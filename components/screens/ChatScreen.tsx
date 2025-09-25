@@ -1,0 +1,126 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, View } from 'react-native';
+
+import Header from '../ui/Header';
+import MessageInput from '../ui/MessageInput';
+import MessageList, { Message } from '../ui/MessageList';
+import NicknameInput from '../ui/NicknameInput';
+import PrivateSidebar from '../ui/PrivateSidebar';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+const MOCKUP_MODE = process.env.EXPO_PUBLIC_MOCKUP_MODE === 'true';
+
+type ChatScreenProps = {
+    pubKey: string;
+    nickname: string;
+    updateNickname: (newName: string) => Promise<void> | void;
+};
+
+const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNickname }) => {
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [privateTarget, setPrivateTarget] = useState<string | null>(null);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // Right offset animated; start hidden to the right
+    const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH * 0.6)).current;
+
+    const currentUser = nickname && nickname.trim() ? nickname : pubKey.slice(0, 8);
+
+    const peers = Array.from(
+        new Set(messages.map((m) => m.from).filter((f) => f !== currentUser))
+    );
+
+    useEffect(() => {
+        if (MOCKUP_MODE) {
+        const mockMsgs: Message[] = [
+            { from: 'Alice', msg: 'Hey there! Welcome to the chat 👋', ts: Date.now() - 100000 },
+            { from: 'Bob', msg: 'Hi Alice, nice to see you here!', ts: Date.now() - 90000 },
+            { from: currentUser, msg: 'Hello everyone, I just joined 🚀', ts: Date.now() - 80000 },
+        ];
+        setMessages(mockMsgs);
+        }
+    }, [currentUser]);
+
+    const toggleSidebar = () => {
+        const toValue = sidebarOpen ? SCREEN_WIDTH * 0.6 : 0;
+        Animated.timing(slideAnim, {
+        toValue,
+        duration: 250,
+        useNativeDriver: false,
+        }).start();
+        setSidebarOpen((prev) => !prev);
+    };
+
+    const sendMessage = (msg: string) => {
+        if (!msg.trim()) return;
+        const payload: Message = {
+        from: currentUser,
+        to: privateTarget || undefined,
+        msg,
+        ts: Date.now(),
+        };
+
+        setMessages((prev) => [...prev, payload]);
+
+        if (MOCKUP_MODE) {
+        console.log('[MOCKUP] Message sent:', payload);
+        }
+        // Real implementation would send payload to backend/P2P here
+    };
+
+    return (
+        <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
+        {/* Header */}
+        <Header pubKey={pubKey} nickname={nickname} toggleSidebar={toggleSidebar} />
+
+        {/* Private sidebar (slides from RIGHT) */}
+        <Animated.View
+            style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            right: -slideAnim,           // 👈 negative value hides it to the right
+            width: SCREEN_WIDTH * 0.6,
+            backgroundColor: '#111111',
+            zIndex: 10,
+            borderLeftWidth: 2,          // 👈 left border now
+            borderColor: '#00FF9C',
+            shadowColor: '#00FF9C',
+            shadowOffset: { width: -2, height: 0 }, // shadow cast inward
+            shadowOpacity: 0.8,
+            shadowRadius: 8,
+            }}
+        >
+            <PrivateSidebar
+            peers={peers}
+            onSelectPeer={(peer) => {
+                setPrivateTarget(peer);
+                toggleSidebar();
+            }}
+            onClose={toggleSidebar}
+            />
+        </Animated.View>
+
+        {/* Nickname input */}
+        <NicknameInput onSave={updateNickname} />
+
+        {/* Messages */}
+        <MessageList
+            messages={messages.filter((m) =>
+            privateTarget ? (m.to === privateTarget || m.from === privateTarget) : !m.to
+            )}
+            currentUser={currentUser}
+            showUsername
+        />
+
+        {/* Input */}
+        <MessageInput
+            onSend={sendMessage}
+            placeholder={privateTarget ? `Message ${privateTarget}` : 'Type a message...'}
+        />
+        </View>
+    );
+};
+
+export default ChatScreen;

@@ -1,98 +1,86 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Keypair } from '@solana/web3.js';
+import { Buffer } from 'buffer';
+import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
+import React, { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
+import 'react-native-get-random-values';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import OnboardingScreen from '@/components/screens/OnboardingScreen';
+import ChatScreen from '@/components/ui/ChatList';
 
-export default function HomeScreen() {
+global.Buffer = Buffer;
+
+export default function App() {
+  const [pubKey, setPubKey] = useState<string | null>(null);
+  const [nickname, setNickname] = useState<string>('');
+  const [tempNickname, setTempNickname] = useState<string>('');
+
+  useEffect(() => {
+    (async () => {
+      const savedPubKey = await SecureStore.getItemAsync('pubKey');
+      if (savedPubKey) setPubKey(savedPubKey);
+
+      const savedNickname = await SecureStore.getItemAsync('nickname');
+      if (savedNickname) setNickname(savedNickname);
+    })();
+  }, []);
+
+  async function onboard() {
+    const hardwareAvailable = await LocalAuthentication.hasHardwareAsync();
+    const enrolled = await LocalAuthentication.isEnrolledAsync();
+
+    if (!hardwareAvailable || !enrolled) {
+      Alert.alert('Proceeding without biometric.');
+    } else {
+      const auth = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to setup wallet',
+        fallbackLabel: 'Use device passcode',
+      });
+      if (!auth.success) {
+        Alert.alert('Authentication failed');
+        return;
+      }
+    }
+
+    const keypair = Keypair.generate();
+    const pub = keypair.publicKey.toBase58();
+    setPubKey(pub);
+    await SecureStore.setItemAsync('pubKey', pub);
+    await SecureStore.setItemAsync('privKey', Buffer.from(keypair.secretKey).toString('hex'));
+
+    if (tempNickname.trim()) {
+      setNickname(tempNickname);
+      await SecureStore.setItemAsync('nickname', tempNickname);
+      Alert.alert('Wallet & Nickname Created', `anon0mesh/@${tempNickname}`);
+    } else {
+      Alert.alert('Wallet Created', `anon0mesh/${pub.slice(0, 8)}`);
+    }
+  }
+
+  async function updateNickname(newName: string) {
+    if (!newName.trim()) return;
+    setNickname(newName);
+    await SecureStore.setItemAsync('nickname', newName);
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <SafeAreaProvider>
+      {pubKey ? (
+        <ChatScreen
+          pubKey={pubKey}
+          nickname={nickname}
+          updateNickname={updateNickname}
+          messages={[]}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
-
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      ) : (
+        <OnboardingScreen
+          tempNickname={tempNickname}
+          setTempNickname={setTempNickname}
+          onboard={onboard}
+        />
+      )}
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
