@@ -15,17 +15,17 @@ export default function IndexScreen() {
             mb="$6"
             borderRadius="$lg"
             borderWidth={2}
-            borderColor="$green500"
+            borderColor="$purple500"
             /> */}
-            <Text color="$green400" fontSize="$3xl" fontFamily="$mono" fontWeight="bold" textAlign="center" mb="$4">
+            <Text color="$purple400" fontSize="$3xl" fontFamily="$mono" fontWeight="bold" textAlign="center" mb="$4">
             anon0mesh
             </Text>
             <Text color="$gray300" fontSize="$md" fontFamily="$mono" lineHeight="$lg" textAlign="center" mb="$8">
             A decentralized, peer-to-peer messaging experiment built with encrypted BLE mesh technology and Solana keys.
             {"\n"}Stay anonymous. Stay connected. Own your identity.
             </Text>
-            <Button size="lg" bg="$green600" px="$10" rounded="$xl" onPress={() => navigation.navigate('chat' as never)}>
-            <ButtonText color="$black" fontWeight="bold" fontFamily="$mono">
+            <Button size="lg" bg="$purple600" px="$10" rounded="$xl" onPress={() => navigation.navigate('chat' as never)}>
+            <ButtonText color="$white" fontWeight="bold" fontFamily="$mono">
                 ENTER THE MESH
             </ButtonText>
             </Button>

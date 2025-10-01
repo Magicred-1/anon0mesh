@@ -34,13 +34,13 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
         <View
             style={{
                 padding: 12,
-                backgroundColor: '#121212',
+                backgroundColor: '#000000',
                 borderBottomWidth: 1,
-                borderColor: '#333',
+                borderColor: '#A855F7',
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                shadowColor: '#00FF9C',
+                shadowColor: '#A855F7',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.5,
                 shadowRadius: 4,
@@ -54,7 +54,7 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                         style={{
                             fontWeight: 'bold',
                             fontSize: 18,
-                            color: '#00FF9C',
+                            color: '#A855F7',
                             fontFamily: 'Courier',
                         }}
                     >
@@ -78,18 +78,18 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                 <TouchableOpacity
                     onPress={() => setQrVisible(true)}
                     style={{
-                        backgroundColor: '#1E1E1E',
+                        backgroundColor: '#0A0A0A',
                         paddingVertical: 6,
                         paddingHorizontal: 12,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: '#00FF9C',
+                        borderColor: '#A855F7',
                         marginRight: 8,
                     }}
                 >
                     <Text
                         style={{
-                            color: '#00FF9C',
+                            color: '#A855F7',
                             fontWeight: 'bold',
                             fontFamily: 'Courier',
                         }}
@@ -102,17 +102,17 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                 <TouchableOpacity
                     onPress={toggleSidebar}
                     style={{
-                        backgroundColor: '#1E1E1E',
+                        backgroundColor: '#0A0A0A',
                         paddingVertical: 6,
                         paddingHorizontal: 16,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: '#00FF9C',
+                        borderColor: '#A855F7',
                     }}
                 >
                     <Text
                         style={{
-                            color: '#00FF9C',
+                            color: '#A855F7',
                             fontWeight: 'bold',
                             fontFamily: 'Courier',
                         }}
@@ -134,22 +134,26 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                 >
                     <View
                         style={{
-                            backgroundColor: '#1A1A1A',
+                            backgroundColor: '#0A0A0A',
                             padding: 20,
                             borderRadius: 16,
                             alignItems: 'center',
+                            borderWidth: 2,
+                            borderColor: '#A855F7',
                         }}
                     >
                         <Text
                             style={{
-                                color: '#00FF9C',
+                                color: '#A855F7',
                                 fontFamily: 'Courier',
                                 marginBottom: 16,
+                                fontSize: 16,
+                                fontWeight: 'bold',
                             }}
                         >
                             Your PubKey
                         </Text>
-                        <QRCode value={pubKey} size={200} color="#00FF9C" backgroundColor="#1A1A1A" />
+                        <QRCode value={pubKey} size={200} color="#A855F7" backgroundColor="#0A0A0A" />
                         <TouchableOpacity
                             onPress={() => setQrVisible(false)}
                             style={{
@@ -157,11 +161,10 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                                 paddingVertical: 8,
                                 paddingHorizontal: 16,
                                 borderRadius: 12,
-                                borderWidth: 1,
-                                borderColor: '#00FF9C',
+                                backgroundColor: '#A855F7',
                             }}
                         >
-                            <Text style={{ color: '#00FF9C', fontFamily: 'Courier' }}>Close</Text>
+                            <Text style={{ color: '#FFFFFF', fontFamily: 'Courier', fontWeight: 'bold' }}>Close</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

@@ -70,7 +70,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
+        <View style={{ flex: 1, backgroundColor: '#000000' }}>
         {/* Header */}
         <Header pubKey={pubKey} nickname={nickname} toggleSidebar={toggleSidebar} />
 
@@ -80,14 +80,14 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
             position: 'absolute',
             top: 0,
             bottom: 0,
-            right: -slideAnim,           // 👈 negative value hides it to the right
+            right: -slideAnim,
             width: SCREEN_WIDTH * 0.6,
-            backgroundColor: '#111111',
+            backgroundColor: '#0A0A0A',
             zIndex: 10,
-            borderLeftWidth: 2,          // 👈 left border now
-            borderColor: '#00FF9C',
-            shadowColor: '#00FF9C',
-            shadowOffset: { width: -2, height: 0 }, // shadow cast inward
+            borderLeftWidth: 2,
+            borderColor: '#A855F7',
+            shadowColor: '#A855F7',
+            shadowOffset: { width: -2, height: 0 },
             shadowOpacity: 0.8,
             shadowRadius: 8,
             }}
@@ -111,14 +111,15 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
             privateTarget ? (m.to === privateTarget || m.from === privateTarget) : !m.to
             )}
             currentUser={currentUser}
-            showUsername
+            showUsername={true}
         />
 
         {/* Input */}
         <MessageInput
-            onSend={sendMessage}
-            placeholder={privateTarget ? `Message ${privateTarget}` : 'Type a message...'}
-        />
+                onSend={sendMessage}
+                placeholder={privateTarget ? `Message ${privateTarget}` : 'Type a message...'} onSendAsset={function (asset: string, amount: string, address: string): void {
+                    throw new Error('Function not implemented.');
+                } }        />
         </View>
     );
 };

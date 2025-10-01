@@ -36,9 +36,9 @@ export default function NicknameInput({ onSave }: Props) {
         style={{
             height: heightAnim,
             padding: 8,
-            backgroundColor: '#111111',
+            backgroundColor: '#0A0A0A',
             borderBottomWidth: 1,
-            borderColor: '#00FF9C',
+            borderColor: '#A855F7',
             borderRadius: 12,
             margin: 8,
             overflow: 'hidden',
@@ -50,14 +50,14 @@ export default function NicknameInput({ onSave }: Props) {
                 style={{
                 flex: 1,
                 borderWidth: 1,
-                borderColor: '#00FF9C',
+                borderColor: '#A855F7',
                 borderRadius: 12,
                 paddingHorizontal: 12,
                 paddingVertical: 6,
                 marginRight: 8,
-                color: '#00FF9C',
+                color: '#C084FC',
                 fontFamily: 'Courier',
-                backgroundColor: '#0F0F0F',
+                backgroundColor: '#000000',
                 }}
                 placeholder="Set or change nickname"
                 placeholderTextColor="#555"
@@ -67,7 +67,7 @@ export default function NicknameInput({ onSave }: Props) {
             <TouchableOpacity
                 onPress={save}
                 style={{
-                backgroundColor: '#00FF9C',
+                backgroundColor: '#A855F7',
                 paddingHorizontal: 16,
                 paddingVertical: 6,
                 borderRadius: 12,
@@ -77,7 +77,7 @@ export default function NicknameInput({ onSave }: Props) {
             >
                 <Text
                 style={{
-                    color: '#0A0A0A',
+                    color: '#FFFFFF',
                     fontWeight: 'bold',
                     fontFamily: 'Courier',
                 }}
@@ -97,7 +97,7 @@ export default function NicknameInput({ onSave }: Props) {
             >
             <Text
                 style={{
-                color: '#00FF9C',
+                color: '#A855F7',
                 fontFamily: 'Courier',
                 fontWeight: 'bold',
                 }}

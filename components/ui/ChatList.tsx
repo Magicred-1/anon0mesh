@@ -45,12 +45,18 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
     };
 
     return (
-        <View style={{ flex:1, backgroundColor:'#121212' }}>
+        <View style={{ flex:1, backgroundColor:'#000000' }}>
         <Header pubKey={pubKey} nickname={nickname} toggleSidebar={toggleSidebar} />
         <Animated.View style={{
             position:'absolute', top:0, bottom:0,
             left:slideAnim, width:SCREEN_WIDTH * 0.6,
-            backgroundColor:'#1A1A1A', zIndex:10
+            backgroundColor:'#0A0A0A', zIndex:10,
+            borderRightWidth: 2,
+            borderColor: '#A855F7',
+            shadowColor: '#A855F7',
+            shadowOffset: { width: 2, height: 0 },
+            shadowOpacity: 0.8,
+            shadowRadius: 8,
         }}>
             <PrivateSidebar
             peers={peers}
@@ -64,9 +70,10 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
             currentUser={nickname}
         />
         <MessageInput
-            onSend={sendMessage}
-            placeholder={privateTarget ? `Message ${privateTarget}` : "Type a message..."}
-        />
+                onSend={sendMessage}
+                placeholder={privateTarget ? `Message ${privateTarget}` : "Type a message..."} onSendAsset={function (asset: string, amount: string, address: string): void {
+                    throw new Error('Function not implemented.');
+                } }        />
         </View>
     );
 }
