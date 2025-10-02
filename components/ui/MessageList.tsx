@@ -26,42 +26,32 @@ export default function MessageList({
         const isPrivate = !!item.to;
 
         const bgColor = isMe
-            ? '#A855F7' // my messages
+            ? '#404040' // my messages - darker
             : isPrivate
-            ? '#C084FC' // private incoming
-            : '#111111'; // public incoming
+            ? '#4a4a4a' // private incoming - slightly lighter
+            : '#3a3a3a'; // public incoming
 
-        const textColor = isMe ? '#0A0A0A' : '#FFFFFF';
-
-        const borderColor = isMe
-            ? '#C084FC'
-            : isPrivate
-            ? '#A855F7'
-            : '#333333';
+        const textColor = '#FFFFFF';
 
         return (
             <View
                 style={{
                     alignSelf: isMe ? 'flex-end' : 'flex-start',
                     backgroundColor: bgColor,
-                    borderRadius: 16,
-                    padding: 10,
-                    marginVertical: 4,
-                    maxWidth: '70%',
-                    borderWidth: 1,
-                    borderColor,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 4,
+                    borderRadius: 12,
+                    padding: 8,
+                    marginVertical: 2,
+                    maxWidth: '75%',
+                    marginHorizontal: 12,
+                    borderWidth: 0,
                 }}
             >
                 {showUsername && (
                     <Text
                         style={{
-                            fontSize: 12,
-                            color: isMe ? '#222222' : '#888888',
-                            fontFamily: 'Courier',
+                            fontSize: 11,
+                            color: '#cccccc',
+                            fontFamily: 'System',
                             marginBottom: 2,
                         }}
                     >
@@ -73,7 +63,9 @@ export default function MessageList({
                 <Text
                     style={{
                         color: textColor,
-                        fontFamily: 'Courier',
+                        fontSize: 14,
+                        fontFamily: 'System',
+                        lineHeight: 18,
                     }}
                 >
                     {item.msg}
@@ -81,11 +73,11 @@ export default function MessageList({
 
                 <Text
                     style={{
-                        fontSize: 10,
-                        color: '#888888',
+                        fontSize: 9,
+                        color: '#999999',
                         alignSelf: 'flex-end',
-                        fontFamily: 'Courier',
-                        marginTop: 4,
+                        fontFamily: 'System',
+                        marginTop: 2,
                     }}
                 >
                     {new Date(item.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -98,15 +90,19 @@ export default function MessageList({
         <FlatList
             ref={ref}
             data={messages}
-            keyExtractor={(_, i) => i.toString()}
+            keyExtractor={(item, index) => `${item.ts}-${index}`}
             renderItem={renderItem}
-            contentContainerStyle={{
-                padding: 12,
-                backgroundColor: '#0A0A0A',
+            style={{ 
+                flex: 1, 
+                backgroundColor: '#212122',
+                paddingHorizontal: 0,
+            }}
+            contentContainerStyle={{ 
+                paddingVertical: 0,
                 flexGrow: 1,
             }}
-            onContentSizeChange={() => ref.current?.scrollToEnd({ animated: true })}
-            onLayout={() => ref.current?.scrollToEnd({ animated: true })}
+            showsVerticalScrollIndicator={false}
+            inverted
         />
     );
 }

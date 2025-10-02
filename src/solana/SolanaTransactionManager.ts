@@ -7,7 +7,7 @@ import {
   Keypair,
 } from '@solana/web3.js';
 import * as ed25519 from '@noble/ed25519';
-import { createHash } from 'crypto';
+import { sha256 } from '@noble/hashes/sha2';
 
 export interface SolanaTransactionPacket {
   serializedTransaction: Uint8Array;
@@ -190,11 +190,13 @@ export class SolanaTransactionManager {
    * Generate a unique ID for a transaction
    */
   private generateTransactionId(packet: SolanaTransactionPacket): string {
-    const hash = createHash('sha256');
-    hash.update(packet.serializedTransaction);
-    hash.update(packet.signer);
-    hash.update(Date.now().toString());
-    return hash.digest('hex').slice(0, 16);
+    const dataToHash = Buffer.concat([
+      Buffer.from(packet.serializedTransaction),
+      Buffer.from(packet.signer),
+      Buffer.from(Date.now().toString())
+    ]);
+    const hash = sha256(dataToHash);
+    return Buffer.from(hash).toString('hex').slice(0, 16);
   }
 
   /**

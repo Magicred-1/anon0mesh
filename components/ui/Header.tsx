@@ -1,15 +1,18 @@
 import { useNavigation } from '@react-navigation/native';
 import React, { useRef, useState } from 'react';
 import { Modal, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
 interface Props {
     pubKey: string;
     nickname: string;
     toggleSidebar: () => void;
+    onWalletPress?: () => void;
+    onNicknameEdit?: () => void;
 }
 
-export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
+export default function Header({ pubKey, nickname, toggleSidebar, onWalletPress, onNicknameEdit }: Props) {
     const navigation = useNavigation<any>();
     const tapCount = useRef(0);
     const tapTimeout = useRef<NodeJS.Timeout | number | null>(null);
@@ -29,18 +32,20 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
         }, 400);
     };
 
-    const displayName = nickname ? `anon0mesh/@${nickname}` : '';
+    const displayName = `anon0mesh/${nickname || 'AliceAndBob'}`;
 
     return (
+        <SafeAreaView style={{ backgroundColor: '#212122' }} edges={['top']}>
         <View
             style={{
-                padding: 12,
-                backgroundColor: '#000000',
-                borderBottomWidth: 1,
-                borderColor: '#A855F7',
+                paddingTop: 8,
+                paddingBottom: 12,
+                paddingHorizontal: 20,
+                backgroundColor: '#212122',
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                minHeight: 56,
             }}
         >
             {/* Title / Nickname */}
@@ -48,10 +53,10 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                 <View>
                     <Text
                         style={{
-                            fontWeight: 'bold',
-                            fontSize: 18,
-                            color: '#A855F7',
-                            fontFamily: 'Courier',
+                            fontWeight: '400',
+                            fontSize: 17,
+                            color: '#FFFFFF',
+                            fontFamily: 'System',
                         }}
                     >
                         {displayName}
@@ -59,51 +64,29 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                 </View>
             </TouchableOpacity>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {/* QR Button */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {/* Wallet Button */}
                 <TouchableOpacity
-                    onPress={() => setQrVisible(true)}
+                    onPress={onWalletPress || (() => {})}
                     style={{
-                        backgroundColor: '#0A0A0A',
-                        paddingVertical: 6,
-                        paddingHorizontal: 12,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: '#A855F7',
-                        marginRight: 8,
-                    }}
-                >
-                    <Text
-                        style={{
-                            color: '#A855F7',
-                            fontWeight: 'bold',
-                            fontFamily: 'Courier',
-                        }}
-                    >
-                        QR
-                    </Text>
-                </TouchableOpacity>
-
-                {/* DMs Button */}
-                <TouchableOpacity
-                    onPress={toggleSidebar}
-                    style={{
-                        backgroundColor: '#0A0A0A',
-                        paddingVertical: 6,
+                        backgroundColor: '#404040',
+                        paddingVertical: 8,
                         paddingHorizontal: 16,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: '#A855F7',
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
                     }}
                 >
+                    <Text style={{ fontSize: 14, marginRight: 6 }}>💰</Text>
                     <Text
                         style={{
-                            color: '#A855F7',
-                            fontWeight: 'bold',
-                            fontFamily: 'Courier',
+                            color: '#FFFFFF',
+                            fontWeight: '500',
+                            fontFamily: 'System',
+                            fontSize: 15,
                         }}
                     >
-                        DMs
+                        Wallet
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -125,16 +108,16 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                             borderRadius: 16,
                             alignItems: 'center',
                             borderWidth: 2,
-                            borderColor: '#A855F7',
+                            borderColor: '#B10FF2',
                         }}
                     >
                         <Text
                             style={{
-                                color: '#A855F7',
-                                fontFamily: 'Courier',
+                                color: '#B10FF2',
+                                fontFamily: 'Lexend',
                                 marginBottom: 16,
                                 fontSize: 16,
-                                fontWeight: 'bold',
+                                fontWeight: 'regular',
                             }}
                         >
                             Your PubKey
@@ -152,14 +135,14 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                                 paddingVertical: 8,
                                 paddingHorizontal: 16,
                                 borderRadius: 12,
-                                backgroundColor: '#A855F7',
+                                backgroundColor: '#B10FF2',
                             }}
                         >
                             <Text
                                 style={{
                                     color: '#FFFFFF',
-                                    fontFamily: 'Courier',
-                                    fontWeight: 'bold',
+                                    fontFamily: 'Lexend',
+                                    fontWeight: 'regular',
                                 }}
                             >
                                 Close
@@ -169,5 +152,6 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                 </View>
             </Modal>
         </View>
+        </SafeAreaView>
     );
 }

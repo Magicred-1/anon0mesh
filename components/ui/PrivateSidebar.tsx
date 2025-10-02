@@ -53,7 +53,7 @@ export default function PrivateSidebar({ visible, peers, onSelectPeer, onClose }
                 }),
             ]).start();
         }
-    }, [visible]);
+    }, [visible, opacityAnim, slideAnim]);
 
     const handleSelectPeer = (peer: string) => {
         onSelectPeer(peer);

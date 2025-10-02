@@ -44,9 +44,18 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
         console.log('[ExpoGo] Simulated broadcast:', payload);
     };
 
+    const handleWalletPress = () => {
+        console.log('Wallet pressed in ChatList - not implemented');
+    };
+
     return (
         <View style={{ flex:1, backgroundColor:'#000000' }}>
-        <Header pubKey={pubKey} nickname={nickname} toggleSidebar={toggleSidebar} />
+        <Header 
+            pubKey={pubKey} 
+            nickname={nickname} 
+            toggleSidebar={toggleSidebar}
+            onWalletPress={handleWalletPress}
+        />
         <Animated.View style={{
             position:'absolute', top:0, bottom:0,
             left:slideAnim, width:SCREEN_WIDTH * 0.6,

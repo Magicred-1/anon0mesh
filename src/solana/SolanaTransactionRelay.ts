@@ -1,24 +1,24 @@
 import { Buffer } from 'buffer';
 import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
 import { 
-  SolanaTransactionManager, 
-  SolanaTransactionPacket, 
-  TransactionRelayRequest 
+    SolanaTransactionManager, 
+    SolanaTransactionPacket, 
+    TransactionRelayRequest 
 } from './SolanaTransactionManager';
 import { Anon0MeshPacket, MessageType } from '../gossip/types';
 
 export interface TransactionRelayConfig {
-  maxRelayHops: number;
-  relayTimeoutMs: number;
-  priorityFee?: number;
-  relayWhitelist?: string[]; // Whitelisted public keys that can relay
+    maxRelayHops: number;
+    relayTimeoutMs: number;
+    priorityFee?: number;
+    relayWhitelist?: string[]; // Whitelisted public keys that can relay
 }
 
 export interface RelayMetrics {
-  transactionsRelayed: number;
-  transactionsSubmitted: number;
-  transactionsFailed: number;
-  averageRelayTime: number;
+    transactionsRelayed: number;
+    transactionsSubmitted: number;
+    transactionsFailed: number;
+    averageRelayTime: number;
 }
 
 export class SolanaTransactionRelay {

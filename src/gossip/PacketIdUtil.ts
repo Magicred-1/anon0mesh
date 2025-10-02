@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { createHash } from 'crypto';
+import { sha256 } from '@noble/hashes/sha2';
 import { Anon0MeshPacket } from './types';
 
 export class PacketIdUtil {
@@ -7,22 +7,19 @@ export class PacketIdUtil {
    * Compute a unique ID for a packet based on its content
    */
   static computeId(packet: Anon0MeshPacket): Buffer {
-    const hash = createHash('sha256');
+    // Concatenate all data to hash in a deterministic order
+    const dataToHash = Buffer.concat([
+      Buffer.from(packet.type.toString()),
+      Buffer.from(packet.senderID),
+      packet.recipientID ? Buffer.from(packet.recipientID) : Buffer.alloc(0),
+      Buffer.from(packet.timestamp.toString()),
+      Buffer.from(packet.payload),
+    ]);
     
-    // Hash the packet fields in a deterministic order
-    hash.update(packet.type.toString());
-    hash.update(Buffer.from(packet.senderID));
-    
-    if (packet.recipientID) {
-      hash.update(Buffer.from(packet.recipientID));
-    } else {
-      hash.update(Buffer.alloc(0));
-    }
-    
-    hash.update(Buffer.from(packet.timestamp.toString()));
-    hash.update(Buffer.from(packet.payload));
+    // Hash using noble crypto
+    const hash = sha256(dataToHash);
     
     // Return first 16 bytes of hash as ID
-    return hash.digest().subarray(0, 16);
+    return Buffer.from(hash.subarray(0, 16));
   }
 }

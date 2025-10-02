@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { createHash } from 'crypto';
+import { sha256 } from '@noble/hashes/sha2';
 
 export interface GCSFilterParams {
     p: number;
@@ -69,8 +69,9 @@ export class GCSFilter {
      * Compute bucket for an ID given modulus m
      */
     static bucket(id: Buffer, m: number): number {
-        const hash = createHash('sha256').update(id).digest();
-        const value = hash.readUInt32BE(0);
+        const hash = sha256(id);
+        const hashBuffer = Buffer.from(hash);
+        const value = hashBuffer.readUInt32BE(0);
         return value % m;
     }
 

@@ -69,10 +69,19 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
         // Real implementation would send payload to backend/P2P here
     };
 
+    const handleWalletPress = () => {
+        console.log('Wallet pressed in ChatScreen - not implemented');
+    };
+
     return (
-        <View style={{ flex: 1, backgroundColor: '#000000' }}>
+        <View style={{ flex: 1, backgroundColor: '#212122' }}>
         {/* Header */}
-        <Header pubKey={pubKey} nickname={nickname} toggleSidebar={toggleSidebar} />
+        <Header 
+            pubKey={pubKey} 
+            nickname={nickname} 
+            toggleSidebar={toggleSidebar} 
+            onWalletPress={handleWalletPress}
+        />
 
         {/* Private sidebar (slides from RIGHT) */}
         <Animated.View
