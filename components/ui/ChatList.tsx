@@ -53,16 +53,14 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
             backgroundColor:'#0A0A0A', zIndex:10,
             borderRightWidth: 2,
             borderColor: '#A855F7',
-            shadowColor: '#A855F7',
             shadowOffset: { width: 2, height: 0 },
             shadowOpacity: 0.8,
             shadowRadius: 8,
         }}>
             <PrivateSidebar
-            peers={peers}
-            onSelectPeer={(peer)=>{ setPrivateTarget(peer); toggleSidebar(); }}
-            onClose={toggleSidebar}
-            />
+                    peers={peers}
+                    onSelectPeer={(peer) => { setPrivateTarget(peer); toggleSidebar(); } }
+                    onClose={toggleSidebar} visible={false}        />
         </Animated.View>
         <NicknameInput onSave={updateNickname} />
         <MessageList

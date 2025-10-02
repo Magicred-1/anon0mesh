@@ -12,7 +12,7 @@ interface Props {
 export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
     const navigation = useNavigation<any>();
     const tapCount = useRef(0);
-    const tapTimeout = useRef<number | null>(null);
+    const tapTimeout = useRef<NodeJS.Timeout | number | null>(null);
     const [qrVisible, setQrVisible] = useState(false);
 
     const handleTitleTap = () => {
@@ -22,7 +22,8 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
 
         tapTimeout.current = setTimeout(() => {
             if (tapCount.current === 3) {
-                navigation.navigate('IndexScreen'); // Triple tap action
+                // 🔧 Instead of onboarding navigation, show QR modal
+                navigation.navigate('onboarding');
             }
             tapCount.current = 0;
         }, 400);
@@ -40,14 +41,9 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                shadowColor: '#A855F7',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.5,
-                shadowRadius: 4,
-                elevation: 5,
             }}
         >
-            {/* Title / PubKey */}
+            {/* Title / Nickname */}
             <TouchableOpacity onPress={handleTitleTap} activeOpacity={0.7}>
                 <View>
                     <Text
@@ -60,16 +56,6 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                     >
                         {displayName}
                     </Text>
-                    {/* <Text
-                        style={{
-                            fontSize: 12,
-                            color: '#AAAAAA',
-                            fontFamily: 'Courier',
-                            marginTop: 2,
-                        }}
-                    >
-                        PubKey: {pubKey}
-                    </Text> */}
                 </View>
             </TouchableOpacity>
 
@@ -153,7 +139,12 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                         >
                             Your PubKey
                         </Text>
-                        <QRCode value={pubKey} size={200} color="#A855F7" backgroundColor="#0A0A0A" />
+                        <QRCode
+                            value={pubKey}
+                            size={200}
+                            color="#A855F7"
+                            backgroundColor="#0A0A0A"
+                        />
                         <TouchableOpacity
                             onPress={() => setQrVisible(false)}
                             style={{
@@ -164,7 +155,15 @@ export default function Header({ pubKey, nickname, toggleSidebar }: Props) {
                                 backgroundColor: '#A855F7',
                             }}
                         >
-                            <Text style={{ color: '#FFFFFF', fontFamily: 'Courier', fontWeight: 'bold' }}>Close</Text>
+                            <Text
+                                style={{
+                                    color: '#FFFFFF',
+                                    fontFamily: 'Courier',
+                                    fontWeight: 'bold',
+                                }}
+                            >
+                                Close
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
