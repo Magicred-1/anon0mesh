@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "offline-mesh-mvp",
+    "name": "anon0mesh",
     "slug": "offline-mesh-mvp",
-    "version": "1.0.0",
+    "version": "1.0.0", 
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "offlinemeshmvp",
+    "scheme": "anon0mesh",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.magicred1.offlinemeshmvp",
+      "bundleIdentifier": "com.magicred1.anon0mesh",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -19,6 +19,7 @@
       "permissions": [
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
+        "BLUETOOTH_ADVERTISE",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "android.permission.BLUETOOTH",

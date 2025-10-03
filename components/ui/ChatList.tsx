@@ -5,6 +5,7 @@ import MessageInput from './MessageInput';
 import MessageList, { Message } from './MessageList';
 import NicknameInput from './NicknameInput';
 import PrivateSidebar from './PrivateSidebar';
+import { Channel } from '@/src/types/channels';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -69,7 +70,9 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
             <PrivateSidebar
                     peers={peers}
                     onSelectPeer={(peer) => { setPrivateTarget(peer); toggleSidebar(); } }
-                    onClose={toggleSidebar} visible={false}        />
+                    onClose={toggleSidebar} visible={false} channels={[]} currentChannel={null} onSelectChannel={function (channel: Channel): void {
+                        throw new Error('Function not implemented.');
+                    } }        />
         </Animated.View>
         <NicknameInput onSave={updateNickname} />
         <MessageList

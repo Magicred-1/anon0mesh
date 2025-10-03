@@ -64,10 +64,11 @@ export class RealBLEManager {
             
             // Request permissions on Android
             if (Platform.OS === 'android') {
+                console.log('[REAL-BLE] Requesting Android permissions...');
                 const hasPermissions = await this.requestPermissions();
                 if (!hasPermissions) {
-                    console.error('[REAL-BLE] Required permissions not granted');
-                    return;
+                    console.warn('[REAL-BLE] Critical permissions not granted - BLE scanning disabled');
+                    return; // Don't continue if critical permissions are missing
                 }
             }
 
@@ -109,17 +110,51 @@ export class RealBLEManager {
                 PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
             ];
 
+            console.log('[REAL-BLE] Requesting permissions:', permissions);
             const granted = await PermissionsAndroid.requestMultiple(permissions);
             
-            const allGranted = permissions.every(permission => 
-                granted[permission] === PermissionsAndroid.RESULTS.GRANTED
-            );
+            console.log('[REAL-BLE] Permission results:', granted);
+            
+            // Check critical permissions (SCAN and CONNECT are most important for mesh networking)
+            const criticalPermissions = [
+                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            ];
 
-            if (!allGranted) {
-                console.warn('[REAL-BLE] Some permissions not granted, BLE functionality may be limited');
+            let hasCriticalPermissions = true;
+            let hasAdvertisePermission = true;
+
+            permissions.forEach(permission => {
+                const result = granted[permission] === PermissionsAndroid.RESULTS.GRANTED;
+                console.log(`[REAL-BLE] Permission ${permission}: ${granted[permission]} (granted: ${result})`);
+                if (!result) {
+                    console.warn(`[REAL-BLE] Permission denied: ${permission}`);
+                    if (criticalPermissions.includes(permission)) {
+                        hasCriticalPermissions = false;
+                    }
+                    if (permission === PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE) {
+                        hasAdvertisePermission = false;
+                    }
+                } else {
+                    console.log(`[REAL-BLE] Permission granted: ${permission}`);
+                }
+            });
+
+            if (hasCriticalPermissions) {
+                console.log('[REAL-BLE] Critical permissions granted - BLE scanning will work');
+                if (hasAdvertisePermission) {
+                    console.log('[REAL-BLE] ✅ Full BLE permissions granted - device can scan and be discoverable');
+                } else {
+                    console.warn('[REAL-BLE] Advertise permission denied - device discovery may be limited');
+                    console.warn('[REAL-BLE] This device can scan for others but may not be discoverable');
+                }
+                return true; // Allow BLE to work with critical permissions
+            } else {
+                console.warn('[REAL-BLE] Critical permissions not granted, BLE functionality will be limited');
+                console.warn('[REAL-BLE] Please check app permissions in device settings');
+                return false;
             }
-
-            return allGranted;
         } catch (error) {
             console.error('[REAL-BLE] Permission request failed:', error);
             return false;
@@ -169,6 +204,26 @@ export class RealBLEManager {
         }
 
         try {
+            // Request permissions first on Android
+            if (Platform.OS === 'android') {
+                console.log('[REAL-BLE] Requesting BLE permissions...');
+                const hasPermissions = await this.requestPermissions();
+                if (!hasPermissions) {
+                    console.error('[REAL-BLE] Required permissions not granted - cannot start scanning');
+                    return;
+                }
+            }
+
+            // Check Bluetooth state first
+            const state = await this.bleManager.state();
+            console.log('[REAL-BLE] Bluetooth state before scanning:', state);
+            
+            if (state !== State.PoweredOn) {
+                console.warn('[REAL-BLE] Bluetooth is not powered on, cannot start scanning');
+                console.warn('[REAL-BLE] Please enable Bluetooth in device settings');
+                return;
+            }
+
             console.log('[REAL-BLE] Starting BLE scan...');
             this.isScanning = true;
 
@@ -177,8 +232,21 @@ export class RealBLEManager {
                 { allowDuplicates: true },
                 (error, device) => {
                     if (error) {
-                        console.error('[REAL-BLE] Scan error:', error);
+                        console.error('[REAL-BLE] Scan error:', error.message);
+                        console.error('[REAL-BLE] Error code:', error.errorCode);
+                        console.error('[REAL-BLE] This might be a permissions issue');
+                        console.error('[REAL-BLE] Check: 1) Bluetooth enabled 2) Location permissions 3) App permissions');
                         this.isScanning = false;
+                        
+                        // Try to request permissions again if it's a permission error
+                        if (Platform.OS === 'android' && error.message.includes('permission')) {
+                            console.log('[REAL-BLE] Attempting to re-request permissions...');
+                            this.requestPermissions().then((granted) => {
+                                if (granted) {
+                                    console.log('[REAL-BLE] Permissions granted, try scanning again');
+                                }
+                            });
+                        }
                         return;
                     }
 

@@ -6,6 +6,7 @@ import MessageInput from '../ui/MessageInput';
 import MessageList, { Message } from '../ui/MessageList';
 import NicknameInput from '../ui/NicknameInput';
 import PrivateSidebar from '../ui/PrivateSidebar';
+import { Channel } from '@/src/types/channels';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -106,7 +107,9 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
                         setPrivateTarget(peer);
                         toggleSidebar();
                     } }
-                    onClose={toggleSidebar} visible={false}            />
+                    onClose={toggleSidebar} visible={false} channels={[]} currentChannel={null} onSelectChannel={function (channel: Channel): void {
+                        throw new Error('Function not implemented.');
+                    } }            />
         </Animated.View>
 
         {/* Nickname input */}

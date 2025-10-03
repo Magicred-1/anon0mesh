@@ -3,16 +3,29 @@ import React, { useRef, useState } from 'react';
 import { Modal, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
+import PenIcon from './PenIcon';
 
 interface Props {
     pubKey: string;
     nickname: string;
+    displayNickname?: string;
+    currentChannelName?: string;
     toggleSidebar: () => void;
     onWalletPress?: () => void;
     onNicknameEdit?: () => void;
+    onChannelPress?: () => void;
 }
 
-export default function Header({ pubKey, nickname, toggleSidebar, onWalletPress, onNicknameEdit }: Props) {
+export default function Header({ 
+    pubKey, 
+    nickname, 
+    displayNickname, 
+    currentChannelName = 'General',
+    toggleSidebar, 
+    onWalletPress, 
+    onNicknameEdit,
+    onChannelPress 
+}: Props) {
     const navigation = useNavigation<any>();
     const tapCount = useRef(0);
     const tapTimeout = useRef<NodeJS.Timeout | number | null>(null);
@@ -25,73 +38,146 @@ export default function Header({ pubKey, nickname, toggleSidebar, onWalletPress,
 
         tapTimeout.current = setTimeout(() => {
             if (tapCount.current === 3) {
-                // 🔧 Instead of onboarding navigation, show QR modal
                 navigation.navigate('onboarding');
             }
             tapCount.current = 0;
         }, 400);
     };
 
-    const displayName = `anon0mesh/${nickname || 'AliceAndBob'}`;
+    const displayName = displayNickname || `anon0mesh/${nickname || 'AliceAndBob'}`;
 
     return (
         <SafeAreaView style={{ backgroundColor: '#212122' }} edges={['top']}>
-        <View
-            style={{
-                paddingTop: 8,
-                paddingBottom: 12,
-                paddingHorizontal: 20,
-                backgroundColor: '#212122',
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                minHeight: 56,
-            }}
-        >
-            {/* Title / Nickname */}
-            <TouchableOpacity onPress={handleTitleTap} activeOpacity={0.7}>
-                <View>
-                    <Text
-                        style={{
-                            fontWeight: '400',
-                            fontSize: 17,
-                            color: '#FFFFFF',
-                            fontFamily: 'System',
-                        }}
-                    >
-                        {displayName}
-                    </Text>
-                </View>
-            </TouchableOpacity>
+            <View
+                style={{
+                    paddingTop: 8,
+                    paddingBottom: 12,
+                    paddingHorizontal: 20,
+                    backgroundColor: '#212122',
+                    flexDirection: 'column',
+                    minHeight: 76,
+                }}
+            >
+                <View style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <TouchableOpacity onPress={handleTitleTap} activeOpacity={0.7}>
+                            <Text
+                                style={{
+                                    fontWeight: '400',
+                                    fontSize: 17,
+                                    color: '#FFFFFF',
+                                    fontFamily: 'System',
+                                }}
+                            >
+                                {displayName}
+                            </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                            onPress={onNicknameEdit}
+                            style={{
+                                marginLeft: 8,
+                                padding: 4,
+                                borderRadius: 4,
+                            }}
+                            activeOpacity={0.6}
+                        >
+                            <PenIcon size={16} color="#888888" />
+                        </TouchableOpacity>
+                    </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {/* Wallet Button */}
-                <TouchableOpacity
-                    onPress={onWalletPress || (() => {})}
-                    style={{
-                        backgroundColor: '#404040',
-                        paddingVertical: 8,
-                        paddingHorizontal: 16,
-                        borderRadius: 8,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                    }}
-                >
-                    <Text style={{ fontSize: 14, marginRight: 6 }}>💰</Text>
-                    <Text
+                    <TouchableOpacity
+                        onPress={onWalletPress || (() => {})}
                         style={{
-                            color: '#FFFFFF',
-                            fontWeight: '500',
-                            fontFamily: 'System',
-                            fontSize: 15,
+                            backgroundColor: '#404040',
+                            paddingVertical: 8,
+                            paddingHorizontal: 16,
+                            borderRadius: 8,
+                            flexDirection: 'row',
+                            alignItems: 'center',
                         }}
                     >
-                        Wallet
-                    </Text>
-                </TouchableOpacity>
+                        <Text style={{ fontSize: 14, marginRight: 6 }}>💰</Text>
+                        <Text
+                            style={{
+                                color: '#FFFFFF',
+                                fontWeight: '500',
+                                fontFamily: 'System',
+                                fontSize: 15,
+                            }}
+                        >
+                            Wallet
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                <View style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}>
+                    <TouchableOpacity
+                        onPress={onChannelPress}
+                        style={{
+                            backgroundColor: '#333333',
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
+                            borderRadius: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            flex: 1,
+                            marginRight: 12,
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={{ fontSize: 16, marginRight: 8 }}>💬</Text>
+                        <Text
+                            style={{
+                                color: '#FFFFFF',
+                                fontWeight: '500',
+                                fontFamily: 'System',
+                                fontSize: 14,
+                                flex: 1,
+                            }}
+                            numberOfLines={1}
+                        >
+                            #{currentChannelName}
+                        </Text>
+                        <Text style={{ color: '#888888', fontSize: 12 }}>▼</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={toggleSidebar}
+                        style={{
+                            backgroundColor: '#333333',
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
+                            borderRadius: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={{ fontSize: 16, marginRight: 6 }}>👥</Text>
+                        <Text
+                            style={{
+                                color: '#FFFFFF',
+                                fontWeight: '500',
+                                fontFamily: 'System',
+                                fontSize: 14,
+                            }}
+                        >
+                            Peers
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            {/* QR Modal */}
             <Modal visible={qrVisible} transparent animationType="fade">
                 <View
                     style={{
@@ -151,7 +237,6 @@ export default function Header({ pubKey, nickname, toggleSidebar, onWalletPress,
                     </View>
                 </View>
             </Modal>
-        </View>
         </SafeAreaView>
     );
 }

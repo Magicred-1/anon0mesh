@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
-    Text,
     TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SendIcon from './SendIcon';
 
 interface Props {
   onSend: (msg: string) => void;
@@ -27,29 +27,31 @@ export default function MessageInput({ onSend, onSendAsset, placeholder }: Props
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={80}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       style={{ 
-        paddingHorizontal: 20, 
-        paddingBottom: Math.max(insets.bottom, 16),
-        paddingTop: 12,
-        backgroundColor: '#212122'
+        paddingHorizontal: 16, 
+        paddingBottom: Math.max(insets.bottom, 12),
+        paddingTop: 8,
+        backgroundColor: '#212122',
+        borderTopWidth: 1,
+        borderTopColor: '#333333',
       }}
     >
       <View
         style={{
           flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: '#404040',
+          alignItems: 'flex-end',
+          backgroundColor: '#2a2a2a',
           borderRadius: 24,
           paddingHorizontal: 16,
-          paddingVertical: 8,
-          marginHorizontal: 4,
+          paddingVertical: 4,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 2,
+          shadowOpacity: 0.15,
+          shadowRadius: 6,
+          elevation: 3,
+          marginBottom: 4,
         }}
       >
         <TextInput
@@ -60,43 +62,44 @@ export default function MessageInput({ onSend, onSendAsset, placeholder }: Props
             paddingVertical: 12,
             paddingHorizontal: 4,
             fontFamily: 'System',
+            maxHeight: 120,
             minHeight: 44,
+            textAlignVertical: 'top',
           }}
           placeholder={placeholder || "Type message..."}
-          placeholderTextColor="#999999"
+          placeholderTextColor="#888888"
           value={text}
           onChangeText={setText}
           blurOnSubmit={false}
           onSubmitEditing={handleSend}
           returnKeyType="send"
           multiline={true}
-          textAlignVertical="center"
+          scrollEnabled={true}
         />
 
         <TouchableOpacity
           onPress={handleSend}
           style={{
-            marginLeft: 12,
-            backgroundColor: '#B10FF2',
-            borderRadius: 20,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
+            marginLeft: 8,
+            marginBottom: 4,
+            backgroundColor: text.trim() ? '#b20ff265' : '#b20ff228',
+            borderRadius: 22,
+            width: 44,
+            height: 44,
             justifyContent: 'center',
             alignItems: 'center',
-            minWidth: 60,
-            minHeight: 40,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.2,
+            shadowRadius: 2,
+            elevation: 2,
           }}
+          disabled={!text.trim()}
         >
-          <Text
-            style={{
-              color: '#FFFFFF',
-              fontWeight: '600',
-              fontSize: 14,
-              fontFamily: 'System',
-            }}
-          >
-            Send
-          </Text>
+          <SendIcon 
+            size={20} 
+            color={text.trim() ? '#FFFFFF' : '#999999'} 
+          />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

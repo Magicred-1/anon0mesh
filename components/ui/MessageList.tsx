@@ -98,7 +98,8 @@ export default function MessageList({
                 paddingHorizontal: 0,
             }}
             contentContainerStyle={{ 
-                paddingVertical: 0,
+                paddingVertical: 8,
+                paddingBottom: 80, // Add bottom padding for message input
                 flexGrow: 1,
             }}
             showsVerticalScrollIndicator={false}

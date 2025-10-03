@@ -58,7 +58,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingHorizontal: 20,
-            paddingVertical: 16,
+            paddingVertical: 12,
             borderBottomWidth: 1,
             borderBottomColor: '#333',
           }}
@@ -84,8 +84,8 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
           style={{
             flexDirection: 'row',
             marginHorizontal: 20,
-            marginTop: 20,
-            marginBottom: 30,
+            marginTop: 16,
+            marginBottom: 20,
           }}
         >
           <TouchableOpacity
@@ -158,22 +158,23 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
           onPress={() => setDropdownVisible(false)}
         >
           {selectedTab === 'receive' ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ flex: 1, justifyContent: 'space-evenly', paddingVertical: 20 }}>
               {/* QR Code */}
-              <View
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  padding: 20,
-                  borderRadius: 16,
-                  marginBottom: 30,
-                }}
-              >
-                <QRCode
-                  value={pubKey}
-                  size={240}
-                  color="#000000"
-                  backgroundColor="#FFFFFF"
-                />
+              <View style={{ alignItems: 'center' }}>
+                <View
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    padding: 20,
+                    borderRadius: 16,
+                  }}
+                >
+                  <QRCode
+                    value={pubKey}
+                    size={220}
+                    color="#000000"
+                    backgroundColor="#FFFFFF"
+                  />
+                </View>
               </View>
 
               {/* Address */}
@@ -185,8 +186,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                   paddingHorizontal: 16,
                   paddingVertical: 12,
                   borderRadius: 8,
-                  marginBottom: 30,
                   maxWidth: '100%',
+                  alignSelf: 'center',
+                  width: '100%',
                 }}
               >
                 <Text style={{ fontSize: 16, marginRight: 8 }}>📋</Text>
@@ -205,304 +207,290 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               </View>
 
               {/* Copy Button */}
-              <TouchableOpacity
-                onPress={copyAddress}
-                style={{
-                  backgroundColor: '#B10FF280',
-                  paddingHorizontal: 32,
-                  paddingVertical: 16,
-                  borderRadius: 12,
-                  minWidth: 200,
-                  alignItems: 'center',
-                }}
-              >
-                <Text
+              <View style={{ alignItems: 'center' }}>
+                <TouchableOpacity
+                  onPress={copyAddress}
                   style={{
-                    color: '#FFFFFF',
-                    fontSize: 16,
-                    fontWeight: '600',
-                    fontFamily: 'System',
-                  }}
-                >
-                  Copy Address
-                </Text>
-              </TouchableOpacity>
-
-              {/* Info Text */}
-              <Text
-                style={{
-                  color: '#888',
-                  fontSize: 14,
-                  fontFamily: 'System',
-                  textAlign: 'center',
-                  marginTop: 20,
-                  paddingHorizontal: 20,
-                }}
-              >
-                You might need to connect to internet to refresh your live balance
-              </Text>
-            </View>
-          ) : (
-            // Send Tab Content
-            <View style={{ flex: 1, paddingTop: 20 }}>
-              {/* Balance Display */}
-              <View
-                style={{
-                  backgroundColor: '#333',
-                  borderRadius: 16,
-                  padding: 20,
-                  marginBottom: 30,
-                  borderWidth: 1,
-                  borderColor: '#444',
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: 'row',
+                    backgroundColor: '#B10FF280',
+                    paddingHorizontal: 32,
+                    paddingVertical: 16,
+                    borderRadius: 12,
+                    minWidth: 200,
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 10,
                   }}
                 >
-                  <TextInput
-                    style={{
-                      color: '#FFFFFF',
-                      fontSize: 32,
-                      fontWeight: '300',
-                      fontFamily: 'System',
-                      textAlign: 'center',
-                      backgroundColor: 'transparent',
-                      borderWidth: 0,
-                      padding: 0,
-                      minWidth: 100,
-                    }}
-                    value={sendAmount}
-                    onChangeText={setSendAmount}
-                    placeholder="0.00"
-                    placeholderTextColor="#666"
-                    keyboardType="decimal-pad"
-                    selectTextOnFocus
-                  />
                   <Text
                     style={{
                       color: '#FFFFFF',
-                      fontSize: 32,
-                      fontWeight: '300',
+                      fontSize: 16,
+                      fontWeight: '600',
                       fontFamily: 'System',
-                      marginLeft: 8,
-                      marginRight: 8,
                     }}
                   >
-                    {selectedCurrency}
+                    Copy Address
                   </Text>
-                  {selectedCurrency === 'SOL' ? (
-                    <SolanaLogo size={28} color="#FFFFFF" />
-                  ) : (
-                    <USDCLogo size={28} />
-                  )}
-                </View>
-                
-                {/* Currency Dropdown */}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            // Send Tab Content
+            <View style={{ flex: 1, justifyContent: 'space-between', paddingVertical: 16 }}>
+              <View style={{ flex: 1, justifyContent: 'space-evenly' }}>
+                {/* Balance Display */}
                 <View
                   style={{
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginBottom: 20,
-                    position: 'relative',
+                    backgroundColor: '#333',
+                    borderRadius: 16,
+                    padding: 20,
+                    borderWidth: 1,
+                    borderColor: '#444',
                   }}
                 >
-                  <TouchableOpacity
-                    onPress={() => setDropdownVisible(!dropdownVisible)}
+                  <View
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      backgroundColor: '#444',
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 8,
+                      justifyContent: 'center',
+                      marginBottom: 10,
                     }}
                   >
-                    <Text style={{ color: '#FFFFFF', fontSize: 18, marginRight: 8 }}>☰</Text>
+                    <TextInput
+                      style={{
+                        color: '#FFFFFF',
+                        fontSize: 32,
+                        fontWeight: '300',
+                        fontFamily: 'System',
+                        textAlign: 'center',
+                        backgroundColor: 'transparent',
+                        borderWidth: 0,
+                        padding: 0,
+                        minWidth: 100,
+                      }}
+                      value={sendAmount}
+                      onChangeText={setSendAmount}
+                      placeholder="0.00"
+                      placeholderTextColor="#666"
+                      keyboardType="decimal-pad"
+                      selectTextOnFocus
+                    />
                     <Text
                       style={{
                         color: '#FFFFFF',
-                        fontSize: 16,
+                        fontSize: 32,
+                        fontWeight: '300',
                         fontFamily: 'System',
+                        marginLeft: 8,
                         marginRight: 8,
                       }}
                     >
                       {selectedCurrency}
                     </Text>
-                    <Text style={{ color: '#FFFFFF', fontSize: 18 }}>▼</Text>
-                  </TouchableOpacity>
-
-                  {/* Dropdown Menu */}
-                  {dropdownVisible && (
-                    <View
+                    {selectedCurrency === 'SOL' ? (
+                      <SolanaLogo size={28} color="#FFFFFF" />
+                    ) : (
+                      <USDCLogo size={28} />
+                    )}
+                  </View>
+                  
+                  {/* Currency Dropdown */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 20,
+                      position: 'relative',
+                    }}
+                  >
+                    <TouchableOpacity
+                      onPress={() => setDropdownVisible(!dropdownVisible)}
                       style={{
-                        position: 'absolute',
-                        top: 45,
-                        backgroundColor: '#333',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#444',
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
                         borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: '#555',
-                        minWidth: 120,
-                        zIndex: 1000,
                       }}
                     >
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedCurrency('SOL');
-                          setDropdownVisible(false);
-                        }}
+                      <Text style={{ color: '#FFFFFF', fontSize: 18, marginRight: 8 }}>☰</Text>
+                      <Text
                         style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingHorizontal: 16,
-                          paddingVertical: 12,
-                          backgroundColor: selectedCurrency === 'SOL' ? '#B10FF240' : 'transparent',
+                          color: '#FFFFFF',
+                          fontSize: 16,
+                          fontFamily: 'System',
+                          marginRight: 8,
                         }}
                       >
-                        <SolanaLogo size={20} color="#FFFFFF" />
-                        <Text
-                          style={{
-                            color: '#FFFFFF',
-                            fontSize: 16,
-                            fontFamily: 'System',
-                            marginLeft: 8,
-                          }}
-                        >
-                          SOL
-                        </Text>
-                      </TouchableOpacity>
-                      
-                      <View style={{ height: 1, backgroundColor: '#555' }} />
-                      
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedCurrency('USDC');
-                          setDropdownVisible(false);
-                        }}
+                        {selectedCurrency}
+                      </Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 18 }}>▼</Text>
+                    </TouchableOpacity>
+
+                    {/* Dropdown Menu */}
+                    {dropdownVisible && (
+                      <View
                         style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingHorizontal: 16,
-                          paddingVertical: 12,
-                          backgroundColor: selectedCurrency === 'USDC' ? '#B10FF240' : 'transparent',
+                          position: 'absolute',
+                          top: 45,
+                          backgroundColor: '#333',
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: '#555',
+                          minWidth: 120,
+                          zIndex: 1000,
                         }}
                       >
-                        <USDCLogo size={20} />
-                        <Text
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedCurrency('SOL');
+                            setDropdownVisible(false);
+                          }}
                           style={{
-                            color: '#FFFFFF',
-                            fontSize: 16,
-                            fontFamily: 'System',
-                            marginLeft: 8,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 16,
+                            paddingVertical: 12,
+                            backgroundColor: selectedCurrency === 'SOL' ? '#B10FF240' : 'transparent',
                           }}
                         >
-                          USDC
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                          <SolanaLogo size={20} color="#FFFFFF" />
+                          <Text
+                            style={{
+                              color: '#FFFFFF',
+                              fontSize: 16,
+                              fontFamily: 'System',
+                              marginLeft: 8,
+                            }}
+                          >
+                            SOL
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        <View style={{ height: 1, backgroundColor: '#555' }} />
+                        
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedCurrency('USDC');
+                            setDropdownVisible(false);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 16,
+                            paddingVertical: 12,
+                            backgroundColor: selectedCurrency === 'USDC' ? '#B10FF240' : 'transparent',
+                          }}
+                        >
+                          <USDCLogo size={20} />
+                          <Text
+                            style={{
+                              color: '#FFFFFF',
+                              fontSize: 16,
+                              fontFamily: 'System',
+                              marginLeft: 8,
+                            }}
+                          >
+                            USDC
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: '#AAAAAA',
+                        fontSize: 14,
+                        fontFamily: 'System',
+                        marginRight: 6,
+                      }}
+                    >
+                      Available balance : {selectedCurrency === 'SOL' ? '2.3' : '1,250.00'} {selectedCurrency}
+                    </Text>
+                    {selectedCurrency === 'SOL' ? (
+                      <SolanaLogo size={16} color="#FFFFFF" />
+                    ) : (
+                      <USDCLogo size={16} />
+                    )}
+                  </View>
                 </View>
 
+                {/* Recipient Address Input */}
                 <View
                   style={{
                     flexDirection: 'row',
-                    justifyContent: 'center',
+                    alignItems: 'center',
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderColor: '#444',
+                    borderRadius: 8,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      color: '#FFFFFF',
+                      fontSize: 16,
+                      fontFamily: 'System',
+                    }}
+                    placeholder="Enter recipient address.."
+                    placeholderTextColor="#666"
+                    value={recipientAddress}
+                    onChangeText={setRecipientAddress}
+                  />
+                  <TouchableOpacity
+                    style={{
+                      marginLeft: 8,
+                      padding: 4,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 18 }}>📷</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Copy Address Button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!sendAmount || parseFloat(sendAmount) <= 0) {
+                      Alert.alert('Invalid Amount', 'Please enter a valid amount to send');
+                      return;
+                    }
+                    if (!recipientAddress.trim()) {
+                      Alert.alert('Invalid Address', 'Please enter a recipient address');
+                      return;
+                    }
+                    Alert.alert('Send', `Sending ${sendAmount} ${selectedCurrency} to ${recipientAddress}`);
+                  }}
+                  style={{
+                    backgroundColor: '#B10FF280',
+                    paddingHorizontal: 32,
+                    paddingVertical: 16,
+                    borderRadius: 12,
                     alignItems: 'center',
                   }}
                 >
                   <Text
                     style={{
-                      color: '#AAAAAA',
-                      fontSize: 14,
+                      color: '#FFFFFF',
+                      fontSize: 16,
+                      fontWeight: '600',
                       fontFamily: 'System',
-                      marginRight: 6,
                     }}
                   >
-                    Available balance : {selectedCurrency === 'SOL' ? '2.3' : '1,250.00'} {selectedCurrency}
+                    Send {sendAmount} {selectedCurrency}
                   </Text>
-                  {selectedCurrency === 'SOL' ? (
-                    <SolanaLogo size={16} color="#FFFFFF" />
-                  ) : (
-                    <USDCLogo size={16} />
-                  )}
-                </View>
-              </View>
-
-              {/* Recipient Address Input */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: 'transparent',
-                  borderWidth: 1,
-                  borderColor: '#444',
-                  borderRadius: 8,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  marginBottom: 30,
-                }}
-              >
-                <TextInput
-                  style={{
-                    flex: 1,
-                    color: '#FFFFFF',
-                    fontSize: 16,
-                    fontFamily: 'System',
-                  }}
-                  placeholder="Enter recipient address.."
-                  placeholderTextColor="#666"
-                  value={recipientAddress}
-                  onChangeText={setRecipientAddress}
-                />
-                <TouchableOpacity
-                  style={{
-                    marginLeft: 8,
-                    padding: 4,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 18 }}>📷</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Copy Address Button */}
-              <TouchableOpacity
-                onPress={() => {
-                  if (!sendAmount || parseFloat(sendAmount) <= 0) {
-                    Alert.alert('Invalid Amount', 'Please enter a valid amount to send');
-                    return;
-                  }
-                  if (!recipientAddress.trim()) {
-                    Alert.alert('Invalid Address', 'Please enter a recipient address');
-                    return;
-                  }
-                  // TODO: Implement send functionality here
-                  Alert.alert('Send', `Sending ${sendAmount} ${selectedCurrency} to ${recipientAddress}`);
-                }}
-                style={{
-                  backgroundColor: '#B10FF280',
-                  paddingHorizontal: 32,
-                  paddingVertical: 16,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  marginBottom: 20,
-                }}
-              >
-                <Text
-                  style={{
-                    color: '#FFFFFF',
-                    fontSize: 16,
-                    fontWeight: '600',
-                    fontFamily: 'System',
-                  }}
-                >
-                  Send {sendAmount} {selectedCurrency}
-                </Text>
-              </TouchableOpacity>
 
               {/* Info Text */}
               <Text
@@ -512,9 +500,10 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                   fontFamily: 'System',
                   textAlign: 'center',
                   paddingHorizontal: 20,
+                  marginTop: 16,
                 }}
               >
-                You might need to connect to internet to refresh your live balance
+                ℹ️ You might need to connect to internet to refresh your live balance
               </Text>
             </View>
           )}

@@ -15,6 +15,7 @@ import MessageList, { Message } from '../ui/MessageList';
 import ReceiveMoneyScreen from './WalletScreen';
 import EditNicknameModal from '../ui/EditNicknameModal';
 import BLEStatusIndicator from '../ui/BLEStatusIndicator';
+import BLEPermissionRequest from '../ui/BLEPermissionRequest';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -46,6 +47,15 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     const [bleStats, setBleStats] = useState({ connectedDevices: 0, isScanning: false });
     const [bleAvailable, setBleAvailable] = useState(true);
 
+    // Generate stable random number for this session (persists across nickname changes)
+    const [randomNumber] = useState(() => Math.floor(1000 + Math.random() * 9000));
+
+    // Generate display nickname with the stable random number
+    const displayNickname = `${nickname || 'AliceAndBob'}#${randomNumber}`;
+
+    // Full display name for header
+    const fullDisplayName = `anon0mesh/${displayNickname}`;
+
     // Get safe area insets to calculate proper header height
     const insets = useSafeAreaInsets();
     
@@ -55,7 +65,8 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     // Sidebar animation - starts off-screen to the right
     const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH * 0.6)).current;
 
-    const currentUser = nickname && nickname.trim() ? nickname : pubKey.slice(0, 8);
+    // Use display nickname (with #number) for messages - this is what gets stored in messages
+    const currentUser = displayNickname;
 
     // Handle incoming messages
     const handleMessageReceived = useCallback((messageData: any) => {
@@ -93,7 +104,7 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     // Initialize mesh networking with offline focus
     const meshNetworking = useMeshNetworking(
         pubKey,
-        nickname,
+        displayNickname, // Use display nickname with #number for mesh networking
         handleMessageReceived,
         undefined, // No transaction handling for offline mode
         undefined, // No transaction status updates
@@ -108,6 +119,10 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
             lastOnlineTimestamp: 0,
         },
     );
+
+    // Use ref to store mesh networking to avoid dependency issues
+    const meshNetworkingRef = useRef(meshNetworking);
+    meshNetworkingRef.current = meshNetworking;
 
     const toggleSidebar = () => {
         // Animate translateX: 0 = visible, SCREEN_WIDTH * 0.6 = hidden off-screen to the right
@@ -130,11 +145,13 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
 
     const handleNicknameSave = (newNickname: string) => {
         setNickname(newNickname);
-        meshNetworking.updateNickname(newNickname);
+        // Update mesh networking with the display nickname (including #number)
+        const newDisplayNickname = `${newNickname}#${randomNumber}`;
+        meshNetworking.updateNickname(newDisplayNickname);
         if (onNicknameChange) {
             onNicknameChange(newNickname);
         }
-        // Announce presence with new nickname
+        // Announce presence with new display nickname
         setTimeout(() => {
             meshNetworking.announcePresence();
         }, 500);
@@ -183,31 +200,34 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     // Auto-announce presence every 2 minutes
     useEffect(() => {
         const interval = setInterval(() => {
-        meshNetworking.announcePresence();
+        meshNetworkingRef.current.announcePresence();
         }, 120000);
 
         return () => clearInterval(interval);
-    }, [meshNetworking]);
+    }, []); // Empty dependency array is safe since we use ref
 
     // Update BLE stats periodically
     useEffect(() => {
-        const interval = setInterval(() => {
-            const stats = meshNetworking.getBLEStats();
-            setBleStats(stats);
-            
-            // Check if BLE is available
-            const available = meshNetworking.isBLEAvailable();
-            setBleAvailable(available);
-        }, 5000); // Update every 5 seconds
+        const updateStats = () => {
+            try {
+                const stats = meshNetworkingRef.current.getBLEStats();
+                setBleStats(stats);
+                
+                // Check if BLE is available
+                const available = meshNetworkingRef.current.isBLEAvailable();
+                setBleAvailable(available);
+            } catch (error) {
+                console.warn('[UI] Error getting BLE stats:', error);
+            }
+        };
 
         // Initial check
-        const stats = meshNetworking.getBLEStats();
-        setBleStats(stats);
-        const available = meshNetworking.isBLEAvailable();
-        setBleAvailable(available);
+        updateStats();
+
+        const interval = setInterval(updateStats, 5000); // Update every 5 seconds
         
         return () => clearInterval(interval);
-    }, [meshNetworking]);
+    }, []); // Empty dependency array is safe since we use ref
 
     // Get list of peer names for the sidebar
     const peers = activePeers.filter(p => p.isOnline).map(p => p.nickname);
@@ -217,7 +237,8 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         {/* Header */}
         <Header 
             pubKey={pubKey} 
-            nickname={nickname} 
+            nickname={nickname}
+            displayNickname={fullDisplayName}
             toggleSidebar={toggleSidebar} 
             onWalletPress={handleWalletPress}
             onNicknameEdit={handleNicknameEdit}
@@ -255,6 +276,9 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
             >
                 <Text style={{ color: '#FFFFFF' }}>✕</Text>
             </TouchableOpacity>
+
+            {/* BLE Permission Request */}
+            <BLEPermissionRequest />
 
             {/* BLE Status */}
             <BLEStatusIndicator
