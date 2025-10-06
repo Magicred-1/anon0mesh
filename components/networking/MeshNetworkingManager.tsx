@@ -15,6 +15,13 @@ import {
   TransactionStatusResponse 
 } from '../../src/solana/BeaconManager';
 import { createBLEManager, getBLEConfig, BLEManager } from '../../src/networking/BLEFactory';
+import { 
+  initializeBackgroundMesh, 
+  addPacketToBackgroundQueue, 
+  stopBackgroundMesh,
+  getBackgroundMeshStatus,
+} from '../../src/background/BackgroundMeshManager';
+import { AppState, AppStateStatus } from 'react-native';
 
 interface MeshNetworkingProps {
   pubKey: string;
@@ -38,6 +45,11 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   
   // BLE Manager for actual mesh networking
   private bleManager: BLEManager;
+  
+  // Background task management
+  private appStateSubscription?: any;
+  private isInBackground: boolean = false;
+  private backgroundMeshInitialized: boolean = false;
 
   constructor(
     pubKey: string, 
@@ -112,11 +124,17 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     sendPacket(packet: Anon0MeshPacket): void {
         console.log('[MESH] Broadcasting packet:', packet.type);
         this.bleManager.broadcast(packet);
+        
+        // Add packet to background queue if app is in background
+        this.addToBackgroundQueueIfNeeded(packet);
     }
 
     sendPacketToPeer(peerID: string, packet: Anon0MeshPacket): void {
         console.log('[MESH] Sending packet to peer:', peerID, packet.type);
         this.bleManager.sendToPeer(peerID, packet);
+        
+        // Add packet to background queue if app is in background
+        this.addToBackgroundQueueIfNeeded(packet);
     }
 
     signPacketForBroadcast(packet: Anon0MeshPacket): Anon0MeshPacket {
@@ -135,6 +153,9 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
           this.bleManager.startScanning();
         }
         
+        // Initialize background mesh networking
+        this.initializeBackgroundSupport();
+        
         console.log('[MESH] GossipSyncManager and BLE started');
     }
 
@@ -148,6 +169,9 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
         if ('disconnect' in this.bleManager) {
           this.bleManager.disconnect();
         }
+        
+        // Cleanup background support
+        this.cleanupBackgroundSupport();
         
         console.log('[MESH] GossipSyncManager and BLE stopped');
     }
@@ -179,12 +203,13 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     }
 
     // Pure P2P messaging without any blockchain/internet dependencies
-    sendOfflineMessage(message: string, targetPeer?: string): void {
+    sendOfflineMessage(message: string, targetPeer?: string, ttl?: number, channelId?: string): void {
         const payload = {
             nickname: this.nickname,
             message: message,
             messageType: 'p2p',
             timestamp: Date.now(),
+            channelId: channelId, // Zone channel identifier
         };
 
         const packet: Anon0MeshPacket = {
@@ -194,7 +219,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
             timestamp: BigInt(Date.now()),
             payload: Buffer.from(JSON.stringify(payload)),
             signature: undefined,
-            ttl: 5, // Higher TTL for P2P messages to ensure delivery
+            ttl: ttl || 5, // Use zone-based TTL or default to 5
         };
 
         const signed = this.signPacketForBroadcast(packet);
@@ -202,11 +227,11 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
         if (targetPeer) {
             // Direct P2P message
             this.sendPacketToPeer(targetPeer, signed);
-            console.log(`[MESH] Sent P2P message to ${targetPeer.slice(0, 8)}`);
+            console.log(`[MESH] Sent P2P message to ${targetPeer.slice(0, 8)} via zone ${channelId || 'default'}`);
         } else {
-            // Broadcast to all mesh participants
+            // Broadcast to all mesh participants in zone
             this.sendPacket(signed);
-            console.log('[MESH] Broadcast P2P message to mesh');
+            console.log(`[MESH] Broadcast P2P message to mesh zone ${channelId || 'default'} (TTL: ${ttl || 5})`);
         }
         
         // Process locally for our own message list
@@ -403,6 +428,121 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     this.nickname = newNickname;
     console.log('[MESH] Nickname updated to:', newNickname);
   }
+
+  // Background Support Methods
+  private async initializeBackgroundSupport(): Promise<void> {
+    try {
+      if (!this.backgroundMeshInitialized) {
+        console.log('[MESH] Initializing background mesh support...');
+        await initializeBackgroundMesh(this.pubKey);
+        this.backgroundMeshInitialized = true;
+        console.log('[MESH] Background mesh support initialized');
+      }
+
+      // Set up app state monitoring
+      this.setupAppStateMonitoring();
+    } catch (error) {
+      console.error('[MESH] Failed to initialize background support:', error);
+    }
+  }
+
+  private setupAppStateMonitoring(): void {
+    // Clean up any existing subscription
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+    }
+
+    // Monitor app state changes
+    this.appStateSubscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      console.log('[MESH] App state changed to:', nextAppState);
+      
+      const wasInBackground = this.isInBackground;
+      this.isInBackground = nextAppState === 'background' || nextAppState === 'inactive';
+      
+      if (!wasInBackground && this.isInBackground) {
+        console.log('[MESH] App entering background - enabling background relay');
+        this.onAppEnterBackground();
+      } else if (wasInBackground && !this.isInBackground) {
+        console.log('[MESH] App entering foreground - resuming normal operation');
+        this.onAppEnterForeground();
+      }
+    });
+  }
+
+  private async onAppEnterBackground(): Promise<void> {
+    console.log('[MESH] Configuring for background operation...');
+    
+    try {
+      // Get current background status
+      const status = await getBackgroundMeshStatus();
+      console.log('[MESH] Background mesh status:', status);
+      
+      if (!status.isActive) {
+        console.warn('[MESH] Background mesh not active - this may affect relay/gossip');
+      }
+    } catch (error) {
+      console.error('[MESH] Failed to check background status:', error);
+    }
+  }
+
+  private onAppEnterForeground(): void {
+    console.log('[MESH] Resuming foreground operation...');
+    
+    // Resume normal BLE operations
+    if ('startScanning' in this.bleManager) {
+      this.bleManager.startScanning();
+    }
+    
+    // Announce presence after returning to foreground
+    setTimeout(() => {
+      this.announcePresence();
+    }, 1000);
+  }
+
+  private async addToBackgroundQueueIfNeeded(packet: Anon0MeshPacket): Promise<void> {
+    if (this.isInBackground && this.backgroundMeshInitialized) {
+      try {
+        await addPacketToBackgroundQueue(packet);
+        console.log('[MESH] Added packet to background queue');
+      } catch (error) {
+        console.error('[MESH] Failed to add packet to background queue:', error);
+      }
+    }
+  }
+
+  private async cleanupBackgroundSupport(): Promise<void> {
+    try {
+      // Remove app state listener
+      if (this.appStateSubscription) {
+        this.appStateSubscription.remove();
+        this.appStateSubscription = undefined;
+      }
+
+      // Stop background mesh operations
+      if (this.backgroundMeshInitialized) {
+        await stopBackgroundMesh();
+        this.backgroundMeshInitialized = false;
+        console.log('[MESH] Background mesh support cleaned up');
+      }
+    } catch (error) {
+      console.error('[MESH] Failed to cleanup background support:', error);
+    }
+  }
+
+  // Get background mesh status
+  async getBackgroundMeshStatus() {
+    try {
+      return await getBackgroundMeshStatus();
+    } catch (error) {
+      console.error('[MESH] Failed to get background mesh status:', error);
+      return {
+        isActive: false,
+        relayEnabled: false,
+        gossipEnabled: false,
+        backgroundFetchStatus: 'denied' as any,
+      };
+    }
+  }
 }
 
 // React Hook for mesh networking
@@ -446,8 +586,8 @@ export const useMeshNetworking = (
   };
 
   // Offline P2P messaging without blockchain dependencies
-  const sendOfflineMessage = (message: string, targetPeer?: string) => {
-    meshManager.current?.sendOfflineMessage(message, targetPeer);
+  const sendOfflineMessage = (message: string, targetPeer?: string, ttl?: number, channelId?: string) => {
+    meshManager.current?.sendOfflineMessage(message, targetPeer, ttl, channelId);
   };
 
   const sendTransactionViaBeacon = (
@@ -491,6 +631,10 @@ export const useMeshNetworking = (
     meshManager.current?.updateNickname(newNickname);
   };
 
+  const getBackgroundMeshStatus = async () => {
+    return meshManager.current?.getBackgroundMeshStatus();
+  };
+
   return {
     sendMessage,
     sendOfflineMessage, // P2P messaging without internet dependencies
@@ -503,6 +647,7 @@ export const useMeshNetworking = (
     isBLEAvailable,
     getConnectedBLEPeers,
     updateNickname,
+    getBackgroundMeshStatus,
     meshManager: meshManager.current,
   };
 };

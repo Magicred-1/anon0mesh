@@ -94,7 +94,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                 style={{
                     color: '#007AFF',
                     fontSize: 16,
-                    fontFamily: 'Lexend',
+                    fontFamily: 'Lexend_400Regular',
                 }}
                 >
                 Cancel
@@ -106,7 +106,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                 color: '#FFFFFF',
                 fontSize: 18,
                 fontWeight: '600',
-                fontFamily: 'Lexend',
+                fontFamily: 'Lexend_400Regular',
                 }}
             >
                 Edit Nickname
@@ -124,7 +124,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                     color: '#007AFF',
                     fontSize: 16,
                     fontWeight: '600',
-                    fontFamily: 'Lexend',
+                    fontFamily: 'Lexend_400Regular',
                 }}
                 >
                 {isValidating ? 'Saving...' : 'Save'}
@@ -150,7 +150,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                     style={{
                     color: '#AAAAAA',
                     fontSize: 14,
-                    fontFamily: 'Lexend',
+                    fontFamily: 'Lexend_400Regular',
                     marginBottom: 8,
                     }}
                 >
@@ -178,7 +178,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                         color: '#FFFFFF',
                         fontSize: 14,
                         fontWeight: '600',
-                        fontFamily: 'Lexend',
+                        fontFamily: 'Lexend_400Regular',
                         }}
                     >
                         {nickname.trim().charAt(0).toUpperCase()}
@@ -188,7 +188,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                     style={{
                         color: '#FFFFFF',
                         fontSize: 16,
-                        fontFamily: 'Lexend',
+                        fontFamily: 'Lexend_400Regular',
                     }}
                     >
                     {nickname.trim()}
@@ -201,7 +201,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                 style={{
                 color: '#FFFFFF',
                 fontSize: 16,
-                fontFamily: 'Lexend',
+                fontFamily: 'Lexend_400Regular',
                 marginBottom: 8,
                 }}
             >
@@ -216,7 +216,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                 paddingVertical: 14,
                 color: '#FFFFFF',
                 fontSize: 16,
-                fontFamily: 'Lexend',
+                fontFamily: 'Lexend_400Regular',
                 borderWidth: 1,
                 borderColor: '#444',
                 }}
@@ -237,7 +237,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                 style={{
                 color: '#888',
                 fontSize: 14,
-                fontFamily: 'Lexend',
+                fontFamily: 'Lexend_400Regular',
                 marginTop: 8,
                 textAlign: 'right',
                 }}
@@ -252,7 +252,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                     color: '#AAAAAA',
                     fontSize: 16,
                     fontWeight: '600',
-                    fontFamily: 'Lexend',
+                    fontFamily: 'Lexend_400Regular',
                     marginBottom: 12,
                 }}
                 >
@@ -260,16 +260,16 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                 </Text>
                 
                 <View style={{ marginLeft: 10 }}>
-                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend' }}>
+                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
                     • 2-20 characters long
                 </Text>
-                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend' }}>
+                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
                     • Letters, numbers, and basic punctuation only
                 </Text>
-                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend' }}>
+                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
                     • Will be visible to other mesh users
                 </Text>
-                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend' }}>
+                <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
                     • Choose something memorable and appropriate
                 </Text>
                 </View>

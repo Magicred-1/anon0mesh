@@ -1,9 +1,9 @@
 export enum MessageType {
-  MESSAGE = 0,
-  ANNOUNCE = 1,
-  REQUEST_SYNC = 2,
-  SOLANA_TRANSACTION = 3,
-  LEAVE = 4,
+    MESSAGE = 0,
+    ANNOUNCE = 1,
+    REQUEST_SYNC = 2,
+    SOLANA_TRANSACTION = 3,
+    LEAVE = 4,
 }
 
 export interface Anon0MeshPacket {

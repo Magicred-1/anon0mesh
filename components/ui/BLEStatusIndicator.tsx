@@ -63,7 +63,7 @@ const BLEStatusIndicator: React.FC<BLEStatusIndicatorProps> = ({
         style={{
           color: '#FFFFFF',
           fontSize: 12,
-          fontFamily: 'System',
+          fontFamily: 'Lexend_400Regular',
           flex: 1,
         }}
       >

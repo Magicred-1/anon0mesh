@@ -10,29 +10,34 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import OnboardingScreen from '@/components/screens/OnboardingScreen';
 import OfflineMeshChatScreen from '@/components/screens/OfflineMeshChatScreen';
-import SplashScreen from '@/components/screens/SplashScreen';
+import IndexScreen from '@/components/screens/IndexScreen';
 
 export default function App() {
   const [pubKey, setPubKey] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string>('');
   const [tempNickname, setTempNickname] = useState<string>('');
-  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [showIndex, setShowIndex] = useState<boolean>(true);
+  const [hasSeenIndex, setHasSeenIndex] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   useEffect(() => {
     (async () => {
-      // Wait for splash screen to complete before loading data
-      if (!showSplash) {
-        const savedPubKey = await SecureStore.getItemAsync('pubKey');
-        if (savedPubKey) setPubKey(savedPubKey);
+      // Load data immediately
+      const savedPubKey = await SecureStore.getItemAsync('pubKey');
+      if (savedPubKey) setPubKey(savedPubKey);
 
-        const savedNickname = await SecureStore.getItemAsync('nickname');
-        if (savedNickname) setNickname(savedNickname);
-        
-        setIsInitialized(true);
+      const savedNickname = await SecureStore.getItemAsync('nickname');
+      if (savedNickname) setNickname(savedNickname);
+
+      // Check if user has seen the index before
+      const seenIndex = await SecureStore.getItemAsync('hasSeenIndex');
+      if (seenIndex === 'true') {
+        setHasSeenIndex(true);
       }
+      
+      setIsInitialized(true);
     })();
-  }, [showSplash]);
+  }, []);
 
   async function onboard() {
     // Test crypto before proceeding
@@ -88,15 +93,30 @@ export default function App() {
     }
   }
 
+  const handleEnterMesh = async () => {
+    // Mark that user has seen the index
+    await SecureStore.setItemAsync('hasSeenIndex', 'true');
+    setHasSeenIndex(true);
+    setShowIndex(false);
+  };
+
+  const handleBackToIndex = () => {
+    setShowIndex(true);
+  };
+
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor="#212122" />
-      {showSplash ? (
-        <SplashScreen onAnimationComplete={() => setShowSplash(false)} />
+      <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
+      {showIndex ? (
+        <IndexScreen 
+          onEnter={handleEnterMesh} 
+          isReturningUser={hasSeenIndex && pubKey !== null}
+        />
       ) : isInitialized && pubKey ? (
         <OfflineMeshChatScreen
           pubKey={pubKey}
           nickname={nickname || `anon${pubKey.slice(0, 6)}`}
+          onBackToIndex={handleBackToIndex}
         />
       ) : isInitialized ? (
         <OnboardingScreen

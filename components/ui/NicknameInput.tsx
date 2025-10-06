@@ -56,7 +56,7 @@ export default function NicknameInput({ onSave }: Props) {
                 paddingVertical: 6,
                 marginRight: 8,
                 color: '#C084FC',
-                fontFamily: 'Lexend',
+                fontFamily: 'Lexend_400Regular',
                 backgroundColor: '#000000',
                 }}
                 placeholder="Set or change nickname"
@@ -79,7 +79,7 @@ export default function NicknameInput({ onSave }: Props) {
                 style={{
                     color: '#FFFFFF',
                     fontWeight: 'regular',
-                    fontFamily: 'Lexend',
+                    fontFamily: 'Lexend_400Regular',
                 }}
                 >
                 Save
@@ -98,7 +98,7 @@ export default function NicknameInput({ onSave }: Props) {
             <Text
                 style={{
                 color: '#A855F7',
-                fontFamily: 'Lexend',
+                fontFamily: 'Lexend_400Regular',
                 fontWeight: 'regular',
                 }}
             >

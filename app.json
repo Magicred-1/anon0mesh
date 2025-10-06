@@ -55,6 +55,17 @@
         }
       ],
       [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/@expo-google-fonts/lexend/Lexend_400Regular.ttf",
+            "node_modules/@expo-google-fonts/lexend/Lexend_500Medium.ttf",
+            "node_modules/@expo-google-fonts/lexend/Lexend_600SemiBold.ttf",
+            "node_modules/@expo-google-fonts/lexend/Lexend_700Bold.ttf"
+          ]
+        }
+      ],
+      [
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
@@ -63,6 +74,18 @@
             "central"
           ],
           "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices"
+        }
+      ],
+      [
+        "expo-background-fetch",
+        {
+          "backgroundFetchEnabled": true
+        }
+      ],
+      [
+        "expo-task-manager",
+        {
+          "backgroundTasks": ["mesh-relay-task", "mesh-gossip-task"]
         }
       ],
       "expo-secure-store"

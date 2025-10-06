@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { FlatList, Text, View, StyleSheet } from 'react-native';
 
 export interface Message {
     from: string;
@@ -25,62 +25,29 @@ export default function MessageList({
         const isMe = currentUser === item.from;
         const isPrivate = !!item.to;
 
-        const bgColor = isMe
-            ? '#404040' // my messages - darker
-            : isPrivate
-            ? '#4a4a4a' // private incoming - slightly lighter
-            : '#3a3a3a'; // public incoming
-
-        const textColor = '#FFFFFF';
-
         return (
-            <View
-                style={{
-                    alignSelf: isMe ? 'flex-end' : 'flex-start',
-                    backgroundColor: bgColor,
-                    borderRadius: 12,
-                    padding: 8,
-                    marginVertical: 2,
-                    maxWidth: '75%',
-                    marginHorizontal: 12,
-                    borderWidth: 0,
-                }}
-            >
-                {showUsername && (
-                    <Text
-                        style={{
-                            fontSize: 11,
-                            color: '#cccccc',
-                            fontFamily: 'System',
-                            marginBottom: 2,
-                        }}
-                    >
-                        {item.from}
-                        {isPrivate ? ` → ${item.to}` : ''}:
+            <View style={styles.messageContainer}>
+                {/* Username and message inline */}
+                <Text style={styles.messageText}>
+                    {showUsername && (
+                        <Text style={[styles.username, isMe && styles.usernameMe]}>
+                            {item.from}
+                            {isPrivate && (
+                                <Text style={styles.privateIndicator}> → {item.to}</Text>
+                            )}
+                            {': '}
+                        </Text>
+                    )}
+                    <Text style={[styles.messageContent, isMe && styles.messageContentMe]}>
+                        {item.msg}
                     </Text>
-                )}
-
-                <Text
-                    style={{
-                        color: textColor,
-                        fontSize: 14,
-                        fontFamily: 'System',
-                        lineHeight: 18,
-                    }}
-                >
-                    {item.msg}
-                </Text>
-
-                <Text
-                    style={{
-                        fontSize: 9,
-                        color: '#999999',
-                        alignSelf: 'flex-end',
-                        fontFamily: 'System',
-                        marginTop: 2,
-                    }}
-                >
-                    {new Date(item.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <Text style={styles.timestamp}>
+                        {' '}
+                        {new Date(item.ts).toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        })}
+                    </Text>
                 </Text>
             </View>
         );
@@ -92,18 +59,64 @@ export default function MessageList({
             data={messages}
             keyExtractor={(item, index) => `${item.ts}-${index}`}
             renderItem={renderItem}
-            style={{ 
-                flex: 1, 
-                backgroundColor: '#212122',
-                paddingHorizontal: 0,
-            }}
-            contentContainerStyle={{ 
-                paddingVertical: 8,
-                paddingBottom: 80, // Add bottom padding for message input
-                flexGrow: 1,
-            }}
+            style={styles.container}
+            contentContainerStyle={styles.contentContainer}
             showsVerticalScrollIndicator={false}
-            inverted
         />
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#0f0f0f',
+    },
+    contentContainer: {
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        paddingBottom: 90,
+        flexGrow: 1,
+        justifyContent: 'flex-start',
+    },
+    messageContainer: {
+        marginVertical: 2,
+        paddingHorizontal: 4,
+        alignItems: 'flex-start',
+    },
+    messageText: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#e5e7eb',
+        letterSpacing: 0.2,
+        fontFamily: 'Lexend_400Regular',
+        textAlign: 'left',
+    },
+    username: {
+        fontWeight: '600',
+        color: '#9ca3af',
+        fontFamily: 'Lexend_400Regular',
+    },
+    usernameMe: {
+        color: '#0084ff',
+        fontFamily: 'Lexend_400Regular',
+    },
+    privateIndicator: {
+        color: '#4ade80',
+        fontWeight: '500',
+        fontFamily: 'Lexend_400Regular',
+    },
+    messageContent: {
+        color: '#e5e7eb',
+        fontFamily: 'Lexend_400Regular',
+    },
+    messageContentMe: {
+        color: '#e5e7eb',
+        fontFamily: 'Lexend_400Regular',
+    },
+    timestamp: {
+        fontSize: 11,
+        color: '#6b7280',
+        fontWeight: '400',
+        fontFamily: 'Lexend_400Regular',
+    },
+});

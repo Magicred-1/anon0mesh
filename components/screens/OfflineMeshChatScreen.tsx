@@ -16,6 +16,11 @@ import ReceiveMoneyScreen from './WalletScreen';
 import EditNicknameModal from '../ui/EditNicknameModal';
 import BLEStatusIndicator from '../ui/BLEStatusIndicator';
 import BLEPermissionRequest from '../ui/BLEPermissionRequest';
+import BackgroundMeshStatusIndicator from '../ui/BackgroundMeshStatusIndicator';
+import { ZoneDropdownSelector } from '../ui/ZoneDropdownSelector';
+import { useChannels } from '../../src/contexts/ChannelContext';
+import { Channel } from '../../src/types/channels';
+import { MeshBackground } from '../ui/MeshBackground';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -23,6 +28,7 @@ interface OfflineMeshChatScreenProps {
     pubKey: string;
     nickname: string;
     onNicknameChange?: (newNickname: string) => void;
+    onBackToIndex?: () => void;
 }
 
 interface PeerInfo {
@@ -36,6 +42,7 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     pubKey,
     nickname: initialNickname,
     onNicknameChange,
+    onBackToIndex,
 }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [activePeers, setActivePeers] = useState<PeerInfo[]>([]);
@@ -46,6 +53,9 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     const [nickname, setNickname] = useState(initialNickname);
     const [bleStats, setBleStats] = useState({ connectedDevices: 0, isScanning: false });
     const [bleAvailable, setBleAvailable] = useState(true);
+
+    // Channel management
+    const { channels, currentChannel, setCurrentChannel } = useChannels();
 
     // Generate stable random number for this session (persists across nickname changes)
     const [randomNumber] = useState(() => Math.floor(1000 + Math.random() * 9000));
@@ -59,8 +69,8 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     // Get safe area insets to calculate proper header height
     const insets = useSafeAreaInsets();
     
-    // Calculate header height: safe area top + padding bottom (16) + content height (~50)
-    const headerHeight = insets.top + 16 + 50;
+    // Calculate header height: safe area top + padding + content height (refined, more compact)
+    const headerHeight = insets.top + 14 + 46;
 
     // Sidebar animation - starts off-screen to the right
     const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH * 0.6)).current;
@@ -163,8 +173,9 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         
         const targetPeer = selectedPeer;
         
-        // Use offline messaging method
-        meshNetworking.sendOfflineMessage(msg.trim(), targetPeer || undefined);
+        // Use offline messaging method with zone-based TTL
+        const ttl = currentChannel?.ttl || 5;
+        meshNetworking.sendOfflineMessage(msg.trim(), targetPeer || undefined, ttl, currentChannel?.id);
 
         // Add to our local message list
         const newMessage: Message = {
@@ -233,16 +244,27 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     const peers = activePeers.filter(p => p.isOnline).map(p => p.nickname);
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#212122' }}>
-        {/* Header */}
-        <Header 
-            pubKey={pubKey} 
-            nickname={nickname}
-            displayNickname={fullDisplayName}
-            toggleSidebar={toggleSidebar} 
-            onWalletPress={handleWalletPress}
-            onNicknameEdit={handleNicknameEdit}
-        />
+        <MeshBackground>
+            <View style={{ flex: 1 }}>
+            {/* Header with Zone Selector */}
+            <Header 
+                pubKey={pubKey} 
+                nickname={nickname}
+                displayNickname={fullDisplayName}
+                toggleSidebar={toggleSidebar} 
+                onWalletPress={handleWalletPress}
+                onNicknameEdit={handleNicknameEdit}
+                zoneSelector={
+                    <ZoneDropdownSelector
+                        channels={channels}
+                        currentChannel={currentChannel}
+                        onChannelSelect={(channel: Channel) => {
+                            setCurrentChannel(channel);
+                            console.log(`[UI] Switched to zone: ${channel.name} (TTL: ${channel.ttl})`);
+                        }}
+                    />
+                }
+            />
 
         {/* Private sidebar (slides from RIGHT) - Full height */}
         <Animated.View
@@ -288,6 +310,11 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
                 bleAvailable={bleAvailable}
             />
 
+            {/* Background Mesh Status */}
+            <BackgroundMeshStatusIndicator
+                getBackgroundStatus={meshNetworking.getBackgroundMeshStatus}
+            />
+
             {peers.length > 0 ? (
                 peers.map((peer, index) => (
                 <TouchableOpacity
@@ -315,7 +342,7 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         </Animated.View>
 
         {/* Messages Area - Clean and minimal */}
-        <View style={{ flex: 1, backgroundColor: '#212122' }}>
+        <View style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
             <MessageList
             messages={messages.filter((m) =>
                 selectedPeer ? (m.to === selectedPeer || m.from === selectedPeer) : !m.to
@@ -382,6 +409,7 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
             onClose={() => setEditNicknameVisible(false)}
         />
         </View>
+        </MeshBackground>
     );
 };
 

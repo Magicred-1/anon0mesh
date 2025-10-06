@@ -1,32 +1,30 @@
-import { useNavigation } from '@react-navigation/native';
 import React, { useRef, useState } from 'react';
-import { Modal, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import PenIcon from './PenIcon';
+import { useRouter } from 'expo-router';
 
 interface Props {
     pubKey: string;
     nickname: string;
     displayNickname?: string;
-    currentChannelName?: string;
     toggleSidebar: () => void;
     onWalletPress?: () => void;
     onNicknameEdit?: () => void;
-    onChannelPress?: () => void;
+    zoneSelector?: React.ReactNode;
 }
 
 export default function Header({ 
     pubKey, 
     nickname, 
     displayNickname, 
-    currentChannelName = 'General',
     toggleSidebar, 
     onWalletPress, 
     onNicknameEdit,
-    onChannelPress 
+    zoneSelector
 }: Props) {
-    const navigation = useNavigation<any>();
+    const navigation = useRouter();
     const tapCount = useRef(0);
     const tapTimeout = useRef<NodeJS.Timeout | number | null>(null);
     const [qrVisible, setQrVisible] = useState(false);
@@ -37,8 +35,8 @@ export default function Header({
         if (tapTimeout.current) clearTimeout(tapTimeout.current);
 
         tapTimeout.current = setTimeout(() => {
-            if (tapCount.current === 3) {
-                navigation.navigate('onboarding');
+            if (tapCount.current === 3 || tapCount.current > 3) {
+                navigation.navigate('/landing');
             }
             tapCount.current = 0;
         }, 400);
@@ -47,133 +45,51 @@ export default function Header({
     const displayName = displayNickname || `anon0mesh/${nickname || 'AliceAndBob'}`;
 
     return (
-        <SafeAreaView style={{ backgroundColor: '#212122' }} edges={['top']}>
-            <View
-                style={{
-                    paddingTop: 8,
-                    paddingBottom: 12,
-                    paddingHorizontal: 20,
-                    backgroundColor: '#212122',
-                    flexDirection: 'column',
-                    minHeight: 76,
-                }}
-            >
-                <View style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <View style={styles.container}>
+                {/* Top Row - Identity and Wallet */}
+                <View style={styles.topRow}>
+                    {/* Left - User Identity */}
+                    <View style={styles.identityContainer}>
                         <TouchableOpacity onPress={handleTitleTap} activeOpacity={0.7}>
-                            <Text
-                                style={{
-                                    fontWeight: '400',
-                                    fontSize: 17,
-                                    color: '#FFFFFF',
-                                    fontFamily: 'System',
-                                }}
-                            >
+                            <Text style={styles.displayName} numberOfLines={1}>
                                 {displayName}
                             </Text>
                         </TouchableOpacity>
                         
                         <TouchableOpacity
                             onPress={onNicknameEdit}
-                            style={{
-                                marginLeft: 8,
-                                padding: 4,
-                                borderRadius: 4,
-                            }}
+                            style={styles.editButton}
                             activeOpacity={0.6}
                         >
-                            <PenIcon size={16} color="#888888" />
+                            <PenIcon size={11} color="#999999" />
                         </TouchableOpacity>
                     </View>
 
+                    {/* Right - Wallet Button */}
                     <TouchableOpacity
                         onPress={onWalletPress || (() => {})}
-                        style={{
-                            backgroundColor: '#404040',
-                            paddingVertical: 8,
-                            paddingHorizontal: 16,
-                            borderRadius: 8,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                        }}
+                        style={styles.walletButton}
+                        activeOpacity={0.7}
                     >
-                        <Text style={{ fontSize: 14, marginRight: 6 }}>💰</Text>
-                        <Text
-                            style={{
-                                color: '#FFFFFF',
-                                fontWeight: '500',
-                                fontFamily: 'System',
-                                fontSize: 15,
-                            }}
-                        >
-                            Wallet
-                        </Text>
+                        <Text style={styles.buttonEmoji}>💰</Text>
+                        <Text style={styles.walletText}>Wallet</Text>
                     </TouchableOpacity>
                 </View>
 
-                <View style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                }}>
-                    <TouchableOpacity
-                        onPress={onChannelPress}
-                        style={{
-                            backgroundColor: '#333333',
-                            paddingVertical: 6,
-                            paddingHorizontal: 12,
-                            borderRadius: 6,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            flex: 1,
-                            marginRight: 12,
-                        }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={{ fontSize: 16, marginRight: 8 }}>💬</Text>
-                        <Text
-                            style={{
-                                color: '#FFFFFF',
-                                fontWeight: '500',
-                                fontFamily: 'System',
-                                fontSize: 14,
-                                flex: 1,
-                            }}
-                            numberOfLines={1}
-                        >
-                            #{currentChannelName}
-                        </Text>
-                        <Text style={{ color: '#888888', fontSize: 12 }}>▼</Text>
-                    </TouchableOpacity>
+                {/* Bottom Row - Zone and Peers */}
+                <View style={styles.bottomRow}>
+                    {/* Zone Selector (if provided) */}
+                    {zoneSelector}
 
+                    {/* Peers Button */}
                     <TouchableOpacity
                         onPress={toggleSidebar}
-                        style={{
-                            backgroundColor: '#333333',
-                            paddingVertical: 6,
-                            paddingHorizontal: 12,
-                            borderRadius: 6,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                        }}
+                        style={styles.peersButton}
                         activeOpacity={0.7}
                     >
-                        <Text style={{ fontSize: 16, marginRight: 6 }}>👥</Text>
-                        <Text
-                            style={{
-                                color: '#FFFFFF',
-                                fontWeight: '500',
-                                fontFamily: 'System',
-                                fontSize: 14,
-                            }}
-                        >
-                            Peers
-                        </Text>
+                        <Text style={styles.buttonEmoji}>👥</Text>
+                        <Text style={styles.peersText}>Peers</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -200,7 +116,7 @@ export default function Header({
                         <Text
                             style={{
                                 color: '#B10FF2',
-                                fontFamily: 'Lexend',
+                                fontFamily: 'Lexend_400Regular',
                                 marginBottom: 16,
                                 fontSize: 16,
                                 fontWeight: 'regular',
@@ -227,7 +143,7 @@ export default function Header({
                             <Text
                                 style={{
                                     color: '#FFFFFF',
-                                    fontFamily: 'Lexend',
+                                    fontFamily: 'Lexend_400Regular',
                                     fontWeight: 'regular',
                                 }}
                             >
@@ -240,3 +156,97 @@ export default function Header({
         </SafeAreaView>
     );
 }
+
+const styles = StyleSheet.create({
+    safeArea: {
+        backgroundColor: '#0f0f0f',
+    },
+    container: {
+        paddingTop: 8,
+        paddingBottom: 8,
+        paddingHorizontal: 14,
+        backgroundColor: '#0f0f0f',
+        flexDirection: 'column',
+        borderBottomWidth: 1,
+        borderBottomColor: '#1f1f1f',
+    },
+    topRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    identityContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 10,
+    },
+    displayName: {
+        fontWeight: '600',
+        fontSize: 14.5,
+        color: '#FFFFFF',
+        letterSpacing: -0.2,
+        fontFamily: 'Lexend_400Regular',
+    },
+    editButton: {
+        marginLeft: 6,
+        padding: 5,
+        borderRadius: 6,
+        backgroundColor: '#1a1a1a',
+    },
+    walletButton: {
+        backgroundColor: '#1a1a1a',
+        paddingVertical: 7,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#252525',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    buttonEmoji: {
+        fontSize: 13,
+        marginRight: 5,
+    },
+    walletText: {
+        color: '#E0E0E0',
+        fontWeight: '600',
+        fontSize: 12.5,
+        fontFamily: 'Lexend_400Regular',
+        letterSpacing: 0.2,
+    },
+    bottomRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 8,
+    },
+    peersButton: {
+        backgroundColor: '#1a1a1a',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#252525',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    peersText: {
+        color: '#E0E0E0',
+        fontWeight: '600',
+        fontSize: 11.5,
+        fontFamily: 'Lexend_400Regular',
+        letterSpacing: 0.2,
+    },
+});

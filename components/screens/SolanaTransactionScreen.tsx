@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import { useSolanaWallet } from '../src/solana/useSolanaWallet';
-import { useMeshNetworking } from './networking/MeshNetworkingManager';
-import { TokenType } from '../src/solana/BeaconManager';
+import { useSolanaWallet } from '../../src/solana/useSolanaWallet';
+import { useMeshNetworking } from '../networking/MeshNetworkingManager';
+import { TokenType } from '../../src/solana/BeaconManager';
 
 interface SolanaTransactionScreenProps {
   pubKey: string;

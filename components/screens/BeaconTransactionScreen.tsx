@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView, Switch } from 'react-native';
-import { useSolanaWallet } from '../src/solana/useSolanaWallet';
-import { useMeshNetworking } from './networking/MeshNetworkingManager';
+import { useSolanaWallet } from '../../src/solana/useSolanaWallet';
+import { useMeshNetworking } from '../networking/MeshNetworkingManager';
 import { 
   TokenType, 
   TransactionStatusResponse, 
   BeaconCapabilities,
   TransactionStatus 
-} from '../src/solana/BeaconManager';
+} from '../../src/solana/BeaconManager';
 
 interface BeaconTransactionScreenProps {
   pubKey: string;

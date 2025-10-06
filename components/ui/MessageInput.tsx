@@ -5,6 +5,7 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SendIcon from './SendIcon';
@@ -20,88 +21,136 @@ export default function MessageInput({ onSend, onSendAsset, placeholder }: Props
   const insets = useSafeAreaInsets();
 
   const handleSend = () => {
-    if (!text.trim()) return;
-    onSend(text.trim());
+    const trimmedText = text.trim();
+    if (!trimmedText) return;
+    
+    // Clear text immediately to prevent any trailing newlines
     setText('');
+    
+    // Send the message
+    onSend(trimmedText);
+  };
+
+  const handleKeyPress = (e: any) => {
+    // On enter key without shift, send the message
+    if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      style={{ 
-        paddingHorizontal: 16, 
-        paddingBottom: Math.max(insets.bottom, 12),
-        paddingTop: 8,
-        backgroundColor: '#212122',
-        borderTopWidth: 1,
-        borderTopColor: '#333333',
-      }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      style={{ flex: 0 }}
     >
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          backgroundColor: '#2a2a2a',
-          borderRadius: 24,
-          paddingHorizontal: 16,
-          paddingVertical: 4,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 6,
-          elevation: 3,
-          marginBottom: 4,
-        }}
+      <View 
+        style={[
+          styles.container,
+          { 
+            paddingBottom: Math.max(insets.bottom, 8) + 8,
+          }
+        ]}
       >
-        <TextInput
-          style={{
-            flex: 1,
-            color: '#FFFFFF',
-            fontSize: 16,
-            paddingVertical: 12,
-            paddingHorizontal: 4,
-            fontFamily: 'System',
-            maxHeight: 120,
-            minHeight: 44,
-            textAlignVertical: 'top',
-          }}
-          placeholder={placeholder || "Type message..."}
-          placeholderTextColor="#888888"
-          value={text}
-          onChangeText={setText}
-          blurOnSubmit={false}
-          onSubmitEditing={handleSend}
-          returnKeyType="send"
-          multiline={true}
-          scrollEnabled={true}
-        />
-
-        <TouchableOpacity
-          onPress={handleSend}
-          style={{
-            marginLeft: 8,
-            marginBottom: 4,
-            backgroundColor: text.trim() ? '#b20ff265' : '#b20ff228',
-            borderRadius: 22,
-            width: 44,
-            height: 44,
-            justifyContent: 'center',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.2,
-            shadowRadius: 2,
-            elevation: 2,
-          }}
-          disabled={!text.trim()}
-        >
-          <SendIcon 
-            size={20} 
-            color={text.trim() ? '#FFFFFF' : '#999999'} 
+        <View style={styles.inputWrapper}>
+          <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder={placeholder || "Message..."}
+            placeholderTextColor="#6b7280"
+            value={text}
+            onChangeText={setText}
+            blurOnSubmit={false}
+            onSubmitEditing={handleSend}
+            onKeyPress={handleKeyPress}
+            returnKeyType="send"
+            multiline={true}
+            scrollEnabled={true}
           />
-        </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleSend}
+            style={[
+              styles.sendButton,
+              text.trim() && styles.sendButtonActive,
+            ]}
+            disabled={!text.trim()}
+            activeOpacity={0.7}
+          >
+            <SendIcon 
+              size={20} 
+              color="#FFFFFF" 
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: '#0f0f0f',
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a2a',
+  },
+  inputWrapper: {
+    marginBottom: 4,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  input: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 15,
+    paddingVertical: 8,
+    paddingRight: 8,
+    maxHeight: 100,
+    minHeight: 36,
+    textAlignVertical: 'center',
+    lineHeight: 20,
+    fontFamily: 'Lexend_400Regular',
+  },
+  sendButton: {
+    marginLeft: 8,
+    marginBottom: 0,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0,
+    shadowRadius: 2,
+    elevation: 0,
+  },
+  sendButtonActive: {
+    backgroundColor: '#B10FF2',
+    borderColor: '#C84FFE',
+    shadowColor: '#B10FF2',
+    shadowOpacity: 0.4,
+    elevation: 3,
+  },
+});

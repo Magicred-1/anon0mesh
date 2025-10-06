@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingHorizontal: 16,
     fontWeight: '400',
-    fontFamily: 'Lexend',
+    fontFamily: 'Lexend_400Regular',
     flex: 0.8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
-    fontFamily: 'Lexend',
+    fontFamily: 'Lexend_400Regular',
     textAlign: 'center',
   },
 });

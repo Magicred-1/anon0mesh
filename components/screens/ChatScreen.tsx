@@ -71,7 +71,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
     };
 
     const handleWalletPress = () => {
-        console.log('Wallet pressed in ChatScreen - not implemented');
+        console.log('Wallet pressed in ChatScreen');
     };
 
     return (

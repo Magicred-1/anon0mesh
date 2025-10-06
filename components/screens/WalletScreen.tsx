@@ -112,7 +112,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: selectedTab === 'receive' ? '600' : '400',
-                fontFamily: 'System',
+                fontFamily: 'Lexend_400Regular',
               }}
             >
               Receive
@@ -143,7 +143,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: selectedTab === 'send' ? '600' : '400',
-                fontFamily: 'System',
+                fontFamily: 'Lexend_400Regular',
               }}
             >
               Send
@@ -196,7 +196,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                   style={{
                     color: '#FFFFFF',
                     fontSize: 14,
-                    fontFamily: 'System',
+                    fontFamily: 'Lexend_400Regular',
                     flex: 1,
                   }}
                   numberOfLines={1}
@@ -224,7 +224,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                       color: '#FFFFFF',
                       fontSize: 16,
                       fontWeight: '600',
-                      fontFamily: 'System',
+                      fontFamily: 'Lexend_400Regular',
                     }}
                   >
                     Copy Address
@@ -259,7 +259,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         color: '#FFFFFF',
                         fontSize: 32,
                         fontWeight: '300',
-                        fontFamily: 'System',
+                        fontFamily: 'Lexend_400Regular',
                         textAlign: 'center',
                         backgroundColor: 'transparent',
                         borderWidth: 0,
@@ -278,7 +278,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         color: '#FFFFFF',
                         fontSize: 32,
                         fontWeight: '300',
-                        fontFamily: 'System',
+                        fontFamily: 'Lexend_400Regular',
                         marginLeft: 8,
                         marginRight: 8,
                       }}
@@ -318,7 +318,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         style={{
                           color: '#FFFFFF',
                           fontSize: 16,
-                          fontFamily: 'System',
+                          fontFamily: 'Lexend_400Regular',
                           marginRight: 8,
                         }}
                       >
@@ -359,7 +359,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                             style={{
                               color: '#FFFFFF',
                               fontSize: 16,
-                              fontFamily: 'System',
+                              fontFamily: 'Lexend_400Regular',
                               marginLeft: 8,
                             }}
                           >
@@ -387,7 +387,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                             style={{
                               color: '#FFFFFF',
                               fontSize: 16,
-                              fontFamily: 'System',
+                              fontFamily: 'Lexend_400Regular',
                               marginLeft: 8,
                             }}
                           >
@@ -409,7 +409,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                       style={{
                         color: '#AAAAAA',
                         fontSize: 14,
-                        fontFamily: 'System',
+                        fontFamily: 'Lexend_400Regular',
                         marginRight: 6,
                       }}
                     >
@@ -441,7 +441,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                       flex: 1,
                       color: '#FFFFFF',
                       fontSize: 16,
-                      fontFamily: 'System',
+                      fontFamily: 'Lexend_400Regular',
                     }}
                     placeholder="Enter recipient address.."
                     placeholderTextColor="#666"
@@ -484,7 +484,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                       color: '#FFFFFF',
                       fontSize: 16,
                       fontWeight: '600',
-                      fontFamily: 'System',
+                      fontFamily: 'Lexend_400Regular',
                     }}
                   >
                     Send {sendAmount} {selectedCurrency}
@@ -497,7 +497,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 style={{
                   color: '#888',
                   fontSize: 14,
-                  fontFamily: 'System',
+                  fontFamily: 'Lexend_400Regular',
                   textAlign: 'center',
                   paddingHorizontal: 20,
                   marginTop: 16,
