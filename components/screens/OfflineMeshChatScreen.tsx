@@ -12,7 +12,7 @@ import { useMeshNetworking } from '../networking/MeshNetworkingManager';
 import Header from '../ui/Header';
 import MessageInput from '../ui/MessageInput';
 import MessageList, { Message } from '../ui/MessageList';
-import ReceiveMoneyScreen from './WalletScreen';
+import WalletScreen from './WalletScreen';
 import EditNicknameModal from '../ui/EditNicknameModal';
 import BLEStatusIndicator from '../ui/BLEStatusIndicator';
 import BLEPermissionRequest from '../ui/BLEPermissionRequest';
@@ -393,8 +393,8 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
             placeholder={selectedPeer ? `Message ${selectedPeer}` : 'Type message...'}
         />
 
-        {/* Receive Money Screen */}
-        <ReceiveMoneyScreen
+        {/* Wallet Screen */}
+        <WalletScreen
             visible={receiveMoneyVisible}
             onClose={() => setReceiveMoneyVisible(false)}
             pubKey={pubKey}

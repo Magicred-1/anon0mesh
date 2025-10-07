@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import * as BackgroundFetch from 'expo-background-fetch';
+
+// Optional import - may not be available in Expo Go
+let BackgroundFetch: any = null;
+try {
+    // eslint-disable-next-line
+    BackgroundFetch = require('expo-background-fetch');
+} catch {
+    console.log('[BG-STATUS] BackgroundFetch not available (Expo Go)');
+}
 
 interface BackgroundMeshStatusProps {
     getBackgroundStatus?: () => Promise<any>;
@@ -11,7 +19,7 @@ export interface BackgroundMeshStatus {
     isActive: boolean;
     relayEnabled: boolean;
     gossipEnabled: boolean;
-    backgroundFetchStatus: BackgroundFetch.BackgroundFetchStatus;
+    backgroundFetchStatus: any; // Can't use BackgroundFetch.BackgroundFetchStatus if module not loaded
 }
 
 const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
@@ -21,7 +29,7 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
     const [status, setStatus] = useState<BackgroundMeshStatus | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-
+    
     const updateStatus = React.useCallback(async () => {
         if (!getBackgroundStatus) return;
         
@@ -59,26 +67,28 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
         if (!status) return 'Unknown';
         
         if (status.isActive && status.relayEnabled && status.gossipEnabled) {
-        return 'Active';
+            return 'Active';
         } else if (status.isActive) {
-        return 'Partial';
-        } else if (status.backgroundFetchStatus === BackgroundFetch.BackgroundFetchStatus.Denied) {
-        return 'Expo Go';
+            return 'Partial';
+        } else if (!BackgroundFetch || (BackgroundFetch && status.backgroundFetchStatus === BackgroundFetch.BackgroundFetchStatus?.Denied)) {
+            return 'Expo Go';
         } else {
-        return 'Inactive';
+            return 'Inactive';
         }
     };
 
-    const getBackgroundFetchStatusText = (bgStatus: BackgroundFetch.BackgroundFetchStatus): string => {
+    const getBackgroundFetchStatusText = (bgStatus: any): string => {
+        if (!BackgroundFetch) return 'Not Available';
+        
         switch (bgStatus) {
-        case BackgroundFetch.BackgroundFetchStatus.Available:
-            return 'Available';
-        case BackgroundFetch.BackgroundFetchStatus.Denied:
-            return 'Denied';
-        case BackgroundFetch.BackgroundFetchStatus.Restricted:
-            return 'Restricted';
-        default:
-            return 'Unknown';
+            case BackgroundFetch.BackgroundFetchStatus?.Available:
+                return 'Available';
+            case BackgroundFetch.BackgroundFetchStatus?.Denied:
+                return 'Denied';
+            case BackgroundFetch.BackgroundFetchStatus?.Restricted:
+                return 'Restricted';
+            default:
+                return 'Unknown';
         }
     };
 
@@ -126,7 +136,7 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
         {isExpanded && status && (
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#444' }}>
             {/* Show Expo Go warning if background fetch is not available */}
-            {status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus.Available && (
+            {(!BackgroundFetch || (BackgroundFetch && status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus?.Available)) && (
                 <View style={{ 
                 backgroundColor: '#FFA50022', 
                 padding: 10, 
@@ -179,8 +189,8 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                 <Text style={{ color: '#AAA', fontSize: 11 }}>Background Fetch:</Text>
                 <Text style={{ 
-                    color: status.backgroundFetchStatus === BackgroundFetch.BackgroundFetchStatus.Available 
-                    ? '#10B981' : '#EF4444', 
+                    color: (!BackgroundFetch || (BackgroundFetch && status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus?.Available))
+                    ? '#EF4444' : '#10B981', 
                     fontSize: 11 
                 }}>
                     {getBackgroundFetchStatusText(status.backgroundFetchStatus)}

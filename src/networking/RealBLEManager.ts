@@ -234,12 +234,31 @@ export class RealBLEManager {
                     if (error) {
                         console.error('[REAL-BLE] Scan error:', error.message);
                         console.error('[REAL-BLE] Error code:', error.errorCode);
-                        console.error('[REAL-BLE] This might be a permissions issue');
-                        console.error('[REAL-BLE] Check: 1) Bluetooth enabled 2) Location permissions 3) App permissions');
+                        
+                        // Error 600 = BleErrorCode.BluetoothUnauthorized
+                        if (error.errorCode === 600) {
+                            console.error('[REAL-BLE] ❌ BLUETOOTH UNAUTHORIZED (Error 600)');
+                            console.error('[REAL-BLE] This means permissions were not granted properly.');
+                            console.error('[REAL-BLE] ');
+                            console.error('[REAL-BLE] 📱 MANUAL FIX REQUIRED:');
+                            console.error('[REAL-BLE] 1. Open your phone Settings');
+                            console.error('[REAL-BLE] 2. Go to Apps → offline-mesh-mvp');
+                            console.error('[REAL-BLE] 3. Tap Permissions');
+                            console.error('[REAL-BLE] 4. Enable ALL of these:');
+                            console.error('[REAL-BLE]    ✅ Location → "Allow all the time"');
+                            console.error('[REAL-BLE]    ✅ Nearby devices (Bluetooth)');
+                            console.error('[REAL-BLE]    ✅ Camera (for QR codes)');
+                            console.error('[REAL-BLE] 5. Also check that Location services are ON in phone settings');
+                            console.error('[REAL-BLE] 6. Restart the app');
+                        } else {
+                            console.error('[REAL-BLE] This might be a permissions or Bluetooth issue');
+                            console.error('[REAL-BLE] Check: 1) Bluetooth enabled 2) Location permissions 3) App permissions');
+                        }
+                        
                         this.isScanning = false;
                         
                         // Try to request permissions again if it's a permission error
-                        if (Platform.OS === 'android' && error.message.includes('permission')) {
+                        if (Platform.OS === 'android' && (error.errorCode === 600 || error.message.includes('permission'))) {
                             console.log('[REAL-BLE] Attempting to re-request permissions...');
                             this.requestPermissions().then((granted) => {
                                 if (granted) {

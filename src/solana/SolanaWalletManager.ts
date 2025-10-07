@@ -58,30 +58,62 @@ export class SolanaWalletManager {
     /**
      * Initialize wallet with existing keypair from secure storage
      */
-    async initializeFromStorage(pubKeyHex: string): Promise<boolean> {
+    async initializeFromStorage(pubKeyBase58: string): Promise<boolean> {
         try {
+        console.log('[SolanaWalletManager] Initializing from storage...');
+        console.log('[SolanaWalletManager] Received pubKey (Base58):', pubKeyBase58);
+        
         const privKeyHex = await SecureStore.getItemAsync('privKey');
         if (!privKeyHex) {
-            console.error('No private key found in secure storage');
+            console.error('[SolanaWalletManager] No private key found in secure storage');
+            return false;
+        }
+
+        console.log('[SolanaWalletManager] Found privKey, length:', privKeyHex.length);
+
+        // Validate private key hex string
+        if (!/^[0-9a-fA-F]+$/.test(privKeyHex)) {
+            console.error('[SolanaWalletManager] Invalid private key format - not hex');
+            return false;
+        }
+
+        // Check if hex string is correct length (should be 128 chars = 64 bytes)
+        if (privKeyHex.length !== 128) {
+            console.error(`[SolanaWalletManager] Invalid hex string length: ${privKeyHex.length} chars (expected 128)`);
+            console.error('[SolanaWalletManager] This suggests corrupted or old wallet data - please reset wallet');
             return false;
         }
 
         const secretKey = Buffer.from(privKeyHex, 'hex');
-        this.keypair = Keypair.fromSecretKey(secretKey);
+        console.log('[SolanaWalletManager] Secret key decoded, size:', secretKey.length, 'bytes');
         
-        // Verify the public key matches
-        const expectedPubKey = this.keypair.publicKey.toBase58();
-        const providedPubKey = new PublicKey(Buffer.from(pubKeyHex, 'hex')).toBase58();
-        
-        if (expectedPubKey !== providedPubKey) {
-            console.error('Public key mismatch');
+        // Solana secret keys must be exactly 64 bytes
+        if (secretKey.length !== 64) {
+            console.error(`[SolanaWalletManager] Invalid secret key size: ${secretKey.length} bytes (expected 64)`);
             return false;
         }
 
-        console.log('Wallet initialized successfully:', expectedPubKey);
+        this.keypair = Keypair.fromSecretKey(secretKey);
+        console.log('[SolanaWalletManager] Keypair created successfully');
+        
+        // Verify the public key matches (pubKeyBase58 is already in Base58 format)
+        const expectedPubKey = this.keypair.publicKey.toBase58();
+        console.log('[SolanaWalletManager] Expected pubKey:', expectedPubKey);
+        console.log('[SolanaWalletManager] Provided pubKey:', pubKeyBase58);
+        
+        if (expectedPubKey !== pubKeyBase58) {
+            console.error('[SolanaWalletManager] Public key mismatch!');
+            return false;
+        }
+
+        console.log('[SolanaWalletManager] ✅ Wallet initialized successfully');
         return true;
         } catch (error) {
-        console.error('Failed to initialize wallet:', error);
+        console.error('[SolanaWalletManager] ❌ Exception caught:', error);
+        if (error instanceof Error) {
+            console.error('[SolanaWalletManager] Error message:', error.message);
+            console.error('[SolanaWalletManager] Error stack:', error.stack);
+        }
         return false;
         }
     }

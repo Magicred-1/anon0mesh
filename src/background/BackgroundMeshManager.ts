@@ -1,8 +1,37 @@
-import * as BackgroundFetch from 'expo-background-fetch';
-import * as TaskManager from 'expo-task-manager';
+/* eslint-disable */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Anon0MeshPacket, MessageType } from '../gossip/types';
 import { Buffer } from 'buffer';
+
+// Optional imports - these may not be available in Expo Go
+let BackgroundFetch: any = null;
+let TaskManager: any = null;
+let isBackgroundAvailable = false;
+
+// Check if modules are available without throwing errors
+const checkModuleAvailable = (moduleName: string): boolean => {
+  try {
+    require.resolve(moduleName);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Only require if modules exist
+if (checkModuleAvailable('expo-background-fetch') && checkModuleAvailable('expo-task-manager')) {
+  try {
+    BackgroundFetch = require('expo-background-fetch');
+    TaskManager = require('expo-task-manager');
+    isBackgroundAvailable = true;
+    console.log('[BG-MESH] Background task modules loaded successfully');
+  } catch (error) {
+    console.log('[BG-MESH] Background tasks not available:', error);
+  }
+} else {
+  console.log('[BG-MESH] Background task modules not found (Expo Go or not installed)');
+}
+/* eslint-enable */
 
 // Background task names
 const MESH_RELAY_TASK = 'mesh-relay-task';
@@ -102,6 +131,8 @@ export class BackgroundMeshManager {
    * Check if background fetch is available (not available in Expo Go)
    */
   private async checkBackgroundFetchAvailable(): Promise<boolean> {
+    if (!BackgroundFetch) return false;
+    
     try {
       const status = await BackgroundFetch.getStatusAsync();
       return status !== null;
@@ -115,6 +146,12 @@ export class BackgroundMeshManager {
    * Register background tasks with TaskManager
    */
   private async registerBackgroundTasks(): Promise<void> {
+    // Check if modules are available
+    if (!BackgroundFetch || !TaskManager) {
+      console.log('[BG-MESH] Background modules not available');
+      return;
+    }
+
     // Check if background fetch is available first
     const isAvailable = await this.checkBackgroundFetchAvailable();
     if (!isAvailable) {
@@ -122,7 +159,8 @@ export class BackgroundMeshManager {
     }
 
     // Register relay task
-    TaskManager.defineTask(MESH_RELAY_TASK, async ({ data, error }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TaskManager.defineTask(MESH_RELAY_TASK, async ({ data, error }: any) => {
       if (error) {
         console.error('[BG-MESH] Relay task error:', error);
         return BackgroundFetch.BackgroundFetchResult.Failed;
@@ -139,7 +177,8 @@ export class BackgroundMeshManager {
     });
 
     // Register gossip task
-    TaskManager.defineTask(MESH_GOSSIP_TASK, async ({ data, error }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TaskManager.defineTask(MESH_GOSSIP_TASK, async ({ data, error }: any) => {
       if (error) {
         console.error('[BG-MESH] Gossip task error:', error);
         return BackgroundFetch.BackgroundFetchResult.Failed;
@@ -403,15 +442,20 @@ export class BackgroundMeshManager {
    */
   async stop(): Promise<void> {
     try {
-      await BackgroundFetch.unregisterTaskAsync(MESH_RELAY_TASK);
-      await BackgroundFetch.unregisterTaskAsync(MESH_GOSSIP_TASK);
+      // Only try to unregister if tasks are actually registered
+      const isAvailable = await this.checkBackgroundFetchAvailable();
+      if (isAvailable) {
+        await BackgroundFetch.unregisterTaskAsync(MESH_RELAY_TASK);
+        await BackgroundFetch.unregisterTaskAsync(MESH_GOSSIP_TASK);
+      }
       
       this.state.isActive = false;
       await this.saveState();
       
       console.log('[BG-MESH] Background operations stopped');
-    } catch (error) {
-      console.error('[BG-MESH] Failed to stop background operations:', error);
+    } catch {
+      // Silently ignore errors when stopping (tasks might not be registered)
+      console.log('[BG-MESH] Background tasks not registered or already stopped');
     }
   }
 
@@ -431,13 +475,15 @@ export class BackgroundMeshManager {
   /**
    * Get background fetch status
    */
-  async getBackgroundStatus(): Promise<BackgroundFetch.BackgroundFetchStatus> {
+  async getBackgroundStatus(): Promise<number> {
+    if (!BackgroundFetch) return 0;
+    
     try {
       const status = await BackgroundFetch.getStatusAsync();
-      return status ?? BackgroundFetch.BackgroundFetchStatus.Denied;
+      return status ?? 0;
     } catch (error) {
       console.error('[BG-MESH] Failed to get background status:', error);
-      return BackgroundFetch.BackgroundFetchStatus.Denied;
+      return 0;
     }
   }
 }
@@ -473,7 +519,7 @@ export async function getBackgroundMeshStatus(): Promise<{
   isActive: boolean;
   relayEnabled: boolean;
   gossipEnabled: boolean;
-  backgroundFetchStatus: BackgroundFetch.BackgroundFetchStatus;
+  backgroundFetchStatus: number;
 }> {
   const manager = BackgroundMeshManager.getInstance();
   const state = manager.getState();

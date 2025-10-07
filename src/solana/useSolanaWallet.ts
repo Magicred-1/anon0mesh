@@ -33,11 +33,17 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize wallet manager
+  // Initialize wallet manager only once or when network changes
   useEffect(() => {
-    const walletManager = new SolanaWalletManager(config);
-    setWallet(walletManager);
-  }, [config]);
+    try {
+      const walletManager = new SolanaWalletManager(config);
+      setWallet(walletManager);
+    } catch (err) {
+      console.error('[useSolanaWallet] Failed to create wallet manager:', err);
+      // Don't show error to user - wallet will work offline
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.network]); // Only recreate if network changes
 
   // Refresh balance
   const refreshBalance = useCallback(async (): Promise<void> => {
@@ -46,21 +52,22 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
     try {
       const newBalance = await wallet.getBalance();
       setBalance(newBalance);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to get balance';
-      setError(errorMessage);
+      setError(null); // Clear any previous errors
+    } catch {
+      // Silently fail if offline - don't throw or show error
+      console.log('[useSolanaWallet] Could not fetch balance - possibly offline');
     }
   }, [wallet, isInitialized]);
 
   // Initialize wallet with keypair
-  const initializeWallet = useCallback(async (pubKeyHex: string): Promise<boolean> => {
+  const initializeWallet = useCallback(async (pubKeyBase58: string): Promise<boolean> => {
     if (!wallet) return false;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      const success = await wallet.initializeFromStorage(pubKeyHex);
+      const success = await wallet.initializeFromStorage(pubKeyBase58);
       if (success) {
         setIsInitialized(true);
         setPublicKey(wallet.getPublicKey());

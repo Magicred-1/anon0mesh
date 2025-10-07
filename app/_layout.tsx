@@ -25,10 +25,8 @@ export default function RootLayout() {
     try {
       const testArray = new Uint8Array(8);
       global.crypto.getRandomValues(testArray);
-      console.log('✅ Crypto polyfill working in layout');
-      console.log('✅ Test random values:', Array.from(testArray));
     } catch (error) {
-      console.error('❌ Crypto polyfill still failing in layout:', error);
+      console.error('❌ Crypto polyfill failing:', error);
     }
   }, []);
 
