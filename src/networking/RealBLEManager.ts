@@ -2,6 +2,7 @@ import { BleManager, Device, State } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
 import { Anon0MeshPacket } from '../gossip/types';
 import { Platform, PermissionsAndroid } from 'react-native';
+import { BLEPermissionManager } from '../utils/BLEPermissionManager';
 
 /**
  * Real BLE Manager for mesh networking using react-native-ble-plx
@@ -76,6 +77,25 @@ export class RealBLEManager {
             const state = await this.bleManager.state();
             console.log('[REAL-BLE] Initial Bluetooth state:', state);
             
+            // On Android, also verify permissions one more time before starting
+            if (Platform.OS === 'android') {
+                const recheckLocation = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+                const recheckScan = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
+                console.log('[REAL-BLE] Final permission check before starting:');
+                console.log('[REAL-BLE]   - Location:', recheckLocation ? '✅' : '❌');
+                console.log('[REAL-BLE]   - BLE Scan:', recheckScan ? '✅' : '❌');
+                
+                if (!recheckLocation || !recheckScan) {
+                    console.error('[REAL-BLE] ❌ PERMISSIONS MISSING - Cannot start BLE');
+                    console.error('[REAL-BLE] Please ensure:');
+                    console.error('[REAL-BLE] 1. Location services are ON in phone Settings → Location');
+                    console.error('[REAL-BLE] 2. App has Location permission set to "Allow all the time"');
+                    console.error('[REAL-BLE] 3. App has "Nearby devices" permission enabled');
+                    console.error('[REAL-BLE] 4. Restart the app after granting permissions');
+                    return;
+                }
+            }
+            
             if (state !== State.PoweredOn) {
                 console.log('[REAL-BLE] Bluetooth is not powered on, waiting for state change...');
                 // Monitor state changes
@@ -98,63 +118,17 @@ export class RealBLEManager {
     /**
      * Request necessary permissions on Android
      */
-    /**
-     * Request necessary permissions on Android
-     */
     private async requestPermissions(): Promise<boolean> {
         try {
-            const permissions = [
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-            ];
-
-            console.log('[REAL-BLE] Requesting permissions:', permissions);
-            const granted = await PermissionsAndroid.requestMultiple(permissions);
+            const status = await BLEPermissionManager.checkAndRequestPermissions();
             
-            console.log('[REAL-BLE] Permission results:', granted);
-            
-            // Check critical permissions (SCAN and CONNECT are most important for mesh networking)
-            const criticalPermissions = [
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-            ];
-
-            let hasCriticalPermissions = true;
-            let hasAdvertisePermission = true;
-
-            permissions.forEach(permission => {
-                const result = granted[permission] === PermissionsAndroid.RESULTS.GRANTED;
-                console.log(`[REAL-BLE] Permission ${permission}: ${granted[permission]} (granted: ${result})`);
-                if (!result) {
-                    console.warn(`[REAL-BLE] Permission denied: ${permission}`);
-                    if (criticalPermissions.includes(permission)) {
-                        hasCriticalPermissions = false;
-                    }
-                    if (permission === PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE) {
-                        hasAdvertisePermission = false;
-                    }
-                } else {
-                    console.log(`[REAL-BLE] Permission granted: ${permission}`);
-                }
-            });
-
-            if (hasCriticalPermissions) {
-                console.log('[REAL-BLE] Critical permissions granted - BLE scanning will work');
-                if (hasAdvertisePermission) {
-                    console.log('[REAL-BLE] ✅ Full BLE permissions granted - device can scan and be discoverable');
-                } else {
-                    console.warn('[REAL-BLE] Advertise permission denied - device discovery may be limited');
-                    console.warn('[REAL-BLE] This device can scan for others but may not be discoverable');
-                }
-                return true; // Allow BLE to work with critical permissions
-            } else {
-                console.warn('[REAL-BLE] Critical permissions not granted, BLE functionality will be limited');
-                console.warn('[REAL-BLE] Please check app permissions in device settings');
-                return false;
+            // If needs manual setup (never_ask_again), trigger UI alert
+            if (status.needsManualSetup && !status.hasAllPermissions) {
+                console.log('[REAL-BLE] 🚨 Triggering permission alert for UI');
+                BLEPermissionManager.showPermissionAlert();
             }
+            
+            return status.hasAllPermissions;
         } catch (error) {
             console.error('[REAL-BLE] Permission request failed:', error);
             return false;

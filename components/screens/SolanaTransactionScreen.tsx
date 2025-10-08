@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'reac
 import { useSolanaWallet } from '../../src/solana/useSolanaWallet';
 import { useMeshNetworking } from '../networking/MeshNetworkingManager';
 import { TokenType } from '../../src/solana/BeaconManager';
+import { RateLimitManager } from '../../src/utils/RateLimitManager';
 
 interface SolanaTransactionScreenProps {
   pubKey: string;
@@ -20,6 +21,7 @@ const SolanaTransactionScreen: React.FC<SolanaTransactionScreenProps> = ({
   const [memo, setMemo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [rateLimitManager] = useState(() => new RateLimitManager(pubKey));
 
   // Initialize Solana wallet (using devnet for demo)
   const solanaWallet = useSolanaWallet({
@@ -95,7 +97,16 @@ const SolanaTransactionScreen: React.FC<SolanaTransactionScreenProps> = ({
       // Submit directly to Solana network
       const signature = await solanaWallet.submitTransaction(signedTx);
       
-      Alert.alert('Success', `Transaction sent directly! Signature: ${signature.slice(0, 20)}...`);
+      // Unlock unlimited messaging after successful transaction
+      await rateLimitManager.unlockMessaging();
+      
+      Alert.alert(
+        '✅ Transaction Sent!', 
+        `Transaction successful!\n\n` +
+        `Signature: ${signature.slice(0, 20)}...\n\n` +
+        `🎉 Bonus: You now have unlimited messaging for today!`,
+        [{ text: 'Awesome!' }]
+      );
       
       // Clear form
       setToAddress('');
@@ -144,7 +155,15 @@ const SolanaTransactionScreen: React.FC<SolanaTransactionScreenProps> = ({
         'devnet'
       );
       
-      Alert.alert('Success', 'Transaction broadcasted to anon0mesh network!');
+      // Unlock unlimited messaging after successful transaction
+      await rateLimitManager.unlockMessaging();
+      
+      Alert.alert(
+        '✅ Transaction Broadcasted!', 
+        `Transaction sent to anon0mesh network!\n\n` +
+        `🎉 Bonus: You now have unlimited messaging for today!`,
+        [{ text: 'Awesome!' }]
+      );
       
       // Clear form
       setToAddress('');

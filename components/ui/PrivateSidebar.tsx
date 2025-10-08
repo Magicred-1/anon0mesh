@@ -221,7 +221,7 @@ export default function PrivateSidebar({ visible, peers, channels, currentChanne
                                 paddingTop: 16,
                                 paddingBottom: 24,
                             }}
-                            showsVerticalScrollIndicator={false}
+                            showsVerticalScrollIndicator={true}
                         >
                             {activeTab === 'channels' ? (
                                 // Channels List

@@ -20,11 +20,6 @@ export default function LandingPage() {
         if (!savedPubKey || !savedPrivKey) {
             console.log('[Landing] Missing keys - redirecting to onboarding');
             // Clean up any partial data
-            if (savedPubKey && !savedPrivKey) {
-            await SecureStore.deleteItemAsync('pubKey');
-            await SecureStore.deleteItemAsync('nickname');
-            await SecureStore.deleteItemAsync('hasSeenIndex');
-            }
             router.replace('/onboarding');
             return;
         }

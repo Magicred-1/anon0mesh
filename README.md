@@ -16,15 +16,6 @@ A decentralized, peer-to-peer mesh networking application built with React Nativ
 - �🔐 **Secure Communication**: Built-in packet signing and verification
 - 💰 **Solana Integration**: Transaction relay through beacon network (optional)
 
-## 📚 Documentation
-
-- [Zone-Based Mesh Networking](./ZONE_MESH_NETWORKING.md) 🌐 **NEW - Self-Healing Zones**
-- [Offline P2P Mesh Networking Guide](./OFFLINE_P2P_MESH.md)
-- [Background Mesh Networking](./BACKGROUND_MESH_NETWORKING.md) ⭐
-- [Expo Go vs Development Build](./EXPO_GO_VS_DEV_BUILD.md) 📱 **Important**
-- [Solana Integration](./SOLANA_INTEGRATION.md)
-- [Physical Device BLE Guide](./PHYSICAL_DEVICE_BLE_GUIDE.md)
-
 ## 🚀 Get Started
 
 ### Prerequisites
@@ -89,8 +80,6 @@ A decentralized, peer-to-peer mesh networking application built with React Nativ
 - ✅ All features including background tasks
 - ✅ Custom native modules
 - ⏱️ Takes 5-10 min to build
-
-See [EXPO_GO_VS_DEV_BUILD.md](./EXPO_GO_VS_DEV_BUILD.md) for detailed comparison.
 
 ## 🏗️ Architecture
 

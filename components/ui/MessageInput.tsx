@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     View,
     StyleSheet,
+    Text,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SendIcon from './SendIcon';
@@ -14,9 +15,11 @@ interface Props {
   onSend: (msg: string) => void;
   onSendAsset: (asset: string, amount: string, address: string) => void;
   placeholder?: string;
+  messagesRemaining?: number;
+  isUnlocked?: boolean;
 }
 
-export default function MessageInput({ onSend, onSendAsset, placeholder }: Props) {
+export default function MessageInput({ onSend, onSendAsset, placeholder, messagesRemaining, isUnlocked }: Props) {
   const [text, setText] = useState('');
   const insets = useSafeAreaInsets();
 
@@ -39,6 +42,22 @@ export default function MessageInput({ onSend, onSendAsset, placeholder }: Props
     }
   };
 
+  // Determine status message
+  const getStatusMessage = () => {
+    if (isUnlocked) {
+      return { text: '∞ Unlimited', color: '#10B981' }; // Green
+    }
+    if (messagesRemaining !== undefined) {
+      if (messagesRemaining === 0) {
+        return { text: '⚠️ Limit reached', color: '#EF4444' }; // Red
+      }
+      return { text: `${messagesRemaining} msg${messagesRemaining === 1 ? '' : 's'} left`, color: '#F59E0B' }; // Orange
+    }
+    return null;
+  };
+
+  const statusMessage = getStatusMessage();
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -53,6 +72,15 @@ export default function MessageInput({ onSend, onSendAsset, placeholder }: Props
           }
         ]}
       >
+        {/* Rate Limit Status */}
+        {statusMessage && (
+          <View style={styles.statusContainer}>
+            <Text style={[styles.statusText, { color: statusMessage.color }]}>
+              {statusMessage.text}
+            </Text>
+          </View>
+        )}
+
         <View style={styles.inputWrapper}>
           <View style={styles.inputContainer}>
           <TextInput
@@ -97,6 +125,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f0f0f',
     borderTopWidth: 1,
     borderTopColor: '#2a2a2a',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'Lexend_400Regular',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   inputWrapper: {
     marginBottom: 4,
