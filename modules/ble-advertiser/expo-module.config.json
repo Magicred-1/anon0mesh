@@ -1,0 +1,9 @@
+{
+  "platforms": ["android", "ios"],
+  "android": {
+    "modules": ["com.anon0mesh.bleadvertiser.BLEAdvertiserModule"]
+  },
+  "ios": {
+    "modules": []
+  }
+}

@@ -10,6 +10,7 @@ export interface UseSolanaWalletReturn {
   wallet: SolanaWalletManager | null;
   isInitialized: boolean;
   balance: number;
+  usdcBalance: number;
   publicKey: string | null;
   isLoading: boolean;
   error: string | null;
@@ -29,6 +30,7 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
   const [wallet, setWallet] = useState<SolanaWalletManager | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [balance, setBalance] = useState(0);
+  const [usdcBalance, setUsdcBalance] = useState(0);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +52,26 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
     if (!wallet || !isInitialized) return;
     
     try {
+      // Fetch SOL balance
       const newBalance = await wallet.getBalance();
       setBalance(newBalance);
+      
+      // Fetch USDC balance (if supported by SolanaWalletManager)
+      try {
+        const getTokenBalanceFn = (wallet as any).getTokenBalance;
+        if (typeof getTokenBalanceFn === 'function') {
+          const usdcBal = await getTokenBalanceFn.call(wallet, 'USDC');
+          setUsdcBalance(usdcBal ?? 0);
+        } else {
+          // Wallet manager doesn't support token balances; default to 0
+          setUsdcBalance(0);
+        }
+      } catch (usdcError) {
+        // USDC account might not exist yet or balance fetch failed - that's okay
+        console.log('[useSolanaWallet] USDC account not found or balance fetch failed', usdcError);
+        setUsdcBalance(0);
+      }
+      
       setError(null); // Clear any previous errors
     } catch {
       // Silently fail if offline - don't throw or show error
@@ -202,7 +222,7 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
     const interval = setInterval(() => {
       refreshBalance();
     }, 30000); // Refresh every 30 seconds
-    
+
     return () => clearInterval(interval);
   }, [isInitialized, refreshBalance]);
 
@@ -210,6 +230,7 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
     wallet,
     isInitialized,
     balance,
+    usdcBalance,
     publicKey,
     isLoading,
     error,

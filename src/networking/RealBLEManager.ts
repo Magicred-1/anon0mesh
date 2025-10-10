@@ -1,8 +1,19 @@
 import { BleManager, Device, State } from 'react-native-ble-plx';
 import { Buffer } from 'buffer';
 import { Anon0MeshPacket } from '../gossip/types';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, NativeModules, NativeEventEmitter } from 'react-native';
 import { BLEPermissionManager } from '../utils/BLEPermissionManager';
+import { BLEPacketEncoder } from './BLEPacketEncoder';
+
+// Try to import the advertiser module if available
+let BleAdvertiser: any = null;
+try {
+    // Attempt to load react-native-ble-advertiser if installed
+    BleAdvertiser = require('react-native-ble-advertiser').default;
+} catch (e) {
+    console.warn('[REAL-BLE] BLE Advertiser not available - peripheral mode disabled');
+    console.warn('[REAL-BLE] Install react-native-ble-advertiser for advertising support');
+}
 
 /**
  * Real BLE Manager for mesh networking using react-native-ble-plx
@@ -19,9 +30,11 @@ export class RealBLEManager {
     private onPeerConnected?: (peerId: string) => void;
     private onPeerDisconnected?: (peerId: string) => void;
 
-    // UUIDs for anon0mesh service (using standard UUIDs)
-    private static readonly SERVICE_UUID = '0000180F-0000-1000-8000-00805f9b34fb'; // Battery Service as base
-    private static readonly CHARACTERISTIC_UUID = '00002A19-0000-1000-8000-00805f9b34fb'; // Battery Level as base
+    // UUIDs for anon0mesh service
+    // Using a custom 128-bit UUID for the mesh network
+    // Format must match between advertiser and scanner
+    private static readonly SERVICE_UUID = '0000FFF0-0000-1000-8000-00805F9B34FB'; // Custom service UUID
+    private static readonly CHARACTERISTIC_UUID = '0000FFF1-0000-1000-8000-00805F9B34FB'; // Custom characteristic UUID
 
     constructor(deviceId: string) {
         this.deviceId = deviceId;
@@ -81,17 +94,25 @@ export class RealBLEManager {
             if (Platform.OS === 'android') {
                 const recheckLocation = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
                 const recheckScan = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
+                const recheckConnect = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
+                
                 console.log('[REAL-BLE] Final permission check before starting:');
                 console.log('[REAL-BLE]   - Location:', recheckLocation ? '✅' : '❌');
                 console.log('[REAL-BLE]   - BLE Scan:', recheckScan ? '✅' : '❌');
+                console.log('[REAL-BLE]   - BLE Connect:', recheckConnect ? '✅' : '❌');
                 
-                if (!recheckLocation || !recheckScan) {
+                if (!recheckLocation || !recheckScan || !recheckConnect) {
                     console.error('[REAL-BLE] ❌ PERMISSIONS MISSING - Cannot start BLE');
                     console.error('[REAL-BLE] Please ensure:');
                     console.error('[REAL-BLE] 1. Location services are ON in phone Settings → Location');
                     console.error('[REAL-BLE] 2. App has Location permission set to "Allow all the time"');
                     console.error('[REAL-BLE] 3. App has "Nearby devices" permission enabled');
                     console.error('[REAL-BLE] 4. Restart the app after granting permissions');
+                    console.error('[REAL-BLE]');
+                    console.error('[REAL-BLE] Missing permissions:');
+                    if (!recheckLocation) console.error('[REAL-BLE]   ❌ Location (ACCESS_FINE_LOCATION)');
+                    if (!recheckScan) console.error('[REAL-BLE]   ❌ Bluetooth Scan (BLUETOOTH_SCAN)');
+                    if (!recheckConnect) console.error('[REAL-BLE]   ❌ Bluetooth Connect (BLUETOOTH_CONNECT)');
                     return;
                 }
             }
@@ -140,11 +161,93 @@ export class RealBLEManager {
      */
     private async startMeshNetworking(): Promise<void> {
         try {
+            // Start BLE advertising so other devices can discover us
+            await this.startAdvertising();
+            
+            // Start scanning for other devices
             await this.startScanning();
-            // Note: BLE advertising with custom data is complex on React Native
-            // For now, we'll focus on scanning and connecting to existing devices
         } catch (error) {
-            console.error('[BLE] Failed to start mesh networking:', error);
+            console.error('[REAL-BLE] Failed to start mesh networking:', error);
+        }
+    }
+
+    /**
+     * Start BLE advertising to make this device discoverable
+     */
+    private async startAdvertising(): Promise<void> {
+        // Check if advertiser is available
+        if (!BleAdvertiser) {
+            console.log('[REAL-BLE] BLE Advertiser not available - device will not be discoverable');
+            console.log('[REAL-BLE] Install react-native-ble-advertiser for advertising support:');
+            console.log('[REAL-BLE]   npm install react-native-ble-advertiser');
+            console.log('[REAL-BLE]   npx expo prebuild --clean');
+            return;
+        }
+
+        if (Platform.OS !== 'android') {
+            console.log('[REAL-BLE] BLE advertising only fully supported on Android');
+            return;
+        }
+
+        try {
+            console.log('[REAL-BLE] 🚀 Starting BLE advertising...');
+            console.log('[REAL-BLE] Device ID:', this.deviceId);
+            console.log('[REAL-BLE] Service UUID:', RealBLEManager.SERVICE_UUID);
+            
+            // Initialize the advertiser
+            await BleAdvertiser.setCompanyId(0x00E0); // Custom company ID
+            
+            // Add the service UUID to advertise
+            console.log('[REAL-BLE] Adding service UUID to advertisement...');
+            await BleAdvertiser.addService(
+                RealBLEManager.SERVICE_UUID,
+                [RealBLEManager.CHARACTERISTIC_UUID]
+            );
+            
+            // Start advertising
+            console.log('[REAL-BLE] Broadcasting advertisement...');
+            await BleAdvertiser.broadcast(
+                this.deviceId, // Device name
+                [], // Manufacturer data (empty for now)
+                {
+                    advertiseMode: BleAdvertiser.ADVERTISE_MODE_LOW_LATENCY,
+                    txPowerLevel: BleAdvertiser.ADVERTISE_TX_POWER_HIGH,
+                    connectable: true,
+                    includeDeviceName: true,
+                    includeTxPowerLevel: true,
+                }
+            );
+
+            console.log('[REAL-BLE] ✅ Advertising started successfully!');
+            console.log('[REAL-BLE] Device is now discoverable as:', this.deviceId);
+            this.isAdvertising = true;
+            
+            // Listen for connection events
+            BleAdvertiser.onConnectionEvent((event: any) => {
+                console.log('[REAL-BLE] 📱 Connection event:', event);
+            });
+            
+        } catch (error) {
+            console.error('[REAL-BLE] ❌ Failed to start advertising:', error);
+            console.error('[REAL-BLE] Error details:', JSON.stringify(error, null, 2));
+            console.warn('[REAL-BLE] Device will scan but not be discoverable to others');
+        }
+    }
+
+    /**
+     * Stop BLE advertising
+     */
+    private async stopAdvertising(): Promise<void> {
+        if (!this.isAdvertising || !BleAdvertiser) {
+            return;
+        }
+
+        try {
+            await BleAdvertiser.stopBroadcast();
+            console.log('[REAL-BLE] Advertising stopped');
+            this.isAdvertising = false;
+        } catch (error) {
+            console.error('[REAL-BLE] Failed to stop advertising:', error);
         }
     }
 
@@ -173,9 +276,13 @@ export class RealBLEManager {
         }
 
         if (this.isScanning) {
-            console.log('[REAL-BLE] Already scanning');
+            console.log('[REAL-BLE] ⚠️  Already scanning - ignoring duplicate scan request');
             return;
         }
+        
+        // Set flag IMMEDIATELY to prevent race conditions
+        this.isScanning = true;
+        console.log('[REAL-BLE] Starting BLE scan...');
 
         try {
             // Request permissions first on Android
@@ -184,6 +291,7 @@ export class RealBLEManager {
                 const hasPermissions = await this.requestPermissions();
                 if (!hasPermissions) {
                     console.error('[REAL-BLE] Required permissions not granted - cannot start scanning');
+                    this.isScanning = false;
                     return;
                 }
             }
@@ -195,60 +303,95 @@ export class RealBLEManager {
             if (state !== State.PoweredOn) {
                 console.warn('[REAL-BLE] Bluetooth is not powered on, cannot start scanning');
                 console.warn('[REAL-BLE] Please enable Bluetooth in device settings');
+                this.isScanning = false;
                 return;
             }
 
-            console.log('[REAL-BLE] Starting BLE scan...');
-            this.isScanning = true;
+            // Add small delay to ensure native layer has synced permissions
+            // This helps avoid Error 600 (BluetoothUnauthorized) right after permission grant
+            console.log('[REAL-BLE] Waiting for BLE to sync permissions...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Stop any existing scan first
+            try {
+                this.bleManager.stopDeviceScan();
+                await new Promise(resolve => setTimeout(resolve, 100));
+            } catch {
+                // Ignore - no scan was running
+            }
 
+            console.log('[REAL-BLE] 🔍 Starting device scan...');
+            console.log('[REAL-BLE] Looking for service UUID:', RealBLEManager.SERVICE_UUID);
+            console.log('[REAL-BLE] Scan will show devices advertising this service');
+            
+            // Start with a broader scan to verify BLE is working
+            let devicesFound = 0;
+            
+            // First, do a quick scan for ALL devices to verify BLE is working
+            console.log('[REAL-BLE] 🔍 Phase 1: Scanning for ANY BLE devices (5 seconds)...');
             this.bleManager.startDeviceScan(
-                [RealBLEManager.SERVICE_UUID],
-                { allowDuplicates: true },
+                null, // Scan for ALL devices
+                { allowDuplicates: false },
                 (error, device) => {
                     if (error) {
-                        console.error('[REAL-BLE] Scan error:', error.message);
-                        console.error('[REAL-BLE] Error code:', error.errorCode);
-                        
-                        // Error 600 = BleErrorCode.BluetoothUnauthorized
-                        if (error.errorCode === 600) {
-                            console.error('[REAL-BLE] ❌ BLUETOOTH UNAUTHORIZED (Error 600)');
-                            console.error('[REAL-BLE] This means permissions were not granted properly.');
-                            console.error('[REAL-BLE] ');
-                            console.error('[REAL-BLE] 📱 MANUAL FIX REQUIRED:');
-                            console.error('[REAL-BLE] 1. Open your phone Settings');
-                            console.error('[REAL-BLE] 2. Go to Apps → offline-mesh-mvp');
-                            console.error('[REAL-BLE] 3. Tap Permissions');
-                            console.error('[REAL-BLE] 4. Enable ALL of these:');
-                            console.error('[REAL-BLE]    ✅ Location → "Allow all the time"');
-                            console.error('[REAL-BLE]    ✅ Nearby devices (Bluetooth)');
-                            console.error('[REAL-BLE]    ✅ Camera (for QR codes)');
-                            console.error('[REAL-BLE] 5. Also check that Location services are ON in phone settings');
-                            console.error('[REAL-BLE] 6. Restart the app');
-                        } else {
-                            console.error('[REAL-BLE] This might be a permissions or Bluetooth issue');
-                            console.error('[REAL-BLE] Check: 1) Bluetooth enabled 2) Location permissions 3) App permissions');
-                        }
-                        
-                        this.isScanning = false;
-                        
-                        // Try to request permissions again if it's a permission error
-                        if (Platform.OS === 'android' && (error.errorCode === 600 || error.message.includes('permission'))) {
-                            console.log('[REAL-BLE] Attempting to re-request permissions...');
-                            this.requestPermissions().then((granted) => {
-                                if (granted) {
-                                    console.log('[REAL-BLE] Permissions granted, try scanning again');
-                                }
-                            });
-                        }
+                        console.error('[REAL-BLE] Scan error:', error.message, error.errorCode);
                         return;
                     }
-
-                    if (device && device.localName?.includes('anon0mesh')) {
-                        console.log('[REAL-BLE] Found anon0mesh device:', device.name || device.id);
-                        this.handleDeviceDiscovered(device);
+                    if (device) {
+                        devicesFound++;
+                        console.log(`[REAL-BLE] 📱 Device ${devicesFound}:`, {
+                            id: device.id,
+                            name: device.name || 'unnamed',
+                            rssi: device.rssi,
+                            serviceUUIDs: device.serviceUUIDs || []
+                        });
+                        
+                        // Check if this device has our service
+                        if (device.serviceUUIDs?.includes(RealBLEManager.SERVICE_UUID)) {
+                            console.log('[REAL-BLE] 🎯 FOUND ANON0MESH DEVICE!');
+                            this.handleDeviceDiscovered(device);
+                        }
                     }
                 }
             );
+            
+            // After 5 seconds, switch to filtered scan
+            setTimeout(() => {
+                console.log(`[REAL-BLE] Phase 1 complete: Found ${devicesFound} total BLE devices`);
+                
+                if (devicesFound === 0) {
+                    console.warn('[REAL-BLE] ⚠️  No BLE devices found at all!');
+                    console.warn('[REAL-BLE] Check: 1) Bluetooth is on, 2) Permissions granted, 3) Other BLE devices nearby');
+                } else {
+                    console.log('[REAL-BLE] ✅ BLE scanning is working!');
+                    console.log('[REAL-BLE] 🔍 Phase 2: Switching to filtered scan for anon0mesh devices...');
+                }
+                
+                // Stop the all-devices scan
+                this.bleManager.stopDeviceScan();
+                
+                // Now start the filtered scan
+                this.bleManager.startDeviceScan(
+                    [RealBLEManager.SERVICE_UUID],
+                    { allowDuplicates: false },
+                    (error, device) => {
+                        if (error) {
+                            console.error('[REAL-BLE] Filtered scan error:', error.message);
+                            return;
+                        }
+                        if (device) {
+                            console.log('[REAL-BLE] 🎯 Found anon0mesh device:', {
+                                id: device.id,
+                                name: device.name || 'unnamed',
+                                rssi: device.rssi
+                            });
+                            this.handleDeviceDiscovered(device);
+                        }
+                    }
+                );
+            }, 5000);
+            
+            console.log('[REAL-BLE] ✅ BLE scan started successfully');
         } catch (error) {
             console.error('[REAL-BLE] Failed to start scanning:', error);
             this.isScanning = false;
@@ -377,7 +520,11 @@ export class RealBLEManager {
         const connectedDevices = Array.from(this.connectedDevices.values());
         
         if (connectedDevices.length === 0) {
-            console.log('[REAL-BLE] No connected devices to broadcast to');
+            console.log('[REAL-BLE] ⚠️  No connected devices - message queued for gossip sync');
+            console.log('[REAL-BLE] Message will be delivered when peers connect');
+            console.log('[REAL-BLE] Packet type:', packet.type);
+            // Don't return early - the message is still added to gossip manager
+            // It will be synced when devices connect
             return;
         }
 
@@ -389,6 +536,7 @@ export class RealBLEManager {
 
         try {
             await Promise.allSettled(promises);
+            console.log(`[REAL-BLE] ✅ Broadcast complete to ${connectedDevices.length} devices`);
         } catch (error) {
             console.error('[REAL-BLE] Broadcast failed:', error);
         }
@@ -419,16 +567,29 @@ export class RealBLEManager {
      */
     private async sendToDevice(device: Device, packet: Anon0MeshPacket): Promise<void> {
         try {
-            const data = Buffer.from(JSON.stringify(packet));
-            const base64Data = data.toString('base64');
-
-            await device.writeCharacteristicWithResponseForService(
-                RealBLEManager.SERVICE_UUID,
-                RealBLEManager.CHARACTERISTIC_UUID,
-                base64Data
-            );
+            // Use proper BLE encoding that respects MTU limits
+            const encodedChunks = BLEPacketEncoder.encode(packet);
+            
+            console.log(`[REAL-BLE] Sending packet in ${encodedChunks.length} chunk(s) to ${device.id}`);
+            
+            // Send each chunk
+            for (let i = 0; i < encodedChunks.length; i++) {
+                const chunk = encodedChunks[i];
+                await device.writeCharacteristicWithResponseForService(
+                    RealBLEManager.SERVICE_UUID,
+                    RealBLEManager.CHARACTERISTIC_UUID,
+                    chunk
+                );
+                
+                // Small delay between chunks to avoid overwhelming the BLE stack
+                if (i < encodedChunks.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+            
+            console.log('[REAL-BLE] ✅ Packet sent successfully');
         } catch (error) {
-            console.error('[BLE] Failed to send to device:', device.id, error);
+            console.error('[REAL-BLE] Failed to send to device:', device.id, error);
         }
     }
 
@@ -454,6 +615,7 @@ export class RealBLEManager {
             connectedDevices: this.bleManager ? this.connectedDevices.size : 0,
             isScanning: this.bleManager ? this.isScanning : false,
             isAdvertising: this.bleManager ? this.isAdvertising : false,
+            advertiserAvailable: BleAdvertiser !== null,
         };
     }
 
@@ -464,6 +626,7 @@ export class RealBLEManager {
         console.log('[REAL-BLE] Disconnecting from all devices');
         
         this.stopScanning();
+        await this.stopAdvertising();
         
         if (!this.bleManager) {
             console.warn('[REAL-BLE] Cannot disconnect - BLE manager not available');
@@ -487,7 +650,9 @@ export class RealBLEManager {
      */
     async destroy(): Promise<void> {
         await this.disconnect();
-        this.bleManager.destroy();
+        if (this.bleManager) {
+            this.bleManager.destroy();
+        }
         console.log('[BLE] BLE Manager destroyed');
     }
 }

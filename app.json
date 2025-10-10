@@ -71,6 +71,7 @@
           "isBackgroundEnabled": true,
           "isBleRequired": true,
           "neverForLocation": false,
+          "companionDeviceEnabled": false,
           "modes": [
             "peripheral",
             "central"

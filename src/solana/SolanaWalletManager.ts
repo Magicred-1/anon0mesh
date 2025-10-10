@@ -10,8 +10,14 @@ import {
     TransactionInstruction,
     ComputeBudgetProgram,
 } from '@solana/web3.js';
+import { 
+    Token, 
+    ASSOCIATED_TOKEN_PROGRAM_ID, 
+    TOKEN_PROGRAM_ID 
+} from '@solana/spl-token';
 import * as SecureStore from 'expo-secure-store';
 import { SolanaTransactionManager } from './SolanaTransactionManager';
+import { getUSDCMint, usdcBaseToUsdc } from './constants';
 
 export interface WalletConfig {
     network: 'mainnet-beta' | 'testnet' | 'devnet' | 'localnet';
@@ -230,6 +236,48 @@ export class SolanaWalletManager {
         } catch (error) {
         console.error('Failed to get balance:', error);
         throw error;
+        }
+    }
+
+    /**
+     * Get token balance (e.g., USDC)
+     */
+    async getTokenBalance(tokenSymbol: 'USDC'): Promise<number> {
+        if (!this.keypair) {
+            throw new Error('Wallet not initialized');
+        }
+
+        try {
+            // Get the mint address for the token
+            const mintAddress = getUSDCMint(this.config.network);
+            
+            // Get the associated token account address (v0.1.8 API)
+            const tokenAccount = await Token.getAssociatedTokenAddress(
+                ASSOCIATED_TOKEN_PROGRAM_ID,
+                TOKEN_PROGRAM_ID,
+                new PublicKey(mintAddress),
+                this.keypair.publicKey
+            );
+
+            // Get the account info (v0.1.8 API)
+            const accountInfo = await this.connection.getAccountInfo(tokenAccount);
+            
+            if (!accountInfo) {
+                console.log(`[SolanaWalletManager] Token account for ${tokenSymbol} not found`);
+                return 0;
+            }
+            
+            // Parse token account data to get balance
+            // Token account layout: 32 bytes (mint) + 32 bytes (owner) + 8 bytes (amount)
+            const data = Buffer.from(accountInfo.data);
+            const amount = data.readBigUInt64LE(64); // Amount is at offset 64
+            
+            // Convert from base units to token units
+            return usdcBaseToUsdc(Number(amount));
+        } catch (error) {
+            // Token account might not exist yet
+            console.log(`[SolanaWalletManager] Token account for ${tokenSymbol} not found or error:`, error);
+            return 0;
         }
     }
 

@@ -70,6 +70,24 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
     network: 'devnet', // Using testnet as requested
   });
 
+  // Get current available balance based on selected currency
+  const getCurrentBalance = () => {
+    if (!isInitialized) return 0;
+    // For now, only SOL balance is supported
+    // TODO: Add USDC balance support
+    return selectedCurrency === 'SOL' ? balance : 0;
+  };
+
+  // Set amount to maximum available balance
+  const setMaxAmount = () => {
+    const maxBalance = getCurrentBalance();
+    if (maxBalance > 0) {
+      // Leave a small amount for transaction fees (0.000005 SOL)
+      const maxWithFee = Math.max(0, maxBalance - 0.000005);
+      setSendAmount(maxWithFee.toFixed(6));
+    }
+  };
+
   // Check internet connectivity and initialize wallet
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -265,10 +283,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
 
     // Check if amount exceeds balance
     const amount = parseFloat(sendAmount);
-    if (amount > balance) {
+    const availableBalance = getCurrentBalance();
+    if (amount > availableBalance) {
       Alert.alert(
         'Insufficient Balance',
-        `You only have ${balance.toFixed(4)} SOL available. Please enter a lower amount.`
+        `You only have ${availableBalance.toFixed(4)} ${selectedCurrency} available. Please enter a lower amount.`
       );
       return;
     }
@@ -643,6 +662,31 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     ) : (
                       <USDCLogo size={28} />
                     )}
+                    
+                    {/* MAX Button */}
+                    <TouchableOpacity
+                      onPress={setMaxAmount}
+                      style={{
+                        backgroundColor: '#B10FF240',
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        marginLeft: 12,
+                        borderWidth: 1,
+                        borderColor: '#B10FF2',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: '#B10FF2',
+                          fontSize: 14,
+                          fontWeight: '700',
+                          fontFamily: 'Lexend_400Regular',
+                        }}
+                      >
+                        MAX
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                   
                   {/* Currency Dropdown */}
@@ -766,12 +810,24 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         marginRight: 6,
                       }}
                     >
-                      Available balance : {isInitialized ? balance.toFixed(4) : '...'} {selectedCurrency}
+                      Available balance : {isInitialized ? getCurrentBalance().toFixed(4) : '...'} {selectedCurrency}
                     </Text>
                     {selectedCurrency === 'SOL' ? (
                       <SolanaLogo size={16} color="#FFFFFF" />
                     ) : (
                       <USDCLogo size={16} />
+                    )}
+                    {selectedCurrency === 'USDC' && (
+                      <Text
+                        style={{
+                          color: '#FFA500',
+                          fontSize: 11,
+                          fontFamily: 'Lexend_400Regular',
+                          marginLeft: 8,
+                        }}
+                      >
+                        (Coming Soon)
+                      </Text>
                     )}
                   </View>
                 </View>
@@ -814,9 +870,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 {/* Send Transaction Button */}
                 <TouchableOpacity
                   onPress={handleSendTransaction}
-                  disabled={isSending || !isConnected}
+                  disabled={isSending || !isConnected || selectedCurrency === 'USDC'}
                   style={{
-                    backgroundColor: isSending || !isConnected ? '#666666' : '#B10FF280',
+                    backgroundColor: isSending || !isConnected || selectedCurrency === 'USDC' ? '#666666' : '#B10FF280',
                     paddingHorizontal: 32,
                     paddingVertical: 16,
                     borderRadius: 12,
@@ -848,7 +904,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         fontFamily: 'Lexend_400Regular',
                       }}
                     >
-                      {isConnected ? `Send ${sendAmount} ${selectedCurrency}` : '🌐 No Internet - Cannot Send'}
+                      {!isConnected 
+                        ? '🌐 No Internet - Cannot Send' 
+                        : selectedCurrency === 'USDC'
+                        ? '🚧 USDC Support Coming Soon'
+                        : `Send ${sendAmount} ${selectedCurrency}`}
                     </Text>
                   )}
                 </TouchableOpacity>

@@ -123,6 +123,8 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   }    // GossipSyncManagerDelegate implementation
     sendPacket(packet: Anon0MeshPacket): void {
         console.log('[MESH] Broadcasting packet:', packet.type);
+        console.log('[MESH] Packet payload preview:', packet.payload?.toString().substring(0, 50));
+        
         this.bleManager.broadcast(packet);
         
         // Add packet to background queue if app is in background
@@ -423,6 +425,24 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     return [];
   }
 
+  // Manually start BLE scanning (for testing/debugging)
+  startBLEScanning(): void {
+    console.log('[MESH] Manually starting BLE scan...');
+    if ('startScanning' in this.bleManager) {
+      this.bleManager.startScanning();
+    } else {
+      console.warn('[MESH] BLE manager does not support scanning');
+    }
+  }
+
+  // Stop BLE scanning
+  stopBLEScanning(): void {
+    console.log('[MESH] Manually stopping BLE scan...');
+    if ('stopScanning' in this.bleManager) {
+      this.bleManager.stopScanning();
+    }
+  }
+
   // Update nickname
   updateNickname(newNickname: string): void {
     this.nickname = newNickname;
@@ -627,6 +647,14 @@ export const useMeshNetworking = (
     return meshManager.current?.getConnectedBLEPeers() || [];
   };
 
+  const startBLEScanning = () => {
+    meshManager.current?.startBLEScanning();
+  };
+
+  const stopBLEScanning = () => {
+    meshManager.current?.stopBLEScanning();
+  };
+
   const updateNickname = (newNickname: string) => {
     meshManager.current?.updateNickname(newNickname);
   };
@@ -646,6 +674,8 @@ export const useMeshNetworking = (
     getBLEStats,
     isBLEAvailable,
     getConnectedBLEPeers,
+    startBLEScanning,
+    stopBLEScanning,
     updateNickname,
     getBackgroundMeshStatus,
     meshManager: meshManager.current,
