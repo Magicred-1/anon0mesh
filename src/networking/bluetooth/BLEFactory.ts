@@ -66,7 +66,7 @@ export class BLEFactory {
             console.log(`[BLE-FACTORY] Creating Real BLE Manager for device: ${deviceId}`);
         }
         
-        return new RealBLEManager(deviceId);
+        return new RealBLEManager();
     }
 
     /**

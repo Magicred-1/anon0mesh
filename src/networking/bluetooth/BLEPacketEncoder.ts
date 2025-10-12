@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import { Anon0MeshPacket, MessageType } from '../gossip/types';
+import { Anon0MeshPacket, MessageType } from '../../gossip/types';
 
 /**
  * BLE Packet Encoder/Decoder

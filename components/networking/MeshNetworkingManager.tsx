@@ -25,7 +25,7 @@ import {
   createBLEManager,
   getBLEConfig,
   BLEManager,
-} from '../../src/networking/BLEFactory';
+} from '../../src/networking/bluetooth/BLEFactory';
 import {
   initializeBackgroundMesh,
   addPacketToBackgroundQueue,
@@ -132,9 +132,15 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
       console.log('[MESH] Using Real BLE Manager (Expo dual-role emulation)');
 
     // Handle incoming BLE packets
-    this.bleManager.setPacketHandler(
-      (packet: Anon0MeshPacket, fromPeer: string) =>
-        this.handleIncomingPacket(packet, fromPeer),
+    this.bleManager.setDataHandler(
+      (data: string, fromPeer: string) => {
+        try {
+          const packet = JSON.parse(data) as Anon0MeshPacket;
+          this.handleIncomingPacket(packet, fromPeer);
+        } catch (e) {
+          console.error('[MESH] Failed to parse incoming BLE data', e);
+        }
+      },
     );
 
     // Peer events if supported
@@ -149,14 +155,32 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   // ===== GossipSyncManagerDelegate implementation =====
   sendPacket(packet: Anon0MeshPacket): void {
     console.log('[MESH] Broadcasting packet', packet.type);
-    this.bleManager.broadcast(packet);
+    const meshPacket = {
+      type: packet.type,
+      data: Buffer.from(packet.payload).toString('base64'),
+      sender: Buffer.from(packet.senderID).toString('hex'),
+      timestamp: Number(packet.timestamp),
+      ttl: packet.ttl,
+      signature: packet.signature,
+      recipientID: packet.recipientID,
+    };
+    this.bleManager.broadcastPacket(meshPacket);
     this.addToBackgroundQueueIfNeeded(packet);
   }
 
   sendPacketToPeer(peerID: string, packet: Anon0MeshPacket): void {
     console.log('[MESH] Sending packet to', peerID, packet.type);
     // RealBLEManager only supports broadcast, not direct peer messaging
-    this.bleManager.broadcast(packet);
+    const meshPacket = {
+      type: packet.type,
+      data: Buffer.from(packet.payload).toString('base64'),
+      sender: Buffer.from(packet.senderID).toString('hex'),
+      timestamp: Number(packet.timestamp),
+      ttl: packet.ttl,
+      signature: packet.signature,
+      recipientID: packet.recipientID,
+    };
+    this.bleManager.broadcastPacket(meshPacket);
     this.addToBackgroundQueueIfNeeded(packet);
   }
 
