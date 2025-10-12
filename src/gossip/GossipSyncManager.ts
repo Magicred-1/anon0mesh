@@ -97,6 +97,19 @@ export class GossipSyncManager {
                 this.messages.delete(victim);
             }
             }
+            
+            // Auto-relay new messages to mesh (gossip flooding)
+            if (packet.ttl > 0) {
+                console.log('[GOSSIP] Auto-relaying new message, TTL:', packet.ttl);
+                const relayPacket = {
+                    ...packet,
+                    ttl: packet.ttl - 1,
+                };
+                // Broadcast to all connected peers
+                setTimeout(() => {
+                    this.delegate?.sendPacket(relayPacket);
+                }, 100); // Small delay to avoid loops
+            }
         }
         } else if (isAnnounce) {
         const sender = Buffer.from(packet.senderID).toString('hex');

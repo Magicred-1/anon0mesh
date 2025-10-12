@@ -222,11 +222,15 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         const updateStats = () => {
             try {
                 const stats = meshNetworkingRef.current.getBLEStats();
-                setBleStats(stats);
+                if (stats) {
+                    setBleStats(stats);
+                }
                 
                 // Check if BLE is available
                 const available = meshNetworkingRef.current.isBLEAvailable();
-                setBleAvailable(available);
+                if (available !== undefined) {
+                    setBleAvailable(available);
+                }
             } catch (error) {
                 console.warn('[UI] Error getting BLE stats:', error);
             }
@@ -312,7 +316,7 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
 
             {/* Background Mesh Status */}
             <BackgroundMeshStatusIndicator
-                getBackgroundStatus={meshNetworking.getBackgroundMeshStatus}
+                getBackgroundStatus={() => meshNetworking.getBackgroundMeshStatus() || Promise.resolve({ isActive: false, relayEnabled: false, gossipEnabled: false, backgroundFetchStatus: 0 })}
             />
 
             {peers.length > 0 ? (

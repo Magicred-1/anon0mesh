@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 
-// Optional import - may not be available in Expo Go
-let BackgroundFetch: any = null;
-try {
-    // eslint-disable-next-line
-    BackgroundFetch = require('expo-background-fetch');
-} catch {
-    console.log('[BG-STATUS] BackgroundFetch not available (Expo Go)');
-}
+// Direct import - available in dev builds
+import * as BackgroundFetch from 'expo-background-fetch';
+
+console.log('[BG-STATUS] ✅ BackgroundFetch module loaded (dev build)');
 
 interface BackgroundMeshStatusProps {
     getBackgroundStatus?: () => Promise<any>;
@@ -63,30 +59,28 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
         }
     };
 
-    const getStatusText = (status: BackgroundMeshStatus | null): string => {
+    const getStatusText = (status: BackgroundMeshStatus | null) => {
         if (!status) return 'Unknown';
         
-        if (status.isActive && status.relayEnabled && status.gossipEnabled) {
-            return 'Active';
-        } else if (status.isActive) {
-            return 'Partial';
-        } else if (!BackgroundFetch || (BackgroundFetch && status.backgroundFetchStatus === BackgroundFetch.BackgroundFetchStatus?.Denied)) {
-            return 'Expo Go';
-        } else {
-            return 'Inactive';
-        }
+        // if (status.isActive && status.relayEnabled && status.gossipEnabled) {
+        //     return 'Active';
+        // } else if (status.isActive) {
+        //     return 'Partial';
+        // } else if (!BackgroundFetch || (BackgroundFetch && status.backgroundFetchStatus === BackgroundFetch.BackgroundFetchStatus?.Denied)) {
+        //     return 'Expo Go';
+        // } else {
+        //     return 'Inactive';
+        // }
     };
 
     const getBackgroundFetchStatusText = (bgStatus: any): string => {
-        if (!BackgroundFetch) return 'Not Available';
-        
         switch (bgStatus) {
-            case BackgroundFetch.BackgroundFetchStatus?.Available:
-                return 'Available';
-            case BackgroundFetch.BackgroundFetchStatus?.Denied:
-                return 'Denied';
-            case BackgroundFetch.BackgroundFetchStatus?.Restricted:
-                return 'Restricted';
+            case BackgroundFetch.BackgroundFetchStatus.Available:
+                return '✔️';
+            case BackgroundFetch.BackgroundFetchStatus.Denied:
+                return '❌';
+            case BackgroundFetch.BackgroundFetchStatus.Restricted:
+                return '⚠️';
             default:
                 return 'Unknown';
         }
@@ -119,7 +113,7 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
                 marginRight: 8,
             }} />
             <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '500' }}>
-                Background Mesh
+                Mesh Status
             </Text>
             </View>
             
@@ -135,8 +129,8 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
 
         {isExpanded && status && (
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#444' }}>
-            {/* Show Expo Go warning if background fetch is not available */}
-            {(!BackgroundFetch || (BackgroundFetch && status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus?.Available)) && (
+            {/* Show warning if background fetch is not available */}
+            {status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus.Available && (
                 <View style={{ 
                 backgroundColor: '#FFA50022', 
                 padding: 10, 
@@ -146,16 +140,13 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
                 borderColor: '#FFA500'
                 }}>
                 <Text style={{ color: '#FFA500', fontSize: 11, fontWeight: '600', marginBottom: 4 }}>
-                    ⚠️ Background Tasks Not Available
+                    ⚠️ Background Tasks Limited
                 </Text>
                 <Text style={{ color: '#CCC', fontSize: 10, lineHeight: 14 }}>
-                    Expo Go doesn&apos;t support background tasks. The app works normally, but background relay is disabled.
+                    Android severely restricts background BLE operations. The mesh works best when the app is in the foreground.
                 </Text>
                 <Text style={{ color: '#CCC', fontSize: 10, lineHeight: 14, marginTop: 4 }}>
-                    To enable: Build a custom development build with:
-                </Text>
-                <Text style={{ color: '#AAA', fontSize: 9, fontFamily: 'monospace', marginTop: 4 }}>
-                    expo run:android{'\n'}or{'\n'}expo run:ios
+                    Status: {getBackgroundFetchStatusText(status.backgroundFetchStatus)}
                 </Text>
                 </View>
             )}
@@ -168,28 +159,28 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                 <Text style={{ color: '#AAA', fontSize: 11 }}>Active:</Text>
                 <Text style={{ color: status.isActive ? '#10B981' : '#EF4444', fontSize: 11 }}>
-                    {status.isActive ? 'Yes' : 'No'}
+                    {status.isActive ? '✔️' : '❌'}
                 </Text>
                 </View>
                 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                 <Text style={{ color: '#AAA', fontSize: 11 }}>Relay:</Text>
                 <Text style={{ color: status.relayEnabled ? '#10B981' : '#EF4444', fontSize: 11 }}>
-                    {status.relayEnabled ? 'Enabled' : 'Disabled'}
+                    {status.relayEnabled ? '✔️' : '❌'}
                 </Text>
                 </View>
                 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                 <Text style={{ color: '#AAA', fontSize: 11 }}>Gossip:</Text>
                 <Text style={{ color: status.gossipEnabled ? '#10B981' : '#EF4444', fontSize: 11 }}>
-                    {status.gossipEnabled ? 'Enabled' : 'Disabled'}
+                    {status.gossipEnabled ? '✔️' : '❌'}
                 </Text>
                 </View>
                 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                 <Text style={{ color: '#AAA', fontSize: 11 }}>Background Fetch:</Text>
                 <Text style={{ 
-                    color: (!BackgroundFetch || (BackgroundFetch && status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus?.Available))
+                    color: status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus.Available
                     ? '#EF4444' : '#10B981', 
                     fontSize: 11 
                 }}>

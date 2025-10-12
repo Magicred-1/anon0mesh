@@ -1,658 +1,468 @@
+// RealBLEManager.ts
 import { BleManager, Device, State } from 'react-native-ble-plx';
-import { Buffer } from 'buffer';
-import { Anon0MeshPacket } from '../gossip/types';
-import { Platform, PermissionsAndroid, NativeModules, NativeEventEmitter } from 'react-native';
+import { Platform } from 'react-native';
 import { BLEPermissionManager } from '../utils/BLEPermissionManager';
 import { BLEPacketEncoder } from './BLEPacketEncoder';
+import { Anon0MeshPacket } from '../gossip/types';
+import { BLEPeripheralServer } from './BLEPeripheralServer';
 
-// Try to import the advertiser module if available
-let BleAdvertiser: any = null;
-try {
-    // Attempt to load react-native-ble-advertiser if installed
-    BleAdvertiser = require('react-native-ble-advertiser').default;
-} catch (e) {
-    console.warn('[REAL-BLE] BLE Advertiser not available - peripheral mode disabled');
-    console.warn('[REAL-BLE] Install react-native-ble-advertiser for advertising support');
-}
+// Direct import - available in dev builds
+import BleAdvertiser from 'react-native-ble-advertiser';
+
+console.log('[BLE] BLE Advertiser module:', BleAdvertiser ? 'LOADED ✅' : 'NOT FOUND ❌');
+
+
+export const SERVICE_UUID = '0000FFF0-0000-1000-8000-00805F9B34FB';
+export const CHARACTERISTIC_UUID = '0000FFF1-0000-1000-8000-00805F9B34FB';
 
 /**
- * Real BLE Manager for mesh networking using react-native-ble-plx
- * Handles Bluetooth Low Energy communication for the anon0mesh network
- * Based on Expo BLE guide best practices
+ * RealBLEManager
+ * Handles both BLE scanning (central) and advertising (peripheral) roles.
  */
 export class RealBLEManager {
-    private bleManager: BleManager;
-    private deviceId: string;
-    private isScanning: boolean = false;
-    private isAdvertising: boolean = false;
-    private connectedDevices: Map<string, Device> = new Map();
-    private onPacketReceived?: (packet: Anon0MeshPacket, fromPeer: string) => void;
-    private onPeerConnected?: (peerId: string) => void;
-    private onPeerDisconnected?: (peerId: string) => void;
+  private ble: BleManager;
+  private peripheral: BLEPeripheralServer; // GATT server for incoming connections
+  private deviceId: string;
+  private isScanning = false;
+  private isAdvertising = false;
+  private connectedDevices = new Map<string, Device>();
+  private connectionAttempts = new Map<string, number>(); // Track failed attempts
+  private pendingConnections = new Set<string>(); // Track in-progress connections
+  private knownMeshPeers = new Set<string>(); // Track devices we know have mesh service
+  private blacklistedDevices = new Set<string>(); // Devices that definitely don't have mesh service
 
-    // UUIDs for anon0mesh service
-    // Using a custom 128-bit UUID for the mesh network
-    // Format must match between advertiser and scanner
-    private static readonly SERVICE_UUID = '0000FFF0-0000-1000-8000-00805F9B34FB'; // Custom service UUID
-    private static readonly CHARACTERISTIC_UUID = '0000FFF1-0000-1000-8000-00805F9B34FB'; // Custom characteristic UUID
+  private onPacketReceived?: (packet: Anon0MeshPacket, fromPeer: string) => void;
+  private onPeerConnected?: (peerId: string) => void;
+  private onPeerDisconnected?: (peerId: string) => void;
 
-    constructor(deviceId: string) {
-        this.deviceId = deviceId;
-        
-        try {
-            // Check if BleManager is available
-            if (!BleManager) {
-                throw new Error('BleManager is not available - react-native-ble-plx may not be properly linked');
-            }
-            
-            this.bleManager = new BleManager();
-            console.log('[REAL-BLE] Initializing Real BLE Manager for device:', deviceId);
-            this.setupBLE();
-        } catch (error) {
-            console.warn('[REAL-BLE] Real BLE initialization failed');
-            console.warn('[REAL-BLE] Error details:', error instanceof Error ? error.message : 'Unknown error');
-            console.warn('[REAL-BLE] Device type: Physical device detected');
-            console.warn('[REAL-BLE] This suggests you need a custom development build');
-            console.warn('[REAL-BLE] Are you using Expo Go or a custom build?');
-            
-            // Don't throw error - let the app continue without BLE
-            console.log('[REAL-BLE] App will continue without mesh networking');
-            
-            // Create a minimal fallback that doesn't crash
-            this.bleManager = null as any;
-        }
+  constructor(deviceId: string) {
+    this.deviceId = deviceId;
+    this.ble = new BleManager();
+    this.peripheral = new BLEPeripheralServer(deviceId);
+    this.init();
+  }
+
+  private async init() {
+    if (Platform.OS === 'android') {
+      const ok = await this.ensurePermissions();
+      if (!ok) return;
     }
 
-    /**
-     * Initialize BLE and request permissions
-     */
-    private async setupBLE(): Promise<void> {
-        // Skip setup if BLE manager failed to initialize
-        if (!this.bleManager) {
-            console.warn('[REAL-BLE] Skipping BLE setup - manager not available');
-            return;
-        }
+    const state = await this.ble.state();
+    if (state === State.PoweredOn) {
+      this.startMeshNetworking();
+    } else {
+      this.ble.onStateChange((s) => {
+        if (s === State.PoweredOn) this.startMeshNetworking();
+      }, true);
+    }
+  }
 
-        try {
-            console.log('[REAL-BLE] Setting up BLE...');
-            
-            // Request permissions on Android
-            if (Platform.OS === 'android') {
-                console.log('[REAL-BLE] Requesting Android permissions...');
-                const hasPermissions = await this.requestPermissions();
-                if (!hasPermissions) {
-                    console.warn('[REAL-BLE] Critical permissions not granted - BLE scanning disabled');
-                    return; // Don't continue if critical permissions are missing
-                }
-            }
+  private async ensurePermissions(): Promise<boolean> {
+    try {
+      const status = await BLEPermissionManager.checkAndRequestPermissions();
+      if (!status.hasAllPermissions && status.needsManualSetup) {
+        BLEPermissionManager.showPermissionAlert();
+      }
+      return status.hasAllPermissions;
+    } catch (err) {
+      console.error('[BLE] Permission error:', err);
+      return false;
+    }
+  }
 
-            // Check if Bluetooth is enabled
-            const state = await this.bleManager.state();
-            console.log('[REAL-BLE] Initial Bluetooth state:', state);
-            
-            // On Android, also verify permissions one more time before starting
-            if (Platform.OS === 'android') {
-                const recheckLocation = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-                const recheckScan = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
-                const recheckConnect = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
-                
-                console.log('[REAL-BLE] Final permission check before starting:');
-                console.log('[REAL-BLE]   - Location:', recheckLocation ? '✅' : '❌');
-                console.log('[REAL-BLE]   - BLE Scan:', recheckScan ? '✅' : '❌');
-                console.log('[REAL-BLE]   - BLE Connect:', recheckConnect ? '✅' : '❌');
-                
-                if (!recheckLocation || !recheckScan || !recheckConnect) {
-                    console.error('[REAL-BLE] ❌ PERMISSIONS MISSING - Cannot start BLE');
-                    console.error('[REAL-BLE] Please ensure:');
-                    console.error('[REAL-BLE] 1. Location services are ON in phone Settings → Location');
-                    console.error('[REAL-BLE] 2. App has Location permission set to "Allow all the time"');
-                    console.error('[REAL-BLE] 3. App has "Nearby devices" permission enabled');
-                    console.error('[REAL-BLE] 4. Restart the app after granting permissions');
-                    console.error('[REAL-BLE]');
-                    console.error('[REAL-BLE] Missing permissions:');
-                    if (!recheckLocation) console.error('[REAL-BLE]   ❌ Location (ACCESS_FINE_LOCATION)');
-                    if (!recheckScan) console.error('[REAL-BLE]   ❌ Bluetooth Scan (BLUETOOTH_SCAN)');
-                    if (!recheckConnect) console.error('[REAL-BLE]   ❌ Bluetooth Connect (BLUETOOTH_CONNECT)');
-                    return;
-                }
-            }
-            
-            if (state !== State.PoweredOn) {
-                console.log('[REAL-BLE] Bluetooth is not powered on, waiting for state change...');
-                // Monitor state changes
-                this.bleManager.onStateChange((newState) => {
-                    console.log('[REAL-BLE] Bluetooth state changed to:', newState);
-                    if (newState === State.PoweredOn) {
-                        console.log('[REAL-BLE] Bluetooth powered on, starting mesh networking');
-                        this.startMeshNetworking();
-                    }
-                }, true);
-            } else {
-                console.log('[REAL-BLE] Bluetooth is ready, starting mesh networking');
-                this.startMeshNetworking();
-            }
-        } catch (error) {
-            console.error('[REAL-BLE] Failed to setup BLE:', error);
-        }
+  private async startMeshNetworking() {
+    console.log('[BLE] 🚀 Starting mesh networking...');
+    console.log('[BLE] 📱 Device ID:', this.deviceId.substring(0, 8) + '...');
+    
+    // Setup peripheral data handler first
+    this.setupPeripheralHandlers();
+    
+    // Check if peripheral module is available
+    if (!this.peripheral.isModuleAvailable()) {
+      console.log('[BLE] ⚠️ GATT server unavailable - running in Central-only mode');
+      console.log('[BLE] ℹ️ You can connect TO other devices but they cannot connect to you');
+      console.log('[BLE] ℹ️ For full mesh, rebuild app after installing react-native-peripheral');
+    } else {
+      // Start GATT server (so others can connect TO us)
+      try {
+        await this.peripheral.start();
+        console.log('[BLE] ✅ GATT server started - we can now receive connections');
+      } catch (error: any) {
+        console.error('[BLE] ❌ Failed to start GATT server:', error?.message || error);
+        console.log('[BLE] ⚠️ Continuing with Central-only mode');
+      }
+    }
+    
+    // Start BLE advertising (legacy, may be redundant with peripheral.start())
+    await this.startAdvertising();
+    
+    // Start scanning (to find and connect to other devices)
+    await this.startScanning();
+  }
+  
+  /**
+   * Setup handlers for data received via GATT server
+   * This handles data from devices that connected TO US (we are the server)
+   */
+  private setupPeripheralHandlers() {
+    this.peripheral.setDataHandler((data: string, from: string) => {
+      console.log('[BLE] 📥 Received data via GATT server, length:', data.length);
+      this.handleIncoming(data, from);
+    });
+  }
+
+  /** --- Advertising (Peripheral Role) --- */
+  private async startAdvertising() {
+    if (!BleAdvertiser) {
+      console.warn('[BLE] BLE Advertiser not available (requires dev build)');
+      return;
     }
 
-    /**
-     * Request necessary permissions on Android
-     */
-    private async requestPermissions(): Promise<boolean> {
-        try {
-            const status = await BLEPermissionManager.checkAndRequestPermissions();
-            
-            // If needs manual setup (never_ask_again), trigger UI alert
-            if (status.needsManualSetup && !status.hasAllPermissions) {
-                console.log('[REAL-BLE] 🚨 Triggering permission alert for UI');
-                BLEPermissionManager.showPermissionAlert();
-            }
-            
-            return status.hasAllPermissions;
-        } catch (error) {
-            console.error('[REAL-BLE] Permission request failed:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Start mesh networking (scanning and advertising)
-     */
-    private async startMeshNetworking(): Promise<void> {
-        try {
-            // Start BLE advertising so other devices can discover us
-            await this.startAdvertising();
-            
-            // Start scanning for other devices
-            await this.startScanning();
-        } catch (error) {
-            console.error('[REAL-BLE] Failed to start mesh networking:', error);
-        }
-    }
-
-    /**
-     * Start BLE advertising to make this device discoverable
-     */
-    private async startAdvertising(): Promise<void> {
-        // Check if advertiser is available
-        if (!BleAdvertiser) {
-            console.log('[REAL-BLE] BLE Advertiser not available - device will not be discoverable');
-            console.log('[REAL-BLE] Install react-native-ble-advertiser for advertising support:');
-            console.log('[REAL-BLE]   npm install react-native-ble-advertiser');
-            console.log('[REAL-BLE]   npx expo prebuild --clean');
-            return;
-        }
-
-        if (Platform.OS !== 'android') {
-            console.log('[REAL-BLE] BLE advertising only fully supported on Android');
-            return;
-        }
-
-        try {
-            console.log('[REAL-BLE] 🚀 Starting BLE advertising...');
-            console.log('[REAL-BLE] Device ID:', this.deviceId);
-            console.log('[REAL-BLE] Service UUID:', RealBLEManager.SERVICE_UUID);
-            
-            // Initialize the advertiser
-            await BleAdvertiser.setCompanyId(0x00E0); // Custom company ID
-            
-            // Add the service UUID to advertise
-            console.log('[REAL-BLE] Adding service UUID to advertisement...');
-            await BleAdvertiser.addService(
-                RealBLEManager.SERVICE_UUID,
-                [RealBLEManager.CHARACTERISTIC_UUID]
-            );
-            
-            // Start advertising
-            console.log('[REAL-BLE] Broadcasting advertisement...');
-            await BleAdvertiser.broadcast(
-                this.deviceId, // Device name
-                [], // Manufacturer data (empty for now)
-                {
-                    advertiseMode: BleAdvertiser.ADVERTISE_MODE_LOW_LATENCY,
-                    txPowerLevel: BleAdvertiser.ADVERTISE_TX_POWER_HIGH,
-                    connectable: true,
-                    includeDeviceName: true,
-                    includeTxPowerLevel: true,
-                }
-            );
-
-            console.log('[REAL-BLE] ✅ Advertising started successfully!');
-            console.log('[REAL-BLE] Device is now discoverable as:', this.deviceId);
-            this.isAdvertising = true;
-            
-            // Listen for connection events
-            BleAdvertiser.onConnectionEvent((event: any) => {
-                console.log('[REAL-BLE] 📱 Connection event:', event);
-            });
-            
-        } catch (error) {
-            console.error('[REAL-BLE] ❌ Failed to start advertising:', error);
-            console.error('[REAL-BLE] Error details:', JSON.stringify(error, null, 2));
-            console.warn('[REAL-BLE] Device will scan but not be discoverable to others');
-        }
-    }
-
-    /**
-     * Stop BLE advertising
-     */
-    private async stopAdvertising(): Promise<void> {
-        if (!this.isAdvertising || !BleAdvertiser) {
-            return;
-        }
-
-        try {
-            await BleAdvertiser.stopBroadcast();
-            console.log('[REAL-BLE] Advertising stopped');
-            this.isAdvertising = false;
-        } catch (error) {
-            console.error('[REAL-BLE] Failed to stop advertising:', error);
-        }
-    }
-
-    /**
-     * Set callback handlers
-     */
-    setPacketHandler(handler: (packet: Anon0MeshPacket, fromPeer: string) => void): void {
-        this.onPacketReceived = handler;
-    }
-
-    setPeerConnectionHandlers(
-        onConnected: (peerId: string) => void,
-        onDisconnected: (peerId: string) => void
-    ): void {
-        this.onPeerConnected = onConnected;
-        this.onPeerDisconnected = onDisconnected;
-    }
-
-    /**
-     * Start scanning for BLE devices
-     */
-    async startScanning(): Promise<void> {
-        if (!this.bleManager) {
-            console.warn('[REAL-BLE] Cannot start scanning - BLE manager not available');
-            return;
-        }
-
-        if (this.isScanning) {
-            console.log('[REAL-BLE] ⚠️  Already scanning - ignoring duplicate scan request');
-            return;
-        }
-        
-        // Set flag IMMEDIATELY to prevent race conditions
-        this.isScanning = true;
-        console.log('[REAL-BLE] Starting BLE scan...');
-
-        try {
-            // Request permissions first on Android
-            if (Platform.OS === 'android') {
-                console.log('[REAL-BLE] Requesting BLE permissions...');
-                const hasPermissions = await this.requestPermissions();
-                if (!hasPermissions) {
-                    console.error('[REAL-BLE] Required permissions not granted - cannot start scanning');
-                    this.isScanning = false;
-                    return;
-                }
-            }
-
-            // Check Bluetooth state first
-            const state = await this.bleManager.state();
-            console.log('[REAL-BLE] Bluetooth state before scanning:', state);
-            
-            if (state !== State.PoweredOn) {
-                console.warn('[REAL-BLE] Bluetooth is not powered on, cannot start scanning');
-                console.warn('[REAL-BLE] Please enable Bluetooth in device settings');
-                this.isScanning = false;
-                return;
-            }
-
-            // Add small delay to ensure native layer has synced permissions
-            // This helps avoid Error 600 (BluetoothUnauthorized) right after permission grant
-            console.log('[REAL-BLE] Waiting for BLE to sync permissions...');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Stop any existing scan first
-            try {
-                this.bleManager.stopDeviceScan();
-                await new Promise(resolve => setTimeout(resolve, 100));
-            } catch {
-                // Ignore - no scan was running
-            }
-
-            console.log('[REAL-BLE] 🔍 Starting device scan...');
-            console.log('[REAL-BLE] Looking for service UUID:', RealBLEManager.SERVICE_UUID);
-            console.log('[REAL-BLE] Scan will show devices advertising this service');
-            
-            // Start with a broader scan to verify BLE is working
-            let devicesFound = 0;
-            
-            // First, do a quick scan for ALL devices to verify BLE is working
-            console.log('[REAL-BLE] 🔍 Phase 1: Scanning for ANY BLE devices (5 seconds)...');
-            this.bleManager.startDeviceScan(
-                null, // Scan for ALL devices
-                { allowDuplicates: false },
-                (error, device) => {
-                    if (error) {
-                        console.error('[REAL-BLE] Scan error:', error.message, error.errorCode);
-                        return;
-                    }
-                    if (device) {
-                        devicesFound++;
-                        console.log(`[REAL-BLE] 📱 Device ${devicesFound}:`, {
-                            id: device.id,
-                            name: device.name || 'unnamed',
-                            rssi: device.rssi,
-                            serviceUUIDs: device.serviceUUIDs || []
-                        });
-                        
-                        // Check if this device has our service
-                        if (device.serviceUUIDs?.includes(RealBLEManager.SERVICE_UUID)) {
-                            console.log('[REAL-BLE] 🎯 FOUND ANON0MESH DEVICE!');
-                            this.handleDeviceDiscovered(device);
-                        }
-                    }
-                }
-            );
-            
-            // After 5 seconds, switch to filtered scan
-            setTimeout(() => {
-                console.log(`[REAL-BLE] Phase 1 complete: Found ${devicesFound} total BLE devices`);
-                
-                if (devicesFound === 0) {
-                    console.warn('[REAL-BLE] ⚠️  No BLE devices found at all!');
-                    console.warn('[REAL-BLE] Check: 1) Bluetooth is on, 2) Permissions granted, 3) Other BLE devices nearby');
-                } else {
-                    console.log('[REAL-BLE] ✅ BLE scanning is working!');
-                    console.log('[REAL-BLE] 🔍 Phase 2: Switching to filtered scan for anon0mesh devices...');
-                }
-                
-                // Stop the all-devices scan
-                this.bleManager.stopDeviceScan();
-                
-                // Now start the filtered scan
-                this.bleManager.startDeviceScan(
-                    [RealBLEManager.SERVICE_UUID],
-                    { allowDuplicates: false },
-                    (error, device) => {
-                        if (error) {
-                            console.error('[REAL-BLE] Filtered scan error:', error.message);
-                            return;
-                        }
-                        if (device) {
-                            console.log('[REAL-BLE] 🎯 Found anon0mesh device:', {
-                                id: device.id,
-                                name: device.name || 'unnamed',
-                                rssi: device.rssi
-                            });
-                            this.handleDeviceDiscovered(device);
-                        }
-                    }
-                );
-            }, 5000);
-            
-            console.log('[REAL-BLE] ✅ BLE scan started successfully');
-        } catch (error) {
-            console.error('[REAL-BLE] Failed to start scanning:', error);
-            this.isScanning = false;
-        }
-    }
-
-    /**
-     * Stop scanning for BLE devices
-     */
-    stopScanning(): void {
-        if (!this.bleManager) {
-            console.warn('[REAL-BLE] Cannot stop scanning - BLE manager not available');
-            return;
-        }
-
-        if (!this.isScanning) {
-            return;
-        }
-
-        try {
-            console.log('[REAL-BLE] Stopping BLE scan...');
-            this.bleManager.stopDeviceScan();
-            this.isScanning = false;
-        } catch (error) {
-            console.error('[REAL-BLE] Failed to stop scanning:', error);
-        }
-    }
-
-    /**
-     * Handle discovered device
-     */
-    private async handleDeviceDiscovered(device: Device): Promise<void> {
-        try {
-            console.log('[BLE] Discovered mesh device:', device.id, device.name);
-
-            // Avoid connecting to ourselves or already connected devices
-            if (device.id === this.deviceId || this.connectedDevices.has(device.id)) {
-                return;
-            }
-
-            // Connect to the device
-            const connectedDevice = await device.connect();
-            console.log('[BLE] Connected to:', device.id);
-
-            // Discover services and characteristics
-            await connectedDevice.discoverAllServicesAndCharacteristics();
-
-            // Store connected device
-            this.connectedDevices.set(device.id, connectedDevice);
-
-            // Set up notifications for incoming packets
-            await this.setupNotifications(connectedDevice);
-
-            // Notify about new peer
-            if (this.onPeerConnected) {
-                this.onPeerConnected(device.id);
-            }
-
-            // Handle disconnection
-            connectedDevice.onDisconnected((error, device) => {
-                console.log('[BLE] Device disconnected:', device?.id, error);
-                if (device) {
-                    this.connectedDevices.delete(device.id);
-                    if (this.onPeerDisconnected) {
-                        this.onPeerDisconnected(device.id);
-                    }
-                }
-            });
-
-        } catch (error) {
-            console.error('[BLE] Failed to connect to device:', device.id, error);
-        }
-    }
-
-    /**
-     * Setup notifications for receiving packets
-     */
-    private async setupNotifications(device: Device): Promise<void> {
-        try {
-            await device.monitorCharacteristicForService(
-                RealBLEManager.SERVICE_UUID,
-                RealBLEManager.CHARACTERISTIC_UUID,
-                (error, characteristic) => {
-                    if (error) {
-                        console.error('[BLE] Notification error:', error);
-                        return;
-                    }
-
-                    if (characteristic?.value) {
-                        this.handleIncomingData(characteristic.value, device.id);
-                    }
-                }
-            );
-        } catch (error) {
-            console.error('[BLE] Failed to setup notifications:', error);
-        }
-    }
-
-    /**
-     * Handle incoming packet data
-     */
-    private handleIncomingData(base64Data: string, fromDeviceId: string): void {
-        try {
-            const data = Buffer.from(base64Data, 'base64');
-            const packet = JSON.parse(data.toString()) as Anon0MeshPacket;
-            
-            console.log('[BLE] Received packet:', packet.type, 'from:', fromDeviceId);
-            
-            if (this.onPacketReceived) {
-                this.onPacketReceived(packet, fromDeviceId);
-            }
-        } catch (error) {
-            console.error('[BLE] Failed to parse incoming packet:', error);
-        }
-    }
-
-    /**
-     * Broadcast packet to all connected devices
-     */
-    async broadcast(packet: Anon0MeshPacket): Promise<void> {
-        if (!this.bleManager) {
-            console.warn('[REAL-BLE] Cannot broadcast - BLE manager not available');
-            return;
-        }
-
-        const connectedDevices = Array.from(this.connectedDevices.values());
-        
-        if (connectedDevices.length === 0) {
-            console.log('[REAL-BLE] ⚠️  No connected devices - message queued for gossip sync');
-            console.log('[REAL-BLE] Message will be delivered when peers connect');
-            console.log('[REAL-BLE] Packet type:', packet.type);
-            // Don't return early - the message is still added to gossip manager
-            // It will be synced when devices connect
-            return;
-        }
-
-        console.log(`[REAL-BLE] Broadcasting ${packet.type} to ${connectedDevices.length} devices`);
-
-        const promises = connectedDevices.map(device => 
-            this.sendToDevice(device, packet)
+    if (this.isAdvertising) return;
+    
+    console.log('[BLE] Starting BLE advertising...');
+    
+    try {
+      await BleAdvertiser.setCompanyId(0x00e0);
+      
+      // Constants are exported from native module
+      const advertiserModule = BleAdvertiser as any;
+      
+      // Try with device name first (helps with discovery)
+      // If it fails due to 31-byte limit, retry without name
+      try {
+        await BleAdvertiser.broadcast(
+          SERVICE_UUID,
+          [],
+          {
+            advertiseMode: advertiserModule.ADVERTISE_MODE_LOW_LATENCY ?? 2,
+            txPowerLevel: advertiserModule.ADVERTISE_TX_POWER_HIGH ?? 3,
+            connectable: true,
+            includeDeviceName: true,  // ✅ Try with name for easier discovery
+            includeTxPowerLevel: false,
+          }
         );
-
-        try {
-            await Promise.allSettled(promises);
-            console.log(`[REAL-BLE] ✅ Broadcast complete to ${connectedDevices.length} devices`);
-        } catch (error) {
-            console.error('[REAL-BLE] Broadcast failed:', error);
-        }
-    }
-
-    /**
-     * Send packet to specific peer
-     */
-    async sendToPeer(peerId: string, packet: Anon0MeshPacket): Promise<void> {
-        if (!this.bleManager) {
-            console.warn('[REAL-BLE] Cannot send to peer - BLE manager not available');
-            return;
-        }
-
-        const device = this.connectedDevices.get(peerId);
-        
-        if (!device) {
-            console.log('[REAL-BLE] Peer not connected:', peerId);
-            return;
-        }
-
-        console.log('[REAL-BLE] Sending', packet.type, 'to peer:', peerId);
-        await this.sendToDevice(device, packet);
-    }
-
-    /**
-     * Send packet to specific device
-     */
-    private async sendToDevice(device: Device, packet: Anon0MeshPacket): Promise<void> {
-        try {
-            // Use proper BLE encoding that respects MTU limits
-            const encodedChunks = BLEPacketEncoder.encode(packet);
-            
-            console.log(`[REAL-BLE] Sending packet in ${encodedChunks.length} chunk(s) to ${device.id}`);
-            
-            // Send each chunk
-            for (let i = 0; i < encodedChunks.length; i++) {
-                const chunk = encodedChunks[i];
-                await device.writeCharacteristicWithResponseForService(
-                    RealBLEManager.SERVICE_UUID,
-                    RealBLEManager.CHARACTERISTIC_UUID,
-                    chunk
-                );
-                
-                // Small delay between chunks to avoid overwhelming the BLE stack
-                if (i < encodedChunks.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                }
+        console.log('[BLE] ✅ Advertising started (with device name)');
+      } catch (nameErr: any) {
+        if (nameErr?.message?.includes('31 bytes')) {
+          console.log('[BLE] Device name too long, advertising without name...');
+          await BleAdvertiser.broadcast(
+            SERVICE_UUID,
+            [],
+            {
+              advertiseMode: advertiserModule.ADVERTISE_MODE_LOW_LATENCY ?? 2,
+              txPowerLevel: advertiserModule.ADVERTISE_TX_POWER_HIGH ?? 3,
+              connectable: true,
+              includeDeviceName: false,
+              includeTxPowerLevel: false,
             }
-            
-            console.log('[REAL-BLE] ✅ Packet sent successfully');
-        } catch (error) {
-            console.error('[REAL-BLE] Failed to send to device:', device.id, error);
+          );
+          console.log('[BLE] ✅ Advertising started (without device name)');
+        } else {
+          throw nameErr;
         }
-    }
+      }
 
-    /**
-     * Get list of connected peer IDs
-     */
-    getConnectedPeers(): string[] {
-        return Array.from(this.connectedDevices.keys());
+      this.isAdvertising = true;
+    } catch (err: any) {
+      console.error('[BLE] ❌ Failed to start advertising:', err?.message || err);
+      
+      // Don't retry if payload is too large - it won't help
+      if (err?.message?.includes('31 bytes')) {
+        console.error('[BLE] ⛔ Advertising payload too large - cannot retry');
+        return;
+      }
+      
+      // Retry once for other errors
+      setTimeout(async () => {
+        if (!this.isAdvertising) {
+          console.log('[BLE] Retrying advertising...');
+          await this.startAdvertising();
+        }
+      }, 2000);
     }
+  }
 
-    /**
-     * Check if connected to specific peer
-     */
-    isConnectedToPeer(peerId: string): boolean {
-        return this.connectedDevices.has(peerId);
+  private async stopAdvertising() {
+    if (!BleAdvertiser || !this.isAdvertising) return;
+    try {
+      await BleAdvertiser.stopBroadcast();
+      this.isAdvertising = false;
+      console.log('[BLE] Advertising stopped');
+    } catch (err) {
+      console.error('[BLE] Stop advertising error:', err);
     }
+  }
 
-    /**
-     * Get connection statistics
-     */
-    getStats() {
-        return {
-            connectedDevices: this.bleManager ? this.connectedDevices.size : 0,
-            isScanning: this.bleManager ? this.isScanning : false,
-            isAdvertising: this.bleManager ? this.isAdvertising : false,
-            advertiserAvailable: BleAdvertiser !== null,
-        };
-    }
+  /** --- Scanning (Central Role) --- */
+  async startScanning() {
+    if (this.isScanning) return;
+    this.isScanning = true;
+    console.log('[BLE] Scanning for mesh devices...');
+    console.log('[BLE] Known mesh peers:', this.knownMeshPeers.size);
 
-    /**
-     * Disconnect from all devices and cleanup
-     */
-    async disconnect(): Promise<void> {
-        console.log('[REAL-BLE] Disconnecting from all devices');
-        
-        this.stopScanning();
-        await this.stopAdvertising();
-        
-        if (!this.bleManager) {
-            console.warn('[REAL-BLE] Cannot disconnect - BLE manager not available');
+    // Scan ALL devices and verify mesh capability after connection
+    this.ble.startDeviceScan(
+      null, // Scan all devices
+      { allowDuplicates: true, scanMode: 2 }, // scanMode 2 = balanced power/latency
+      async (error, device) => {
+        if (error) {
+          console.error('[BLE] Scan error:', error.message);
+          return;
+        }
+        if (device) {
+          // Priority 1: Always try to connect to known mesh peers
+          if (this.knownMeshPeers.has(device.id)) {
+            console.log('[BLE] 🎯 Found known mesh peer:', device.id, device.name || 'unnamed');
+            await this.handleDeviceDiscovered(device);
             return;
-        }
+          }
 
-        const disconnectPromises = Array.from(this.connectedDevices.values()).map(
-            device => device.cancelConnection()
+          // Skip blacklisted devices
+          if (this.blacklistedDevices.has(device.id)) {
+            return;
+          }
+          
+          // Priority 2: Devices with names (more likely to be mesh peers)
+          if (device.name) {
+            console.log('[BLE] Discovered named device:', device.id, device.name);
+            await this.handleDeviceDiscovered(device);
+            return;
+          }
+          
+          // Priority 3: Try unnamed devices occasionally (10% chance)
+          // This reduces connection spam to random BLE devices
+          if (Math.random() < 0.1) {
+            console.log('[BLE] Trying unnamed device:', device.id);
+            await this.handleDeviceDiscovered(device);
+          }
+        }
+      }
+    );
+  }
+
+  stopScanning() {
+    if (this.isScanning) {
+      this.ble.stopDeviceScan();
+      this.isScanning = false;
+      console.log('[BLE] Scanning stopped');
+    }
+  }
+
+  private async handleDeviceDiscovered(device: Device) {
+    // Skip if already connected, pending, or if it's our own device
+    if (this.connectedDevices.has(device.id) || 
+        this.pendingConnections.has(device.id) ||
+        device.id === this.deviceId) {
+      return;
+    }
+
+    // Skip blacklisted devices
+    if (this.blacklistedDevices.has(device.id)) {
+      return;
+    }
+
+    // Skip if too many failed attempts (max 2 for unknown devices, unlimited for known mesh peers)
+    const attempts = this.connectionAttempts.get(device.id) || 0;
+    if (!this.knownMeshPeers.has(device.id) && attempts >= 2) {
+      // Blacklist after 2 failed attempts
+      this.blacklistedDevices.add(device.id);
+      console.log('[BLE] ⛔ Blacklisted device after failed attempts:', device.id);
+      return;
+    }
+
+    console.log('[BLE] Attempting to connect to peer:', device.id, device.name || 'unnamed', `(attempt ${attempts + 1})`);
+    this.pendingConnections.add(device.id);
+
+    try {
+      // Connect with timeout (10s for GATT server connection)
+      const connected = await Promise.race([
+        device.connect(),
+        new Promise<Device>((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 10000)
+        )
+      ]);
+
+      console.log('[BLE] ✅ Connected, accepting as potential mesh peer:', device.id);
+
+      // Discover services and characteristics
+      await connected.discoverAllServicesAndCharacteristics();
+      
+      // Since we can't create GATT servers with current libraries,
+      // we'll accept any successfully connected device and let the
+      // notification setup fail naturally if it's not a mesh peer
+      console.log('[BLE] Setting up as mesh peer...');
+
+      // SUCCESS! Add to connected devices
+      this.knownMeshPeers.add(device.id); // Remember this device
+      this.connectedDevices.set(device.id, connected);
+      this.pendingConnections.delete(device.id);
+      this.connectionAttempts.delete(device.id); // Reset attempts on success
+      console.log('[BLE] 🎉 Mesh peer connected:', device.id, device.name || 'unnamed');
+      console.log('[BLE] Total mesh peers:', this.connectedDevices.size, 'Known peers:', this.knownMeshPeers.size);
+
+      if (this.onPeerConnected) this.onPeerConnected(device.id);
+      
+      // Try to setup notifications - will fail silently if not a mesh peer
+      this.setupNotifications(connected);
+
+      connected.onDisconnected((error, d) => {
+        console.log('[BLE] Peer disconnected:', d.id, error ? `Error: ${error.message}` : '');
+        this.connectedDevices.delete(d.id);
+        this.pendingConnections.delete(d.id);
+        // Keep in knownMeshPeers so we prioritize reconnecting
+        if (this.onPeerDisconnected) this.onPeerDisconnected(d.id);
+      });
+    } catch (err: any) {
+      const errorMsg = err?.message || err;
+      
+      // Timeout is normal during mesh discovery - both devices trying to connect to each other
+      if (errorMsg === 'Connection timeout') {
+        console.log('[BLE] ⏱️ Connection timeout to', device.id, '- will retry if device reappears');
+      } else {
+        console.warn('[BLE] ⚠️ Connect error to', device.id, ':', errorMsg);
+      }
+      
+      this.pendingConnections.delete(device.id);
+      this.connectionAttempts.set(device.id, attempts + 1);
+      
+      // Clean up failed connection attempt
+      try {
+        await device.cancelConnection();
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  private async setupNotifications(device: Device) {
+    try {
+      console.log('[BLE] Attempting to setup notifications for:', device.id);
+      
+      // Note: This will fail because we can't create GATT servers with current libraries
+      // Keeping it to detect if a device somehow has the service
+      await device.monitorCharacteristicForService(
+        SERVICE_UUID,
+        CHARACTERISTIC_UUID,
+        (err, char) => {
+          if (err) {
+            // Expected to fail - devices don't have GATT servers
+            console.log('[BLE] Notification setup failed for', device.id, '(expected with current libraries)');
+            return;
+          }
+          if (char?.value) {
+            console.log('[BLE] ✅ Received data from:', device.id);
+            this.handleIncoming(char.value, device.id);
+          }
+        }
+      );
+      
+      console.log('[BLE] ✅ Notification listener registered for:', device.id);
+    } catch {
+      // Expected to fail - log once at info level
+      console.log('[BLE] Could not setup notifications for', device.id, '- device lacks GATT server (expected)');
+    }
+  }
+
+  private handleIncoming(base64Data: string, fromId: string) {
+    try {
+      const packet = BLEPacketEncoder.decode(base64Data);
+      if (packet && this.onPacketReceived) {
+        console.log('[BLE] Received packet from', fromId, 'type:', packet.type);
+        this.onPacketReceived(packet, fromId);
+      }
+    } catch (e) {
+      console.error('[BLE] Decode error:', e);
+    }
+  }
+
+  /** --- Messaging --- */
+  async broadcast(packet: Anon0MeshPacket) {
+    const deviceCount = this.connectedDevices.size;
+    
+    console.log(`[BLE] Broadcasting packet type ${packet.type} to ${deviceCount} connected device(s)`);
+    
+    // Send to devices we connected TO (as Central)
+    if (deviceCount > 0) {
+      const promises = Array.from(this.connectedDevices.values()).map(d => 
+        this.sendToDevice(d, packet)
+      );
+      await Promise.allSettled(promises);
+    }
+    
+    // Send to devices connected TO US (as Peripheral via GATT server)
+    if (this.peripheral.isRunning()) {
+      try {
+        const encoded = BLEPacketEncoder.encode(packet);
+        if (encoded.length > 0) {
+          await this.peripheral.sendData(encoded[0]);
+          console.log('[BLE] ✅ Sent packet via GATT server notifications');
+        }
+      } catch (error: any) {
+        console.log('[BLE] Could not send via GATT server:', error?.message || error);
+      }
+    }
+  }
+
+  private async sendToDevice(device: Device, packet: Anon0MeshPacket) {
+    try {
+      const chunks = BLEPacketEncoder.encode(packet);
+      
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        await device.writeCharacteristicWithResponseForService(
+          SERVICE_UUID,
+          CHARACTERISTIC_UUID,
+          chunk
         );
-
-        try {
-            await Promise.allSettled(disconnectPromises);
-            this.connectedDevices.clear();
-        } catch (error) {
-            console.error('[REAL-BLE] Disconnect failed:', error);
+        
+        // Log progress for multi-chunk messages
+        if (chunks.length > 1) {
+          console.log(`[BLE] Sent chunk ${i + 1}/${chunks.length} to ${device.id}`);
         }
-    }
-
-    /**
-     * Cleanup resources
-     */
-    async destroy(): Promise<void> {
-        await this.disconnect();
-        if (this.bleManager) {
-            this.bleManager.destroy();
+        
+        // Small delay between chunks to avoid overwhelming the BLE stack
+        if (i < chunks.length - 1) {
+          await new Promise((r) => setTimeout(r, 40));
         }
-        console.log('[BLE] BLE Manager destroyed');
+      }
+      
+      console.log(`[BLE] ✅ Sent packet type ${packet.type} to ${device.id}`);
+    } catch (err: any) {
+      console.error(`[BLE] ❌ Send failed to ${device.id}:`, err?.message || err);
+      
+      // If device is disconnected, clean it up
+      if (err?.message?.includes('disconnected') || err?.message?.includes('not connected')) {
+        console.log('[BLE] Removing disconnected device:', device.id);
+        this.connectedDevices.delete(device.id);
+        if (this.onPeerDisconnected) this.onPeerDisconnected(device.id);
+      }
     }
+  }
+
+  /** --- Cleanup --- */
+  async disconnectAll() {
+    this.stopScanning();
+    await this.stopAdvertising();
+    await this.peripheral.stop();
+    for (const d of this.connectedDevices.values()) {
+      await d.cancelConnection().catch(() => {});
+    }
+    this.connectedDevices.clear();
+  }
+
+  destroy() {
+    this.disconnectAll();
+    this.ble.destroy();
+  }
+
+  /** --- Handlers --- */
+  setPacketHandler(cb: (packet: Anon0MeshPacket, from: string) => void) {
+    this.onPacketReceived = cb;
+  }
+  setPeerHandlers(onC: (id: string) => void, onD: (id: string) => void) {
+    this.onPeerConnected = onC;
+    this.onPeerDisconnected = onD;
+  }
 }

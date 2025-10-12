@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { useSolanaWallet } from '../../src/solana/useSolanaWallet';
 import { useMeshNetworking } from '../networking/MeshNetworkingManager';
-import { TokenType } from '../../src/solana/BeaconManager';
 import { RateLimitManager } from '../../src/utils/RateLimitManager';
 
 interface SolanaTransactionScreenProps {
@@ -140,8 +139,7 @@ const SolanaTransactionScreen: React.FC<SolanaTransactionScreenProps> = ({
       const transaction = await solanaWallet.createTransferTransaction(
         toAddress,
         parseFloat(amount),
-        { 
-          memo: memo || `Sent via anon0mesh by ${nickname}`,
+        {
           priorityFee: 1000, // 0.001 SOL priority fee
         }
       );
@@ -149,11 +147,8 @@ const SolanaTransactionScreen: React.FC<SolanaTransactionScreenProps> = ({
       // Sign transaction
       const signedTx = solanaWallet.signTransaction(transaction);
 
-      meshNetworking.sendTransactionViaBeacon(
-        signedTx,
-        TokenType.SOL,
-        'devnet'
-      );
+      // Send transaction via mesh (only pass the transaction)
+      meshNetworking.sendTransactionViaBeacon(signedTx);
       
       // Unlock unlimited messaging after successful transaction
       await rateLimitManager.unlockMessaging();
@@ -223,9 +218,9 @@ const SolanaTransactionScreen: React.FC<SolanaTransactionScreenProps> = ({
       {/* Mesh Metrics */}
       <View style={styles.metrics}>
         <Text style={styles.label}>Mesh Network Status:</Text>
-        <Text style={styles.metricText}>Known Beacons: {beaconStats?.knownBeacons || 0}</Text>
-        <Text style={styles.metricText}>Pending Requests: {beaconStats?.pendingRequests || 0}</Text>
-        <Text style={styles.metricText}>Is Beacon: {beaconStats?.isBeacon ? 'Yes' : 'No'}</Text>
+        <Text style={styles.metricText}>Known Beacons: {(beaconStats as any)?.knownBeacons || 0}</Text>
+        <Text style={styles.metricText}>Pending Requests: {(beaconStats as any)?.pendingRequests || 0}</Text>
+        <Text style={styles.metricText}>Is Beacon: {(beaconStats as any)?.isBeacon ? 'Yes' : 'No'}</Text>
       </View>
 
       {/* Transaction Form */}

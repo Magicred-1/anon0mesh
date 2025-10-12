@@ -3,34 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Anon0MeshPacket, MessageType } from '../gossip/types';
 import { Buffer } from 'buffer';
 
-// Optional imports - these may not be available in Expo Go
-let BackgroundFetch: any = null;
-let TaskManager: any = null;
-let isBackgroundAvailable = false;
+// Direct imports - available in dev builds
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
 
-// Check if modules are available without throwing errors
-const checkModuleAvailable = (moduleName: string): boolean => {
-  try {
-    require.resolve(moduleName);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-// Only require if modules exist
-if (checkModuleAvailable('expo-background-fetch') && checkModuleAvailable('expo-task-manager')) {
-  try {
-    BackgroundFetch = require('expo-background-fetch');
-    TaskManager = require('expo-task-manager');
-    isBackgroundAvailable = true;
-    console.log('[BG-MESH] Background task modules loaded successfully');
-  } catch (error) {
-    console.log('[BG-MESH] Background tasks not available:', error);
-  }
-} else {
-  console.log('[BG-MESH] Background task modules not found (Expo Go or not installed)');
-}
+const isBackgroundAvailable = true;
+console.log('[BG-MESH] ✅ Background task modules loaded (dev build)');
+console.warn('[BG-MESH] ⚠️  Note: Android severely restricts background BLE');
+console.warn('[BG-MESH] ⚠️  Mesh works best when app is in foreground');
 /* eslint-enable */
 
 // Background task names
@@ -159,7 +139,6 @@ export class BackgroundMeshManager {
     }
 
     // Register relay task
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     TaskManager.defineTask(MESH_RELAY_TASK, async ({ data, error }: any) => {
       if (error) {
         console.error('[BG-MESH] Relay task error:', error);
@@ -177,7 +156,6 @@ export class BackgroundMeshManager {
     });
 
     // Register gossip task
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     TaskManager.defineTask(MESH_GOSSIP_TASK, async ({ data, error }: any) => {
       if (error) {
         console.error('[BG-MESH] Gossip task error:', error);
