@@ -1,7 +1,13 @@
 // src/networking/RealBLEManager.ts
 // Improved BLE Manager with enhanced error handling
-import { BleManager, Device, Characteristic, BleError } from 'react-native-ble-plx';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { BleError, BleManager, Characteristic, Device } from 'react-native-ble-plx';
+import {
+  ANON0MESH_SERVICE_UUID,
+  BLE_CONFIG,
+  NOTIFY_CHARACTERISTIC_UUID,
+  WRITE_CHARACTERISTIC_UUID,
+} from './constants/BLEConstants';
 
 interface ConnectedDevice {
   device: Device;
@@ -22,11 +28,11 @@ interface MeshPacket {
   sender: string;
 }
 
-// Service and Characteristic UUIDs
-export const WRITE_CHAR_UUID = '00001235-0000-1000-8000-00805f9b34fb';
-export const NOTIFY_CHAR_UUID = '00001236-0000-1000-8000-00805f9b34fb';
-export const SERVICE_UUID = '0000FFF0-0000-1000-8000-00805F9B34FB';
-export const CHARACTERISTIC_UUID = '0000FFF1-0000-1000-8000-00805F9B34FB';
+// Re-export for backwards compatibility
+export const WRITE_CHAR_UUID = WRITE_CHARACTERISTIC_UUID;
+export const NOTIFY_CHAR_UUID = NOTIFY_CHARACTERISTIC_UUID;
+export const SERVICE_UUID = ANON0MESH_SERVICE_UUID;
+export const CHARACTERISTIC_UUID = BLE_CONFIG.service.characteristics.data;
 
 export class RealBLEManager {
   private manager: BleManager;
@@ -38,10 +44,10 @@ export class RealBLEManager {
   private isInitialized = false;
   
   
-  // Configuration
-  private MAX_FAILURES = 3;
-  private MTU_SIZE = 512; // Request larger MTU for better throughput
-  private WRITE_TIMEOUT = 5000; // 5 second timeout for writes
+  // Configuration from BLE_CONFIG
+  private MAX_FAILURES = BLE_CONFIG.connection.maxFailures;
+  private MTU_SIZE = BLE_CONFIG.connection.mtuSize;
+  private WRITE_TIMEOUT = BLE_CONFIG.connection.writeTimeout;
   
   constructor() {
     this.manager = new BleManager();
@@ -279,7 +285,7 @@ export class RealBLEManager {
       // Try to clean up
       try {
         await device.cancelConnection();
-      } catch (cleanupError) {
+      } catch {
         // Ignore cleanup errors
       }
     }
@@ -302,7 +308,7 @@ export class RealBLEManager {
     let successCount = 0;
     const sendPromises: Promise<void>[] = [];
     
-    for (const [deviceId, connectedDevice] of this.connectedDevices.entries()) {
+    for (const [deviceId, connectedDevice] of Array.from(this.connectedDevices.entries())) {
       // Skip devices that aren't ready or have too many failures
       if (!connectedDevice.isReady || connectedDevice.failureCount >= this.MAX_FAILURES) {
         continue;
@@ -430,7 +436,7 @@ export class RealBLEManager {
     try {
       console.log('[BLE] 🔌 Disconnecting from:', deviceId);
       await connectedDevice.device.cancelConnection();
-    } catch (error) {
+    } catch {
       // Ignore disconnection errors
     } finally {
       this.connectedDevices.delete(deviceId);
@@ -445,7 +451,7 @@ export class RealBLEManager {
       const now = Date.now();
       const staleTimeout = 60000; // 1 minute
       
-      for (const [deviceId, connectedDevice] of this.connectedDevices.entries()) {
+      for (const [deviceId, connectedDevice] of Array.from(this.connectedDevices.entries())) {
         try {
           // Check if device is still connected
           const isConnected = await connectedDevice.device.isConnected();
@@ -462,7 +468,7 @@ export class RealBLEManager {
             await this.disconnectDevice(deviceId);
           }
           
-        } catch (error) {
+        } catch {
           console.log(`[BLE] Health check failed for ${deviceId}`);
           this.connectedDevices.delete(deviceId);
         }
@@ -528,7 +534,7 @@ export class RealBLEManager {
     }
     
     // Disconnect all devices
-    for (const deviceId of this.connectedDevices.keys()) {
+    for (const deviceId of Array.from(this.connectedDevices.keys())) {
       await this.disconnectDevice(deviceId);
     }
     

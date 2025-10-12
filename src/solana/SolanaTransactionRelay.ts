@@ -1,11 +1,11 @@
-import { Buffer } from 'buffer';
 import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
-import { 
-    SolanaTransactionManager, 
-    SolanaTransactionPacket, 
-    TransactionRelayRequest 
-} from './SolanaTransactionManager';
+import { Buffer } from 'buffer';
 import { Anon0MeshPacket, MessageType } from '../gossip/types';
+import {
+  SolanaTransactionManager,
+  SolanaTransactionPacket,
+  TransactionRelayRequest
+} from './SolanaTransactionManager';
 
 export interface TransactionRelayConfig {
     maxRelayHops: number;
@@ -261,14 +261,14 @@ export class SolanaTransactionRelay {
     const cleanupThreshold = this.config.relayTimeoutMs * 2; // Keep history for 2x timeout
 
     // Clean relay history
-    for (const [txId, timestamp] of this.relayHistory.entries()) {
+    this.relayHistory.forEach((timestamp, txId) => {
       if (now - timestamp > cleanupThreshold) {
         this.relayHistory.delete(txId);
       }
-    }
+    });
 
     // Clean pending transactions
-    for (const [txId, request] of this.pendingTransactions.entries()) {
+    for (const [txId, request] of Array.from(this.pendingTransactions.entries())) {
       if (now - request.timestamp > this.config.relayTimeoutMs) {
         this.pendingTransactions.delete(txId);
       }

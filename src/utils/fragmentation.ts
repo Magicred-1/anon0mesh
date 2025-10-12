@@ -6,10 +6,10 @@
 import { Buffer } from 'buffer';
 import {
     BitchatPacket,
+    BLE_MTU,
+    FragmentMetadata,
     MessageType,
     PacketFlags,
-    FragmentMetadata,
-    BLE_MTU,
 } from '../types/protocol';
 
 export interface Fragment {
@@ -160,11 +160,11 @@ export class FragmentationManager {
         const now = Date.now();
         const expired: string[] = [];
         
-        for (const [messageId, state] of this.reassemblyStates) {
+        this.reassemblyStates.forEach((state, messageId) => {
             if (now - state.startTime > this.timeout) {
                 expired.push(messageId);
             }
-        }
+        });
         
         for (const messageId of expired) {
             console.log('[FRAG] Reassembly timeout:', messageId);

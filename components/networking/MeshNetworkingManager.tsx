@@ -1,37 +1,38 @@
 // src/networking/MeshNetworkingManager.ts
+import { Connection } from '@solana/web3.js';
+import { Buffer } from 'buffer';
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { Buffer } from 'buffer';
-import { Connection } from '@solana/web3.js';
 import {
+  addPacketToBackgroundQueue,
+  getBackgroundMeshStatus,
+  initializeBackgroundMesh,
+  stopBackgroundMesh,
+} from '../../src/background/BackgroundMeshManager';
+import {
+  GossipSyncConfig,
   GossipSyncManager,
   GossipSyncManagerDelegate,
-  GossipSyncConfig,
 } from '../../src/gossip/GossipSyncManager';
 import {
   Anon0MeshPacket,
   MessageType,
 } from '../../src/gossip/types';
 import {
-  SolanaTransactionRelay,
-  TransactionRelayConfig,
-} from '../../src/solana/SolanaTransactionRelay';
+  BLEManager,
+  createBLEManager,
+  getBLEConfig,
+} from '../../src/networking/bluetooth/BLEFactory';
+import { BLEPeripheralServer } from '../../src/networking/bluetooth/BLEPeripheralServer';
 import {
-  BeaconManager,
   BeaconCapabilities,
+  BeaconManager,
   TransactionStatusResponse,
 } from '../../src/solana/BeaconManager';
 import {
-  createBLEManager,
-  getBLEConfig,
-  BLEManager,
-} from '../../src/networking/bluetooth/BLEFactory';
-import {
-  initializeBackgroundMesh,
-  addPacketToBackgroundQueue,
-  stopBackgroundMesh,
-  getBackgroundMeshStatus,
-} from '../../src/background/BackgroundMeshManager';
+  SolanaTransactionRelay,
+  TransactionRelayConfig,
+} from '../../src/solana/SolanaTransactionRelay';
 
 // Ensure Buffer is globally available for React Native
 if (!(global as any).Buffer) {
@@ -60,6 +61,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   private solanaRelay: SolanaTransactionRelay;
   private beaconManager: BeaconManager;
   private bleManager: BLEManager;
+  private blePeripheralServer: BLEPeripheralServer;
 
   private pubKey: string;
   private nickname: string;
@@ -131,6 +133,10 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     if (bleConfig.enableLogs)
       console.log('[MESH] Using Real BLE Manager (Expo dual-role emulation)');
 
+    // Initialize BLE Peripheral Server (GATT server)
+    console.log('[MESH] Initializing BLE Peripheral Server (GATT)...');
+    this.blePeripheralServer = new BLEPeripheralServer(pubKey);
+
     // Handle incoming BLE packets
     this.bleManager.setDataHandler(
       (data: string, fromPeer: string) => {
@@ -142,6 +148,23 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
         }
       },
     );
+
+    // Handle incoming GATT server data
+    // Note: BLEPeripheralServer may handle incoming data internally
+    // If setDataHandler is needed, implement it in BLEPeripheralServer class
+    if ('setDataHandler' in this.blePeripheralServer && typeof this.blePeripheralServer.setDataHandler === 'function') {
+      this.blePeripheralServer.setDataHandler(
+        (data: string, from: string) => {
+          try {
+            const packet = JSON.parse(data) as Anon0MeshPacket;
+            console.log('[MESH] Received packet via GATT server from', from);
+            this.handleIncomingPacket(packet, from);
+          } catch (e) {
+            console.error('[MESH] Failed to parse incoming GATT data', e);
+          }
+        },
+      );
+    }
 
     // Peer events if supported
     if ('setPeerConnectionHandlers' in this.bleManager) {
@@ -190,29 +213,54 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   }
 
   // ===== Lifecycle =====
-  start(): void {
+  async start(): Promise<void> {
     this.gossipManager.start();
-    if ('startScanning' in this.bleManager) this.bleManager.startScanning();
+    
+    // Start GATT server (Peripheral mode - accepts connections)
+    console.log('[MESH] 🚀 Starting BLE Peripheral Server (GATT)...');
+    await this.blePeripheralServer.start();
+    
+    // Initialize BLE if it has an initialize method
+    if ('initialize' in this.bleManager) {
+      console.log('[MESH] Initializing BLE Manager...');
+      const initialized = await (this.bleManager as any).initialize();
+      if (!initialized) {
+        console.error('[MESH] ❌ BLE initialization failed - mesh will operate without BLE');
+        return;
+      }
+    }
+    
+    // Start scanning (Central mode - discovers and connects to devices)
+    console.log('[MESH] 🔍 Starting BLE scanning...');
+    if ('startScanning' in this.bleManager) {
+      await this.bleManager.startScanning();
+    }
 
     // Emulate peripheral advertisement for Expo
     if ('advertisePresence' in this.bleManager) {
-      (this.bleManager as any).advertisePresence({
+      await (this.bleManager as any).advertisePresence({
         id: this.pubKey.slice(0, 8),
         nickname: this.nickname,
       });
     }
 
     this.initializeBackgroundSupport();
-    console.log('[MESH] BLE + Gossip mesh started');
+    console.log('[MESH] ✅ BLE + Gossip mesh started (Central + Peripheral)');
   }
 
   stop(): void {
     this.gossipManager.stop();
+    
+    // Stop peripheral server
+    console.log('[MESH] 🛑 Stopping BLE Peripheral Server...');
+    this.blePeripheralServer.stop();
+    
+    // Stop central mode
     if ('stopScanning' in this.bleManager) this.bleManager.stopScanning();
     if ('disconnect' in this.bleManager) (this.bleManager as any).disconnect();
 
     this.cleanupBackgroundSupport();
-    console.log('[MESH] BLE + Gossip mesh stopped');
+    console.log('[MESH] ✅ BLE + Gossip mesh stopped');
   }
 
   // ===== Messaging =====
@@ -408,8 +456,17 @@ export const useMeshNetworking = (
       solanaConnection,
       beaconCapabilities,
     );
-    meshRef.current.start();
-    setTimeout(() => meshRef.current?.announcePresence(), 2000);
+    
+    // Start the mesh manager asynchronously
+    (async () => {
+      try {
+        await meshRef.current?.start();
+        setTimeout(() => meshRef.current?.announcePresence(), 2000);
+      } catch (error) {
+        console.error('[MESH-HOOK] Failed to start mesh manager:', error);
+      }
+    })();
+    
     return () => meshRef.current?.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pubKey, nickname]);

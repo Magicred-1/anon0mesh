@@ -1,5 +1,5 @@
-import { Buffer } from 'buffer';
 import { Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Buffer } from 'buffer';
 import { Anon0MeshPacket, MessageType } from '../gossip/types';
 
 export enum BeaconMessageType {
@@ -479,7 +479,7 @@ export class BeaconManager {
 
   private cleanupExpiredRequests(): void {
     const now = Date.now();
-    for (const [requestId, request] of this.pendingRequests.entries()) {
+    for (const [requestId, request] of Array.from(this.pendingRequests.entries())) {
       if (now > request.expiresAt) {
         this.pendingRequests.delete(requestId);
         this.statusCallbacks.delete(requestId);
