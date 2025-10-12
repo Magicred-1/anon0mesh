@@ -1,9 +1,9 @@
-import React, { useRef, useState } from 'react';
-import { Modal, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import QRCode from 'react-native-qrcode-svg';
-import PenIcon from './PenIcon';
 import { useRouter } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import PenIcon from './PenIcon';
 
 interface Props {
     pubKey: string;
@@ -42,7 +42,7 @@ export default function Header({
         }, 400);
     };
 
-    const displayName = displayNickname || `anon0mesh/${nickname || 'AliceAndBob'}`;
+    const displayName = displayNickname || `${nickname || ''}`;
 
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>

@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, View, Alert } from 'react-native';
+import { Alert, Animated, Dimensions, View } from 'react-native';
 
+import { Channel } from '@/src/types/channels';
+import { RateLimitManager } from '@/src/utils/RateLimitManager';
 import Header from '../ui/Header';
 import MessageInput from '../ui/MessageInput';
 import MessageList, { Message } from '../ui/MessageList';
 import NicknameInput from '../ui/NicknameInput';
 import PrivateSidebar from '../ui/PrivateSidebar';
-import { Channel } from '@/src/types/channels';
-import { RateLimitManager } from '@/src/utils/RateLimitManager';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DAILY_MESSAGE_LIMIT = 3;
@@ -48,15 +48,17 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
     }, [rateLimitManager]);
 
     useEffect(() => {
-        if (MOCKUP_MODE) {
-        const mockMsgs: Message[] = [
-            { from: 'Alice', msg: 'Hey there! Welcome to the chat 👋', ts: Date.now() - 100000 },
-            { from: 'Bob', msg: 'Hi Alice, nice to see you here!', ts: Date.now() - 90000 },
-            { from: currentUser, msg: 'Hello everyone, I just joined 🚀', ts: Date.now() - 80000 },
-        ];
-        setMessages(mockMsgs);
+        // Seed some mock messages by default when the chat is empty.
+        // If real messages are already present, do not overwrite them.
+        if (messages.length === 0) {
+            const mockMsgs: Message[] = [
+                { from: 'Alice', msg: 'Hey there! Welcome to the chat 👋', ts: Date.now() - 100000 },
+                { from: 'Bob', msg: 'Hi Alice, nice to see you here!', ts: Date.now() - 90000 },
+                { from: currentUser, msg: 'Hello everyone, I just joined 🚀', ts: Date.now() - 80000 },
+            ];
+            setMessages(mockMsgs);
         }
-    }, [currentUser]);
+    }, [currentUser, messages.length]);
 
     const toggleSidebar = () => {
         const toValue = sidebarOpen ? SCREEN_WIDTH * 0.6 : 0;
@@ -160,10 +162,16 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
                     onSelectPeer={(peer) => {
                         setPrivateTarget(peer);
                         toggleSidebar();
-                    } }
-                    onClose={toggleSidebar} visible={false} channels={[]} currentChannel={null} onSelectChannel={function (channel: Channel): void {
-                        throw new Error('Function not implemented.');
-                    } }            />
+                    }}
+                    onClose={toggleSidebar}
+                    visible={sidebarOpen}
+                    channels={[]}
+                    currentChannel={null}
+                    onSelectChannel={(channel: Channel) => {
+                        console.log('[CHAT] selected channel', channel);
+                        // Future: navigate to channel or set currentChannel
+                    }}
+            />
         </Animated.View>
 
         {/* Nickname input */}

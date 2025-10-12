@@ -65,7 +65,6 @@
     "react-aria": "^3.43.2",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
-    "react-native-ble-advertiser": "^0.0.17",
     "react-native-ble-plx": "^3.5.0",
     "react-native-crypto": "^2.2.1",
     "react-native-gesture-handler": "~2.28.0",

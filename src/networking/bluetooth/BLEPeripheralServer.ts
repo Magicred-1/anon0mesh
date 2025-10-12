@@ -2,7 +2,6 @@
 // GATT Server implementation using react-native-multi-ble-peripheral
 
 import { Buffer } from 'buffer';
-import Peripheral, { Permission, Property } from 'react-native-multi-ble-peripheral';
 import {
   ANON0MESH_SERVICE_UUID,
   MESH_DATA_CHARACTERISTIC_UUID,
@@ -11,12 +10,42 @@ import {
   generateDeviceName,
 } from './constants/BLEConstants';
 
+// We will lazy-load `react-native-multi-ble-peripheral` at runtime. This
+// avoids bundler/build failures in Expo dev (Expo Go) where the native
+// module isn't available. When the module can't be loaded, the server becomes
+// a safe no-op and reports availability=false.
+let PeripheralModule: any = null;
+let PeripheralClass: any = null;
+let Permission: any = undefined;
+let Property: any = undefined;
+
+async function ensurePeripheralModuleLoaded(): Promise<boolean> {
+  if (PeripheralModule && PeripheralClass) return true;
+  try {
+    // Dynamic import - only for native builds. Expo Go/dev won't have this module.
+    const mod = await import('react-native-multi-ble-peripheral');
+    PeripheralModule = mod;
+    PeripheralClass = mod.default || mod;
+    Permission = mod.Permission;
+    Property = mod.Property;
+    return true;
+  } catch (err) {
+    console.log('[PERIPHERAL] react-native-multi-ble-peripheral not available:', (err as Error).message);
+    PeripheralModule = null;
+    PeripheralClass = null;
+    Permission = undefined;
+    Property = undefined;
+    return false;
+  }
+}
+
 // Re-export for backwards compatibility
 export const SERVICE_UUID = ANON0MESH_SERVICE_UUID;
 export const CHARACTERISTIC_UUID = MESH_DATA_CHARACTERISTIC_UUID;
 
 export class BLEPeripheralServer {
-  private peripheral: Peripheral | null = null;
+  // Using `any` because Peripheral may not be available in dev builds
+  private peripheral: any | null = null;
   private isAdvertising = false;
   private deviceId: string;
   private isAvailable = false;
@@ -40,24 +69,37 @@ export class BLEPeripheralServer {
     
     try {
       console.log('[PERIPHERAL] 🚀 Starting GATT server...');
-      
+
+      const ok = await ensurePeripheralModuleLoaded();
+      if (!ok) {
+        console.log('[PERIPHERAL] ⚠️ Peripheral native module unavailable — skipping GATT server start');
+        this.isAvailable = false;
+        this.startFailed = true;
+        return;
+      }
+
       // Create peripheral instance
-      this.peripheral = new Peripheral();
+      this.peripheral = new PeripheralClass();
       this.setupEventListeners();
       
-      // Wait for ready event before configuring
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
-        this.peripheral!.on('ready', async () => {
-          clearTimeout(timeout);
-          try {
-            await this.configurePeripheral();
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
+      // Wait for ready event before configuring (if the peripheral implements events)
+      if (typeof this.peripheral.on === 'function') {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Timeout waiting for peripheral ready')), 5000);
+          this.peripheral.on('ready', async () => {
+            clearTimeout(timeout);
+            try {
+              await this.configurePeripheral();
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          });
         });
-      });
+      } else {
+        // If no event emitter, attempt to configure immediately
+        await this.configurePeripheral();
+      }
       
       console.log('[PERIPHERAL] ✅ GATT server started successfully');
       this.isAdvertising = true;

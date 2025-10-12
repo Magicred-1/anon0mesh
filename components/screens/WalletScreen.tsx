@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  Alert,
-  TextInput,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import QRCode from 'react-native-qrcode-svg';
 import * as Clipboard from 'expo-clipboard';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSolanaWallet } from '../../src/solana/useSolanaWallet';
 import { RateLimitManager } from '../../src/utils/RateLimitManager';
-import SolanaLogo from '../ui/SolanaLogo';
-import USDCLogo from '../ui/USDCLogo';
 import ReceiveIcon from '../ui/ReceiveIcon';
 import SendIcon from '../ui/SendIcon';
+import SolanaLogo from '../ui/SolanaLogo';
+import USDCLogo from '../ui/USDCLogo';
 
 // Optional NetInfo - may not be available in Expo Go
 /* eslint-disable */
@@ -42,7 +42,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   nickname,
 }) => {
   const [selectedTab, setSelectedTab] = useState<'receive' | 'send'>('receive');
-  const [sendAmount, setSendAmount] = useState('0.06');
+  const [sendAmount, setSendAmount] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
   const [selectedCurrency, setSelectedCurrency] = useState<'SOL' | 'USDC'>('SOL');
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -103,20 +103,25 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
     }
 
     // Initialize wallet when component mounts
-    if (pubKey && !isInitialized) {
-      initializeWallet(pubKey).then(success => {
-        if (!success) {
-          // Wallet initialization failed - silently log and close wallet
-          console.error('Wallet initialization failed - keys may be corrupted');
-          onClose();
+    let mounted = true;
+    (async () => {
+      if (pubKey && !isInitialized) {
+        try {
+          const success = await initializeWallet(pubKey);
+          if (!success) {
+            // Wallet initialization failed - silently log and close wallet if still mounted
+            console.error('Wallet initialization failed - keys may be corrupted');
+            if (mounted) onClose();
+          }
+        } catch (err) {
+          console.error('Failed to initialize wallet:', err);
+          if (mounted) onClose();
         }
-      }).catch(err => {
-        console.error('Failed to initialize wallet:', err);
-        onClose();
-      });
-    }
+      }
+    })();
 
     return () => {
+      mounted = false;
       if (unsubscribe) unsubscribe();
     };
   }, [pubKey, isInitialized, initializeWallet, onClose]);

@@ -1,26 +1,26 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  View, 
-  Text,
-  TouchableOpacity,
-  Alert,
-  Animated,
-  Dimensions,
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    Alert,
+    Animated,
+    Dimensions,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMeshNetworking } from '../networking/MeshNetworkingManager';
-import Header from '../ui/Header';
-import MessageInput from '../ui/MessageInput';
-import MessageList, { Message } from '../ui/MessageList';
-import WalletScreen from './WalletScreen';
-import EditNicknameModal from '../ui/EditNicknameModal';
-import BLEStatusIndicator from '../ui/BLEStatusIndicator';
-import BLEPermissionRequest from '../ui/BLEPermissionRequest';
-import BackgroundMeshStatusIndicator from '../ui/BackgroundMeshStatusIndicator';
-import { ZoneDropdownSelector } from '../ui/ZoneDropdownSelector';
 import { useChannels } from '../../src/contexts/ChannelContext';
 import { Channel } from '../../src/types/channels';
+import { useMeshNetworking } from '../networking/MeshNetworkingManager';
+import BLEPermissionRequest from '../ui/BLEPermissionRequest';
+import BLEStatusIndicator from '../ui/BLEStatusIndicator';
+import BackgroundMeshStatusIndicator from '../ui/BackgroundMeshStatusIndicator';
+import EditNicknameModal from '../ui/EditNicknameModal';
+import Header from '../ui/Header';
 import { MeshBackground } from '../ui/MeshBackground';
+import MessageInput from '../ui/MessageInput';
+import MessageList, { Message } from '../ui/MessageList';
+import { ZoneDropdownSelector } from '../ui/ZoneDropdownSelector';
+import WalletScreen from './WalletScreen';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -110,6 +110,38 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         });
         }
     }, [nickname]);
+
+    // --- Mock data for demo mode ---
+    // Seed mock messages when there are no messages yet
+    useEffect(() => {
+        if (messages.length === 0) {
+            const demo: Message[] = [
+                { from: 'Alice', msg: 'Welcome to the mesh chat 👋', ts: Date.now() - 120000 },
+                { from: 'Bob', msg: 'Hey anons.', ts: Date.now() - 90000 },
+                { from: currentUser, msg: "Hey, I'm testing offline mesh chat! 🚀", ts: Date.now() - 60000 },
+                { from: 'Charlie', msg: 'This is pretty cool!', ts: Date.now() - 30000 },
+                { from: 'Dave', msg: 'Anyone up for a decentralized party?', ts: Date.now() - 15000 },
+                { from: currentUser, msg: 'Absolutely! Let\'s make it happen. 🎉', ts: Date.now() - 5000 },
+            ];
+            setMessages(demo);
+        }
+    }, [currentUser, messages.length]);
+
+    // Seed mock peers when none are present
+    useEffect(() => {
+        if (activePeers.length === 0) {
+            const now = Date.now();
+            const demoPeers: PeerInfo[] = [
+                { id: 'MESH-GATT', nickname: 'MESH-GATT', lastSeen: now, isOnline: true },
+                { id: 'Bob', nickname: 'Bob', lastSeen: now - 60000, isOnline: true },
+                { id: 'Charlie', nickname: 'Charlie', lastSeen: now - 120000, isOnline: true },
+                { id: 'Dave', nickname: 'Dave', lastSeen: now - 10 * 60000, isOnline: false },
+                { id: 'Eve', nickname: 'Eve', lastSeen: now - 20 * 60000, isOnline: false },
+            ];
+            
+            setActivePeers(demoPeers);
+        }
+    }, [activePeers.length]);
 
     // Initialize mesh networking with offline focus
     const meshNetworking = useMeshNetworking(
