@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import IndexScreen from '@/components/screens/IndexScreen';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { View, ActivityIndicator } from 'react-native';
-import IndexScreen from '@/components/screens/IndexScreen';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
 export default function LandingPage() {
     const router = useRouter();

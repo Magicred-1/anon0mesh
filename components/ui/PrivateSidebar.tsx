@@ -20,6 +20,10 @@ interface Props {
     onSelectPeer: (peer: string) => void;
     onSelectChannel: (channel: Channel) => void;
     onClose: () => void;
+    // Optional: currently selected private target (so sidebar can offer a quick return)
+    currentPrivate?: string | null;
+    // Handler to clear private target / return to general chat
+    onClearPrivate?: () => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -33,6 +37,8 @@ export default function PrivateSidebar({
     onSelectPeer,
     onSelectChannel,
     onClose,
+    currentPrivate,
+    onClearPrivate,
 }: Props) {
     const slideAnim = React.useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const opacityAnim = React.useRef(new Animated.Value(0)).current;
@@ -215,8 +221,31 @@ export default function PrivateSidebar({
                                 </Text>
                             </View>
                         ) : (
-                            displayPeers.map((peer, i) => (
-                                <TouchableOpacity
+                            <>
+                                {/* Quick return to general chat when in a private convo */}
+                                {currentPrivate ? (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (onClearPrivate) onClearPrivate();
+                                            onClose();
+                                        }}
+                                        style={{
+                                            padding: 12,
+                                            marginBottom: 12,
+                                            borderRadius: 12,
+                                            backgroundColor: '#222',
+                                            borderWidth: 1,
+                                            borderColor: '#444',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Text style={{ color: '#fff', fontFamily: 'Courier', fontWeight: '700' }}>
+                                            ← Return to general chat
+                                        </Text>
+                                    </TouchableOpacity>
+                                ) : null}
+                                {displayPeers.map((peer, i) => (
+                                    <TouchableOpacity
                                     key={i}
                                     onPress={() => handleSelectPeer(peer.name)}
                                     style={{
@@ -254,8 +283,9 @@ export default function PrivateSidebar({
                                     </View>
                                     <Text style={{ color: '#A855F7', fontSize: 20 }}>→</Text>
                                 </TouchableOpacity>
-                            ))
-                        )}
+                            ))}
+                        </>
+                    )}
                     </ScrollView>
 
                     {/* Footer */}

@@ -2,7 +2,7 @@
   "expo": {
     "name": "anon0mesh",
     "slug": "offline-mesh-mvp",
-    "version": "1.0.0", 
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "anon0mesh",
@@ -74,7 +74,9 @@
       [
         "expo-background-fetch",
         {
-          "backgroundFetchEnabled": true
+          "minimumInterval": 600,
+          "stopOnTerminate": false,
+          "startOnBoot": true
         }
       ],
       [
@@ -92,18 +94,16 @@
         }
       ],
       [
-        "expo-background-fetch",
-        {
-          "backgroundFetchEnabled": true
-        }
-      ],
-      [
         "expo-task-manager",
         {
-          "backgroundTasks": ["mesh-relay-task", "mesh-gossip-task"]
+          "backgroundTasks": [
+            "mesh-relay-task",
+            "mesh-gossip-task"
+          ]
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

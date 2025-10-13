@@ -1,13 +1,31 @@
 /* eslint-disable */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Anon0MeshPacket, MessageType } from '../gossip/types';
 import { Buffer } from 'buffer';
+import * as TaskManager from 'expo-task-manager';
+import { Anon0MeshPacket, MessageType } from '../gossip/types';
 
 // Direct imports - available in dev builds
-import * as BackgroundFetch from 'expo-background-fetch';
-import * as TaskManager from 'expo-task-manager';
+// Import background fetch module. The package prints a deprecation warning in
+// runtime - temporarily suppress that specific warning to reduce noise. A full
+// migration to expo-background-task should be done later.
+let BackgroundFetch: any;
+try {
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    // Suppress only the specific deprecation message from the module loader
+    if (typeof args[0] === 'string' && args[0].includes('expo-background-fetch: This library is deprecated')) {
+      return;
+    }
+    return originalWarn.apply(console, args);
+  };
+   
+  BackgroundFetch = require('expo-background-fetch');
+  console.warn = originalWarn;
+} catch (err) {
+  console.warn('[BG-MESH] expo-background-fetch not available:', err ?? err);
+  // Leave BackgroundFetch undefined - code already guards for its presence
+}
 
-const isBackgroundAvailable = true;
 console.log('[BG-MESH] ✅ Background task modules loaded (dev build)');
 console.warn('[BG-MESH] ⚠️  Note: Android severely restricts background BLE');
 console.warn('[BG-MESH] ⚠️  Mesh works best when app is in foreground');
@@ -142,16 +160,16 @@ export class BackgroundMeshManager {
     TaskManager.defineTask(MESH_RELAY_TASK, async ({ data, error }: any) => {
       if (error) {
         console.error('[BG-MESH] Relay task error:', error);
-        return BackgroundFetch.BackgroundFetchResult.Failed;
+        return BackgroundFetch.BackgroundTaskResult.Failed;
       }
 
       try {
         console.log('[BG-MESH] Running relay task in background');
         await this.handleRelayTask();
-        return BackgroundFetch.BackgroundFetchResult.NewData;
+        return BackgroundFetch.BackgroundTaskResult.NewData;
       } catch (taskError) {
         console.error('[BG-MESH] Relay task failed:', taskError);
-        return BackgroundFetch.BackgroundFetchResult.Failed;
+        return BackgroundFetch.BackgroundTaskResult.Failed;
       }
     });
 

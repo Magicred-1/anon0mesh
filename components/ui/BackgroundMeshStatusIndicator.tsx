@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
 
 // Direct import - available in dev builds
-import * as BackgroundFetch from 'expo-background-fetch';
-
-console.log('[BG-STATUS] ✅ BackgroundFetch module loaded (dev build)');
+// Rely on BackgroundMeshManager for status; avoid importing deprecated expo-background-fetch here.
 
 interface BackgroundMeshStatusProps {
     getBackgroundStatus?: () => Promise<any>;
@@ -15,7 +13,6 @@ export interface BackgroundMeshStatus {
     isActive: boolean;
     relayEnabled: boolean;
     gossipEnabled: boolean;
-    backgroundFetchStatus: any; // Can't use BackgroundFetch.BackgroundFetchStatus if module not loaded
 }
 
 const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
@@ -73,13 +70,22 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
         // }
     };
 
+    // Local mapping for background fetch status codes. The BackgroundMeshManager
+    // returns numeric codes; treat 1=Available, 2=Denied, 3=Restricted for UI.
+    enum BGStatus {
+        Unknown = 0,
+        Available = 1,
+        Denied = 2,
+        Restricted = 3,
+    }
+
     const getBackgroundFetchStatusText = (bgStatus: any): string => {
         switch (bgStatus) {
-            case BackgroundFetch.BackgroundFetchStatus.Available:
+            case BGStatus.Available:
                 return '✔️';
-            case BackgroundFetch.BackgroundFetchStatus.Denied:
+            case BGStatus.Denied:
                 return '❌';
-            case BackgroundFetch.BackgroundFetchStatus.Restricted:
+            case BGStatus.Restricted:
                 return '⚠️';
             default:
                 return 'Unknown';
@@ -130,26 +136,6 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
         {isExpanded && status && (
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#444' }}>
             {/* Show warning if background fetch is not available */}
-            {status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus.Available && (
-                <View style={{ 
-                backgroundColor: '#FFA50022', 
-                padding: 10, 
-                borderRadius: 6, 
-                marginBottom: 12,
-                borderWidth: 1,
-                borderColor: '#FFA500'
-                }}>
-                <Text style={{ color: '#FFA500', fontSize: 11, fontWeight: '600', marginBottom: 4 }}>
-                    ⚠️ Background Tasks Limited
-                </Text>
-                <Text style={{ color: '#CCC', fontSize: 10, lineHeight: 14 }}>
-                    Android severely restricts background BLE operations. The mesh works best when the app is in the foreground.
-                </Text>
-                <Text style={{ color: '#CCC', fontSize: 10, lineHeight: 14, marginTop: 4 }}>
-                    Status: {getBackgroundFetchStatusText(status.backgroundFetchStatus)}
-                </Text>
-                </View>
-            )}
 
             <View style={{ marginBottom: 8 }}>
                 <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '500', marginBottom: 4 }}>
@@ -174,17 +160,6 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
                 <Text style={{ color: '#AAA', fontSize: 11 }}>Gossip:</Text>
                 <Text style={{ color: status.gossipEnabled ? '#10B981' : '#EF4444', fontSize: 11 }}>
                     {status.gossipEnabled ? '✔️' : '❌'}
-                </Text>
-                </View>
-                
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                <Text style={{ color: '#AAA', fontSize: 11 }}>Background Fetch:</Text>
-                <Text style={{ 
-                    color: status.backgroundFetchStatus !== BackgroundFetch.BackgroundFetchStatus.Available
-                    ? '#EF4444' : '#10B981', 
-                    fontSize: 11 
-                }}>
-                    {getBackgroundFetchStatusText(status.backgroundFetchStatus)}
                 </Text>
                 </View>
             </View>

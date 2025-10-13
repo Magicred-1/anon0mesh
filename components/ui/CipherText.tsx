@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Text, TextStyle } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Platform, Text, TextStyle } from 'react-native';
 
 interface CipherTextProps {
     text: string;
@@ -56,7 +56,21 @@ export const CipherText: React.FC<CipherTextProps> = ({
     }, [text, delay, animateText]);
 
     return (
-        <Text style={style}>
+        <Text
+            // Apply a fallback font family on Android to ensure custom fonts loaded
+            // via expo-font are respected. If the caller passed a fontFamily it
+            // will be preserved.
+            style={(() => {
+                // Clone provided style into a plain object so we can safely mutate
+                const base = (Array.isArray(style) ? Object.assign({}, ...style) : { ...(style as object) }) as TextStyle | undefined;
+                if (Platform.OS === 'android') {
+                    if (!base || !base.fontFamily) {
+                        return { ...(base || {}), fontFamily: 'Primal' } as TextStyle;
+                    }
+                }
+                return base as TextStyle | undefined;
+            })()}
+        >
             {displayText}
         </Text>
     );

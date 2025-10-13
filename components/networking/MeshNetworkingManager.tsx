@@ -1,8 +1,13 @@
+// Bluetooth/permission check utility
+import { PermissionsAndroid, Platform } from 'react-native';
+import { BleManager } from 'react-native-ble-plx';
 // src/networking/MeshNetworkingManager.ts
 import { Connection } from '@solana/web3.js';
 import { Buffer } from 'buffer';
+// ...existing code...
 import { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, NativeModules } from 'react-native';
+// ...existing code...
 import {
   addPacketToBackgroundQueue,
   getBackgroundMeshStatus,
@@ -23,6 +28,7 @@ import {
   createBLEManager,
   getBLEConfig,
 } from '../../src/networking/bluetooth/BLEFactory';
+import { BLEPacketEncoder } from '../../src/networking/bluetooth/BLEPacketEncoder';
 import { BLEPeripheralServer } from '../../src/networking/bluetooth/BLEPeripheralServer';
 import {
   BeaconCapabilities,
@@ -33,6 +39,34 @@ import {
   SolanaTransactionRelay,
   TransactionRelayConfig,
 } from '../../src/solana/SolanaTransactionRelay';
+
+async function ensureBluetoothAndPermissions() {
+  if (Platform.OS === 'android') {
+    // Request permissions
+    const perms = [
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    ];
+    const granted = await PermissionsAndroid.requestMultiple(perms);
+    if (Object.values(granted).some(val => val !== PermissionsAndroid.RESULTS.GRANTED)) {
+      throw new Error('BLE permissions not granted');
+    }
+  }
+  // Wait for Bluetooth to be ON
+  const manager = new BleManager();
+  let state = await manager.state();
+  if (state !== 'PoweredOn') {
+    await new Promise<void>((resolve) => {
+      const sub = manager.onStateChange((newState) => {
+        if (newState === 'PoweredOn') {
+          sub.remove();
+          resolve();
+        }
+      }, true);
+    });
+  }
+}
 
 // Ensure Buffer is globally available for React Native
 if (!(global as any).Buffer) {
@@ -74,6 +108,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   private appStateSubscription?: any;
   private isInBackground = false;
   private backgroundMeshInitialized = false;
+  private deviceId: string; // Physical device ID for BLE advertising
 
   constructor(
     pubKey: string,
@@ -89,6 +124,8 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     this.onMessageReceived = onMessageReceived;
     this.onTransactionReceived = onTransactionReceived;
     this.onTransactionStatusUpdate = onTransactionStatusUpdate;
+    // Use pubKey-derived deviceId for BLE advertising and background mesh
+    this.deviceId = pubKey.slice(0, 8);
 
     // Gossip configuration
     const gossipConfig: GossipSyncConfig = {
@@ -113,7 +150,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
       lastOnlineTimestamp: 0,
     };
 
-    this.gossipManager = new GossipSyncManager(pubKey, gossipConfig);
+    this.gossipManager = new GossipSyncManager(this.deviceId, gossipConfig);
     this.gossipManager.setDelegate(this);
 
     this.solanaRelay = new SolanaTransactionRelay(
@@ -128,21 +165,39 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     );
 
     const bleConfig = getBLEConfig();
-    this.bleManager = createBLEManager(pubKey);
+    this.bleManager = createBLEManager(this.deviceId);
 
     if (bleConfig.enableLogs)
       console.log('[MESH] Using Real BLE Manager (Expo dual-role emulation)');
 
     // Initialize BLE Peripheral Server (GATT server)
     console.log('[MESH] Initializing BLE Peripheral Server (GATT)...');
-    this.blePeripheralServer = new BLEPeripheralServer(pubKey);
+    this.blePeripheralServer = new BLEPeripheralServer(this.deviceId);
+
+    // Diagnostic: print NativeModules keys and the specific peripheral entry so
+    // we can see whether the native module was included and under which key.
+    try {
+      const keys = Object.keys((NativeModules as any) || {});
+      console.log('[MESH] NativeModules keys:', keys.join(', '));
+      console.log(
+        '[MESH] NativeModules.ReactNativeMultiBlePeripheral =',
+        (NativeModules as any).ReactNativeMultiBlePeripheral,
+      );
+    } catch (e) {
+      console.warn('[MESH] Failed to read NativeModules for diagnostic', e);
+    }
 
     // Handle incoming BLE packets
     this.bleManager.setDataHandler(
       (data: string, fromPeer: string) => {
         try {
-          const packet = JSON.parse(data) as Anon0MeshPacket;
-          this.handleIncomingPacket(packet, fromPeer);
+          // Decode BLE packet (base64 chunked)
+          const packet = BLEPacketEncoder.decode(data);
+          if (packet) {
+            this.handleIncomingPacket(packet, fromPeer);
+          } else {
+            console.error('[MESH] Failed to decode BLE packet');
+          }
         } catch (e) {
           console.error('[MESH] Failed to parse incoming BLE data', e);
         }
@@ -156,9 +211,13 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
       this.blePeripheralServer.setDataHandler(
         (data: string, from: string) => {
           try {
-            const packet = JSON.parse(data) as Anon0MeshPacket;
-            console.log('[MESH] Received packet via GATT server from', from);
-            this.handleIncomingPacket(packet, from);
+            const packet = BLEPacketEncoder.decode(data);
+            if (packet) {
+              console.log('[MESH] Received packet via GATT server from', from);
+              this.handleIncomingPacket(packet, from);
+            } else {
+              console.error('[MESH] Failed to decode GATT packet');
+            }
           } catch (e) {
             console.error('[MESH] Failed to parse incoming GATT data', e);
           }
@@ -178,32 +237,14 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   // ===== GossipSyncManagerDelegate implementation =====
   sendPacket(packet: Anon0MeshPacket): void {
     console.log('[MESH] Broadcasting packet', packet.type);
-    const meshPacket = {
-      type: packet.type,
-      data: Buffer.from(packet.payload).toString('base64'),
-      sender: Buffer.from(packet.senderID).toString('hex'),
-      timestamp: Number(packet.timestamp),
-      ttl: packet.ttl,
-      signature: packet.signature,
-      recipientID: packet.recipientID,
-    };
-    this.bleManager.broadcastPacket(meshPacket);
+    this.bleManager.broadcastPacket(packet);
     this.addToBackgroundQueueIfNeeded(packet);
   }
 
   sendPacketToPeer(peerID: string, packet: Anon0MeshPacket): void {
     console.log('[MESH] Sending packet to', peerID, packet.type);
     // RealBLEManager only supports broadcast, not direct peer messaging
-    const meshPacket = {
-      type: packet.type,
-      data: Buffer.from(packet.payload).toString('base64'),
-      sender: Buffer.from(packet.senderID).toString('hex'),
-      timestamp: Number(packet.timestamp),
-      ttl: packet.ttl,
-      signature: packet.signature,
-      recipientID: packet.recipientID,
-    };
-    this.bleManager.broadcastPacket(meshPacket);
+    this.bleManager.broadcastPacket(packet);
     this.addToBackgroundQueueIfNeeded(packet);
   }
 
@@ -215,11 +256,19 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   // ===== Lifecycle =====
   async start(): Promise<void> {
     this.gossipManager.start();
-    
+
+    // Ensure Bluetooth and permissions before starting BLE peripheral
+    try {
+      await ensureBluetoothAndPermissions();
+    } catch (err) {
+      console.error('[MESH] ❌ BLE permissions/Bluetooth not ready:', err);
+      return;
+    }
+
     // Start GATT server (Peripheral mode - accepts connections)
     console.log('[MESH] 🚀 Starting BLE Peripheral Server (GATT)...');
     await this.blePeripheralServer.start();
-    
+
     // Initialize BLE if it has an initialize method
     if ('initialize' in this.bleManager) {
       console.log('[MESH] Initializing BLE Manager...');
@@ -229,7 +278,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
         return;
       }
     }
-    
+
     // Start scanning (Central mode - discovers and connects to devices)
     console.log('[MESH] 🔍 Starting BLE scanning...');
     if ('startScanning' in this.bleManager) {
@@ -239,7 +288,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
     // Emulate peripheral advertisement for Expo
     if ('advertisePresence' in this.bleManager) {
       await (this.bleManager as any).advertisePresence({
-        id: this.pubKey.slice(0, 8),
+        id: this.deviceId,
         nickname: this.nickname,
       });
     }
@@ -294,7 +343,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
       payload: Buffer.from(
         JSON.stringify({ nickname: this.nickname, status: 'online' }),
       ),
-      ttl: 3,
+      ttl: 1,
       signature: undefined,
     };
 
@@ -341,7 +390,7 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   // ===== Background support =====
   private async initializeBackgroundSupport(): Promise<void> {
     if (!this.backgroundMeshInitialized) {
-      await initializeBackgroundMesh(this.pubKey);
+      await initializeBackgroundMesh(this.deviceId);
       this.backgroundMeshInitialized = true;
     }
     this.setupAppStateMonitoring();

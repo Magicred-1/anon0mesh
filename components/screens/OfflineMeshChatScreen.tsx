@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannels } from '../../src/contexts/ChannelContext';
+import { BeaconCapabilities } from '../../src/solana/BeaconManager';
 import { Channel } from '../../src/types/channels';
+import { RateLimitManager } from '../../src/utils/RateLimitManager';
 import { useMeshNetworking } from '../networking/MeshNetworkingManager';
 import BLEPermissionRequest from '../ui/BLEPermissionRequest';
 import BLEStatusIndicator from '../ui/BLEStatusIndicator';
@@ -53,6 +55,9 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     const [nickname, setNickname] = useState(initialNickname);
     const [bleStats, setBleStats] = useState({ connectedDevices: 0, isScanning: false });
     const [bleAvailable, setBleAvailable] = useState(true);
+    const [rateLimitManager] = useState(() => new RateLimitManager(pubKey));
+    const [messagesRemaining, setMessagesRemaining] = useState<number>(3);
+    const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
 
     // Channel management
     const { channels, currentChannel, setCurrentChannel } = useChannels();
@@ -64,7 +69,7 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     const displayNickname = `${nickname || 'AliceAndBob'}#${randomNumber}`;
 
     // Full display name for header
-    const fullDisplayName = `anon0mesh/${displayNickname}`;
+    const fullDisplayName = `${displayNickname}`;
 
     // Get safe area insets to calculate proper header height
     const insets = useSafeAreaInsets();
@@ -111,39 +116,61 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         }
     }, [nickname]);
 
+    // Generate random mock peers if none exist
+    const generateMockPeers = (count: number) => {
+        const adjectives = ['Swift', 'Calm', 'Brave', 'Lucky', 'Mighty', 'Silent', 'Bright', 'Witty', 'Chill', 'Bold'];
+        const animals = ['Tiger', 'Eagle', 'Panda', 'Wolf', 'Otter', 'Falcon', 'Fox', 'Bear', 'Dolphin', 'Hawk'];
+        const emojis = ['🦊', '🐻', '🐼', '🐺', '🐯', '🦅', '🐬', '🦉', '🐧', '🐙'];
+        const randomPeers = Array.from({ length: count }, () => {
+            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+            const animal = animals[Math.floor(Math.random() * animals.length)];
+            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+            const num = Math.floor(Math.random() * 900 + 100);
+            return { name: `${adj}${animal}${num}`, emoji };
+        });
+        return randomPeers;
+    };
+
     // --- Mock data for demo mode ---
     // Seed mock messages when there are no messages yet
     useEffect(() => {
         if (messages.length === 0) {
-            const demo: Message[] = [
-                { from: 'Alice', msg: 'Welcome to the mesh chat 👋', ts: Date.now() - 120000 },
-                { from: 'Bob', msg: 'Hey anons.', ts: Date.now() - 90000 },
+            const demoMsgs: Message[] = [
+                { from: 'Alice', msg: 'Hey there! Welcome to the mesh chat 👋', ts: Date.now() - 120000 },
+                { from: 'Bob', msg: 'This is a mock conversation to showcase the UI.', ts: Date.now() - 90000 },
                 { from: currentUser, msg: "Hey, I'm testing offline mesh chat! 🚀", ts: Date.now() - 60000 },
-                { from: 'Charlie', msg: 'This is pretty cool!', ts: Date.now() - 30000 },
-                { from: 'Dave', msg: 'Anyone up for a decentralized party?', ts: Date.now() - 15000 },
-                { from: currentUser, msg: 'Absolutely! Let\'s make it happen. 🎉', ts: Date.now() - 5000 },
             ];
-            setMessages(demo);
+            setMessages(demoMsgs);
         }
     }, [currentUser, messages.length]);
 
-    // Seed mock peers when none are present
+    // Seed mock peers when none are present (use generateMockPeers helper)
     useEffect(() => {
         if (activePeers.length === 0) {
             const now = Date.now();
-            const demoPeers: PeerInfo[] = [
-                { id: 'MESH-GATT', nickname: 'MESH-GATT', lastSeen: now, isOnline: true },
-                { id: 'Bob', nickname: 'Bob', lastSeen: now - 60000, isOnline: true },
-                { id: 'Charlie', nickname: 'Charlie', lastSeen: now - 120000, isOnline: true },
-                { id: 'Dave', nickname: 'Dave', lastSeen: now - 10 * 60000, isOnline: false },
-                { id: 'Eve', nickname: 'Eve', lastSeen: now - 20 * 60000, isOnline: false },
-            ];
-            
+            const generated = generateMockPeers(6);
+            const demoPeers: PeerInfo[] = generated.map((p, i) => ({
+                id: p.name,
+                nickname: p.name,
+                // Spread lastSeen times so some appear recently online
+                lastSeen: now - Math.floor(Math.random() * 10) * 60000,
+                isOnline: Math.random() > 0.3,
+            }));
             setActivePeers(demoPeers);
         }
     }, [activePeers.length]);
 
     // Initialize mesh networking with offline focus
+    const offlineCaps: BeaconCapabilities = {
+        hasInternetConnection: false,
+        supportedNetworks: [],
+        supportedTokens: [],
+        maxTransactionSize: 0,
+        priorityFeeSupport: false,
+        rpcEndpoints: [],
+        lastOnlineTimestamp: 0,
+    };
+
     const meshNetworking = useMeshNetworking(
         pubKey,
         displayNickname, // Use display nickname with #number for mesh networking
@@ -151,15 +178,7 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         undefined, // No transaction handling for offline mode
         undefined, // No transaction status updates
         undefined, // No Solana connection
-        {
-            hasInternetConnection: false,
-            supportedNetworks: [],
-            supportedTokens: [],
-            maxTransactionSize: 0,
-            priorityFeeSupport: false,
-            rpcEndpoints: [],
-            lastOnlineTimestamp: 0,
-        },
+        offlineCaps,
     );
 
     // Use ref to store mesh networking to avoid dependency issues
@@ -200,21 +219,49 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
     };
 
     // Send message through P2P mesh
-    const sendMessage = (msg: string) => {
+    const sendMessage = async (msg: string) => {
         if (!msg.trim()) return;
-        
+
+        // Check rate limit before sending
+        try {
+            const canSend = await rateLimitManager.canSendMessage();
+            if (!canSend) {
+                const timeRemaining = await rateLimitManager.getTimeUntilReset();
+                Alert.alert(
+                    '📨 Daily Message Limit Reached',
+                    `You've reached your daily limit of 3 messages.\n\n` +
+                    `💡 Tip: Send a Solana transaction to unlock unlimited messaging!\n\n` +
+                    `Limit resets in: ${timeRemaining}`,
+                    [{ text: 'OK' }]
+                );
+                return;
+            }
+        } catch (err) {
+            console.warn('[RATE_LIMIT] check failed, allowing send by default', err);
+        }
+
         const targetPeer = selectedPeer;
-        
+
         // Use offline messaging method with zone-based TTL
         const ttl = currentChannel?.ttl || 5;
         meshNetworking.sendOfflineMessage(msg.trim(), targetPeer || undefined, ttl, currentChannel?.id);
 
+        // Record the message send
+        try {
+            await rateLimitManager.recordMessageSent();
+            const status = await rateLimitManager.getStatus();
+            setMessagesRemaining(status.messagesRemaining === Infinity ? Number.MAX_SAFE_INTEGER : status.messagesRemaining);
+            setIsUnlocked(status.isUnlocked);
+        } catch (err) {
+            console.warn('[RATE_LIMIT] failed to record message sent', err);
+        }
+
         // Add to our local message list
         const newMessage: Message = {
-        from: currentUser,
-        to: targetPeer || undefined,
-        msg: msg.trim(),
-        ts: Date.now(),
+            from: currentUser,
+            to: targetPeer || undefined,
+            msg: msg.trim(),
+            ts: Date.now(),
         };
 
         setMessages(prev => [...prev, newMessage]);
@@ -248,6 +295,20 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
 
         return () => clearInterval(interval);
     }, []); // Empty dependency array is safe since we use ref
+
+    // Load rate limit status on mount
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const status = await rateLimitManager.getStatus();
+                setMessagesRemaining(status.messagesRemaining === Infinity ? Number.MAX_SAFE_INTEGER : status.messagesRemaining);
+                setIsUnlocked(status.isUnlocked);
+            } catch (err) {
+                console.warn('[RATE_LIMIT] failed to load status', err);
+            }
+        };
+        load();
+    }, [rateLimitManager]);
 
     // Update BLE stats periodically
     useEffect(() => {
@@ -348,8 +409,18 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
 
             {/* Background Mesh Status */}
             <BackgroundMeshStatusIndicator
-                getBackgroundStatus={() => meshNetworking.getBackgroundMeshStatus() || Promise.resolve({ isActive: false, relayEnabled: false, gossipEnabled: false, backgroundFetchStatus: 0 })}
+                getBackgroundStatus={() => meshNetworking.getBackgroundMeshStatus() || Promise.resolve({ isActive: false, relayEnabled: false, gossipEnabled: false, backgroundFetchStatus: 'available' })}
             />
+
+            {/* Rate limit status */}
+            <View style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#222', marginTop: 12 }}>
+                <Text style={{ color: '#C084FC', fontFamily: 'Courier', fontSize: 12, marginBottom: 4 }}>Messages</Text>
+                {isUnlocked ? (
+                    <Text style={{ color: '#10B981', fontSize: 12 }}>Unlimited for today (unlocked)</Text>
+                ) : (
+                    <Text style={{ color: '#AAAAAA', fontSize: 12 }}>{messagesRemaining} messages remaining today</Text>
+                )}
+            </View>
 
             {peers.length > 0 ? (
                 peers.map((peer, index) => (

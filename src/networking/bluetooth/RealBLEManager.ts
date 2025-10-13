@@ -2,12 +2,16 @@
 // Improved BLE Manager with enhanced error handling
 import { PermissionsAndroid, Platform } from 'react-native';
 import { BleError, BleManager, Characteristic, Device } from 'react-native-ble-plx';
+import { BLEPacketEncoder } from './BLEPacketEncoder';
 import {
   ANON0MESH_SERVICE_UUID,
   BLE_CONFIG,
   NOTIFY_CHARACTERISTIC_UUID,
   WRITE_CHARACTERISTIC_UUID,
 } from './constants/BLEConstants';
+
+
+import { Anon0MeshPacket } from '../../gossip/types';
 
 interface ConnectedDevice {
   device: Device;
@@ -21,13 +25,6 @@ interface ConnectedDevice {
   failureCount: number;
 }
 
-interface MeshPacket {
-  type: number;
-  data: string;
-  timestamp: number;
-  sender: string;
-}
-
 // Re-export for backwards compatibility
 export const WRITE_CHAR_UUID = WRITE_CHARACTERISTIC_UUID;
 export const NOTIFY_CHAR_UUID = NOTIFY_CHARACTERISTIC_UUID;
@@ -38,6 +35,7 @@ export class RealBLEManager {
   private manager: BleManager;
   private connectedDevices: Map<string, ConnectedDevice> = new Map();
   private onDataReceived?: (data: string, from: string) => void;
+  private chunkBuffers: Map<string, Map<number, Buffer>> = new Map();
   private scanInterval?: ReturnType<typeof setInterval>;
   private healthCheckInterval?: ReturnType<typeof setInterval>;
   private isScanning = false;
@@ -77,6 +75,7 @@ export class RealBLEManager {
       console.log('[BLE] 📡 Bluetooth state:', state);
       
       if (state !== 'PoweredOn') {
+      console.log(`[BLE] [DEBUG] Scanning for service UUID: ${SERVICE_UUID}`);
         console.log('[BLE] ⚠️ Bluetooth is not powered on');
         
         // Listen for state changes
@@ -93,6 +92,7 @@ export class RealBLEManager {
       // Start health check
       this.startHealthCheck();
       
+            console.log('[BLE] [DEBUG] Scan callback: no device found in this callback');
       this.isInitialized = true;
       console.log('[BLE] ✅ BLE Manager initialized');
       return true;
@@ -115,9 +115,7 @@ export class RealBLEManager {
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
           ]);
-          
           return Object.values(granted).every(
             (status) => status === PermissionsAndroid.RESULTS.GRANTED
           );
@@ -175,19 +173,21 @@ export class RealBLEManager {
   }
 
   /**
-   * Handle discovered BLE device
+   * Handle discovered BLE device during scan.
    */
   private async handleDiscoveredDevice(device: Device) {
-    // Skip if already connected
-    if (this.connectedDevices.has(device.id)) {
+    if (!device || !device.id) {
       return;
     }
-
-    console.log('[BLE] 📱 Discovered device:', device.id, device.name || 'Unknown');
-    
-    // Attempt to connect
+    // Avoid reconnecting to already connected devices
+    if (this.connectedDevices.has(device.id)) {
+      // Optionally update RSSI or lastSeen here
+      return;
+    }
+    // Optionally filter devices by name, RSSI, etc.
     await this.connectToDevice(device);
   }
+
 
   /**
    * Connect to a BLE device with proper setup
@@ -294,49 +294,46 @@ export class RealBLEManager {
   /**
    * Send data to connected devices
    */
-  async broadcastPacket(packet: MeshPacket): Promise<number> {
+  async broadcastPacket(packet: Anon0MeshPacket): Promise<number> {
     if (this.connectedDevices.size === 0) {
       console.log('[BLE] No connected devices to broadcast to');
       return 0;
     }
 
     console.log(`[BLE] Broadcasting packet type ${packet.type} to ${this.connectedDevices.size} device(s)`);
-    
-    // Encode packet
-    const encodedData = Buffer.from(JSON.stringify(packet)).toString('base64');
-    
+
+    // Encode packet using BLEPacketEncoder (chunked)
+    const chunks = BLEPacketEncoder.encode(packet);
+
     let successCount = 0;
     const sendPromises: Promise<void>[] = [];
-    
+
     for (const [deviceId, connectedDevice] of Array.from(this.connectedDevices.entries())) {
-      // Skip devices that aren't ready or have too many failures
       if (!connectedDevice.isReady || connectedDevice.failureCount >= this.MAX_FAILURES) {
         continue;
       }
-      
-      const promise = this.sendToDevice(deviceId, encodedData, packet.type)
+      // Send all chunks to each device
+      const promise = (async () => {
+        for (const chunk of chunks) {
+          await this.sendToDevice(deviceId, Buffer.from(chunk, 'utf8').toString('base64'), packet.type);
+        }
+      })()
         .then(() => {
           successCount++;
-          // Reset failure count on success
           connectedDevice.failureCount = 0;
         })
         .catch((error) => {
-          // Increment failure count
           connectedDevice.failureCount++;
-          
-          // If too many failures, disconnect
           if (connectedDevice.failureCount >= this.MAX_FAILURES) {
             console.log(`[BLE] 🚫 Device ${deviceId} exceeded failure threshold, disconnecting`);
             this.disconnectDevice(deviceId);
           }
         });
-      
       sendPromises.push(promise);
     }
-    
-    // Wait for all sends to complete
+
     await Promise.allSettled(sendPromises);
-    
+
     console.log(`[BLE] ✅ Sent to ${successCount} of ${this.connectedDevices.size} devices`);
     return successCount;
   }
@@ -407,20 +404,26 @@ export class RealBLEManager {
    */
   private handleReceivedData(base64Data: string, fromDevice: string) {
     try {
-      const jsonString = Buffer.from(base64Data, 'base64').toString('utf-8');
-      const packet: MeshPacket = JSON.parse(jsonString);
-      
-      console.log(`[BLE] 📥 Received packet type ${packet.type} from ${fromDevice}`);
-      
-      // Update last seen
-      const connectedDevice = this.connectedDevices.get(fromDevice);
-      if (connectedDevice) {
-        connectedDevice.lastSeen = Date.now();
+      // base64Data is a chunk (base64-encoded utf8 string)
+      const chunkStr = Buffer.from(base64Data, 'base64').toString('utf8');
+      if (!this.chunkBuffers.has(fromDevice)) this.chunkBuffers.set(fromDevice, new Map());
+      const chunkMap = this.chunkBuffers.get(fromDevice)!;
+      const fullBuffer = BLEPacketEncoder.addChunk(chunkMap, chunkStr);
+      if (fullBuffer) {
+        const packet = BLEPacketEncoder.decode(fullBuffer.toString('base64'));
+        if (packet) {
+          console.log(`[BLE] 📥 Received packet type ${packet.type} from ${fromDevice}`);
+          // Update last seen
+          const connectedDevice = this.connectedDevices.get(fromDevice);
+          if (connectedDevice) {
+            connectedDevice.lastSeen = Date.now();
+          }
+          // Call data handler with base64-encoded binary for compatibility
+          this.onDataReceived?.(fullBuffer.toString('base64'), fromDevice);
+        }
+        // Clear buffer for this device
+        this.chunkBuffers.set(fromDevice, new Map());
       }
-      
-      // Call data handler
-      this.onDataReceived?.(packet.data, fromDevice);
-      
     } catch (error: any) {
       console.log('[BLE] Failed to parse received data:', error?.message);
     }

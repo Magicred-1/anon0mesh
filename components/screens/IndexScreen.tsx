@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CipherText } from '../ui/CipherText';
 
 interface IndexScreenProps {
@@ -23,7 +23,7 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
         {
             icon: '🔐',
             title: 'End-to-End Encrypted',
-            description: 'Your messages are secured with military-grade encryption',
+            description: 'Your messages are secured & encrypted',
         },
         {
             icon: '📡',
@@ -50,12 +50,6 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
                     <CipherText text="ANON0MESH" style={styles.title} duration={1500} delay={300} />
                     <Text style={styles.subtitle}>Decentralized P2P Messaging</Text>
                 </View>
-
-                {/* Description */}
-                <Text style={styles.description}>
-                    A self-healing mesh network for private, censorship-resistant communication.
-                    Stay connected without relying on centralized servers.
-                </Text>
 
                 {/* Features Grid */}
                 <View style={styles.featuresContainer}>
@@ -169,6 +163,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 4,
         elevation: 3,
+        minHeight: 150,
+        justifyContent: 'space-between',
     },
     iconContainer: {
         width: 44,

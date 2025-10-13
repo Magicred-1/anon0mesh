@@ -8,7 +8,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 const RATE_LIMIT_KEY_PREFIX = 'rate_limit_';
-const DAILY_MESSAGE_LIMIT = 3;
+const DAILY_MESSAGE_LIMIT = 100
 
 export interface RateLimitStatus {
   messagesRemaining: number;
@@ -30,16 +30,7 @@ export class RateLimitManager {
   private getStorageKey(): string {
     return `${RATE_LIMIT_KEY_PREFIX}${this.userId}`;
   }
-  
-  /**
-   * Get the start of today (midnight UTC)
-   */
-  private getTodayStart(): number {
-    const now = new Date();
-    now.setUTCHours(0, 0, 0, 0);
-    return now.getTime();
-  }
-  
+
   /**
    * Get the end of today (midnight UTC tomorrow)
    */

@@ -165,6 +165,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
                     }}
                     onClose={toggleSidebar}
                     visible={sidebarOpen}
+                    currentPrivate={privateTarget}
+                    onClearPrivate={() => setPrivateTarget(null)}
                     channels={[]}
                     currentChannel={null}
                     onSelectChannel={(channel: Channel) => {
