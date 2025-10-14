@@ -1,0 +1,1158 @@
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/.project b/node_modules/react-native-multi-ble-peripheral/android/.project
+new file mode 100644
+index 0000000..863b739
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>react-native-multi-ble-peripheral</name>
++	<comment>Project react-native-multi-ble-peripheral created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1760386026181</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/.transforms/b70b6861cd89c96eef31374353e5d4f1/results.bin b/node_modules/react-native-multi-ble-peripheral/android/build/.transforms/b70b6861cd89c96eef31374353e5d4f1/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/.transforms/b70b6861cd89c96eef31374353e5d4f1/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/.transforms/b70b6861cd89c96eef31374353e5d4f1/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-multi-ble-peripheral/android/build/.transforms/b70b6861cd89c96eef31374353e5d4f1/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..e2c02a8
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/.transforms/b70b6861cd89c96eef31374353e5d4f1/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/buildConfig/debug/com/fugood/reactnativemultibleperipheral/BuildConfig.java b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/buildConfig/debug/com/fugood/reactnativemultibleperipheral/BuildConfig.java
+new file mode 100644
+index 0000000..b75ca80
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/buildConfig/debug/com/fugood/reactnativemultibleperipheral/BuildConfig.java
+@@ -0,0 +1,12 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package com.fugood.reactnativemultibleperipheral;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = Boolean.parseBoolean("true");
++  public static final String LIBRARY_PACKAGE_NAME = "com.fugood.reactnativemultibleperipheral";
++  public static final String BUILD_TYPE = "debug";
++  // Field from default config.
++  public static final boolean IS_NEW_ARCHITECTURE_ENABLED = true;
++}
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/CMakeLists.txt b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/CMakeLists.txt
+new file mode 100644
+index 0000000..fa295cc
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/CMakeLists.txt
+@@ -0,0 +1,28 @@
++# Copyright (c) Meta Platforms, Inc. and affiliates.
++#
++# This source code is licensed under the MIT license found in the
++# LICENSE file in the root directory of this source tree.
++
++cmake_minimum_required(VERSION 3.13)
++set(CMAKE_VERBOSE_MAKEFILE on)
++
++file(GLOB react_codegen_SRCS CONFIGURE_DEPENDS *.cpp react/renderer/components/ReactNativeMultiBlePeripheral/*.cpp)
++
++add_library(
++  react_codegen_ReactNativeMultiBlePeripheral
++  OBJECT
++  ${react_codegen_SRCS}
++)
++
++target_include_directories(react_codegen_ReactNativeMultiBlePeripheral PUBLIC . react/renderer/components/ReactNativeMultiBlePeripheral)
++
++target_link_libraries(
++  react_codegen_ReactNativeMultiBlePeripheral
++  fbjni
++  jsi
++  # We need to link different libraries based on whether we are building rncore or not, that's necessary
++  # because we want to break a circular dependency between react_codegen_rncore and reactnative
++  reactnative
++)
++
++target_compile_reactnative_options(react_codegen_ReactNativeMultiBlePeripheral PRIVATE)
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/ReactNativeMultiBlePeripheral-generated.cpp b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/ReactNativeMultiBlePeripheral-generated.cpp
+new file mode 100644
+index 0000000..450a7bb
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/ReactNativeMultiBlePeripheral-generated.cpp
+@@ -0,0 +1,22 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateModuleJniCpp.js
++ */
++
++#include "ReactNativeMultiBlePeripheral.h"
++
++namespace facebook::react {
++
++
++
++std::shared_ptr<TurboModule> ReactNativeMultiBlePeripheral_ModuleProvider(const std::string &moduleName, const JavaTurboModule::InitParams &params) {
++
++  return nullptr;
++}
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/ReactNativeMultiBlePeripheral.h b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/ReactNativeMultiBlePeripheral.h
+new file mode 100644
+index 0000000..805be7a
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/ReactNativeMultiBlePeripheral.h
+@@ -0,0 +1,24 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateModuleJniH.js
++ */
++
++#pragma once
++
++#include <ReactCommon/JavaTurboModule.h>
++#include <ReactCommon/TurboModule.h>
++#include <jsi/jsi.h>
++
++namespace facebook::react {
++
++
++
++JSI_EXPORT
++std::shared_ptr<TurboModule> ReactNativeMultiBlePeripheral_ModuleProvider(const std::string &moduleName, const JavaTurboModule::InitParams &params);
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ComponentDescriptors.cpp b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ComponentDescriptors.cpp
+new file mode 100644
+index 0000000..d07c99e
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ComponentDescriptors.cpp
+@@ -0,0 +1,22 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateComponentDescriptorCpp.js
++ */
++
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/ComponentDescriptors.h>
++#include <react/renderer/core/ConcreteComponentDescriptor.h>
++#include <react/renderer/componentregistry/ComponentDescriptorProviderRegistry.h>
++
++namespace facebook::react {
++
++void ReactNativeMultiBlePeripheral_registerComponentDescriptorsFromCodegen(
++  std::shared_ptr<const ComponentDescriptorProviderRegistry> registry) {
++
++}
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ComponentDescriptors.h b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ComponentDescriptors.h
+new file mode 100644
+index 0000000..686d5f0
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ComponentDescriptors.h
+@@ -0,0 +1,24 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateComponentDescriptorH.js
++ */
++
++#pragma once
++
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.h>
++#include <react/renderer/core/ConcreteComponentDescriptor.h>
++#include <react/renderer/componentregistry/ComponentDescriptorProviderRegistry.h>
++
++namespace facebook::react {
++
++
++
++void ReactNativeMultiBlePeripheral_registerComponentDescriptorsFromCodegen(
++  std::shared_ptr<const ComponentDescriptorProviderRegistry> registry);
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.cpp b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.cpp
+new file mode 100644
+index 0000000..7a11982
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.cpp
+@@ -0,0 +1,16 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateEventEmitterCpp.js
++ */
++
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.h>
++
++
++namespace facebook::react {
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.h b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.h
+new file mode 100644
+index 0000000..2845a63
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.h
+@@ -0,0 +1,17 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateEventEmitterH.js
++ */
++#pragma once
++
++#include <react/renderer/components/view/ViewEventEmitter.h>
++
++
++namespace facebook::react {
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/Props.cpp b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/Props.cpp
+new file mode 100644
+index 0000000..dcb1358
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/Props.cpp
+@@ -0,0 +1,19 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GeneratePropsCpp.js
++ */
++
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/Props.h>
++#include <react/renderer/core/PropsParserContext.h>
++#include <react/renderer/core/propsConversions.h>
++
++namespace facebook::react {
++
++
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/Props.h b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/Props.h
+new file mode 100644
+index 0000000..870864b
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/Props.h
+@@ -0,0 +1,18 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GeneratePropsH.js
++ */
++#pragma once
++
++
++
++namespace facebook::react {
++
++
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ReactNativeMultiBlePeripheralJSI-generated.cpp b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ReactNativeMultiBlePeripheralJSI-generated.cpp
+new file mode 100644
+index 0000000..7bd97c4
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ReactNativeMultiBlePeripheralJSI-generated.cpp
+@@ -0,0 +1,17 @@
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateModuleCpp.js
++ */
++
++#include "ReactNativeMultiBlePeripheralJSI.h"
++
++namespace facebook::react {
++
++
++
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ReactNativeMultiBlePeripheralJSI.h b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ReactNativeMultiBlePeripheralJSI.h
+new file mode 100644
+index 0000000..ec16260
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ReactNativeMultiBlePeripheralJSI.h
+@@ -0,0 +1,19 @@
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateModuleH.js
++ */
++
++#pragma once
++
++#include <ReactCommon/TurboModule.h>
++#include <react/bridging/Bridging.h>
++
++namespace facebook::react {
++
++
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.cpp b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.cpp
+new file mode 100644
+index 0000000..c675768
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.cpp
+@@ -0,0 +1,17 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateShadowNodeCpp.js
++ */
++
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.h>
++
++namespace facebook::react {
++
++
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.h b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.h
+new file mode 100644
+index 0000000..60632e7
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/ShadowNodes.h
+@@ -0,0 +1,23 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateShadowNodeH.js
++ */
++
++#pragma once
++
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/EventEmitters.h>
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/Props.h>
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/States.h>
++#include <react/renderer/components/view/ConcreteViewShadowNode.h>
++#include <jsi/jsi.h>
++
++namespace facebook::react {
++
++
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/States.cpp b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/States.cpp
+new file mode 100644
+index 0000000..3ccb2d6
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/States.cpp
+@@ -0,0 +1,16 @@
++
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateStateCpp.js
++ */
++#include <react/renderer/components/ReactNativeMultiBlePeripheral/States.h>
++
++namespace facebook::react {
++
++
++
++} // namespace facebook::react
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/States.h b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/States.h
+new file mode 100644
+index 0000000..2e55bce
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/jni/react/renderer/components/ReactNativeMultiBlePeripheral/States.h
+@@ -0,0 +1,20 @@
++/**
++ * This code was generated by [react-native-codegen](https://www.npmjs.com/package/react-native-codegen).
++ *
++ * Do not edit this file as changes may cause incorrect behavior and will be lost
++ * once the code is regenerated.
++ *
++ * @generated by codegen project: GenerateStateH.js
++ */
++#pragma once
++
++#include <react/renderer/core/StateData.h>
++#ifdef RN_SERIALIZABLE_STATE
++#include <folly/dynamic.h>
++#endif
++
++namespace facebook::react {
++
++
++
++} // namespace facebook::react
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/schema.json b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/schema.json
+new file mode 100644
+index 0000000..c845b54
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/generated/source/codegen/schema.json
+@@ -0,0 +1 @@
++{"libraryName":"","modules":{}}
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..5c7f13a
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.fugood.reactnativemultibleperipheral" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <uses-permission android:name="android.permission.BLUETOOTH" />
++    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
++    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+new file mode 100644
+index 0000000..3344d8c
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "com.fugood.reactnativemultibleperipheral",
++  "variantName": "debug",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aar_main_jar/debug/syncDebugLibJars/classes.jar b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aar_main_jar/debug/syncDebugLibJars/classes.jar
+new file mode 100644
+index 0000000..a2d938d
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aar_main_jar/debug/syncDebugLibJars/classes.jar differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+new file mode 100644
+index 0000000..1211b1e
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+@@ -0,0 +1,6 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
++coreLibraryDesugaringEnabled=false
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/annotations_typedef_file/debug/extractDebugAnnotations/typedefs.txt b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/annotations_typedef_file/debug/extractDebugAnnotations/typedefs.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
+new file mode 100644
+index 0000000..1fad2dc
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
+new file mode 100644
+index 0000000..6cff4af
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug-mergeJavaRes/merge-state b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug-mergeJavaRes/merge-state
+new file mode 100644
+index 0000000..6e25e89
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug-mergeJavaRes/merge-state differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+new file mode 100644
+index 0000000..86a465b
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Tue Oct 14 02:04:59 CEST 2025
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+new file mode 100644
+index 0000000..7863849
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug" generated-set="debug$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/build/generated/res/resValues/debug"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/build/generated/res/resValues/debug"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugAssets/merger.xml b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+new file mode 100644
+index 0000000..fa2eca8
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/assets"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/debug/assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/shader_assets/debug/compileDebugShaders/out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..bfcea65
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/jniLibs"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/debug/jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugShaders/merger.xml b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+new file mode 100644
+index 0000000..e98e84a
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/shaders"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/debug/shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/java_res/debug/processDebugJavaRes/out/META-INF/react-native-multi-ble-peripheral_debug.kotlin_module b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/java_res/debug/processDebugJavaRes/out/META-INF/react-native-multi-ble-peripheral_debug.kotlin_module
+new file mode 100644
+index 0000000..9dbc290
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/java_res/debug/processDebugJavaRes/out/META-INF/react-native-multi-ble-peripheral_debug.kotlin_module differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/fugood/reactnativemultibleperipheral/BuildConfig.class b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/fugood/reactnativemultibleperipheral/BuildConfig.class
+new file mode 100644
+index 0000000..2516a27
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/fugood/reactnativemultibleperipheral/BuildConfig.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+new file mode 100644
+index 0000000..19c583f
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+@@ -0,0 +1,17 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="com.fugood.reactnativemultibleperipheral" >
++4
++5    <uses-sdk android:minSdkVersion="24" />
++6
++7    <uses-permission android:name="android.permission.BLUETOOTH" />
++7-->/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:4:3-66
++7-->/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:4:20-63
++8    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
++8-->/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:5:3-76
++8-->/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:5:20-73
++9    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
++9-->/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:6:3-74
++9-->/home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:6:20-71
++10
++11</manifest>
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/merged_java_res/debug/mergeDebugJavaResource/feature-react-native-multi-ble-peripheral.jar b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/merged_java_res/debug/mergeDebugJavaResource/feature-react-native-multi-ble-peripheral.jar
+new file mode 100644
+index 0000000..d5a8c5a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/merged_java_res/debug/mergeDebugJavaResource/feature-react-native-multi-ble-peripheral.jar differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+new file mode 100644
+index 0000000..5c7f13a
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.fugood.reactnativemultibleperipheral" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <uses-permission android:name="android.permission.BLUETOOTH" />
++    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
++    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+new file mode 100644
+index 0000000..08f4ebe
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+@@ -0,0 +1 @@
++0 Warning/Error
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
+new file mode 100644
+index 0000000..01a048e
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+new file mode 100644
+index 0000000..896d3c3
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+@@ -0,0 +1 @@
++com.fugood.reactnativemultibleperipheral
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab
+new file mode 100644
+index 0000000..c30c71a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream
+new file mode 100644
+index 0000000..d3ea0ac
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len
+new file mode 100644
+index 0000000..389cdb8
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len
+new file mode 100644
+index 0000000..93a595b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at
+new file mode 100644
+index 0000000..ae933d1
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i
+new file mode 100644
+index 0000000..a0e8750
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab
+new file mode 100644
+index 0000000..2e42f86
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream
+new file mode 100644
+index 0000000..0848226
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len
+new file mode 100644
+index 0000000..0dfc082
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len
+new file mode 100644
+index 0000000..817b326
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at
+new file mode 100644
+index 0000000..92b2b7d
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i
+new file mode 100644
+index 0000000..b8fa5aa
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab
+new file mode 100644
+index 0000000..f2eac6e
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream
+new file mode 100644
+index 0000000..0848226
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len
+new file mode 100644
+index 0000000..0dfc082
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len
+new file mode 100644
+index 0000000..817b326
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at
+new file mode 100644
+index 0000000..9849d91
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i
+new file mode 100644
+index 0000000..b8fa5aa
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab
+new file mode 100644
+index 0000000..bdf584a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream
+new file mode 100644
+index 0000000..92a072f
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len
+new file mode 100644
+index 0000000..cff5dd5
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len
+new file mode 100644
+index 0000000..2a17e6e
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at
+new file mode 100644
+index 0000000..960b8ec
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i
+new file mode 100644
+index 0000000..9416113
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab
+new file mode 100644
+index 0000000..5203207
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream
+new file mode 100644
+index 0000000..696ab01
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len
+new file mode 100644
+index 0000000..9ac05e7
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len
+new file mode 100644
+index 0000000..eb0b8a0
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at
+new file mode 100644
+index 0000000..7359bac
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i
+new file mode 100644
+index 0000000..d4ee51b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab
+new file mode 100644
+index 0000000..ed777d7
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream
+new file mode 100644
+index 0000000..d43327f
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len
+new file mode 100644
+index 0000000..466716a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len
+new file mode 100644
+index 0000000..fa606b6
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at
+new file mode 100644
+index 0000000..12e0016
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i
+new file mode 100644
+index 0000000..2824216
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab
+new file mode 100644
+index 0000000..68055e4
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream
+new file mode 100644
+index 0000000..d3ea0ac
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len
+new file mode 100644
+index 0000000..389cdb8
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len
+new file mode 100644
+index 0000000..93a595b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at
+new file mode 100644
+index 0000000..0c975ac
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i
+new file mode 100644
+index 0000000..a0e8750
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab
+new file mode 100644
+index 0000000..bf7702f
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream
+new file mode 100644
+index 0000000..b425921
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len
+new file mode 100644
+index 0000000..1cf91b4
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at
+new file mode 100644
+index 0000000..d592f91
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i
+new file mode 100644
+index 0000000..13aca7b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab
+new file mode 100644
+index 0000000..c9d6e50
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream
+new file mode 100644
+index 0000000..aea1867
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len
+new file mode 100644
+index 0000000..c1c02f7
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at
+new file mode 100644
+index 0000000..fdc18fe
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i
+new file mode 100644
+index 0000000..4c0d8f1
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab
+new file mode 100644
+index 0000000..26d3b09
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab
+@@ -0,0 +1,2 @@
++4
++0
+\ No newline at end of file
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab
+new file mode 100644
+index 0000000..18b2511
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream
+new file mode 100644
+index 0000000..d3ea0ac
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len
+new file mode 100644
+index 0000000..389cdb8
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len
+new file mode 100644
+index 0000000..93a595b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at
+new file mode 100644
+index 0000000..3e23c2a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i
+new file mode 100644
+index 0000000..a0e8750
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab
+new file mode 100644
+index 0000000..737bf23
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream
+new file mode 100644
+index 0000000..6e7a926
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len
+new file mode 100644
+index 0000000..eb52963
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len
+new file mode 100644
+index 0000000..93a595b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at
+new file mode 100644
+index 0000000..bb97ff3
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i
+new file mode 100644
+index 0000000..6936967
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab
+new file mode 100644
+index 0000000..0f36a5a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream
+new file mode 100644
+index 0000000..338211e
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len
+new file mode 100644
+index 0000000..2a06b87
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len
+new file mode 100644
+index 0000000..2708d54
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at
+new file mode 100644
+index 0000000..77e0fbd
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i
+new file mode 100644
+index 0000000..c05445a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin
+new file mode 100644
+index 0000000..ac14bbe
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/cacheable/last-build.bin differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin
+new file mode 100644
+index 0000000..c74824c
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/classpath-snapshot/shrunk-classpath-snapshot.bin differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin
+new file mode 100644
+index 0000000..a589a18
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/outputs/aar/react-native-multi-ble-peripheral-debug.aar b/node_modules/react-native-multi-ble-peripheral/android/build/outputs/aar/react-native-multi-ble-peripheral-debug.aar
+new file mode 100644
+index 0000000..6f11c9b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/outputs/aar/react-native-multi-ble-peripheral-debug.aar differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/react-native-multi-ble-peripheral/android/build/outputs/logs/manifest-merger-debug-report.txt
+new file mode 100644
+index 0000000..13b793d
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/build/outputs/logs/manifest-merger-debug-report.txt
+@@ -0,0 +1,29 @@
++-- Merging decision tree log ---
++manifest
++ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:1:1-8:12
++INJECTED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:1:1-8:12
++	package
++		ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:2:11-61
++		INJECTED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml
++	xmlns:android
++		ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:1:11-69
++uses-permission#android.permission.BLUETOOTH
++ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:4:3-66
++	android:name
++		ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:4:20-63
++uses-permission#android.permission.BLUETOOTH_ADVERTISE
++ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:5:3-76
++	android:name
++		ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:5:20-73
++uses-permission#android.permission.BLUETOOTH_CONNECT
++ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:6:3-74
++	android:name
++		ADDED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml:6:20-71
++uses-sdk
++INJECTED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml
++INJECTED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from /home/m4gicred1/Documents/coding/anon0mesh/node_modules/react-native-multi-ble-peripheral/android/src/main/AndroidManifest.xml
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..984c780
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/META-INF/react-native-multi-ble-peripheral_debug.kotlin_module b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/META-INF/react-native-multi-ble-peripheral_debug.kotlin_module
+new file mode 100644
+index 0000000..9dbc290
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/META-INF/react-native-multi-ble-peripheral_debug.kotlin_module differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Constants$Companion.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Constants$Companion.class
+new file mode 100644
+index 0000000..295c455
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Constants$Companion.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Constants.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Constants.class
+new file mode 100644
+index 0000000..1a61fad
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Constants.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$Companion.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$Companion.class
+new file mode 100644
+index 0000000..8966702
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$Companion.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$startAdvertising$1.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$startAdvertising$1.class
+new file mode 100644
+index 0000000..b04027a
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$startAdvertising$1.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$startAdvertising$bluetoothGattServer$1.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$startAdvertising$bluetoothGattServer$1.class
+new file mode 100644
+index 0000000..0916c51
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule$startAdvertising$bluetoothGattServer$1.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.class
+new file mode 100644
+index 0000000..788252c
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralPackage.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralPackage.class
+new file mode 100644
+index 0000000..8f44d5d
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralPackage.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Utils$Companion.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Utils$Companion.class
+new file mode 100644
+index 0000000..d496a5b
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Utils$Companion.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Utils.class b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Utils.class
+new file mode 100644
+index 0000000..8a47ff3
+Binary files /dev/null and b/node_modules/react-native-multi-ble-peripheral/android/build/tmp/kotlin-classes/debug/com/fugood/reactnativemultibleperipheral/Utils.class differ
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt b/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt
+index d3d31af..03eb665 100644
+--- a/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt
++++ b/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt
+@@ -445,13 +445,21 @@ class ReactNativeMultiBlePeripheralModule(reactContext: ReactApplicationContext)
+       )
+     }
+     if (advServices != null) {
+-      for (service in advServices.getEntryIterator()) {
+-        val uuid = UUID.fromString(service.key)
+-        if (service.value is String) {
+-          val data = Base64.decode(service.value as String, Base64.DEFAULT)
+-          advertiseDataBuilder.addServiceData(ParcelUuid(uuid), data)
++      // React Native ReadableMap does not support entrySet or getEntryIterator, so use keySetIterator for compatibility
++      val keyIter = advServices.keySetIterator()
++      while (keyIter.hasNextKey()) {
++        val key = keyIter.nextKey()
++        try {
++          val maybeValue = advServices.getString(key)
++          val uuid = UUID.fromString(key)
++          if (maybeValue != null) {
++            val data = Base64.decode(maybeValue, Base64.DEFAULT)
++            advertiseDataBuilder.addServiceData(ParcelUuid(uuid), data)
++          }
++          advertiseDataBuilder.addServiceUuid(ParcelUuid(uuid))
++        } catch (e: Exception) {
++          Log.w(NAME, "Invalid advertise service entry: $key - ${e.message}")
+         }
+-        advertiseDataBuilder.addServiceUuid(ParcelUuid(uuid))
+       }
+     }
+ 

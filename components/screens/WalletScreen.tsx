@@ -110,11 +110,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
           const success = await initializeWallet(pubKey);
           if (!success) {
             // Wallet initialization failed - silently log and close wallet if still mounted
-            console.error('Wallet initialization failed - keys may be corrupted');
             if (mounted) onClose();
           }
         } catch (err) {
-          console.error('Failed to initialize wallet:', err);
           if (mounted) onClose();
         }
       }
