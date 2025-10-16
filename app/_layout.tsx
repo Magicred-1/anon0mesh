@@ -1,14 +1,14 @@
 // Import polyfills first, before anything else
-import '../src/polyfills';
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
+import { Lexend_400Regular, Lexend_500Medium, Lexend_600SemiBold, Lexend_700Bold, useFonts } from '@expo-google-fonts/lexend';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect, useState } from 'react';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { ChannelProvider } from '../src/contexts/ChannelContext';
-import { useFonts, Lexend_400Regular, Lexend_500Medium, Lexend_600SemiBold, Lexend_700Bold } from '@expo-google-fonts/lexend';
-import * as SplashScreen from 'expo-splash-screen';
-import { BLEPermissionManager } from '../src/utils/BLEPermissionManager';
 import BLEPermissionAlert from '../components/ui/BLEPermissionAlert';
+import { ChannelProvider } from '../src/contexts/ChannelContext';
+import '../src/polyfills';
+import { BLEPermissionManager } from '../src/utils/BLEPermissionManager';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -19,7 +19,7 @@ export default function RootLayout() {
     Lexend_500Medium,
     Lexend_600SemiBold,
     Lexend_700Bold,
-    'Primal': require('../components/fonts/Primal/Primal.otf'),
+    'Primal': require('../components/fonts/Primal/Primal.ttf'),
   });
 
   const [showPermissionAlert, setShowPermissionAlert] = useState(false);

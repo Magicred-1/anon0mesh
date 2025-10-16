@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking, Platform } from 'react-native';
+import { Linking, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 interface BLEPermissionAlertProps {
   onDismiss?: () => void;
@@ -15,82 +15,141 @@ const BLEPermissionAlert: React.FC<BLEPermissionAlertProps> = ({ onDismiss }) =>
   return (
     <View style={{
       position: 'absolute',
-      top: 60,
-      left: 20,
-      right: 20,
-      backgroundColor: '#FF4444',
-      borderRadius: 12,
-      padding: 16,
+      top: 50,
+      left: 16,
+      right: 16,
+      backgroundColor: '#1A1A2E',
+      borderRadius: 16,
+      overflow: 'hidden',
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 8,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+      elevation: 10,
       zIndex: 1000,
+      borderLeftWidth: 4,
+      borderLeftColor: '#FF6B6B',
     }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', flex: 1 }}>
-          ⚠️ Bluetooth Permissions Required
-        </Text>
+      {/* Header */}
+      <View style={{
+        backgroundColor: 'linear-gradient(135deg, #FF6B6B 0%, #FF8787 100%)',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <Text style={{ fontSize: 20, marginRight: 10 }}>🔐</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700' }}>
+            Bluetooth Permissions
+          </Text>
+        </View>
         {onDismiss && (
-          <TouchableOpacity onPress={onDismiss}>
-            <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: 'bold' }}>×</Text>
+          <TouchableOpacity onPress={onDismiss} style={{ padding: 4 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: '300', marginTop: -2 }}>×</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <Text style={{ color: '#FFFFFF', fontSize: 13, marginBottom: 12, lineHeight: 18 }}>
-        BLE mesh networking requires specific permissions. Please grant them manually:
-      </Text>
+      <ScrollView style={{ maxHeight: 400 }} scrollEnabled={false}>
+        {/* Main Content */}
+        <View style={{ padding: 16 }}>
+          <Text style={{ color: '#E0E0E0', fontSize: 13, marginBottom: 16, lineHeight: 20, fontWeight: '500' }}>
+            This app needs location and Bluetooth permissions to discover and connect to BLE mesh devices.
+          </Text>
 
-      <View style={{ backgroundColor: '#00000030', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-        <Text style={{ color: '#FFFFFF', fontSize: 12, marginBottom: 6, fontWeight: '600' }}>
-          Required Steps:
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16, marginBottom: 4 }}>
-          1. Tap &quot;Open Settings&quot; below
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16, marginBottom: 4 }}>
-          2. Go to Permissions
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16, marginBottom: 4 }}>
-          3. Enable these permissions:
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16, marginLeft: 12, marginBottom: 2 }}>
-          ✅ Location → &quot;Allow all the time&quot;
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16, marginLeft: 12, marginBottom: 2 }}>
-          ✅ Nearby devices (Bluetooth)
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16, marginLeft: 12, marginBottom: 4 }}>
-          ✅ Camera (for QR codes)
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16, marginBottom: 4 }}>
-          4. Enable Location in phone settings
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 11, lineHeight: 16 }}>
-          5. Close and restart the app
-        </Text>
-      </View>
+          {/* Steps Container */}
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ color: '#FF8787', fontSize: 12, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Required Permissions
+            </Text>
 
-      <TouchableOpacity
-        onPress={openAppSettings}
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: 8,
-          paddingVertical: 12,
-          paddingHorizontal: 20,
-          alignItems: 'center',
-        }}
-      >
-        <Text style={{ color: '#FF4444', fontSize: 14, fontWeight: '700' }}>
-          Open Settings
-        </Text>
-      </TouchableOpacity>
+            {[
+              { icon: '📍', title: 'Location', desc: 'Set to "Allow all the time"' },
+              { icon: '📡', title: 'Nearby Devices', desc: 'Bluetooth scanning' },
+              { icon: '📷', title: 'Camera', desc: 'For QR code scanning' },
+            ].map((item, index) => (
+              <View key={index} style={{
+                flexDirection: 'row',
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                backgroundColor: '#252538',
+                marginBottom: 8,
+                borderRadius: 10,
+                borderLeftWidth: 3,
+                borderLeftColor: '#FF8787',
+                alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 18, marginRight: 12, width: 28 }}>{item.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>
+                    {item.title}
+                  </Text>
+                  <Text style={{ color: '#A0A0A0', fontSize: 11, marginTop: 2 }}>
+                    {item.desc}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
 
-      <Text style={{ color: '#FFFFFFCC', fontSize: 10, marginTop: 8, textAlign: 'center', fontStyle: 'italic' }}>
-        Android requires location for BLE scanning (you&apos;re not tracked)
-      </Text>
+          {/* Quick Steps */}
+          <View style={{
+            backgroundColor: '#252538',
+            borderRadius: 10,
+            padding: 12,
+            marginBottom: 16,
+            borderTopWidth: 1,
+            borderTopColor: '#3A3A52',
+          }}>
+            <Text style={{ color: '#FF8787', fontSize: 11, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Quick Setup
+            </Text>
+            {[
+              'Tap "Open Settings" below',
+              'Grant all requested permissions',
+              'Enable Location in system settings',
+              'Restart the app',
+            ].map((step, index) => (
+              <View key={index} style={{ flexDirection: 'row', marginBottom: index < 3 ? 6 : 0, alignItems: 'flex-start' }}>
+                <Text style={{ color: '#FF8787', fontSize: 12, fontWeight: '700', marginRight: 8, width: 20 }}>
+                  {index + 1}.
+                </Text>
+                <Text style={{ color: '#D0D0D0', fontSize: 12, flex: 1, lineHeight: 16 }}>
+                  {step}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Button */}
+          <TouchableOpacity
+            onPress={openAppSettings}
+            style={{
+              backgroundColor: '#FF6B6B',
+              borderRadius: 10,
+              paddingVertical: 14,
+              alignItems: 'center',
+              marginBottom: 10,
+              shadowColor: '#FF6B6B',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 5,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>
+              Open Settings
+            </Text>
+          </TouchableOpacity>
+
+          {/* Footer Note */}
+          <Text style={{ color: '#707080', fontSize: 10, textAlign: 'center', lineHeight: 14, fontStyle: 'italic' }}>
+            🔒 Your location is only used for Bluetooth discovery and is never tracked or stored.
+          </Text>
+        </View>
+      </ScrollView>
     </View>
   );
 };

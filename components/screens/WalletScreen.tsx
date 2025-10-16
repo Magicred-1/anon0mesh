@@ -252,20 +252,8 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   // Handle sending transaction
   const handleSendTransaction = async () => {
     if (!isConnected) {
-      // No internet - offer Bluetooth relay
-      Alert.alert(
-        '🌐 No Internet Connection',
-        'You can either:\n\n' +
-        '1. Wait until you have internet to send\n' +
-        '2. Use Bluetooth Mesh Relay to send through nearby peers',
-        [
-          { text: 'Wait', style: 'cancel' },
-          {
-            text: 'Use Mesh Relay',
-            onPress: () => handleSendViaBluetoothMesh(),
-          },
-        ]
-      );
+      // No internet - automatically switch to Bluetooth mesh relay
+      await handleSendViaBluetoothMesh();
       return;
     }
 
@@ -445,7 +433,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               width: 32,
               height: 32,
               borderRadius: 16,
-              backgroundColor: '#B10FF280',
+              backgroundColor: '#26C6DA',
               justifyContent: 'center',
               alignItems: 'center',
             }}
@@ -472,11 +460,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               justifyContent: 'center',
               paddingVertical: 12,
               paddingHorizontal: 16,
-              backgroundColor: selectedTab === 'receive' ? '#B10FF280' : 'transparent',
+              backgroundColor: selectedTab === 'receive' ? '#26C6DA' : 'transparent',
               borderRadius: 8,
               marginRight: 8,
               borderWidth: 1,
-              borderColor: selectedTab === 'receive' ? '#B10FF280' : '#B10FF240',
+              borderColor: selectedTab === 'receive' ? '#26C6DA' : '#26C6DA40',
             }}
           >
             <View style={{ marginRight: 8 }}>
@@ -487,7 +475,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: selectedTab === 'receive' ? '600' : '400',
-                fontFamily: 'Lexend_400Regular',
+                fontFamily: 'monospace',
               }}
             >
               Receive
@@ -503,11 +491,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               justifyContent: 'center',
               paddingVertical: 12,
               paddingHorizontal: 16,
-              backgroundColor: selectedTab === 'send' ? '#B10FF280' : 'transparent',
+              backgroundColor: selectedTab === 'send' ? '#26C6DA' : 'transparent',
               borderRadius: 8,
               marginLeft: 8,
               borderWidth: 1,
-              borderColor: selectedTab === 'send' ? '#B10FF280' : '#B10FF240',
+              borderColor: selectedTab === 'send' ? '#26C6DA' : '#B10FF240',
             }}
           >
             <View style={{ marginRight: 8 }}>
@@ -518,7 +506,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: selectedTab === 'send' ? '600' : '400',
-                fontFamily: 'Lexend_400Regular',
+                fontFamily: 'monospace',
               }}
             >
               Send
@@ -557,7 +545,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: '#B10FF240',
+                  backgroundColor: '#333',
                   paddingHorizontal: 16,
                   paddingVertical: 12,
                   borderRadius: 8,
@@ -586,7 +574,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 <TouchableOpacity
                   onPress={copyAddress}
                   style={{
-                    backgroundColor: '#B10FF280',
+                    backgroundColor: '#26C6DA',
                     paddingHorizontal: 32,
                     paddingVertical: 16,
                     borderRadius: 12,
@@ -670,18 +658,18 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     <TouchableOpacity
                       onPress={setMaxAmount}
                       style={{
-                        backgroundColor: '#B10FF240',
+                        backgroundColor: '#26C6DA40',
                         paddingHorizontal: 12,
                         paddingVertical: 6,
                         borderRadius: 6,
                         marginLeft: 12,
                         borderWidth: 1,
-                        borderColor: '#B10FF2',
+                        borderColor: '#26C6DA',
                       }}
                     >
                       <Text
                         style={{
-                          color: '#B10FF2',
+                          color: '#FFFFFF',
                           fontSize: 14,
                           fontWeight: '700',
                           fontFamily: 'Lexend_400Regular',
@@ -779,7 +767,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                             alignItems: 'center',
                             paddingHorizontal: 16,
                             paddingVertical: 12,
-                            backgroundColor: selectedCurrency === 'USDC' ? '#B10FF240' : 'transparent',
+                            backgroundColor: selectedCurrency === 'USDC' ? '#333' : 'transparent',
                           }}
                         >
                           <USDCLogo size={20} />
@@ -875,7 +863,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                   onPress={handleSendTransaction}
                   disabled={isSending || !isConnected || selectedCurrency === 'USDC'}
                   style={{
-                    backgroundColor: isSending || !isConnected || selectedCurrency === 'USDC' ? '#666666' : '#B10FF280',
+                    backgroundColor: isSending || !isConnected || selectedCurrency === 'USDC' ? '#666666' : '#26C6DA',
                     paddingHorizontal: 32,
                     paddingVertical: 16,
                     borderRadius: 12,
@@ -986,63 +974,73 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
         >
           <View
             style={{
-              backgroundColor: '#1a1a1a',
-              borderRadius: 20,
-              padding: 24,
+              backgroundColor: '#181c1f',
+              borderRadius: 24,
+              padding: 28,
               width: '100%',
               maxWidth: 400,
               borderWidth: 2,
-              borderColor: '#10B981',
+              borderColor: '#26C6DA',
+              shadowColor: '#26C6DA',
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              elevation: 8,
             }}
           >
-            {/* Success Icon */}
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+            {/* Success Icon and Title */}
+            <View style={{ alignItems: 'center', marginBottom: 18 }}>
               <View
                 style={{
                   width: 80,
                   height: 80,
                   borderRadius: 40,
-                  backgroundColor: '#10B98120',
+                  backgroundColor: '#26C6DA22',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  marginBottom: 16,
+                  marginBottom: 12,
+                  borderWidth: 2,
+                  borderColor: '#26C6DA',
                 }}
               >
-                <Text style={{ fontSize: 48 }}>✅</Text>
+                <Text style={{ fontSize: 44, color: '#26C6DA' }}>✔️</Text>
               </View>
               <Text
                 style={{
-                  color: '#FFFFFF',
-                  fontSize: 24,
+                  color: '#fff',
+                  fontSize: 22,
                   fontWeight: '700',
                   fontFamily: 'Lexend_400Regular',
-                  marginBottom: 8,
+                  marginBottom: 2,
+                  letterSpacing: 1.1,
+                  textTransform: 'uppercase',
                 }}
               >
-                Transaction Sent!
+                Transaction Sent
               </Text>
               <Text
                 style={{
-                  color: '#10B981',
+                  color: '#b0b0b0',
                   fontSize: 14,
                   fontFamily: 'Lexend_400Regular',
                   textAlign: 'center',
+                  marginBottom: 8,
                 }}
               >
-                Your transaction has been submitted to the Solana network
+                Your transaction is on its way to the Solana network.
               </Text>
               <Text
                 style={{
-                  color: '#B10FF2',
+                  color: '#26C6DA',
                   fontSize: 13,
                   fontWeight: '600',
                   fontFamily: 'Lexend_400Regular',
                   textAlign: 'center',
-                  marginTop: 12,
+                  marginTop: 10,
                   paddingHorizontal: 16,
                   paddingVertical: 8,
-                  backgroundColor: '#B10FF220',
+                  backgroundColor: '#26C6DA22',
                   borderRadius: 8,
+                  letterSpacing: 0.5,
                 }}
               >
                 🎉 Unlimited messaging unlocked for today!
@@ -1053,39 +1051,44 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
             {lastTransactionDetails && (
               <View
                 style={{
-                  backgroundColor: '#252525',
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 20,
+                  backgroundColor: '#23272a',
+                  borderRadius: 14,
+                  padding: 18,
+                  marginBottom: 22,
+                  borderWidth: 1,
+                  borderColor: '#222',
                 }}
               >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <Text style={{ color: '#888888', fontSize: 14, fontFamily: 'Lexend_400Regular' }}>
+                <Text style={{ color: '#26C6DA', fontSize: 13, fontFamily: 'Lexend_400Regular', marginBottom: 10, letterSpacing: 1, textTransform: 'uppercase' }}>
+                  Transaction Details
+                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <Text style={{ color: '#b0b0b0', fontSize: 14, fontFamily: 'Lexend_400Regular' }}>
                     Amount
                   </Text>
-                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600', fontFamily: 'Lexend_400Regular' }}>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600', fontFamily: 'Lexend_400Regular' }}>
                     {lastTransactionDetails.amount} {lastTransactionDetails.currency}
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <Text style={{ color: '#888888', fontSize: 14, fontFamily: 'Lexend_400Regular' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <Text style={{ color: '#b0b0b0', fontSize: 14, fontFamily: 'Lexend_400Regular' }}>
                     To
                   </Text>
                   <Text
-                    style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Lexend_400Regular', maxWidth: 200 }}
+                    style={{ color: '#fff', fontSize: 12, fontFamily: 'Lexend_400Regular', maxWidth: 200 }}
                     numberOfLines={1}
                     ellipsizeMode="middle"
                   >
                     {lastTransactionDetails.recipient}
                   </Text>
                 </View>
-                <View style={{ height: 1, backgroundColor: '#333333', marginVertical: 8 }} />
+                <View style={{ height: 1, backgroundColor: '#333', marginVertical: 8 }} />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ color: '#888888', fontSize: 14, fontFamily: 'Lexend_400Regular' }}>
+                  <Text style={{ color: '#b0b0b0', fontSize: 14, fontFamily: 'Lexend_400Regular' }}>
                     Signature
                   </Text>
                   <Text
-                    style={{ color: '#B10FF2', fontSize: 12, fontFamily: 'Lexend_400Regular', maxWidth: 200 }}
+                    style={{ color: '#26C6DA', fontSize: 12, fontFamily: 'Lexend_400Regular', maxWidth: 200 }}
                     numberOfLines={1}
                     ellipsizeMode="middle"
                   >
@@ -1101,7 +1104,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               <TouchableOpacity
                 onPress={handleViewReceipt}
                 style={{
-                  backgroundColor: '#B10FF280',
+                  backgroundColor: '#26C6DA',
                   paddingVertical: 14,
                   paddingHorizontal: 20,
                   borderRadius: 12,

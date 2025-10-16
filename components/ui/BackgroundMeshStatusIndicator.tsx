@@ -70,28 +70,6 @@ const BackgroundMeshStatusIndicator: React.FC<BackgroundMeshStatusProps> = ({
         // }
     };
 
-    // Local mapping for background fetch status codes. The BackgroundMeshManager
-    // returns numeric codes; treat 1=Available, 2=Denied, 3=Restricted for UI.
-    enum BGStatus {
-        Unknown = 0,
-        Available = 1,
-        Denied = 2,
-        Restricted = 3,
-    }
-
-    const getBackgroundFetchStatusText = (bgStatus: any): string => {
-        switch (bgStatus) {
-            case BGStatus.Available:
-                return '✔️';
-            case BGStatus.Denied:
-                return '❌';
-            case BGStatus.Restricted:
-                return '⚠️';
-            default:
-                return 'Unknown';
-        }
-    };
-
     const statusColor = getStatusColor(status);
     const statusText = getStatusText(status);
 

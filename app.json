@@ -61,7 +61,8 @@
             "node_modules/@expo-google-fonts/lexend/400Regular/Lexend_400Regular.ttf",
             "node_modules/@expo-google-fonts/lexend/500Medium/Lexend_500Medium.ttf",
             "node_modules/@expo-google-fonts/lexend/600SemiBold/Lexend_600SemiBold.ttf",
-            "node_modules/@expo-google-fonts/lexend/700Bold/Lexend_700Bold.ttf"
+            "node_modules/@expo-google-fonts/lexend/700Bold/Lexend_700Bold.ttf",
+            "components/fonts/Primal/Primal.otf"
           ]
         }
       ],

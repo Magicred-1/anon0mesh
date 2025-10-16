@@ -111,7 +111,7 @@ export default function PrivateSidebar({
                         backgroundColor: '#121212',
                         transform: [{ translateX: slideAnim }],
                         borderLeftWidth: 2,
-                        borderLeftColor: '#A855F7',
+                        borderLeftColor: '#26C6DA',
                         shadowColor: '#000',
                         shadowOffset: { width: -3, height: 0 },
                         shadowOpacity: 0.4,
@@ -120,10 +120,10 @@ export default function PrivateSidebar({
                 >
                     {/* Header */}
                     <View style={{ paddingTop: 60, paddingHorizontal: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
-                        <Text style={{ color: '#A855F7', fontSize: 26, fontWeight: '700', fontFamily: 'Courier', marginBottom: 4 }}>
+                        <Text style={{ color: '#26C6DA', fontSize: 26, fontWeight: '700', fontFamily: 'monospace', marginBottom: 4 }}>
                             Mesh Network
                         </Text>
-                        <Text style={{ color: '#aaa', fontSize: 13, fontFamily: 'Courier' }}>
+                        <Text style={{ color: '#aaa', fontSize: 13, fontFamily: 'monospace' }}>
                             {channels.length} channels • {displayPeers.length} peers online
                         </Text>
                     </View>
@@ -138,13 +138,13 @@ export default function PrivateSidebar({
                                     flex: 1,
                                     paddingVertical: 10,
                                     borderRadius: 12,
-                                    backgroundColor: activeTab === tab ? '#A855F7' : 'transparent',
+                                    backgroundColor: activeTab === tab ? '#26C6DA' : 'transparent',
                                 }}
                             >
                                 <Text
                                     style={{
                                         color: activeTab === tab ? '#fff' : '#888',
-                                        fontFamily: 'Courier',
+                                        fontFamily: 'monospace',
                                         fontSize: 14,
                                         fontWeight: '600',
                                         textAlign: 'center',
@@ -162,7 +162,7 @@ export default function PrivateSidebar({
                             channels.length === 0 ? (
                                 <View style={{ alignItems: 'center', paddingVertical: 60 }}>
                                     <Text style={{ fontSize: 48, marginBottom: 12 }}>💬</Text>
-                                    <Text style={{ color: '#666', fontFamily: 'Courier', fontSize: 14, textAlign: 'center' }}>
+                                    <Text style={{ color: '#666', fontFamily: 'monospace', fontSize: 14, textAlign: 'center' }}>
                                         No channels available
                                     </Text>
                                 </View>
@@ -191,7 +191,7 @@ export default function PrivateSidebar({
                                                 width: 44,
                                                 height: 44,
                                                 borderRadius: 22,
-                                                backgroundColor: '#A855F7',
+                                                backgroundColor: '#26C6DA',
                                                 justifyContent: 'center',
                                                 alignItems: 'center',
                                                 marginRight: 12,
@@ -200,11 +200,11 @@ export default function PrivateSidebar({
                                             <Text style={{ fontSize: 20 }}>{channel.icon || '💬'}</Text>
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ color: '#C084FC', fontFamily: 'Courier', fontSize: 15, fontWeight: '600' }}>
+                                            <Text style={{ color: '#26C6DA', fontFamily: 'Lexend_400Regular', fontSize: 15, fontWeight: '600' }}>
                                                 #{channel.name}
                                             </Text>
                                             {channel.description && (
-                                                <Text style={{ color: '#888', fontSize: 11 }}>{channel.description}</Text>
+                                                <Text style={{ color: '#b0b0b0', fontSize: 11, fontFamily: 'monospace' }}>{channel.description}</Text>
                                             )}
                                         </View>
                                         {currentChannel?.id === channel.id && (
@@ -216,7 +216,7 @@ export default function PrivateSidebar({
                         ) : displayPeers.length === 0 ? (
                             <View style={{ alignItems: 'center', paddingVertical: 60 }}>
                                 <Text style={{ fontSize: 48, marginBottom: 12 }}>👥</Text>
-                                <Text style={{ color: '#666', fontFamily: 'Courier', fontSize: 14, textAlign: 'center' }}>
+                                <Text style={{ color: '#666', fontFamily: 'monospace', fontSize: 14, textAlign: 'center' }}>
                                     No peers online yet
                                 </Text>
                             </View>
@@ -239,7 +239,7 @@ export default function PrivateSidebar({
                                             alignItems: 'center',
                                         }}
                                     >
-                                        <Text style={{ color: '#fff', fontFamily: 'Courier', fontWeight: '700' }}>
+                                        <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700' }}>
                                             ← Return to general chat
                                         </Text>
                                     </TouchableOpacity>
@@ -265,7 +265,7 @@ export default function PrivateSidebar({
                                             width: 44,
                                             height: 44,
                                             borderRadius: 22,
-                                            backgroundColor: '#A855F7',
+                                            backgroundColor: '#26C6DA',
                                             justifyContent: 'center',
                                             alignItems: 'center',
                                             marginRight: 12,
@@ -274,14 +274,14 @@ export default function PrivateSidebar({
                                         <Text style={{ fontSize: 20 }}>{peer.emoji}</Text>
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={{ color: '#C084FC', fontFamily: 'Courier', fontSize: 15, fontWeight: '600' }}>
+                                        <Text style={{ color: '#26C6DA', fontFamily: 'Lexend_400Regular', fontSize: 15, fontWeight: '600' }}>
                                             {peer.name.length > 20
                                                 ? `${peer.name.slice(0, 8)}...${peer.name.slice(-8)}`
                                                 : peer.name}
                                         </Text>
                                         <Text style={{ color: '#10B981', fontSize: 11 }}>Online</Text>
                                     </View>
-                                    <Text style={{ color: '#A855F7', fontSize: 20 }}>→</Text>
+                                    <Text style={{ color: '#26C6DA', fontSize: 20 }}>→</Text>
                                 </TouchableOpacity>
                             ))}
                         </>
@@ -293,7 +293,7 @@ export default function PrivateSidebar({
                         <TouchableOpacity
                             onPress={onClose}
                             style={{
-                                backgroundColor: '#A855F7',
+                                backgroundColor: '#26C6DA',
                                 paddingVertical: 14,
                                 borderRadius: 14,
                                 alignItems: 'center',
@@ -303,7 +303,7 @@ export default function PrivateSidebar({
                                 style={{
                                     color: '#fff',
                                     fontWeight: '700',
-                                    fontFamily: 'Courier',
+                                    fontFamily: 'monospace',
                                     fontSize: 16,
                                 }}
                             >

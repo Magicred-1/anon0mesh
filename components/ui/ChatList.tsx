@@ -1,3 +1,4 @@
+import { Channel } from '@/src/types/channels';
 import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, View } from 'react-native';
 import Header from './Header';
@@ -5,7 +6,6 @@ import MessageInput from './MessageInput';
 import MessageList, { Message } from './MessageList';
 import NicknameInput from './NicknameInput';
 import PrivateSidebar from './PrivateSidebar';
-import { Channel } from '@/src/types/channels';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -62,7 +62,7 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
             left:slideAnim, width:SCREEN_WIDTH * 0.6,
             backgroundColor:'#0A0A0A', zIndex:10,
             borderRightWidth: 2,
-            borderColor: '#A855F7',
+            borderColor: '#26C6DA',
             shadowOffset: { width: 2, height: 0 },
             shadowOpacity: 0.8,
             shadowRadius: 8,

@@ -1,13 +1,10 @@
 // Bluetooth/permission check utility
-import { PermissionsAndroid, Platform } from 'react-native';
+import { AppState, AppStateStatus, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { BleManager } from 'react-native-ble-plx';
 // src/networking/MeshNetworkingManager.ts
 import { Connection } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-// ...existing code...
 import { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus, NativeModules } from 'react-native';
-// ...existing code...
 import {
   addPacketToBackgroundQueue,
   getBackgroundMeshStatus,

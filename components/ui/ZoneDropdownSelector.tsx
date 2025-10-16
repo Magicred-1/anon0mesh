@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
   Modal,
   ScrollView,
   StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Channel } from '../../src/types/channels';
 
@@ -288,14 +288,14 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    shadowColor: '#B10FF2',
+    shadowColor: '#26C6DA',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
     elevation: 3,
   },
   closeButton: {
-    backgroundColor: '#B10FF280',
+  backgroundColor: '#26C6DA',
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',

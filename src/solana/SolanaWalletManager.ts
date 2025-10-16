@@ -1,20 +1,20 @@
-import { Buffer } from 'buffer';
 import {
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    Token,
+    TOKEN_PROGRAM_ID
+} from '@solana/spl-token';
+import {
+    ComputeBudgetProgram,
     Connection,
     Keypair,
-    PublicKey,
-    Transaction,
-    SystemProgram,
     LAMPORTS_PER_SOL,
+    PublicKey,
     sendAndConfirmTransaction,
+    SystemProgram,
+    Transaction,
     TransactionInstruction,
-    ComputeBudgetProgram,
 } from '@solana/web3.js';
-import { 
-    Token, 
-    ASSOCIATED_TOKEN_PROGRAM_ID, 
-    TOKEN_PROGRAM_ID 
-} from '@solana/spl-token';
+import { Buffer } from 'buffer';
 import * as SecureStore from 'expo-secure-store';
 import { SolanaTransactionManager } from './SolanaTransactionManager';
 import { getUSDCMint, usdcBaseToUsdc } from './constants';

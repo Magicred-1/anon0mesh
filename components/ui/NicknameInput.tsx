@@ -38,7 +38,7 @@ export default function NicknameInput({ onSave }: Props) {
             padding: 8,
             backgroundColor: '#0A0A0A',
             borderBottomWidth: 1,
-            borderColor: '#A855F7',
+            borderColor: '#26C6DA',
             borderRadius: 12,
             margin: 8,
             overflow: 'hidden',
@@ -50,13 +50,13 @@ export default function NicknameInput({ onSave }: Props) {
                 style={{
                 flex: 1,
                 borderWidth: 1,
-                borderColor: '#A855F7',
+                borderColor: '#26C6DA',
                 borderRadius: 12,
                 paddingHorizontal: 12,
                 paddingVertical: 6,
                 marginRight: 8,
-                color: '#C084FC',
-                fontFamily: 'Lexend_400Regular',
+                color: '#b0b0b0',
+                fontFamily: 'monospace',
                 backgroundColor: '#000000',
                 }}
                 placeholder="Set or change nickname"
@@ -67,7 +67,7 @@ export default function NicknameInput({ onSave }: Props) {
             <TouchableOpacity
                 onPress={save}
                 style={{
-                backgroundColor: '#A855F7',
+                backgroundColor: '#26C6DA',
                 paddingHorizontal: 16,
                 paddingVertical: 6,
                 borderRadius: 12,
@@ -97,7 +97,7 @@ export default function NicknameInput({ onSave }: Props) {
             >
             <Text
                 style={{
-                color: '#A855F7',
+                color: '#26C6DA',
                 fontFamily: 'Lexend_400Regular',
                 fontWeight: 'regular',
                 }}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { Text, View } from 'react-native';
 
 interface BLEStatusIndicatorProps {
   isConnected: boolean;
@@ -63,7 +63,7 @@ const BLEStatusIndicator: React.FC<BLEStatusIndicatorProps> = ({
         style={{
           color: '#FFFFFF',
           fontSize: 12,
-          fontFamily: 'Lexend_400Regular',
+          fontFamily: 'monospace',
           flex: 1,
         }}
       >

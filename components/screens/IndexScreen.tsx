@@ -74,7 +74,6 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
                         <Text style={styles.buttonText}>
                             {isReturningUser ? 'CONTINUE' : 'ENTER THE MESH'}
                         </Text>
-                        <Text style={styles.buttonArrow}>→</Text>
                     </View>
                     <View style={styles.buttonGlow} />
                 </TouchableOpacity>
@@ -124,7 +123,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 6,
         letterSpacing: 2,
-        textShadowColor: '#B10FF280',
+    textShadowColor: '#26C6DA',
         textShadowOffset: { width: 0, height: 0 },
         textShadowRadius: 20,
         fontFamily: 'Primal',
@@ -170,12 +169,12 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#B10FF220',
+        backgroundColor: '#45cbdd3f',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 8,
         borderWidth: 2,
-        borderColor: '#B10FF240',
+        borderColor: '#0e7280ff',
     },
     featureIcon: {
         fontSize: 22,
@@ -187,7 +186,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 4,
         letterSpacing: -0.2,
-        fontFamily: 'Lexend_400Regular',
+        fontFamily: 'monospace',
     },
     featureDescription: {
         color: '#999999',
@@ -209,11 +208,11 @@ const styles = StyleSheet.create({
     },
     button: {
         position: 'relative',
-        backgroundColor: '#B10FF2',
+        backgroundColor: '#26C6DA',
         paddingHorizontal: 40,
         paddingVertical: 14,
         borderRadius: 14,
-        shadowColor: '#B10FF2',
+        shadowColor: '#26C6DA',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.6,
         shadowRadius: 12,
@@ -221,7 +220,7 @@ const styles = StyleSheet.create({
         marginBottom: '4%',
         overflow: 'visible',
         borderWidth: 2,
-        borderColor: '#C84FFE',
+        borderColor: '#26C6DA',
     },
     buttonContent: {
         flexDirection: 'row',
@@ -237,13 +236,7 @@ const styles = StyleSheet.create({
         textShadowColor: '#00000040',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 2,
-        fontFamily: 'Lexend_400Regular',
-    },
-    buttonArrow: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '700',
-        fontFamily: 'Lexend_400Regular',
+        fontFamily: 'monospace',
     },
     buttonGlow: {
         position: 'absolute',

@@ -1,5 +1,6 @@
+import { useFonts } from 'expo-font';
 import React, { useEffect, useRef, useState } from 'react';
-import { Platform, Text, TextStyle } from 'react-native';
+import { Text, TextStyle } from 'react-native';
 
 interface CipherTextProps {
     text: string;
@@ -17,60 +18,78 @@ export const CipherText: React.FC<CipherTextProps> = ({
     delay = 0 
 }) => {
     const [displayText, setDisplayText] = useState(text);
-    const hasAnimated = useRef(false);
+    const [fontsLoaded] = useFonts({
+        Primal: require('../fonts/Primal/Primal.ttf'), // Adjust path to your font file
+    });
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (!fontsLoaded) return;
+
+        // Clear any existing timers
+        if (timerRef.current) clearTimeout(timerRef.current);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+
+        const startAnimation = () => {
+            const frameTime = 50;
+            const totalFrames = Math.ceil(duration / frameTime);
+            let currentFrame = 0;
+
+            intervalRef.current = setInterval(() => {
+                // Calculate progress (0 to 1)
+                const progress = currentFrame / totalFrames;
+                
+                const displayChars = text.split('').map((char, index) => {
+                    // Space characters never change
+                    if (char === ' ') return ' ';
+                    
+                    // Reveal characters progressively based on their position
+                    const charProgress = Math.max(0, progress - (index / text.length) * 0.3);
+                    
+                    if (charProgress >= 1) {
+                        return char; // Fully revealed
+                    } else if (charProgress > 0) {
+                        return Math.random() > charProgress ? generateRandomChar() : char;
+                    } else {
+                        return generateRandomChar(); // Not yet started revealing
+                    }
+                });
+
+                setDisplayText(displayChars.join(''));
+                currentFrame++;
+
+                if (currentFrame > totalFrames) {
+                    setDisplayText(text);
+                    if (intervalRef.current) clearInterval(intervalRef.current);
+                }
+            }, frameTime);
+        };
+
+        timerRef.current = setTimeout(startAnimation, delay);
+
+        // Cleanup function
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [fontsLoaded, text, duration, delay]);
+
+    if (!fontsLoaded) {
+        return <Text style={style}>{text}</Text>;
+    }
 
     const generateRandomChar = () => {
         return CIPHER_CHARS[Math.floor(Math.random() * CIPHER_CHARS.length)];
     };
 
-    const animateText = React.useCallback(() => {
-        if (hasAnimated.current) return;
-        hasAnimated.current = true;
-
-        const iterations = Math.floor(duration / 50);
-        let currentIteration = 0;
-
-        const interval = setInterval(() => {
-            if (currentIteration < iterations) {
-                const randomText = text
-                    .split('')
-                    .map((char) => {
-                        if (char === ' ') return ' ';
-                        return Math.random() > 0.5 ? generateRandomChar() : char;
-                    })
-                    .join('');
-                setDisplayText(randomText);
-                currentIteration++;
-            } else {
-                setDisplayText(text);
-                clearInterval(interval);
-            }
-        }, 50);
-
-        return () => clearInterval(interval);
-    }, [text, duration]);
-
-    useEffect(() => {
-        const timer = setTimeout(animateText, delay);
-        return () => clearTimeout(timer);
-    }, [text, delay, animateText]);
+    const mergedStyle: TextStyle = {
+        fontFamily: 'Primal',
+        ...style,
+    };
 
     return (
-        <Text
-            // Apply a fallback font family on Android to ensure custom fonts loaded
-            // via expo-font are respected. If the caller passed a fontFamily it
-            // will be preserved.
-            style={(() => {
-                // Clone provided style into a plain object so we can safely mutate
-                const base = (Array.isArray(style) ? Object.assign({}, ...style) : { ...(style as object) }) as TextStyle | undefined;
-                if (Platform.OS === 'android') {
-                    if (!base || !base.fontFamily) {
-                        return { ...(base || {}), fontFamily: 'Primal' } as TextStyle;
-                    }
-                }
-                return base as TextStyle | undefined;
-            })()}
-        >
+        <Text style={mergedStyle}>
             {displayText}
         </Text>
     );

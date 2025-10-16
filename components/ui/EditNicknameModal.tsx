@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
-    View,
+    Alert,
+    Modal,
     Text,
     TextInput,
     TouchableOpacity,
-    Modal,
-    Alert,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -94,7 +94,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                 style={{
                     color: '#007AFF',
                     fontSize: 16,
-                    fontFamily: 'Lexend_400Regular',
+                    fontFamily: 'monospace',
                 }}
                 >
                 Cancel
