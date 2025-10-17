@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
 import { Transaction } from '@solana/web3.js';
-import { 
-  SolanaWalletManager, 
-  WalletConfig, 
-  TransactionMetadata 
+import { useCallback, useEffect, useState } from 'react';
+import {
+  SolanaWalletManager,
+  TransactionMetadata,
+  WalletConfig
 } from './SolanaWalletManager';
 
 export interface UseSolanaWalletReturn {

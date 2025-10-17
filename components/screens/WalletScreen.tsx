@@ -1,3 +1,4 @@
+import { SolanaTransactionSerializer } from '@/src/types/solana';
 import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';
 import {
@@ -64,6 +65,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
     signTransaction,
     submitTransaction,
     balance,
+    usdcBalance,
     isInitialized,
     refreshBalance,
   } = useSolanaWallet({
@@ -73,20 +75,24 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   // Get current available balance based on selected currency
   const getCurrentBalance = () => {
     if (!isInitialized) return 0;
-    // For now, only SOL balance is supported
-    // TODO: Add USDC balance support
-    return selectedCurrency === 'SOL' ? balance : 0;
-  };
+    if (selectedCurrency === 'SOL') return balance;
+    if (selectedCurrency === 'USDC') return usdcBalance;
+    return 0;
+  } 
 
   // Set amount to maximum available balance
   const setMaxAmount = () => {
     const maxBalance = getCurrentBalance();
     if (maxBalance > 0) {
-      // Leave a small amount for transaction fees (0.000005 SOL)
-      const maxWithFee = Math.max(0, maxBalance - 0.000005);
-      setSendAmount(maxWithFee.toFixed(6));
+      if (selectedCurrency === 'SOL') {
+        // Leave a small amount for transaction fees (0.000010 SOL)
+        const maxWithFee = Math.max(0, maxBalance - 0.000010);
+        setSendAmount(maxWithFee.toFixed(6));
+      } else {
+        setSendAmount(maxBalance.toFixed(2));
+      }
     }
-  };
+  } 
 
   // Check internet connectivity and initialize wallet
   useEffect(() => {
@@ -158,29 +164,25 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
             setIsSending(true);
             try {
               console.log('[WALLET] Creating transaction for mesh relay...');
-              
-              // Create and sign transaction locally
+
+              // USDC support: pass SPL token transfer metadata for USDC
               const transaction = await createTransferTransaction(
                 recipientAddress,
                 amount,
-                {
-                  memo: `anon0mesh mesh relay from ${nickname}`,
-                }
+                { memo: `anon0mesh mesh relay from ${nickname}` }
               );
 
               // Sign transaction
               const signedTx = signTransaction(transaction);
-              
+
               // Serialize transaction for mesh transmission
               const serialized = signedTx.serialize();
-              
+
               console.log('[WALLET] Transaction signed and serialized');
               console.log('[WALLET] Size:', serialized.length, 'bytes');
 
-              // Import relay types and manager
-              const { SolanaTransactionSerializer } = await import('../../src/types/solana');
-              const { Buffer } = await import('buffer');
-              
+                        { `anon0mesh mesh relay from ${nickname}` }
+
               // Create transaction payload for relay
               const txPayload = {
                 id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -190,7 +192,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 sender: nickname,
                 senderPubKey: pubKey,
                 recipientPubKey: recipientAddress,
-                amount: amount * 1e9, // Convert to lamports
+                amount: selectedCurrency === 'SOL' ? amount * 1e9 : amount * 1e6, // lamports for SOL, 6 decimals for USDC
                 currency: selectedCurrency,
                 hopCount: 0,
                 ttl: 10,
@@ -200,12 +202,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
 
               // Serialize for mesh transmission
               const meshPayload = SolanaTransactionSerializer.serialize(txPayload);
-              
+
               console.log('[WALLET] Mesh payload created:', meshPayload.length, 'bytes');
 
               // TODO: Broadcast through MeshNetworkingManager
               // For now, store transaction details and show success
-              
+
               // Unlock unlimited messaging after creating transaction
               await rateLimitManager.unlockMessaging();
 
@@ -214,9 +216,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 recipient: recipientAddress,
                 currency: selectedCurrency,
               });
-              
+
               setTransactionSignature(txPayload.id);
-              
+
               Alert.alert(
                 '✅ Transaction Queued for Relay',
                 `Your transaction has been signed and is ready to broadcast through the mesh network.\n\n` +
@@ -228,7 +230,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     text: 'OK',
                     onPress: () => {
                       // Clear form
-                      setSendAmount('0.06');
+                      setSendAmount(selectedCurrency === 'SOL' ? '0.06' : '1.00');
                       setRecipientAddress('');
                     }
                   }
@@ -294,13 +296,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
           onPress: async () => {
             setIsSending(true);
             try {
-              // Create transaction
+              // USDC support: pass currency to createTransferTransaction
               const transaction = await createTransferTransaction(
                 recipientAddress,
                 amount,
-                {
-                  memo: `anon0mesh transfer from ${nickname}`,
-                }
+                    { memo: `anon0mesh transfer from ${nickname}` }
               );
 
               // Sign transaction
@@ -324,9 +324,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               setShowSuccessModal(true);
 
               // Clear form
-              setSendAmount('0.06');
+              setSendAmount(selectedCurrency === 'SOL' ? '0.06' : '1.00');
               setRecipientAddress('');
-              
+
               // Refresh balance
               await refreshBalance();
             } catch (error) {
@@ -613,8 +613,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      justifyContent: 'center',
+                      justifyContent: 'space-between',
                       marginBottom: 10,
+                      gap: 8,
                     }}
                   >
                     <TextInput
@@ -627,7 +628,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         backgroundColor: 'transparent',
                         borderWidth: 0,
                         padding: 0,
-                        minWidth: 100,
+                        minWidth: 60,
+                        maxWidth: 110,
+                        flexShrink: 1,
                       }}
                       value={sendAmount}
                       onChangeText={setSendAmount}
@@ -642,8 +645,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         fontSize: 32,
                         fontWeight: '300',
                         fontFamily: 'Lexend_400Regular',
-                        marginLeft: 8,
-                        marginRight: 8,
+                        marginHorizontal: 8,
                       }}
                     >
                       {selectedCurrency}
@@ -653,8 +655,6 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     ) : (
                       <USDCLogo size={28} />
                     )}
-                    
-                    {/* MAX Button */}
                     <TouchableOpacity
                       onPress={setMaxAmount}
                       style={{
@@ -662,7 +662,6 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                         paddingHorizontal: 12,
                         paddingVertical: 6,
                         borderRadius: 6,
-                        marginLeft: 12,
                         borderWidth: 1,
                         borderColor: '#26C6DA',
                       }}
@@ -743,7 +742,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                           }}
                         >
                           <SolanaLogo size={20} color="#FFFFFF" />
-                          <Text
+                          {/* <Text
                             style={{
                               color: '#FFFFFF',
                               fontSize: 16,
@@ -752,7 +751,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                             }}
                           >
                             SOL
-                          </Text>
+                          </Text> */}
                         </TouchableOpacity>
                         
                         <View style={{ height: 1, backgroundColor: '#555' }} />
@@ -808,18 +807,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     ) : (
                       <USDCLogo size={16} />
                     )}
-                    {selectedCurrency === 'USDC' && (
-                      <Text
-                        style={{
-                          color: '#FFA500',
-                          fontSize: 11,
-                          fontFamily: 'Lexend_400Regular',
-                          marginLeft: 8,
-                        }}
-                      >
-                        (Coming Soon)
-                      </Text>
-                    )}
+                    {/* USDC is now supported, so no Coming Soon label */}
                   </View>
                 </View>
 
@@ -861,9 +849,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 {/* Send Transaction Button */}
                 <TouchableOpacity
                   onPress={handleSendTransaction}
-                  disabled={isSending || !isConnected || selectedCurrency === 'USDC'}
+                  disabled={isSending || !isConnected}
                   style={{
-                    backgroundColor: isSending || !isConnected || selectedCurrency === 'USDC' ? '#666666' : '#26C6DA',
+                    backgroundColor: isSending || !isConnected ? '#666666' : '#26C6DA',
                     paddingHorizontal: 32,
                     paddingVertical: 16,
                     borderRadius: 12,
@@ -897,8 +885,6 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     >
                       {!isConnected 
                         ? '🌐 No Internet - Cannot Send' 
-                        : selectedCurrency === 'USDC'
-                        ? '🚧 USDC Support Coming Soon'
                         : `Send ${sendAmount} ${selectedCurrency}`}
                     </Text>
                   )}
@@ -933,7 +919,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                       fontWeight: '600',
                     }}
                   >
-                    {isConnected ? 'Online' : 'Offline'}
+                    {isConnected
+                      ? 'Online'
+                      : 'Offline - Using Mesh Relay'}
                   </Text>
                 </View>
 

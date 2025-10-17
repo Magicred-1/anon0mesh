@@ -75,7 +75,7 @@ export const USDC_METADATA: TokenMetadata = {
   symbol: 'USDC',
   name: 'USD Coin',
   decimals: 6, // USDC uses 6 decimals
-  logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+  logoURI: '/assets/images/usdc_icon.svg',
 };
 
 export const SOL_METADATA: TokenMetadata = {
