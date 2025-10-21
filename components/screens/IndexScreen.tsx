@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 6,
         letterSpacing: 2,
-    textShadowColor: '#26C6DA',
+        textShadowColor: '#26C6DA', // updated accent color
         textShadowOffset: { width: 0, height: 0 },
         textShadowRadius: 20,
         fontFamily: 'Primal',
@@ -169,12 +169,12 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#45cbdd3f',
+        backgroundColor: '#26C6DA3f', // updated accent color
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 8,
         borderWidth: 2,
-        borderColor: '#0e7280ff',
+        borderColor: '#26C6DA', // updated accent color
     },
     featureIcon: {
         fontSize: 22,
@@ -208,11 +208,11 @@ const styles = StyleSheet.create({
     },
     button: {
         position: 'relative',
-        backgroundColor: '#26C6DA',
+        backgroundColor: '#26C6DA', // updated accent color
         paddingHorizontal: 40,
         paddingVertical: 14,
         borderRadius: 14,
-        shadowColor: '#26C6DA',
+        shadowColor: '#26C6DA', // updated accent color
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.6,
         shadowRadius: 12,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
         marginBottom: '4%',
         overflow: 'visible',
         borderWidth: 2,
-        borderColor: '#26C6DA',
+        borderColor: '#26C6DA', // updated accent color
     },
     buttonContent: {
         flexDirection: 'row',
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
         right: -4,
         bottom: -4,
         borderRadius: 16,
-        backgroundColor: '#B10FF240',
+        backgroundColor: '#26C6DA40', // updated accent color
         zIndex: -1,
         opacity: 0.5,
     },

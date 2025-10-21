@@ -7,7 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import { Alert, Platform } from 'react-native';
 // @ts-ignore
-import { transact, Web3MobileWallet } from '@solana-mobile/mobile-wallet-adapter-protocol';
+import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
 
 const isSeekerDevice = (): boolean => {
   // Defensive: Model may not exist on all platforms
@@ -19,7 +19,7 @@ export default function OnboardingPage() {
   const [tempNickname, setTempNickname] = useState<string>('');
   const router = useRouter();
 
-  async function onboard(useMWA?: boolean) {
+  async function onboard() {
     // Test crypto before proceeding
     try {
       const testArray = new Uint8Array(4);
@@ -31,9 +31,9 @@ export default function OnboardingPage() {
     }
 
     // If MWA/Seeker is requested, use transact
-    if (useMWA) {
+    if (isSeekerDevice()) {
       try {
-        await transact(async (wallet: Web3MobileWallet) => {
+        await transact(async (wallet) => {
           // Authorize wallet
           const auth = await wallet.authorize({
             identity: { name: 'anon0mesh', uri: 'https://anon0mesh.app' },
@@ -45,6 +45,7 @@ export default function OnboardingPage() {
           const pub = auth.accounts[0].address;
 
           await SecureStore.setItemAsync('pubKey', pub);
+          await SecureStore.setItemAsync('useSeeker', 'true');
           // Save nickname
           if (tempNickname.trim()) {
             await SecureStore.setItemAsync('nickname', tempNickname);
@@ -105,9 +106,6 @@ export default function OnboardingPage() {
     // 5️⃣ Navigate to landing page
     router.replace('/landing');
   }
-
-  // Only enable MWA if transact is available AND device is Seeker
-  const isMWAAvailable = typeof transact === 'function' && isSeekerDevice();
 
   return (
     <OnboardingScreen

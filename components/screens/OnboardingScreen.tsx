@@ -214,9 +214,9 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   keyBody: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#26C6DA', // accent color
     borderRadius: 8,
-    shadowColor: '#6366F1',
+    shadowColor: '#26C6DA', // accent color
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -224,11 +224,11 @@ const styles = StyleSheet.create({
   },
   keyHead: {
     position: 'absolute',
-    backgroundColor: '#6366F1',
+    backgroundColor: '#26C6DA', // accent color
     borderRadius: 50,
     borderWidth: 8,
     borderColor: '#212122',
-    shadowColor: '#6366F1',
+    shadowColor: '#26C6DA', // accent color
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   },
   keyTeeth: {
     position: 'absolute',
-    backgroundColor: '#6366F1',
+    backgroundColor: '#26C6DA', // accent color
     borderRadius: 2,
   },
   inner: {
@@ -261,9 +261,9 @@ const styles = StyleSheet.create({
   mainKeyBody: {
     width: 120,
     height: 60,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#26C6DA', // accent color
     borderRadius: 12,
-    shadowColor: '#8B5CF6',
+    shadowColor: '#26C6DA', // accent color
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
@@ -275,11 +275,11 @@ const styles = StyleSheet.create({
     left: 16,
     width: 40,
     height: 40,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#26C6DA', // accent color
     borderRadius: 20,
     borderWidth: 12,
     borderColor: '#212122',
-    shadowColor: '#8B5CF6',
+    shadowColor: '#26C6DA', // accent color
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     top: 20,
     width: 32,
     height: 8,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#26C6DA', // accent color
     borderRadius: 4,
   },
   description: {
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   button: {
-    backgroundColor: 'rgba(177, 15, 242, 0.15)',
+    backgroundColor: '#26C6DA',
     borderRadius: 3,
     paddingVertical: 6,
     paddingHorizontal: 16,
