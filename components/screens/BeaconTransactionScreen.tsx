@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ScrollView, Switch } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  BeaconCapabilities,
+  TokenType,
+  TransactionStatus,
+  TransactionStatusResponse
+} from '../../src/solana/BeaconManager';
 import { useSolanaWallet } from '../../src/solana/useSolanaWallet';
 import { useMeshNetworking } from '../networking/MeshNetworkingManager';
-import { 
-  TokenType, 
-  TransactionStatusResponse, 
-  BeaconCapabilities,
-  TransactionStatus 
-} from '../../src/solana/BeaconManager';
 
 interface BeaconTransactionScreenProps {
   pubKey: string;
@@ -188,8 +188,6 @@ const BeaconTransactionScreen: React.FC<BeaconTransactionScreenProps> = ({
   };
 
   const beaconStats = meshNetworking.getBeaconStats();
-  const knownBeacons = meshNetworking.getKnownBeacons();
-
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>anon0mesh Beacon Network</Text>
@@ -216,25 +214,6 @@ const BeaconTransactionScreen: React.FC<BeaconTransactionScreenProps> = ({
         <Text style={styles.balance}>{formatBalance(solanaWallet.balance)}</Text>
         
         <Text style={styles.label}>Network: {selectedNetwork}</Text>
-      </View>
-
-      {/* Beacon Stats */}
-      <View style={styles.metrics}>
-        <Text style={styles.label}>Beacon Network Status:</Text>
-        <Text style={styles.metricText}>Mode: {beaconStats?.isBeacon ? '🟢 Beacon' : '🔵 Client'}</Text>
-        <Text style={styles.metricText}>Pending Requests: {beaconStats?.pendingRequests || 0}</Text>
-        <Text style={styles.metricText}>Known Beacons: {beaconStats?.knownBeacons || 0}</Text>
-        
-        {knownBeacons.length > 0 && (
-          <>
-            <Text style={styles.label}>Available Beacons:</Text>
-            {knownBeacons.slice(0, 3).map((beacon, index) => (
-              <Text key={index} style={styles.beaconText}>
-                📡 {beacon.beaconId.slice(0, 8)}... ({beacon.hopCount} hops)
-              </Text>
-            ))}
-          </>
-        )}
       </View>
 
       {/* Network Selection */}

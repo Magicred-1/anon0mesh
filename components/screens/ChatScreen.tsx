@@ -177,7 +177,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
         </Animated.View>
 
         {/* Nickname input */}
-        <NicknameInput onSave={updateNickname} />
+        <NicknameInput onSave={updateNickname} pubKey={pubKey} />
 
         {/* Messages */}
         <MessageList

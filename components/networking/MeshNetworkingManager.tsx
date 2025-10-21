@@ -2,24 +2,12 @@
 import { AppState, AppStateStatus, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { BleManager } from 'react-native-ble-plx';
 // src/networking/MeshNetworkingManager.ts
+import { addPacketToBackgroundQueue, getBackgroundMeshStatus, initializeBackgroundMesh, stopBackgroundMesh } from '@/src/background/BackgroundMeshManager';
+import { GossipSyncConfig, GossipSyncManager, GossipSyncManagerDelegate } from '@/src/gossip/GossipSyncManager';
+import { Anon0MeshPacket, MessageType } from '@/src/gossip/types';
 import { Connection } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import { useEffect, useRef } from 'react';
-import {
-  addPacketToBackgroundQueue,
-  getBackgroundMeshStatus,
-  initializeBackgroundMesh,
-  stopBackgroundMesh,
-} from '../../src/background/BackgroundMeshManager';
-import {
-  GossipSyncConfig,
-  GossipSyncManager,
-  GossipSyncManagerDelegate,
-} from '../../src/gossip/GossipSyncManager';
-import {
-  Anon0MeshPacket,
-  MessageType,
-} from '../../src/gossip/types';
 import {
   BLEManager,
   createBLEManager,
@@ -477,6 +465,18 @@ export class MeshNetworkingManager implements GossipSyncManagerDelegate {
   getBackgroundMeshStatus() {
     return getBackgroundMeshStatus();
   }
+
+  updateBeaconCapabilities(updated: Partial<BeaconCapabilities>) {
+    if (this.beaconManager && typeof this.beaconManager.updateCapabilities === 'function') {
+      this.beaconManager.updateCapabilities(updated);
+    } else if (this.beaconManager) {
+      // Fallback: merge and replace
+      (this.beaconManager as any).capabilities = {
+        ...(this.beaconManager as any).capabilities,
+        ...updated,
+      };
+    }
+  }
 }
 
 // ===== React hook API =====
@@ -518,18 +518,17 @@ export const useMeshNetworking = (
   }, [pubKey, nickname]);
 
   return {
-    sendMessage: (msg: string, peer?: string) =>
-      meshRef.current?.sendMessage(msg, peer),
+    sendMessage: (msg: string, peer?: string) => meshRef.current?.sendMessage(msg, peer),
     announcePresence: () => meshRef.current?.announcePresence(),
     getBLEStats: () => meshRef.current?.getBLEStats(),
     startBLEScanning: () => meshRef.current?.startBLEScanning(),
     stopBLEScanning: () => meshRef.current?.stopBLEScanning(),
     updateNickname: (newNickname: string) => meshRef.current?.updateNickname(newNickname),
-    sendOfflineMessage: (content: string, peer?: string, ttl?: number, channelId?: string) =>
-      meshRef.current?.sendOfflineMessage(content, peer, ttl, channelId),
+    sendOfflineMessage: (content: string, peer?: string, ttl?: number, channelId?: string) => meshRef.current?.sendOfflineMessage(content, peer, ttl, channelId),
     isBLEAvailable: () => meshRef.current?.isBLEAvailable(),
     sendTransactionViaBeacon: (tx: any) => meshRef.current?.sendTransactionViaBeacon(tx),
     getBeaconStats: () => meshRef.current?.getBeaconStats(),
     getBackgroundMeshStatus: () => meshRef.current?.getBackgroundMeshStatus(),
+    updateBeaconCapabilities: (updated: Partial<BeaconCapabilities>) => meshRef.current?.updateBeaconCapabilities(updated),
   };
 };

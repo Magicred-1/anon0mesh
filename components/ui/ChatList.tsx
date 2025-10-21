@@ -74,7 +74,7 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
                         throw new Error('Function not implemented.');
                     } }        />
         </Animated.View>
-        <NicknameInput onSave={updateNickname} />
+        <NicknameInput onSave={updateNickname} pubKey={pubKey} />
         <MessageList
             messages={messages.filter(m => privateTarget ? (m.to===privateTarget || m.from===privateTarget) : !m.to)}
             currentUser={nickname}

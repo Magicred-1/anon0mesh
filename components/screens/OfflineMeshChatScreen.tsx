@@ -510,11 +510,10 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
 
         {/* Edit Nickname Modal */}
         <EditNicknameModal
-            visible={editNicknameVisible}
-            currentNickname={nickname}
-            onSave={handleNicknameSave}
-            onClose={() => setEditNicknameVisible(false)}
-        />
+                    visible={editNicknameVisible}
+                    currentNickname={nickname}
+                    onSave={handleNicknameSave}
+                    onClose={() => setEditNicknameVisible(false)} pubKey={pubKey}        />
         </View>
         </MeshBackground>
     );

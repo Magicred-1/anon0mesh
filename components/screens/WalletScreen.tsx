@@ -14,6 +14,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSolanaWallet } from '../../src/solana/useSolanaWallet';
 import { RateLimitManager } from '../../src/utils/RateLimitManager';
+import QrScannerModal from '../ui/QrScannerModal';
 import ReceiveIcon from '../ui/ReceiveIcon';
 import SendIcon from '../ui/SendIcon';
 import SolanaLogo from '../ui/SolanaLogo';
@@ -57,6 +58,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
     currency: string;
   } | null>(null);
   const [rateLimitManager] = useState(() => new RateLimitManager(pubKey));
+  const [qrModalVisible, setQrModalVisible] = useState(false);
 
   // Initialize Solana wallet
   const {
@@ -837,6 +839,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                     onChangeText={setRecipientAddress}
                   />
                   <TouchableOpacity
+                    onPress={() => setQrModalVisible(true)}
                     style={{
                       marginLeft: 8,
                       padding: 4,
@@ -844,6 +847,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                   >
                     <Text style={{ color: '#FFFFFF', fontSize: 18 }}>📷</Text>
                   </TouchableOpacity>
+      {/* QR Code Scanner Modal */}
+      <QrScannerModal
+        visible={qrModalVisible}
+        onClose={() => setQrModalVisible(false)}
+        onScanned={(data) => setRecipientAddress(data)}
+      />
                 </View>
 
                 {/* Send Transaction Button */}
