@@ -6,7 +6,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "simulator": "true"
+      }
     },
     "preview": {
       "distribution": "internal"

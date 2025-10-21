@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
-import { Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import OnboardingScreen from '@/components/screens/OnboardingScreen';
 import { Keypair } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import OnboardingScreen from '@/components/screens/OnboardingScreen';
+import React, { useState } from 'react';
+import { Alert, Platform } from 'react-native';
+// @ts-ignore
+import { transact, Web3MobileWallet } from '@solana-mobile/mobile-wallet-adapter-protocol';
+
+const isSeekerDevice = (): boolean => {
+  // Defensive: Model may not exist on all platforms
+  const model = (Platform.constants as any)?.Model;
+  return model === 'Seeker';
+};
 
 export default function OnboardingPage() {
   const [tempNickname, setTempNickname] = useState<string>('');
   const router = useRouter();
 
-  async function onboard() {
+  async function onboard(useMWA?: boolean) {
     // Test crypto before proceeding
     try {
       const testArray = new Uint8Array(4);
@@ -20,6 +28,37 @@ export default function OnboardingPage() {
       console.error('❌ Crypto not working:', error);
       Alert.alert('Crypto Error', 'Random number generation not available. Please restart the app.');
       return;
+    }
+
+    // If MWA/Seeker is requested, use transact
+    if (useMWA) {
+      try {
+        await transact(async (wallet: Web3MobileWallet) => {
+          // Authorize wallet
+          const auth = await wallet.authorize({
+            identity: { name: 'anon0mesh', uri: 'https://anon0mesh.app' },
+          });
+          if (!auth || !auth.accounts || !auth.accounts[0]) {
+            Alert.alert('MWA Error', 'No wallet account found.');
+            return;
+          }
+          const pub = auth.accounts[0].address;
+
+          await SecureStore.setItemAsync('pubKey', pub);
+          // Save nickname
+          if (tempNickname.trim()) {
+            await SecureStore.setItemAsync('nickname', tempNickname);
+            Alert.alert('Wallet Connected!', `Welcome to anon0mesh, @${tempNickname}! You can edit your nickname later in settings.`);
+          } else {
+            Alert.alert('Wallet Connected', `anon0mesh/${pub.slice(0, 8)}`);
+          }
+          router.replace('/landing');
+        });
+        return;
+      } catch (e: any) {
+        Alert.alert('MWA Error', 'Failed to connect wallet.');
+        return;
+      }
     }
 
     // 1️⃣ Check if device supports biometric/passcode
@@ -66,6 +105,9 @@ export default function OnboardingPage() {
     // 5️⃣ Navigate to landing page
     router.replace('/landing');
   }
+
+  // Only enable MWA if transact is available AND device is Seeker
+  const isMWAAvailable = typeof transact === 'function' && isSeekerDevice();
 
   return (
     <OnboardingScreen

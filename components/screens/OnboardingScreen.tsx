@@ -1,10 +1,10 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    Animated,
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface Props {
