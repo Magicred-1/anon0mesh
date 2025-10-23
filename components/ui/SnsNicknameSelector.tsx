@@ -1,5 +1,8 @@
+import { getAllDomains, reverseLookup } from '@bonfida/spl-name-service';
+import { Connection, PublicKey } from '@solana/web3.js';
 import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SOLANA_NETWORKS } from '../../src/solana/constants';
 
 interface SnsNicknameSelectorProps {
   pubKey: string;
@@ -14,31 +17,36 @@ export default function SnsNicknameSelector({ pubKey, onSelect, onDomainsLoaded 
   const [selected, setSelected] = useState<string | null>(null);
 
   // Fetch SNS domains for the user
-  const fetchDomains = async () => {
+  const fetchDomains = React.useCallback(async () => {
     setLoading(true);
     try {
-      // Use SNS SDK proxy (see https://sns-sdk-proxy.bonfida.workers.dev/)
-      const resp = await fetch(`https://sns-sdk-proxy.bonfida.workers.dev/domains/${pubKey}`);
-      const data = await resp.json();
-      let domains: string[] = [];
-      if (Array.isArray(data.result)) {
-        domains = data.result.map((d: any) => d.domain || d);
-        setSnsDomains(domains);
-      } else {
-        setSnsDomains([]);
+      // Use the Bonfida SPL Name Service library to fetch domains owned by the pubkey
+      const connection = new Connection(SOLANA_NETWORKS.devnet);
+      const owner = new PublicKey(pubKey);
+      const domainKeys = await getAllDomains(connection, owner);
+      // domainKeys is an array of PublicKey domain registry keys; perform reverse lookup to get the readable name
+      const domains: string[] = [];
+      for (const dk of domainKeys) {
+        try {
+          const name = await reverseLookup(connection, dk);
+          if (name) domains.push(name);
+        } catch {
+          // ignore lookup failures for individual domains
+        }
       }
+      setSnsDomains(domains);
       if (onDomainsLoaded) onDomainsLoaded(domains);
-    } catch (e) {
+    } catch {
       setSnsDomains([]);
       if (onDomainsLoaded) onDomainsLoaded([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [pubKey, onDomainsLoaded]);
 
   React.useEffect(() => {
     if (pubKey) fetchDomains();
-  }, [pubKey]);
+  }, [pubKey, fetchDomains]);
 
   const handleSelect = (nickname: string) => {
     setSelected(nickname);

@@ -12,7 +12,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.magicred1.anon0mesh",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleAllowMixedLocalizations": true,
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to communicate with nearby devices for offline mesh networking.",
+        "NSCameraUsageDescription": "This app requires camera access to scan wallet addresses QR codes.",
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to communicate with nearby devices for offline mesh networking."
       }
     },
     "android": {
@@ -70,7 +74,7 @@
             "node_modules/@expo-google-fonts/lexend/500Medium/Lexend_500Medium.ttf",
             "node_modules/@expo-google-fonts/lexend/600SemiBold/Lexend_600SemiBold.ttf",
             "node_modules/@expo-google-fonts/lexend/700Bold/Lexend_700Bold.ttf",
-            "components/fonts/Primal/Primal.otf"
+            "components/fonts/Primal/Primal.ttf"
           ]
         }
       ],

@@ -1,4 +1,6 @@
 // Import polyfills first, before anything else
+import EdgeSwipeHandler from '@/components/ui/EdgeSwipeHandler';
+import PrivateSidebar from '@/components/ui/PrivateSidebar';
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import { Lexend_400Regular, Lexend_500Medium, Lexend_600SemiBold, Lexend_700Bold, useFonts } from '@expo-google-fonts/lexend';
 import { Stack } from 'expo-router';
@@ -23,6 +25,12 @@ export default function RootLayout() {
   });
 
   const [showPermissionAlert, setShowPermissionAlert] = useState(false);
+  const [peersOpen, setPeersOpen] = useState(false);
+  const [privateOpen, setPrivateOpen] = useState(false);
+  // In this layout we don't have direct access to the live peers list from
+  // ChatScreen; pass an empty array for now. The Chat components will still
+  // pass peers directly to sidebars when rendered within their screens.
+  const dummyPeers: string[] = [];
 
   useEffect(() => {
     // Test crypto polyfill on app start
@@ -60,18 +68,34 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider style={{ flex: 1, backgroundColor: '#121212' }}>
-      <GluestackUIProvider mode="dark">
-        <ChannelProvider>
-          <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-            <Stack screenOptions={{ headerShown: false }} />
-            {showPermissionAlert && (
-              <BLEPermissionAlert
-                onDismiss={() => setShowPermissionAlert(false)}
+      <EdgeSwipeHandler
+        onOpenLeft={() => setPeersOpen(true)}
+        onOpenRight={() => setPrivateOpen(true)}
+      >
+        <GluestackUIProvider mode="dark">
+          <ChannelProvider>
+            <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+              <Stack screenOptions={{ headerShown: false }} />
+              {showPermissionAlert && (
+                <BLEPermissionAlert
+                  onDismiss={() => setShowPermissionAlert(false)}
+                />
+              )}
+
+              <PrivateSidebar
+                visible={privateOpen}
+                peers={dummyPeers}
+                channels={[]}
+                currentChannel={null}
+                onSelectPeer={() => setPrivateOpen(false)}
+                onSelectChannel={() => setPrivateOpen(false)}
+                onClose={() => setPrivateOpen(false)}
+                onClearPrivate={() => setPrivateOpen(false)}
               />
-            )}
-          </SafeAreaView>
-        </ChannelProvider>
-      </GluestackUIProvider>
+            </SafeAreaView>
+          </ChannelProvider>
+        </GluestackUIProvider>
+      </EdgeSwipeHandler>
     </SafeAreaProvider>
   );
 }

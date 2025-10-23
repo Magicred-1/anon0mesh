@@ -82,6 +82,13 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
     return 0;
   } 
 
+  // Normalize amount string to use '.' as decimal separator regardless of user's locale input
+  const normalizeAmount = (raw: string) => {
+    if (!raw) return '';
+    // Replace commas with dots, remove spaces
+    return raw.replace(/\s+/g, '').replace(/,/g, '.');
+  };
+
   // Set amount to maximum available balance
   const setMaxAmount = () => {
     const maxBalance = getCurrentBalance();
@@ -120,9 +127,9 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
             // Wallet initialization failed - silently log and close wallet if still mounted
             if (mounted) onClose();
           }
-        } catch (err) {
-          if (mounted) onClose();
-        }
+        } catch {
+              if (mounted) onClose();
+            }
       }
     })();
 
@@ -139,7 +146,15 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
       return;
     }
 
-    if (!sendAmount || parseFloat(sendAmount) <= 0) {
+    // Normalize amount string to use '.' as decimal separator regardless of user's locale input
+    const normalizeAmount = (raw: string) => {
+      if (!raw) return '';
+      // Replace commas with dots, remove spaces
+      return raw.replace(/\s+/g, '').replace(/,/g, '.');
+    };
+
+    const amount = parseFloat(normalizeAmount(sendAmount));
+    if (!sendAmount || isNaN(amount) || amount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount to send');
       return;
     }
@@ -149,15 +164,13 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
       return;
     }
 
-    const amount = parseFloat(sendAmount);
-
     // Confirm mesh relay
     Alert.alert(
       '📡 Bluetooth Mesh Relay',
       `This will create and sign your transaction locally, then broadcast it through the mesh network.\n\n` +
-      `Amount: ${sendAmount} ${selectedCurrency}\n` +
-      `To: ${recipientAddress.slice(0, 8)}...${recipientAddress.slice(-8)}\n\n` +
-      `Nearby peers with internet will relay it to Solana. You'll be notified when it's submitted.`,
+        `Amount: ${sendAmount} ${selectedCurrency}\n` +
+        `To: ${recipientAddress.slice(0, 8)}...${recipientAddress.slice(-8)}\n\n` +
+        `Nearby peers with internet will relay it to Solana. You'll be notified when it's submitted.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -167,7 +180,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
             try {
               console.log('[WALLET] Creating transaction for mesh relay...');
 
-              // USDC support: pass SPL token transfer metadata for USDC
+              // Create the on-chain transaction (supports SOL & USDC metadata)
               const transaction = await createTransferTransaction(
                 recipientAddress,
                 amount,
@@ -177,13 +190,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               // Sign transaction
               const signedTx = signTransaction(transaction);
 
-              // Serialize transaction for mesh transmission
+              // Serialize transaction for mesh transmission if offline but broadcasting via mesh
               const serialized = signedTx.serialize();
 
               console.log('[WALLET] Transaction signed and serialized');
               console.log('[WALLET] Size:', serialized.length, 'bytes');
-
-                        { `anon0mesh mesh relay from ${nickname}` }
 
               // Create transaction payload for relay
               const txPayload = {
@@ -224,18 +235,18 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               Alert.alert(
                 '✅ Transaction Queued for Relay',
                 `Your transaction has been signed and is ready to broadcast through the mesh network.\n\n` +
-                `Transaction ID: ${txPayload.id}\n\n` +
-                `It will be relayed hop-by-hop until a peer with internet submits it to Solana. ` +
-                `You'll receive a notification when it's confirmed.`,
+                  `Transaction ID: ${txPayload.id}\n\n` +
+                  `It will be relayed hop-by-hop until a peer with internet submits it to Solana. ` +
+                  `You'll receive a notification when it's confirmed.`,
                 [
-                  { 
+                  {
                     text: 'OK',
                     onPress: () => {
                       // Clear form
                       setSendAmount(selectedCurrency === 'SOL' ? '0.06' : '1.00');
                       setRecipientAddress('');
-                    }
-                  }
+                    },
+                  },
                 ]
               );
             } catch (error) {
@@ -265,8 +276,8 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
       Alert.alert('Wallet Not Ready', 'Wallet is still initializing. Please wait a moment.');
       return;
     }
-
-    if (!sendAmount || parseFloat(sendAmount) <= 0) {
+    const amount = parseFloat(normalizeAmount(sendAmount));
+    if (!sendAmount || isNaN(amount) || amount <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount to send');
       return;
     }
@@ -277,7 +288,6 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
     }
 
     // Check if amount exceeds balance
-    const amount = parseFloat(sendAmount);
     const availableBalance = getCurrentBalance();
     if (amount > availableBalance) {
       Alert.alert(
@@ -744,7 +754,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                           }}
                         >
                           <SolanaLogo size={20} color="#FFFFFF" />
-                          {/* <Text
+                          <Text
                             style={{
                               color: '#FFFFFF',
                               fontSize: 16,
@@ -753,7 +763,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                             }}
                           >
                             SOL
-                          </Text> */}
+                          </Text>
                         </TouchableOpacity>
                         
                         <View style={{ height: 1, backgroundColor: '#555' }} />

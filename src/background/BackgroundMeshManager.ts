@@ -200,13 +200,16 @@ export class BackgroundMeshManager {
     try {
       // Register background fetch for both tasks
       await BackgroundFetch.registerTaskAsync(MESH_RELAY_TASK, {
-        minimumInterval: 15000, // 15 seconds minimum
+        // BackgroundFetch expects seconds. Previously this was a large
+        // millisecond-like value (15000) which would mean ~4 hours. Use
+        // 15 seconds for development/testing; production may increase.
+        minimumInterval: 15, // 15 seconds minimum
         stopOnTerminate: false,
         startOnBoot: true,
       });
 
       await BackgroundFetch.registerTaskAsync(MESH_GOSSIP_TASK, {
-        minimumInterval: 30000, // 30 seconds minimum
+        minimumInterval: 30, // 30 seconds minimum
         stopOnTerminate: false,
         startOnBoot: true,
       });

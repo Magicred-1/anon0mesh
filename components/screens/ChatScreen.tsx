@@ -194,9 +194,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
                 placeholder={privateTarget ? `Message ${privateTarget}` : 'Type a message...'}
                 messagesRemaining={messagesRemaining}
                 isUnlocked={isUnlocked}
-                onSendAsset={function (asset: string, amount: string, address: string): void {
-                    throw new Error('Function not implemented.');
-                } }        />
+        />
         </View>
     );
 };

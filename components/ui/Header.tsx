@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import React, { useRef } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PenIcon from './PenIcon';
 
@@ -16,18 +15,14 @@ interface Props {
 }
 
 export default function Header({ 
-    pubKey, 
     nickname, 
     displayNickname, 
-    toggleSidebar, 
     onWalletPress, 
     onNicknameEdit,
-    zoneSelector
 }: Props) {
     const navigation = useRouter();
     const tapCount = useRef(0);
     const tapTimeout = useRef<NodeJS.Timeout | number | null>(null);
-    const [qrVisible, setQrVisible] = useState(false);
 
     const handleTitleTap = () => {
         tapCount.current += 1;
@@ -76,83 +71,8 @@ export default function Header({
                         <Text style={styles.walletText}>Wallet</Text>
                     </TouchableOpacity>
                 </View>
-
-                {/* Bottom Row - Zone and Peers */}
-                <View style={styles.bottomRow}>
-                    {/* Zone Selector (if provided) */}
-                    {zoneSelector}
-
-                    {/* Peers Button */}
-                    <TouchableOpacity
-                        onPress={toggleSidebar}
-                        style={styles.peersButton}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.buttonEmoji}>👥</Text>
-                        <Text style={styles.peersText}>Peers</Text>
-                    </TouchableOpacity>
-                </View>
+                
             </View>
-
-            <Modal visible={qrVisible} transparent animationType="fade">
-                <View
-                    style={{
-                        flex: 1,
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                    }}
-                >
-                    <View
-                        style={{
-                            backgroundColor: '#0A0A0A',
-                            padding: 20,
-                            borderRadius: 16,
-                            alignItems: 'center',
-                            borderWidth: 2,
-                            borderColor: '#B10FF2',
-                        }}
-                    >
-                        <Text
-                            style={{
-                                color: '#B10FF2',
-                                fontFamily: 'Lexend_400Regular',
-                                marginBottom: 16,
-                                fontSize: 16,
-                                fontWeight: 'regular',
-                            }}
-                        >
-                            Your PubKey
-                        </Text>
-                        <QRCode
-                            value={pubKey}
-                            size={200}
-                            color="#A855F7"
-                            backgroundColor="#0A0A0A"
-                        />
-                        <TouchableOpacity
-                            onPress={() => setQrVisible(false)}
-                            style={{
-                                marginTop: 20,
-                                paddingVertical: 8,
-                                paddingHorizontal: 16,
-                                borderRadius: 12,
-                                backgroundColor: '#B10FF2',
-                            }}
-                        >
-                            <Text
-                                style={{
-                                    color: '#FFFFFF',
-                                    fontFamily: 'Lexend_400Regular',
-                                    fontWeight: 'regular',
-                                }}
-                            >
-                                Close
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
         </SafeAreaView>
     );
 }
@@ -162,7 +82,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#0f0f0f',
     },
     container: {
-        paddingTop: 8,
+        paddingTop: 0,
         paddingBottom: 8,
         paddingHorizontal: 14,
         backgroundColor: '#0f0f0f',

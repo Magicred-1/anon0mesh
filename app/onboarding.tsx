@@ -6,13 +6,26 @@ import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
 import { Alert, Platform } from 'react-native';
-// @ts-ignore
-import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
 
 const isSeekerDevice = (): boolean => {
   // Defensive: Model may not exist on all platforms
   const model = (Platform.constants as any)?.Model;
   return model === 'Seeker';
+};
+
+// Lazy load the mobile wallet adapter only when needed
+const getMobileWalletAdapter = async () => {
+  if (Platform.OS !== 'android') {
+    return null;
+  }
+  
+  try {
+    const mwa = await import('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
+    return mwa.transact;
+  } catch (error) {
+    console.warn('Mobile Wallet Adapter not available:', error);
+    return null;
+  }
 };
 
 export default function OnboardingPage() {
@@ -33,6 +46,13 @@ export default function OnboardingPage() {
     // If MWA/Seeker is requested, use transact
     if (isSeekerDevice()) {
       try {
+        const transact = await getMobileWalletAdapter();
+        
+        if (!transact) {
+          Alert.alert('MWA Error', 'Mobile Wallet Adapter not available on this device.');
+          return;
+        }
+
         await transact(async (wallet) => {
           // Authorize wallet
           const auth = await wallet.authorize({

@@ -12,6 +12,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@bonfida/spl-name-service": "^3.0.16",
     "@expo-google-fonts/lexend": "^0.4.1",
     "@expo/html-elements": "^0.10.1",
     "@expo/metro-runtime": "~6.1.2",
@@ -97,5 +98,6 @@
     "react-native-svg-uri": "^0.0.1",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "packageManager": "pnpm@7.13.4+sha256.ef9d3eac337b5bb88963e939e7a0cb50e5645590e5583965d443cb9e42a279c7"
 }

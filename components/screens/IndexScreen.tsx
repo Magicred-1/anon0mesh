@@ -123,9 +123,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginBottom: 6,
         letterSpacing: 2,
-        textShadowColor: '#26C6DA', // updated accent color
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 20,
         fontFamily: 'Primal',
     },
     subtitle: {

@@ -1,27 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    TextInput,
-    TouchableOpacity,
-    View,
-    StyleSheet,
-    Text,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SendIcon from './SendIcon';
 
 interface Props {
   onSend: (msg: string) => void;
-  onSendAsset: (asset: string, amount: string, address: string) => void;
   placeholder?: string;
   messagesRemaining?: number;
   isUnlocked?: boolean;
 }
 
-export default function MessageInput({ onSend, onSendAsset, placeholder, messagesRemaining, isUnlocked }: Props) {
+export default function MessageInput({ onSend, placeholder, messagesRemaining, isUnlocked }: Props) {
   const [text, setText] = useState('');
   const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const inputRef = useRef<TextInput | null>(null);
 
   const handleSend = () => {
     const trimmedText = text.trim();
@@ -32,6 +34,12 @@ export default function MessageInput({ onSend, onSendAsset, placeholder, message
     
     // Send the message
     onSend(trimmedText);
+
+    // Re-focus the input after a short delay so the keyboard stays open
+    // (blurOnSubmit will have blurred it). This keeps the flow continuous.
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
   };
 
   const handleKeyPress = (e: any) => {
@@ -58,17 +66,47 @@ export default function MessageInput({ onSend, onSendAsset, placeholder, message
 
   const statusMessage = getStatusMessage();
 
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: any) => {
+      // Only measure keyboard height on Android. On iOS we rely on
+      // KeyboardAvoidingView's 'padding' behavior to avoid double-offsets.
+      if (Platform.OS === 'android') {
+        const h = e?.endCoordinates?.height || 0;
+        setKeyboardHeight(h);
+      }
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   return (
+    // On Android, using `behavior='height'` generally produces more reliable
+    // results for multi-line inputs and different keyboard implementations.
+    // We also offset by the bottom safe-area inset so the input doesn't hide
+    // behind system gestures or nav bars.
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      style={{ flex: 0 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // On iOS offset by the bottom safe area so the view aligns with system UI.
+      keyboardVerticalOffset={Platform.OS === 'ios' ? Math.max(insets.bottom, 8) + 8 : 0}
+      style={{ width: '100%' }}
     >
       <View 
         style={[
           styles.container,
           { 
-            paddingBottom: Math.max(insets.bottom, 8) + 8,
+            // Add measured keyboard height only for Android; iOS uses
+            // KeyboardAvoidingView to adjust layout to avoid double-offset.
+            paddingBottom: Math.max(insets.bottom, 8) + 8 + (Platform.OS === 'android' ? keyboardHeight : 0),
           }
         ]}
       >
@@ -89,7 +127,7 @@ export default function MessageInput({ onSend, onSendAsset, placeholder, message
             placeholderTextColor="#6b7280"
             value={text}
             onChangeText={setText}
-            blurOnSubmit={false}
+            blurOnSubmit={true}
             onSubmitEditing={handleSend}
             onKeyPress={handleKeyPress}
             returnKeyType="send"
@@ -165,7 +203,9 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     maxHeight: 100,
     minHeight: 36,
-    textAlignVertical: 'center',
+    // Use 'top' so the cursor and first line don't appear vertically centered
+    // on iOS multiline TextInput (fixes common rendering/cursor glitches).
+    textAlignVertical: 'top',
     lineHeight: 20,
     fontFamily: 'Lexend_400Regular',
   },
@@ -187,9 +227,9 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   sendButtonActive: {
-    backgroundColor: '#B10FF2',
-    borderColor: '#C84FFE',
-    shadowColor: '#B10FF2',
+    backgroundColor: '#26C6DA',
+    borderColor: '#21a3b4ff',
+    shadowColor: '#26C6DA',
     shadowOpacity: 0.4,
     elevation: 3,
   },

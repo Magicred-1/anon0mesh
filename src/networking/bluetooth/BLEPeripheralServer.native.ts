@@ -516,18 +516,9 @@ export class BLEPeripheralServer {
         this.onDataReceived = callback;
     }
 
+    
     isAdvertisingActive(): boolean {
-        return this.isAdvertising && this.gattServerReady;
-    }
-
-    isPeripheralAvailable(): boolean {
-        return this.isAvailable;
-    }
-
-    updateMeshLoad(load: number) {
-        const clampedLoad = Math.min(100, Math.max(0, load));
-        this.meshData.meshLoad = Math.floor((clampedLoad / 100) * 255);
-        console.log(`[PERIPHERAL.native] 📊 Mesh load updated: ${clampedLoad}%`);
+        return this.isAdvertising && this.gattServerReady;          
     }
 
     updateCapabilities(capabilities: number) {
@@ -537,5 +528,10 @@ export class BLEPeripheralServer {
 
     getMeshData(): MeshAdvertisingData {
         return { ...this.meshData };
+    }
+
+    // Backwards-compatible alias for older callers
+    setDataHandler(callback: (data: string, from: string) => void) {
+        this.onDataReceived = callback;
     }
 }

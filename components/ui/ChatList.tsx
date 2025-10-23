@@ -81,9 +81,10 @@ export default function ChatScreen({ pubKey, nickname, updateNickname }: Props) 
         />
         <MessageInput
                 onSend={sendMessage}
-                placeholder={privateTarget ? `Message ${privateTarget}` : "Type a message..."} onSendAsset={function (asset: string, amount: string, address: string): void {
-                    throw new Error('Function not implemented.');
-                } }        />
+                placeholder={privateTarget ? `Message ${privateTarget}` : "Type a message..."} 
+                messagesRemaining={undefined}
+                isUnlocked={true}
+            />
         </View>
     );
 }

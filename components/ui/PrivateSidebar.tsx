@@ -85,6 +85,34 @@ export default function PrivateSidebar({
         onClose();
     };
 
+    // When returning from a private convo, prefer switching back to the 'general'
+    // channel (if present) and keep the sidebar open so the user can continue
+    // navigating. Only close as a last resort.
+    const handleReturnToGeneral = () => {
+        if (onClearPrivate) onClearPrivate();
+
+        const generalChannel = channels.find(
+            (c) => (c.name && c.name.toLowerCase() === 'general') || c.id === 'general'
+        );
+
+        if (generalChannel) {
+            onSelectChannel(generalChannel);
+            setActiveTab('channels');
+            // Keep the sidebar open so the user can pick another channel or inspect
+            // channel details.
+            return;
+        }
+
+        if (channels.length > 0) {
+            onSelectChannel(channels[0]);
+            setActiveTab('channels');
+            return;
+        }
+
+        // Fallback: close sidebar
+        onClose();
+    };
+
     return (
         <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
             <View style={{ flex: 1 }}>
@@ -126,6 +154,24 @@ export default function PrivateSidebar({
                         <Text style={{ color: '#aaa', fontSize: 13, fontFamily: 'monospace' }}>
                             {channels.length} channels • {displayPeers.length} peers online
                         </Text>
+                        {/* Quick return to general chat (visible whenever in a private convo) */}
+                        {currentPrivate ? (
+                            <TouchableOpacity
+                                onPress={handleReturnToGeneral}
+                                style={{
+                                    marginTop: 12,
+                                    alignSelf: 'flex-start',
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 10,
+                                    backgroundColor: '#222',
+                                    borderWidth: 1,
+                                    borderColor: '#444',
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700' }}>← Back to general</Text>
+                            </TouchableOpacity>
+                        ) : null}
                     </View>
 
                     {/* Tabs */}
@@ -225,22 +271,25 @@ export default function PrivateSidebar({
                                 {/* Quick return to general chat when in a private convo */}
                                 {currentPrivate ? (
                                     <TouchableOpacity
-                                        onPress={() => {
-                                            if (onClearPrivate) onClearPrivate();
-                                            onClose();
-                                        }}
+                                        onPress={handleReturnToGeneral}
                                         style={{
-                                            padding: 12,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 14,
                                             marginBottom: 12,
-                                            borderRadius: 12,
+                                            borderRadius: 10,
                                             backgroundColor: '#222',
                                             borderWidth: 1,
                                             borderColor: '#444',
                                             alignItems: 'center',
+                                            flexDirection: 'row',
+                                            justifyContent: 'center',
                                         }}
                                     >
+                                        <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700', marginRight: 8 }}>
+                                            ←
+                                        </Text>
                                         <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700' }}>
-                                            ← Return to general chat
+                                            Back to general
                                         </Text>
                                     </TouchableOpacity>
                                 ) : null}

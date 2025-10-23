@@ -10,7 +10,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannels } from '../../src/contexts/ChannelContext';
 import { BeaconCapabilities } from '../../src/solana/BeaconManager';
-import { Channel } from '../../src/types/channels';
 import { RateLimitManager } from '../../src/utils/RateLimitManager';
 import { useMeshNetworking } from '../networking/MeshNetworkingManager';
 import BLEPermissionRequest from '../ui/BLEPermissionRequest';
@@ -21,7 +20,6 @@ import Header from '../ui/Header';
 import { MeshBackground } from '../ui/MeshBackground';
 import MessageInput from '../ui/MessageInput';
 import MessageList, { Message } from '../ui/MessageList';
-import { ZoneDropdownSelector } from '../ui/ZoneDropdownSelector';
 import WalletScreen from './WalletScreen';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -267,11 +265,6 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         setMessages(prev => [...prev, newMessage]);
     };
 
-    // Send asset function (placeholder for now)
-    const sendAsset = (asset: string, amount: string, address: string) => {
-        Alert.alert('Send Asset', `Would send ${amount} ${asset} to ${address}`);
-    };
-
     // Mark peers as offline after 5 minutes of inactivity
     useEffect(() => {
         const interval = setInterval(() => {
@@ -351,16 +344,16 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
                 toggleSidebar={toggleSidebar} 
                 onWalletPress={handleWalletPress}
                 onNicknameEdit={handleNicknameEdit}
-                zoneSelector={
-                    <ZoneDropdownSelector
-                        channels={channels}
-                        currentChannel={currentChannel}
-                        onChannelSelect={(channel: Channel) => {
-                            setCurrentChannel(channel);
-                            console.log(`[UI] Switched to zone: ${channel.name} (TTL: ${channel.ttl})`);
-                        }}
-                    />
-                }
+                // zoneSelector={
+                //     <ZoneDropdownSelector
+                //         channels={channels}
+                //         currentChannel={currentChannel}
+                //         onChannelSelect={(channel: Channel) => {
+                //             setCurrentChannel(channel);
+                //             console.log(`[UI] Switched to zone: ${channel.name} (TTL: ${channel.ttl})`);
+                //         }}
+                //     />
+                // }
             />
 
         {/* Private sidebar (slides from RIGHT) - Full height */}
@@ -496,7 +489,6 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
         {/* Input */}
         <MessageInput
             onSend={sendMessage}
-            onSendAsset={sendAsset}
             placeholder={selectedPeer ? `Message ${selectedPeer}` : 'Type message...'}
         />
 

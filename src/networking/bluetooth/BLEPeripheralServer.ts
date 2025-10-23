@@ -55,9 +55,12 @@ export class BLEPeripheralServer {
   
   constructor(deviceId: string) {
     this.deviceId = deviceId;
-    
-    this.isAvailable = true;
-    console.log('[PERIPHERAL] ✅ New peripheral module ready');
+    // Do not assume availability at construction time — the native module may
+    // not be present in Expo Go or some dev builds. Availability will be
+    // determined when we attempt to load the native/js module in
+    // ensurePeripheralModuleLoaded().
+    this.isAvailable = false;
+    console.log('[PERIPHERAL] ℹ️ Peripheral instance created; availability unknown until module load');
   }
   
   async start() {
@@ -169,6 +172,11 @@ export class BLEPeripheralServer {
   
   setDataReceivedCallback(callback: (data: string, from: string) => void) {
     this.onDataReceived = callback;
+  }
+
+  // Backwards-compatible alias: some callers expect `setDataHandler`.
+  setDataHandler(callback: (data: string, from: string) => void) {
+    this.setDataReceivedCallback(callback);
   }
   
   isAdvertisingActive(): boolean {

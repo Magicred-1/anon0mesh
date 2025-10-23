@@ -15,6 +15,7 @@ import {
     TransactionInstruction,
 } from '@solana/web3.js';
 import { Buffer } from 'buffer';
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { SolanaTransactionManager } from './SolanaTransactionManager';
 import { getUSDCMint, usdcBaseToUsdc } from './constants';
@@ -47,17 +48,27 @@ export class SolanaWalletManager {
      * Get default RPC URL for network
      */
     private getDefaultRPCUrl(network: string): string {
+        // Allow overriding the devnet RPC with a Bonfida (or other) RPC provider
+        // via Expo config `extra.bonfidaDevnetRpc` or the environment variable
+        // `BONFIDA_DEVNET_RPC`. If not provided, fall back to the default
+        // Solana public RPC endpoints.
+        const bonfidaDevnetRpc =
+            (Constants.expoConfig?.extra as any)?.bonfidaDevnetRpc ||
+            (process.env.BONFIDA_DEVNET_RPC as string | undefined) ||
+            undefined;
+
         switch (network) {
         case 'mainnet-beta':
             return 'https://api.mainnet-beta.solana.com';
         case 'testnet':
             return 'https://api.testnet.solana.com';
         case 'devnet':
-            return 'https://api.devnet.solana.com';
+            // Prefer Bonfida/devnet override when available
+            return bonfidaDevnetRpc || 'https://api.devnet.solana.com';
         case 'localnet':
             return 'http://127.0.0.1:8899';
         default:
-            return 'https://api.devnet.solana.com';
+            return bonfidaDevnetRpc || 'https://api.devnet.solana.com';
         }
     }
 

@@ -18,14 +18,14 @@ export const CipherText: React.FC<CipherTextProps> = ({
     delay = 0 
 }) => {
     const [displayText, setDisplayText] = useState(text);
-    const [fontsLoaded] = useFonts({
-        Primal: require('../fonts/Primal/Primal.ttf'), // Adjust path to your font file
+    const [fontsLoaded, fontError] = useFonts({
+        'Primal': require('../fonts/Primal/Primal.ttf'),
     });
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        if (!fontsLoaded) return;
+        if (!fontsLoaded && !fontError) return;
 
         // Clear any existing timers
         if (timerRef.current) clearTimeout(timerRef.current);
@@ -37,22 +37,19 @@ export const CipherText: React.FC<CipherTextProps> = ({
             let currentFrame = 0;
 
             intervalRef.current = setInterval(() => {
-                // Calculate progress (0 to 1)
                 const progress = currentFrame / totalFrames;
                 
                 const displayChars = text.split('').map((char, index) => {
-                    // Space characters never change
                     if (char === ' ') return ' ';
                     
-                    // Reveal characters progressively based on their position
                     const charProgress = Math.max(0, progress - (index / text.length) * 0.3);
                     
                     if (charProgress >= 1) {
-                        return char; // Fully revealed
+                        return char;
                     } else if (charProgress > 0) {
                         return Math.random() > charProgress ? generateRandomChar() : char;
                     } else {
-                        return generateRandomChar(); // Not yet started revealing
+                        return generateRandomChar();
                     }
                 });
 
@@ -68,23 +65,22 @@ export const CipherText: React.FC<CipherTextProps> = ({
 
         timerRef.current = setTimeout(startAnimation, delay);
 
-        // Cleanup function
         return () => {
             if (timerRef.current) clearTimeout(timerRef.current);
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [fontsLoaded, text, duration, delay]);
-
-    if (!fontsLoaded) {
-        return <Text style={style}>{text}</Text>;
-    }
+    }, [fontsLoaded, fontError, text, duration, delay]);
 
     const generateRandomChar = () => {
         return CIPHER_CHARS[Math.floor(Math.random() * CIPHER_CHARS.length)];
     };
 
+    if (!fontsLoaded && !fontError) {
+        return <Text style={style}>{text}</Text>;
+    }
+
     const mergedStyle: TextStyle = {
-        fontFamily: 'Primal',
+        ...(fontsLoaded && { fontFamily: 'Primal' }),
         ...style,
     };
 

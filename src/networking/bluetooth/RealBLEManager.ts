@@ -1,6 +1,6 @@
 // src/networking/RealBLEManager.ts
 // Improved BLE Manager with enhanced error handling
-import { PermissionsAndroid, Platform } from 'react-native';
+import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import { BleError, BleManager, Characteristic, Device } from 'react-native-ble-plx';
 import { BLEPacketEncoder } from './BLEPacketEncoder';
 import {
@@ -9,7 +9,6 @@ import {
   NOTIFY_CHARACTERISTIC_UUID,
   WRITE_CHARACTERISTIC_UUID,
 } from './constants/BLEConstants';
-
 
 import { Anon0MeshPacket } from '../../gossip/types';
 
@@ -31,8 +30,23 @@ export const NOTIFY_CHAR_UUID = NOTIFY_CHARACTERISTIC_UUID;
 export const SERVICE_UUID = ANON0MESH_SERVICE_UUID;
 export const CHARACTERISTIC_UUID = BLE_CONFIG.service.characteristics.data;
 
+// Check if BLE is available on this platform
+const isBLEAvailable = (): boolean => {
+  if (Platform.OS === 'web') {
+    return false;
+  }
+  
+  try {
+    // Check if the native module exists
+    const BleModule = NativeModules.BleClientManager;
+    return BleModule != null;
+  } catch {
+    return false;
+  }
+};
+
 export class RealBLEManager {
-  private manager: BleManager;
+  private manager: BleManager | null = null;
   private connectedDevices: Map<string, ConnectedDevice> = new Map();
   private onDataReceived?: (data: string, from: string) => void;
   private chunkBuffers: Map<string, Map<number, Buffer>> = new Map();
@@ -40,7 +54,7 @@ export class RealBLEManager {
   private healthCheckInterval?: ReturnType<typeof setInterval>;
   private isScanning = false;
   private isInitialized = false;
-  
+  private bleAvailable = false;
   
   // Configuration from BLE_CONFIG
   private MAX_FAILURES = BLE_CONFIG.connection.maxFailures;
@@ -48,13 +62,38 @@ export class RealBLEManager {
   private WRITE_TIMEOUT = BLE_CONFIG.connection.writeTimeout;
   
   constructor() {
-    this.manager = new BleManager();
+    this.bleAvailable = isBLEAvailable();
+    
+    if (this.bleAvailable) {
+      try {
+        this.manager = new BleManager();
+        console.log('[BLE] ✅ BleManager instance created');
+      } catch (error: any) {
+        console.log('[BLE] ❌ Failed to create BleManager:', error?.message);
+        this.bleAvailable = false;
+        this.manager = null;
+      }
+    } else {
+      console.log('[BLE] ⚠️ BLE not available on this platform');
+    }
+  }
+
+  /**
+   * Check if BLE is available
+   */
+  isAvailable(): boolean {
+    return this.bleAvailable && this.manager != null;
   }
 
   /**
    * Initialize BLE with permissions
    */
   async initialize(): Promise<boolean> {
+    if (!this.isAvailable()) {
+      console.log('[BLE] ⚠️ BLE not available, skipping initialization');
+      return false;
+    }
+
     if (this.isInitialized) {
       console.log('[BLE] Already initialized');
       return true;
@@ -71,15 +110,15 @@ export class RealBLEManager {
       }
       
       // Check Bluetooth state
-      const state = await this.manager.state();
+      const state = await this.manager!.state();
       console.log('[BLE] 📡 Bluetooth state:', state);
       
       if (state !== 'PoweredOn') {
-      console.log(`[BLE] [DEBUG] Scanning for service UUID: ${SERVICE_UUID}`);
+        console.log(`[BLE] [DEBUG] Scanning for service UUID: ${SERVICE_UUID}`);
         console.log('[BLE] ⚠️ Bluetooth is not powered on');
         
         // Listen for state changes
-        this.manager.onStateChange((newState) => {
+        this.manager!.onStateChange((newState) => {
           console.log('[BLE] 📡 Bluetooth state changed:', newState);
           if (newState === 'PoweredOn') {
             console.log('[BLE] ✅ Bluetooth is now ready');
@@ -92,7 +131,7 @@ export class RealBLEManager {
       // Start health check
       this.startHealthCheck();
       
-            console.log('[BLE] [DEBUG] Scan callback: no device found in this callback');
+      console.log('[BLE] [DEBUG] Scan callback: no device found in this callback');
       this.isInitialized = true;
       console.log('[BLE] ✅ BLE Manager initialized');
       return true;
@@ -138,6 +177,11 @@ export class RealBLEManager {
    * Start scanning for BLE devices
    */
   async startScanning() {
+    if (!this.isAvailable()) {
+      console.log('[BLE] ⚠️ Cannot scan: BLE not available');
+      return;
+    }
+
     if (this.isScanning) {
       console.log('[BLE] Already scanning');
       return;
@@ -149,7 +193,7 @@ export class RealBLEManager {
       this.isScanning = true;
       
       // Start scanning with service UUID filter
-      this.manager.startDeviceScan(
+      this.manager!.startDeviceScan(
         [SERVICE_UUID],
         { allowDuplicates: false },
         (error, device) => {
@@ -187,7 +231,6 @@ export class RealBLEManager {
     // Optionally filter devices by name, RSSI, etc.
     await this.connectToDevice(device);
   }
-
 
   /**
    * Connect to a BLE device with proper setup
@@ -295,6 +338,11 @@ export class RealBLEManager {
    * Send data to connected devices
    */
   async broadcastPacket(packet: Anon0MeshPacket): Promise<number> {
+    if (!this.isAvailable()) {
+      console.log('[BLE] ⚠️ Cannot broadcast: BLE not available');
+      return 0;
+    }
+
     if (this.connectedDevices.size === 0) {
       console.log('[BLE] No connected devices to broadcast to');
       return 0;
@@ -483,10 +531,12 @@ export class RealBLEManager {
    * Stop scanning
    */
   stopScanning() {
-    if (!this.isScanning) return;
+    if (!this.isAvailable() || !this.isScanning) {
+      return;
+    }
     
     try {
-      this.manager.stopDeviceScan();
+      this.manager!.stopDeviceScan();
       this.isScanning = false;
       console.log('[BLE] 🛑 Scanning stopped');
     } catch (error: any) {
@@ -543,8 +593,14 @@ export class RealBLEManager {
     
     this.connectedDevices.clear();
     
-    // Destroy manager
-    await this.manager.destroy();
+    // Destroy manager if it exists
+    if (this.manager) {
+      try {
+        await this.manager.destroy();
+      } catch (error: any) {
+        console.log('[BLE] Error destroying manager:', error?.message);
+      }
+    }
     
     this.isInitialized = false;
     console.log('[BLE] ✅ Cleanup complete');
