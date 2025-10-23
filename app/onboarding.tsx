@@ -56,7 +56,7 @@ export default function OnboardingPage() {
         await transact(async (wallet) => {
           // Authorize wallet
           const auth = await wallet.authorize({
-            identity: { name: 'anon0mesh', uri: 'https://anon0mesh.app' },
+            identity: { name: 'anon0mesh', uri: 'https://anonme.sh/' },
           });
           if (!auth || !auth.accounts || !auth.accounts[0]) {
             Alert.alert('MWA Error', 'No wallet account found.');

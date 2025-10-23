@@ -344,16 +344,6 @@ const OfflineMeshChatScreen: React.FC<OfflineMeshChatScreenProps> = ({
                 toggleSidebar={toggleSidebar} 
                 onWalletPress={handleWalletPress}
                 onNicknameEdit={handleNicknameEdit}
-                // zoneSelector={
-                //     <ZoneDropdownSelector
-                //         channels={channels}
-                //         currentChannel={currentChannel}
-                //         onChannelSelect={(channel: Channel) => {
-                //             setCurrentChannel(channel);
-                //             console.log(`[UI] Switched to zone: ${channel.name} (TTL: ${channel.ttl})`);
-                //         }}
-                //     />
-                // }
             />
 
         {/* Private sidebar (slides from RIGHT) - Full height */}

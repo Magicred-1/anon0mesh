@@ -1,9 +1,11 @@
 import { SolanaTransactionSerializer } from '@/src/types/solana';
 import * as Clipboard from 'expo-clipboard';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Modal,
   Text,
   TextInput,
@@ -43,7 +45,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   pubKey,
   nickname,
 }) => {
-  const [selectedTab, setSelectedTab] = useState<'receive' | 'send'>('receive');
+  const [selectedTab, setSelectedTab] = useState<'receive' | 'swap' | 'send'>('receive');
   const [sendAmount, setSendAmount] = useState('');
   const [recipientAddress, setRecipientAddress] = useState('');
   const [selectedCurrency, setSelectedCurrency] = useState<'SOL' | 'USDC'>('SOL');
@@ -59,6 +61,26 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   } | null>(null);
   const [rateLimitManager] = useState(() => new RateLimitManager(pubKey));
   const [qrModalVisible, setQrModalVisible] = useState(false);
+
+  // Rotation animation for the Swap icon
+  const rotationAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.timing(rotationAnim, {
+        toValue: 1,
+        duration: 2000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [rotationAnim]);
+
+  const rotation = rotationAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   // Initialize Solana wallet
   const {
@@ -461,6 +483,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
             marginHorizontal: 20,
             marginTop: 16,
             marginBottom: 20,
+            gap: 8,
           }}
         >
           <TouchableOpacity
@@ -474,9 +497,8 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               paddingHorizontal: 16,
               backgroundColor: selectedTab === 'receive' ? '#26C6DA' : 'transparent',
               borderRadius: 8,
-              marginRight: 8,
               borderWidth: 1,
-              borderColor: selectedTab === 'receive' ? '#26C6DA' : '#26C6DA40',
+              borderColor: selectedTab === 'receive' ? '#26C6DA' : '#444',
             }}
           >
             <View style={{ marginRight: 8 }}>
@@ -487,10 +509,42 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: selectedTab === 'receive' ? '600' : '400',
-                fontFamily: 'monospace',
+                fontFamily: 'Lexend_400Regular',
               }}
             >
               Receive
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setSelectedTab('swap')}
+            disabled={false}
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 12,
+              paddingHorizontal: 12,
+              backgroundColor: selectedTab === 'swap' ? '#26C6DA' : 'transparent',
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: selectedTab === 'swap' ? '#26C6DA' : '#444',
+              opacity: 0.9,
+            }}
+          >
+            <Animated.View>
+              <Text style={{ fontSize: 16 }}>🔁</Text>
+            </Animated.View>
+            <Text
+              style={{
+                color: '#FFFFFF',
+                fontSize: 14,
+                fontWeight: selectedTab === 'swap' ? '600' : '400',
+                fontFamily: 'Lexend_400Regular',
+              }}
+            >
+              Swap
             </Text>
           </TouchableOpacity>
 
@@ -505,9 +559,8 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               paddingHorizontal: 16,
               backgroundColor: selectedTab === 'send' ? '#26C6DA' : 'transparent',
               borderRadius: 8,
-              marginLeft: 8,
               borderWidth: 1,
-              borderColor: selectedTab === 'send' ? '#26C6DA' : '#B10FF240',
+              borderColor: selectedTab === 'send' ? '#26C6DA' : '#444',
             }}
           >
             <View style={{ marginRight: 8 }}>
@@ -518,7 +571,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                 color: '#FFFFFF',
                 fontSize: 16,
                 fontWeight: selectedTab === 'send' ? '600' : '400',
-                fontFamily: 'monospace',
+                fontFamily: 'Lexend_400Regular',
               }}
             >
               Send
@@ -606,6 +659,11 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          ) : selectedTab === 'swap' ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              <Text style={{ fontSize: 32, marginBottom: 12 }}>🔁</Text>
+              <Text style={{ color: '#aaa', fontSize: 16, textAlign: 'center' }}>Swap is coming soon — stay tuned.</Text>
             </View>
           ) : (
             // Send Tab Content

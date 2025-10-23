@@ -162,18 +162,16 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ pubKey, nickname, updateNicknam
                     onSelectPeer={(peer) => {
                         setPrivateTarget(peer);
                         toggleSidebar();
-                    }}
+                    } }
                     onClose={toggleSidebar}
                     visible={sidebarOpen}
                     currentPrivate={privateTarget}
                     onClearPrivate={() => setPrivateTarget(null)}
-                    channels={[]}
-                    currentChannel={null}
                     onSelectChannel={(channel: Channel) => {
                         console.log('[CHAT] selected channel', channel);
                         // Future: navigate to channel or set currentChannel
-                    }}
-            />
+                    } } 
+                    channels={[]}            />
         </Animated.View>
 
         {/* Nickname input */}

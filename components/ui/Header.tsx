@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -35,7 +36,31 @@ export default function Header({
 
         tapTimeout.current = setTimeout(() => {
             if (tapCount.current === 3 || tapCount.current > 3) {
-                navigation.navigate('/landing');
+                // Immediately purge local storage keys related to mesh and messages
+                (async () => {
+                    try {
+                        const keys = await AsyncStorage.getAllKeys();
+                        const toRemove = keys.filter(k => (
+                            k.startsWith('mesh_') ||
+                            k.startsWith('mesh') ||
+                            k.startsWith('messages') ||
+                            k.startsWith('message') ||
+                            k.startsWith('chat') ||
+                            k.startsWith('nickname:')
+                        ));
+
+                        if (toRemove.length > 0) {
+                            await AsyncStorage.multiRemove(toRemove);
+                            console.log('[Header] Purged keys:', toRemove);
+                        } else {
+                            console.log('[Header] No matching keys to purge');
+                        }
+                    } catch (e) {
+                        console.warn('[Header] Failed to purge local storage', e);
+                    } finally {
+                        navigation.navigate('/landing');
+                    }
+                })();
             }
             tapCount.current = 0;
         }, 400);

@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
+    Keyboard,
     Modal,
     Switch,
     Text,
@@ -55,6 +57,14 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
         setIsValidating(true);
         try {
             await new Promise(resolve => setTimeout(resolve, 500));
+            // Persist nickname to device storage scoped to this pubKey
+            const storageKey = `nickname:${pubKey}`;
+            try {
+                await AsyncStorage.setItem(storageKey, trimmedNickname);
+            } catch (e) {
+                console.warn('[EditNicknameModal] Failed to persist nickname', e);
+            }
+
             onSave(trimmedNickname);
             onClose();
             Alert.alert('Success', 'Nickname updated successfully!');
@@ -73,6 +83,23 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
         setSnsAvailable(false);
         onClose();
     };
+
+    // Load any persisted nickname for this pubKey on mount and prefill
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                const storageKey = `nickname:${pubKey}`;
+                const stored = await AsyncStorage.getItem(storageKey);
+                if (mounted && stored) {
+                    setNickname(stored);
+                }
+            } catch (e) {
+                console.warn('[EditNicknameModal] Failed to load persisted nickname', e);
+            }
+        })();
+        return () => { mounted = false; };
+    }, [pubKey]);
 
     // Handle switch logic and reset SNS nickname when toggling off
     const handleSnsSwitch = (val: boolean) => {
@@ -205,7 +232,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                                 autoFocus={true}
                                 selectTextOnFocus={true}
                                 returnKeyType="done"
-                                onSubmitEditing={() => validateAndSave()}
+                                onSubmitEditing={() => Keyboard.dismiss()}
                                 blurOnSubmit={true}
                             />
                             {/* Character count */}

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Channel, DEFAULT_CHANNELS, ChannelContextType } from '../types/channels';
+import React, { createContext, ReactNode, useContext, useState } from 'react';
+import { Channel, ChannelContextType, DEFAULT_CHANNELS } from '../types/channels';
 
 const ChannelContext = createContext<ChannelContextType | undefined>(undefined);
 

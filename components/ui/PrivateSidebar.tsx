@@ -6,6 +6,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
     View,
@@ -15,10 +16,10 @@ import { Channel } from '../../src/types/channels';
 interface Props {
     visible: boolean;
     peers: string[];
-    channels: Channel[];
-    currentChannel: Channel | null;
     onSelectPeer: (peer: string) => void;
     onSelectChannel: (channel: Channel) => void;
+    channels: Channel[];
+    currentChannel?: Channel | null;
     onClose: () => void;
     // Optional: currently selected private target (so sidebar can offer a quick return)
     currentPrivate?: string | null;
@@ -42,7 +43,10 @@ export default function PrivateSidebar({
 }: Props) {
     const slideAnim = React.useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
     const opacityAnim = React.useRef(new Animated.Value(0)).current;
-    const [activeTab, setActiveTab] = React.useState<'channels' | 'peers'>('channels');
+    // Tabs removed: always show peers
+    const [activePeer, setActivePeer] = React.useState<string | null>(null);
+    const [messagesMap, setMessagesMap] = React.useState<Record<string, { from: 'me' | 'them'; text: string; }[]>>({});
+    const [composed, setComposed] = React.useState('');
 
     // Generate random mock peers if none exist
     const generateMockPeers = (count: number) => {
@@ -81,9 +85,34 @@ export default function PrivateSidebar({
     }, [visible, slideAnim, opacityAnim]);
 
     const handleSelectPeer = (peer: string) => {
+        // open inline private chat inside the sidebar
+        setActivePeer(peer);
         onSelectPeer(peer);
-        onClose();
+
+        // seed mock conversation if none
+        setMessagesMap((prev) => {
+            if (prev[peer]) return prev;
+            return {
+                ...prev,
+                [peer]: [
+                    { from: 'them', text: `Hey — this is ${peer}.` },
+                    { from: 'me', text: 'Hello! This is a private chat.' },
+                ],
+            };
+        });
     };
+
+    const handleSendMessage = () => {
+        if (!activePeer || !composed.trim()) return;
+        const text = composed.trim();
+        setMessagesMap((prev) => ({
+            ...prev,
+            [activePeer]: [...(prev[activePeer] || []), { from: 'me', text }],
+        }));
+        setComposed('');
+    };
+
+    // handleCloseChat removed; use setActivePeer(null) directly where needed
 
     // When returning from a private convo, prefer switching back to the 'general'
     // channel (if present) and keep the sidebar open so the user can continue
@@ -97,7 +126,6 @@ export default function PrivateSidebar({
 
         if (generalChannel) {
             onSelectChannel(generalChannel);
-            setActiveTab('channels');
             // Keep the sidebar open so the user can pick another channel or inspect
             // channel details.
             return;
@@ -105,7 +133,6 @@ export default function PrivateSidebar({
 
         if (channels.length > 0) {
             onSelectChannel(channels[0]);
-            setActiveTab('channels');
             return;
         }
 
@@ -139,7 +166,7 @@ export default function PrivateSidebar({
                         backgroundColor: '#121212',
                         transform: [{ translateX: slideAnim }],
                         borderLeftWidth: 2,
-                        borderLeftColor: '#26C6DA',
+                        borderLeftColor: '#444',
                         shadowColor: '#000',
                         shadowOffset: { width: -3, height: 0 },
                         shadowOpacity: 0.4,
@@ -148,11 +175,8 @@ export default function PrivateSidebar({
                 >
                     {/* Header */}
                     <View style={{ paddingTop: 60, paddingHorizontal: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>
-                        <Text style={{ color: '#26C6DA', fontSize: 26, fontWeight: '700', fontFamily: 'monospace', marginBottom: 4 }}>
-                            Mesh Network
-                        </Text>
                         <Text style={{ color: '#aaa', fontSize: 13, fontFamily: 'monospace' }}>
-                            {channels.length} channels • {displayPeers.length} peers online
+                            🛜 {displayPeers.length} peers online
                         </Text>
                         {/* Quick return to general chat (visible whenever in a private convo) */}
                         {currentPrivate ? (
@@ -174,193 +198,124 @@ export default function PrivateSidebar({
                         ) : null}
                     </View>
 
-                    {/* Tabs */}
-                    <View style={{ flexDirection: 'row', margin: 16, backgroundColor: '#1E1E1E', borderRadius: 12 }}>
-                        {['channels', 'peers'].map((tab) => (
-                            <TouchableOpacity
-                                key={tab}
-                                onPress={() => setActiveTab(tab as 'channels' | 'peers')}
-                                style={{
-                                    flex: 1,
-                                    paddingVertical: 10,
-                                    borderRadius: 12,
-                                    backgroundColor: activeTab === tab ? '#26C6DA' : 'transparent',
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        color: activeTab === tab ? '#fff' : '#888',
-                                        fontFamily: 'monospace',
-                                        fontSize: 14,
-                                        fontWeight: '600',
-                                        textAlign: 'center',
-                                    }}
-                                >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                    {/* Tabs removed - peers-only sidebar */}
 
-                    {/* Content */}
-                    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-                        {activeTab === 'channels' ? (
-                            channels.length === 0 ? (
+                    {/* Content: peers or inline private chat */}
+                    {activePeer ? (
+                        <View style={{ flex: 1 }}>
+                            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#222', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <View>
+                                    <Text style={{ color: '#26C6DA', fontSize: 16, fontWeight: '700' }}>{activePeer}</Text>
+                                    <Text style={{ color: '#999', fontSize: 12 }}>Private conversation</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setActivePeer(null)} style={{ padding: 8 }}>
+                                    <Text style={{ color: '#fff' }}>← Back</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView contentContainerStyle={{ padding: 16, flexGrow: 1 }}>
+                                {(messagesMap[activePeer] || []).map((m, i) => (
+                                    <View key={i} style={{ marginBottom: 8, alignItems: m.from === 'me' ? 'flex-end' : 'flex-start' }}>
+                                        <View style={{ backgroundColor: m.from === 'me' ? '#26C6DA' : '#222', padding: 10, borderRadius: 12, maxWidth: '80%' }}>
+                                            <Text style={{ color: m.from === 'me' ? '#000' : '#fff' }}>{m.text}</Text>
+                                        </View>
+                                    </View>
+                                ))}
+                            </ScrollView>
+
+                            <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#222', flexDirection: 'row', alignItems: 'center' }}>
+                                <TextInput
+                                    value={composed}
+                                    onChangeText={setComposed}
+                                    placeholder="Message"
+                                    placeholderTextColor="#888"
+                                    style={{ flex: 1, color: '#fff', backgroundColor: '#111', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, marginRight: 8 }}
+                                />
+                                <TouchableOpacity onPress={handleSendMessage} style={{ paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#26C6DA', borderRadius: 10 }}>
+                                    <Text style={{ fontWeight: '700' }}>Send</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : (
+                        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
+                            {displayPeers.length === 0 ? (
                                 <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-                                    <Text style={{ fontSize: 48, marginBottom: 12 }}>💬</Text>
+                                    <Text style={{ fontSize: 48, marginBottom: 12 }}>👥</Text>
                                     <Text style={{ color: '#666', fontFamily: 'monospace', fontSize: 14, textAlign: 'center' }}>
-                                        No channels available
+                                        No peers online yet
                                     </Text>
                                 </View>
                             ) : (
-                                channels.map((channel) => (
-                                    <TouchableOpacity
-                                        key={channel.id}
-                                        onPress={() => {
-                                            onSelectChannel(channel);
-                                            onClose();
-                                        }}
-                                        style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            padding: 16,
-                                            marginBottom: 12,
-                                            borderRadius: 16,
-                                            backgroundColor: currentChannel?.id === channel.id ? '#1f3f3f' : '#1A1A1A',
-                                            borderWidth: 1,
-                                            borderColor: currentChannel?.id === channel.id ? '#10B981' : '#333',
-                                        }}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View
+                                <>
+                                    {/* Quick return to general chat when in a private convo */}
+                                    {currentPrivate ? (
+                                        <TouchableOpacity
+                                            onPress={handleReturnToGeneral}
                                             style={{
-                                                width: 44,
-                                                height: 44,
-                                                borderRadius: 22,
-                                                backgroundColor: '#26C6DA',
-                                                justifyContent: 'center',
+                                                paddingVertical: 10,
+                                                paddingHorizontal: 14,
+                                                marginBottom: 12,
+                                                borderRadius: 10,
+                                                backgroundColor: '#222',
+                                                borderWidth: 1,
+                                                borderColor: '#444',
                                                 alignItems: 'center',
-                                                marginRight: 12,
+                                                flexDirection: 'row',
+                                                justifyContent: 'center',
                                             }}
                                         >
-                                            <Text style={{ fontSize: 20 }}>{channel.icon || '💬'}</Text>
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ color: '#26C6DA', fontFamily: 'Lexend_400Regular', fontSize: 15, fontWeight: '600' }}>
-                                                #{channel.name}
+                                            <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700', marginRight: 8 }}>
+                                                ←
                                             </Text>
-                                            {channel.description && (
-                                                <Text style={{ color: '#b0b0b0', fontSize: 11, fontFamily: 'monospace' }}>{channel.description}</Text>
-                                            )}
-                                        </View>
-                                        {currentChannel?.id === channel.id && (
-                                            <Text style={{ color: '#10B981', fontSize: 20 }}>✓</Text>
-                                        )}
-                                    </TouchableOpacity>
-                                ))
-                            )
-                        ) : displayPeers.length === 0 ? (
-                            <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-                                <Text style={{ fontSize: 48, marginBottom: 12 }}>👥</Text>
-                                <Text style={{ color: '#666', fontFamily: 'monospace', fontSize: 14, textAlign: 'center' }}>
-                                    No peers online yet
-                                </Text>
-                            </View>
-                        ) : (
-                            <>
-                                {/* Quick return to general chat when in a private convo */}
-                                {currentPrivate ? (
-                                    <TouchableOpacity
-                                        onPress={handleReturnToGeneral}
-                                        style={{
-                                            paddingVertical: 10,
-                                            paddingHorizontal: 14,
-                                            marginBottom: 12,
-                                            borderRadius: 10,
-                                            backgroundColor: '#222',
-                                            borderWidth: 1,
-                                            borderColor: '#444',
-                                            alignItems: 'center',
-                                            flexDirection: 'row',
-                                            justifyContent: 'center',
-                                        }}
-                                    >
-                                        <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700', marginRight: 8 }}>
-                                            ←
-                                        </Text>
-                                        <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700' }}>
-                                            Back to general
-                                        </Text>
-                                    </TouchableOpacity>
-                                ) : null}
-                                {displayPeers.map((peer, i) => (
-                                    <TouchableOpacity
-                                    key={i}
-                                    onPress={() => handleSelectPeer(peer.name)}
-                                    style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        padding: 16,
-                                        marginBottom: 12,
-                                        borderRadius: 16,
-                                        backgroundColor: '#1A1A1A',
-                                        borderWidth: 1,
-                                        borderColor: '#333',
-                                    }}
-                                    activeOpacity={0.8}
-                                >
-                                    <View
-                                        style={{
-                                            width: 44,
-                                            height: 44,
-                                            borderRadius: 22,
-                                            backgroundColor: '#26C6DA',
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                            marginRight: 12,
-                                        }}
-                                    >
-                                        <Text style={{ fontSize: 20 }}>{peer.emoji}</Text>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ color: '#26C6DA', fontFamily: 'Lexend_400Regular', fontSize: 15, fontWeight: '600' }}>
-                                            {peer.name.length > 20
-                                                ? `${peer.name.slice(0, 8)}...${peer.name.slice(-8)}`
-                                                : peer.name}
-                                        </Text>
-                                        <Text style={{ color: '#10B981', fontSize: 11 }}>Online</Text>
-                                    </View>
-                                    <Text style={{ color: '#26C6DA', fontSize: 20 }}>→</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </>
+                                            <Text style={{ color: '#fff', fontFamily: 'monospace', fontWeight: '700' }}>
+                                                Back to general
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                    {displayPeers.map((peer, i) => (
+                                        <TouchableOpacity
+                                            key={i}
+                                            onPress={() => handleSelectPeer(peer.name)}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                padding: 16,
+                                                marginBottom: 12,
+                                                borderRadius: 16,
+                                                backgroundColor: '#1A1A1A',
+                                                borderWidth: 1,
+                                                borderColor: '#333',
+                                            }}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View
+                                                style={{
+                                                    width: 44,
+                                                    height: 44,
+                                                    borderRadius: 22,
+                                                    backgroundColor: '#26C6DA',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                    marginRight: 12,
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 20 }}>{peer.emoji}</Text>
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ color: '#26C6DA', fontFamily: 'Lexend_400Regular', fontSize: 15, fontWeight: '600' }}>
+                                                    {peer.name.length > 20
+                                                        ? `${peer.name.slice(0, 8)}...${peer.name.slice(-8)}`
+                                                        : peer.name}
+                                                </Text>
+                                                <Text style={{ color: '#10B981', fontSize: 11 }}>Online</Text>
+                                            </View>
+                                            <Text style={{ color: '#26C6DA', fontSize: 20 }}>→</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </>
+                            )}
+                        </ScrollView>
                     )}
-                    </ScrollView>
-
-                    {/* Footer */}
-                    <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#2a2a2a' }}>
-                        <TouchableOpacity
-                            onPress={onClose}
-                            style={{
-                                backgroundColor: '#26C6DA',
-                                paddingVertical: 14,
-                                borderRadius: 14,
-                                alignItems: 'center',
-                            }}
-                        >
-                            <Text
-                                style={{
-                                    color: '#fff',
-                                    fontWeight: '700',
-                                    fontFamily: 'monospace',
-                                    fontSize: 16,
-                                }}
-                            >
-                                Close Sidebar
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
             </View>
         </Modal>
     );
