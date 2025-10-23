@@ -13,12 +13,16 @@ interface ZoneDropdownSelectorProps {
   channels: Channel[];
   currentChannel: Channel | null;
   onChannelSelect: (channel: Channel) => void;
+  useAntennaIcon?: boolean;
+  iconOnly?: boolean;
 }
 
 export const ZoneDropdownSelector: React.FC<ZoneDropdownSelectorProps> = ({
   channels,
   currentChannel,
   onChannelSelect,
+  useAntennaIcon = false,
+  iconOnly = false,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -31,24 +35,33 @@ export const ZoneDropdownSelector: React.FC<ZoneDropdownSelectorProps> = ({
 
   return (
     <>
-      {/* Dropdown Button */}
-      <TouchableOpacity
-        onPress={() => setDropdownOpen(true)}
-        style={styles.dropdownButton}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.dropdownIcon}>
-          {currentChannel?.icon || '📡'}
-        </Text>
-        <View style={styles.dropdownTextContainer}>
-          <Text style={styles.dropdownLabel}>Mesh Zone</Text>
-          <Text style={styles.dropdownValue} numberOfLines={1}>
-            {currentChannel?.name || 'Select Zone'}
+      {/* Minimal Dropdown Button or Icon-only */}
+      {iconOnly ? (
+        <TouchableOpacity
+          onPress={() => setDropdownOpen(true)}
+          style={styles.dropdownButtonIconOnly}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.dropdownIconSmall}>{useAntennaIcon ? '📡' : (currentChannel?.icon || '📡')}</Text>
+          <Text style={styles.dropdownCaretSmall}>▾</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          onPress={() => setDropdownOpen(true)}
+          style={styles.dropdownButtonMinimal}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.dropdownIcon}>
+            {useAntennaIcon ? '📡' : (currentChannel?.icon || '📡')}
           </Text>
-        </View>
-        <Text style={styles.dropdownArrow}>▼</Text>
-      </TouchableOpacity>
-
+          <View style={styles.dropdownTextContainer}>
+            <Text style={styles.dropdownValue} numberOfLines={1}>
+              {currentChannel?.name || 'Select Zone'}
+            </Text>
+          </View>
+          <Text style={styles.dropdownArrow}>▾</Text>
+        </TouchableOpacity>
+      )}
       {/* Dropdown Modal */}
       <Modal
         visible={dropdownOpen}
@@ -61,67 +74,37 @@ export const ZoneDropdownSelector: React.FC<ZoneDropdownSelectorProps> = ({
           activeOpacity={1}
           onPress={() => setDropdownOpen(false)}
         >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📡 Select Mesh Zone</Text>
-              <Text style={styles.modalSubtitle}>Self-Healing Network</Text>
-            </View>
+          <View style={styles.modalContentMinimal}>
+            <Text style={styles.modalTitleMinimal}>📡 Select Mesh Zone</Text>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
               {zoneChannels.map((channel) => {
                 const isActive = currentChannel?.id === channel.id;
-                
+
                 return (
                   <TouchableOpacity
                     key={channel.id}
                     style={[
-                      styles.zoneOption,
-                      isActive && styles.zoneOptionActive,
-                      { borderLeftColor: channel.colorCode || '#666' }
+                      styles.zoneOptionMinimal,
+                      isActive && styles.zoneOptionActiveMinimal,
                     ]}
                     onPress={() => handleSelect(channel)}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                   >
-                    <View style={styles.zoneOptionLeft}>
-                      <Text style={styles.zoneOptionIcon}>{channel.icon}</Text>
-                      <View style={styles.zoneOptionInfo}>
-                        <Text style={[styles.zoneOptionName, isActive && styles.zoneOptionNameActive]}>
-                          {channel.name}
-                        </Text>
-                        <Text style={styles.zoneOptionDescription} numberOfLines={1}>
-                          {channel.description}
-                        </Text>
-                      </View>
+                    <View style={styles.zoneOptionLeftMinimal}>
+                      <Text style={styles.zoneOptionIconMinimal}>{channel.icon}</Text>
+                      <Text style={[styles.zoneOptionNameMinimal, isActive && styles.zoneOptionNameActive]}>{channel.name}</Text>
                     </View>
 
-                    <View style={styles.zoneOptionRight}>
-                      <View style={styles.zoneStats}>
-                        <Text style={styles.zoneStatLabel}>TTL</Text>
-                        <Text style={styles.zoneStatValue}>{channel.ttl}</Text>
-                      </View>
-                      <View style={styles.zoneStats}>
-                        <Text style={styles.zoneStatLabel}>Range</Text>
-                        <Text style={styles.zoneStatValue}>
-                          {channel.maxDistanceKm === Infinity ? '∞' : `${channel.maxDistanceKm}km`}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {isActive && (
-                      <View style={[styles.activeIndicator, { backgroundColor: channel.colorCode }]} />
-                    )}
+                    {isActive ? (
+                      <Text style={[styles.checkMark, { color: channel.colorCode || '#26C6DA' }]}>
+                        ✓
+                      </Text>
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setDropdownOpen(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -173,6 +156,40 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginLeft: 4,
   },
+  dropdownButtonMinimal: {
+    backgroundColor: 'transparent',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  dropdownButtonIconOnly: {
+    width: 44,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a1a',
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#252525',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dropdownIconSmall: {
+    fontSize: 16,
+  },
+  dropdownCaretSmall: {
+    fontSize: 10,
+    color: '#E0E0E0',
+    marginLeft: 6,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -206,6 +223,24 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     letterSpacing: -0.3,
   },
+  modalContentMinimal: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    width: '80%',
+    maxHeight: '60%',
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    overflow: 'hidden',
+    paddingVertical: 8,
+  },
+  modalTitleMinimal: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    textAlign: 'center',
+  },
   modalSubtitle: {
     fontSize: 11,
     color: '#999999',
@@ -227,6 +262,37 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     backgroundColor: '#1a1a1a',
     position: 'relative',
+  },
+  zoneOptionMinimal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#252525',
+    backgroundColor: '#1a1a1a',
+  },
+  zoneOptionActiveMinimal: {
+    backgroundColor: '#222222',
+  },
+  zoneOptionLeftMinimal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  zoneOptionIconMinimal: {
+    fontSize: 18,
+    marginRight: 10,
+  },
+  zoneOptionNameMinimal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  checkMark: {
+    fontSize: 16,
+    fontWeight: '800',
   },
   zoneOptionActive: {
     backgroundColor: '#252525',

@@ -2,7 +2,9 @@ import { useRouter } from 'expo-router';
 import React, { useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useChannels } from '../../src/contexts/ChannelContext';
 import PenIcon from './PenIcon';
+import { ZoneDropdownSelector } from './ZoneDropdownSelector';
 
 interface Props {
     pubKey: string;
@@ -19,10 +21,12 @@ export default function Header({
     displayNickname, 
     onWalletPress, 
     onNicknameEdit,
+    zoneSelector,
 }: Props) {
     const navigation = useRouter();
     const tapCount = useRef(0);
     const tapTimeout = useRef<NodeJS.Timeout | number | null>(null);
+    const { channels, currentChannel, setCurrentChannel } = useChannels();
 
     const handleTitleTap = () => {
         tapCount.current += 1;
@@ -61,16 +65,30 @@ export default function Header({
                         </TouchableOpacity>
                     </View>
 
-                    {/* Right - Wallet Button */}
-                    <TouchableOpacity
-                        onPress={onWalletPress || (() => {})}
-                        style={styles.walletButton}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.buttonEmoji}>💰</Text>
-                        <Text style={styles.walletText}>Wallet</Text>
-                    </TouchableOpacity>
+                    {/* Right group: selector (left) + wallet (right) */}
+                    <View style={styles.rightGroup}>
+                        <View style={styles.selectorContainer}>
+                            <ZoneDropdownSelector
+                                channels={channels}
+                                currentChannel={currentChannel}
+                                onChannelSelect={(ch) => setCurrentChannel(ch)}
+                                useAntennaIcon={true}
+                                iconOnly={true}
+                            />
+                        </View>
+
+                        {/* Right - Wallet Button */}
+                        <TouchableOpacity
+                            onPress={onWalletPress || (() => {})}
+                            style={styles.walletButton}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.buttonEmoji}>💰</Text>
+                            <Text style={styles.walletText}>Wallet</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
+                {/* Dropdown is self-contained; no modal needed here */}
                 
             </View>
         </SafeAreaView>
@@ -168,5 +186,29 @@ const styles = StyleSheet.create({
         fontSize: 11.5,
         fontFamily: 'Lexend_400Regular',
         letterSpacing: 0.2,
+    },
+    channelButton: {
+        marginRight: 8,
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        backgroundColor: '#1a1a1a',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#252525',
+    },
+    channelIcon: {
+        color: '#E0E0E0',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    rightGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    selectorContainer: {
+        marginRight: 8,
+        width: 48,
     },
 });
