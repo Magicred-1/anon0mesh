@@ -8,24 +8,31 @@ import { NativeModules, Platform } from 'react-native';
  * Check if BLE is available on this platform/device
  * This function is safe to call and won't crash even if BLE is not available
  */
-export const isBLEAvailable = (): boolean => {
-  // BLE is not supported on web
-  if (Platform.OS === 'web') {
-    console.log('[BLE-Utils] Platform: web - BLE not supported');
-    return false;
+// src/networking/bluetooth/BLEUtils.ts
+
+export function isBLEAvailable(): boolean {
+  if (Platform.OS === 'android' || Platform.OS === 'ios') {
+    try {
+      // If using react-native-ble-plx or similar, check native module
+      const hasBLEModule =
+        !!NativeModules.ReactNativeBleManager ||
+        !!NativeModules.ReactNativeMultiBlePeripheral ||
+        !!NativeModules.BleManager ||
+        !!NativeModules.BlePlxModule;
+
+      if (!hasBLEModule) {
+        console.warn('[BLEUtils] No BLE native module found in NativeModules:', Object.keys(NativeModules));
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn('[BLEUtils] BLE check failed', e);
+      return false;
+    }
   }
-  
-  try {
-    // Check if the native module exists
-    const BleModule = NativeModules.BleClientManager;
-    const isAvailable = BleModule != null;
-    console.log(`[BLE-Utils] Platform: ${Platform.OS} - Native module ${isAvailable ? 'found' : 'not found'}`);
-    return isAvailable;
-  } catch (error) {
-    console.log(`[BLE-Utils] Platform: ${Platform.OS} - Error checking native module:`, error);
-    return false;
-  }
-};
+  return false;
+}
+
 
 /**
  * Safely get BleManager instance

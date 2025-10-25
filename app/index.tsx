@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { isSeekerDevice } from '@/src/types/solana';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import { useEffect } from 'react';
 
 export default function Index() {
     const router = useRouter();
+    const isSeekerUser = isSeekerDevice();
 
     useEffect(() => {
         (async () => {
@@ -13,6 +15,12 @@ export default function Index() {
         
         // Check if user has seen index
         const hasSeenIndex = await SecureStore.getItemAsync('hasSeenIndex');
+
+        if (isSeekerUser) {
+            // Seeker devices don't need privKey stored
+            router.replace('/(tabs)');
+            return;
+        }
         
         if (!savedPubKey || !savedPrivKey) {
             // No wallet - go to onboarding
@@ -25,7 +33,7 @@ export default function Index() {
             router.replace('/(tabs)');
         }
         })();
-    }, [router]);
+    }, [router, isSeekerUser]);
 
     return null;
 }

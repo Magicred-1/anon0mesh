@@ -1,10 +1,11 @@
 // Import polyfills first
-import '../../src/polyfills';
-import React, { useEffect, useState } from 'react';
+import OfflineMeshChatScreen from '@/components/screens/OfflineMeshChatScreen';
+import { isSeekerDevice } from '@/src/types/solana';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { View, ActivityIndicator } from 'react-native';
-import OfflineMeshChatScreen from '@/components/screens/OfflineMeshChatScreen';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import '../../src/polyfills';
 
 export default function ChatPage() {
   const router = useRouter();
@@ -16,10 +17,10 @@ export default function ChatPage() {
     (async () => {
       // Load data immediately
       const savedPubKey = await SecureStore.getItemAsync('pubKey');
-      const savedPrivKey = await SecureStore.getItemAsync('privKey');
+      const savedPrivKey = isSeekerDevice() ? 'SEEKER_DEVICE' : await SecureStore.getItemAsync('privKey');
       
       // ⚠️ If wallet isn't initialized (missing either key), go to onboarding
-      if (!savedPubKey || !savedPrivKey) {
+      if (!savedPubKey || !savedPrivKey && !isSeekerDevice()) {
         router.replace('/onboarding');
         return;
       }

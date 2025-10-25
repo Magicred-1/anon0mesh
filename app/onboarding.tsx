@@ -1,24 +1,15 @@
 import OnboardingScreen from '@/components/screens/OnboardingScreen';
+import { isSeekerDevice } from '@/src/types/solana';
 import { Keypair } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 
-const isSeekerDevice = (): boolean => {
-  // Defensive: Model may not exist on all platforms
-  const model = (Platform.constants as any)?.Model;
-  return model === 'Seeker';
-};
-
-// Lazy load the mobile wallet adapter only when needed
 const getMobileWalletAdapter = async () => {
-  if (Platform.OS !== 'android') {
-    return null;
-  }
-  
+  if (Platform.OS !== 'android') return null;
   try {
     const mwa = await import('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
     return mwa.transact;
@@ -30,101 +21,88 @@ const getMobileWalletAdapter = async () => {
 
 export default function OnboardingPage() {
   const [tempNickname, setTempNickname] = useState<string>('');
+  const [isSeeker, setIsSeeker] = useState<boolean>(false);
   const router = useRouter();
 
-  async function onboard() {
-    // Test crypto before proceeding
-    try {
-      const testArray = new Uint8Array(4);
-      global.crypto.getRandomValues(testArray);
-    } catch (error) {
-      console.error('❌ Crypto not working:', error);
-      Alert.alert('Crypto Error', 'Random number generation not available. Please restart the app.');
-      return;
-    }
+  useEffect(() => {
+    setIsSeeker(isSeekerDevice());
+  }, []);
 
-    // If MWA/Seeker is requested, use transact
-    if (isSeekerDevice()) {
+  async function onboard() {
+    if (isSeeker) {
+      console.log('[Onboarding] Seeker device detected - connecting via MWA');
       try {
         const transact = await getMobileWalletAdapter();
-        
         if (!transact) {
           Alert.alert('MWA Error', 'Mobile Wallet Adapter not available on this device.');
           return;
         }
 
         await transact(async (wallet) => {
-          // Authorize wallet
-          const auth = await wallet.authorize({
-            identity: { name: 'anon0mesh', uri: 'https://anonme.sh/' },
+          const authResult = await wallet.authorize({
+            cluster: 'devnet',
+            identity: { 
+              name: 'anon0mesh', 
+              uri: 'https://anonme.sh/',
+              icon: '/assets/images/icon.png',
+            },
           });
-          if (!auth || !auth.accounts || !auth.accounts[0]) {
-            Alert.alert('MWA Error', 'No wallet account found.');
+
+          if (!authResult?.accounts?.length) {
+            Alert.alert('Connection Failed', 'No wallet account found.');
             return;
           }
-          const pub = auth.accounts[0].address;
 
-          await SecureStore.setItemAsync('pubKey', pub);
+          const publicKey = authResult.accounts[0].address;
+          await SecureStore.setItemAsync('pubKey', publicKey);
           await SecureStore.setItemAsync('useSeeker', 'true');
-          // Save nickname
-          if (tempNickname.trim()) {
-            await SecureStore.setItemAsync('nickname', tempNickname);
-            Alert.alert('Wallet Connected!', `Welcome to anon0mesh, @${tempNickname}! You can edit your nickname later in settings.`);
-          } else {
-            Alert.alert('Wallet Connected', `anon0mesh/${pub.slice(0, 8)}`);
-          }
-          router.replace('/landing');
+          await SecureStore.setItemAsync('nickname', tempNickname || '');
+
+          Alert.alert(
+            'Wallet Connected!',
+            `Welcome to anon0mesh${tempNickname ? `, @${tempNickname}` : ''}!`,
+            [{ text: 'OK', onPress: () => router.replace('/landing') }]
+          );
         });
-        return;
-      } catch (e: any) {
-        Alert.alert('MWA Error', 'Failed to connect wallet.');
-        return;
-      }
-    }
 
-    // 1️⃣ Check if device supports biometric/passcode
-    const hardware = await LocalAuthentication.hasHardwareAsync();
-    const enrolled = await LocalAuthentication.isEnrolledAsync();
+        router.replace('/landing');
 
-    if (!hardware || !enrolled) {
-      Alert.alert('No biometrics', 'Proceeding without biometric protection.');
-    } else {
-      const auth = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Authenticate to setup wallet',
-        fallbackLabel: 'Use device passcode',
-      });
-      if (!auth.success) {
-        Alert.alert('Authentication failed');
+        return;
+      } catch (error: any) {
+        Alert.alert('Connection Failed', error?.message || 'Failed to connect wallet.');
         return;
       }
     }
 
-    // 2️⃣ Generate Solana keypair locally
-    const keypair = Keypair.generate();
-    const pub = keypair.publicKey.toBase58();
-    const privKeyHex = Buffer.from(keypair.secretKey).toString('hex');
+    // Normal Android flow
+    console.log('[Onboarding] Non-Seeker device - generating wallet');
 
-    // Validate key size (Solana secret keys are always 64 bytes)
-    if (keypair.secretKey.length !== 64) {
-      console.error(`Invalid secret key size: ${keypair.secretKey.length} bytes`);
-      Alert.alert('Key Generation Error', 'Failed to generate valid keypair. Please try again.');
-      return;
-    }
+    try {
+      const hardware = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
 
-    // 3️⃣ Save to SecureStore (encrypted by OS)
-    await SecureStore.setItemAsync('pubKey', pub);
-    await SecureStore.setItemAsync('privKey', privKeyHex);
+      if (hardware && enrolled) {
+        const auth = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Authenticate to setup wallet',
+          fallbackLabel: 'Use device passcode',
+        });
+        if (!auth.success) return Alert.alert('Authentication failed');
+      }
 
-    // 4️⃣ Save the generated nickname
-    if (tempNickname.trim()) {
+      const keypair = Keypair.generate();
+      const pub = keypair.publicKey.toBase58();
+      const privKeyHex = Buffer.from(keypair.secretKey).toString('hex');
+
+      await SecureStore.setItemAsync('pubKey', pub);
+      await SecureStore.setItemAsync('privKey', privKeyHex);
       await SecureStore.setItemAsync('nickname', tempNickname);
-      Alert.alert('Wallet Created!', `Welcome to anon0mesh, @${tempNickname}! You can edit your nickname later in settings.`);
-    } else {
-      Alert.alert('Wallet Created', `anon0mesh/${pub.slice(0, 8)}`);
-    }
 
-    // 5️⃣ Navigate to landing page
-    router.replace('/landing');
+      Alert.alert('Wallet Created!', `Welcome @${tempNickname || pub.slice(0, 8)}!`);
+      router.replace('/landing');
+    } catch (err) {
+      console.error('Error creating wallet:', err);
+      Alert.alert('Error', 'Something went wrong during onboarding.');
+    }
   }
 
   return (
@@ -132,6 +110,7 @@ export default function OnboardingPage() {
       tempNickname={tempNickname}
       setTempNickname={setTempNickname}
       onboard={onboard}
+      isSeeker={isSeeker}
     />
   );
 }

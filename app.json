@@ -16,7 +16,7 @@
         "CFBundleAllowMixedLocalizations": true,
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to communicate with nearby devices for offline mesh networking.",
         "NSCameraUsageDescription": "This app requires camera access to scan wallet addresses QR codes.",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to communicate with nearby devices for offline mesh networking."
+        "NSBluetoothPeripheralUsageDescription": "This app advertises over Bluetooth to nearby peers."
       }
     },
     "android": {
@@ -25,16 +25,13 @@
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_ADVERTISE",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
-        "android.permission.BLUETOOTH_CONNECT"
+        "ACCESS_COARSE_LOCATION"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -42,7 +39,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",

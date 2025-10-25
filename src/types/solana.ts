@@ -3,6 +3,7 @@
  */
 
 import { Buffer } from 'buffer';
+import { Platform } from 'react-native';
 
 // ============================================================================
 // SOLANA TRANSACTION MESSAGE TYPES
@@ -371,3 +372,9 @@ export function estimateTransactionSize(payload: SolanaTransactionPayload): numb
     
     return size;
 }
+
+export const isSeekerDevice = (): boolean => {
+    // Defensive: Model may not exist on all platforms
+    const model = (Platform.constants as any)?.Model;
+    return model === 'Seeker';
+};

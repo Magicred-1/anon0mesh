@@ -1,9 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Transaction } from '@solana/web3.js';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  SolanaWalletManager,
-  TransactionMetadata,
-  WalletConfig
+    SolanaWalletManager,
+    TransactionMetadata,
+    WalletConfig
 } from './SolanaWalletManager';
 
 export interface UseSolanaWalletReturn {
@@ -55,13 +56,31 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
       // Fetch SOL balance
       const newBalance = await wallet.getBalance();
       setBalance(newBalance);
+      // Persist SOL balance to cache per-publicKey
+      try {
+        const pk = wallet.getPublicKey?.() ?? publicKey;
+        if (pk) {
+          await AsyncStorage.setItem(`wallet_balance:${pk}:SOL`, JSON.stringify(newBalance));
+        }
+      } catch (e) {
+        console.warn('[useSolanaWallet] Failed to cache SOL balance', e);
+      }
       
       // Fetch USDC balance (if supported by SolanaWalletManager)
       try {
         const getTokenBalanceFn = (wallet as any).getTokenBalance;
         if (typeof getTokenBalanceFn === 'function') {
-          const usdcBal = await getTokenBalanceFn.call(wallet, 'USDC');
-          setUsdcBalance(usdcBal ?? 0);
+            const usdcBal = await getTokenBalanceFn.call(wallet, 'USDC');
+            setUsdcBalance(usdcBal ?? 0);
+            // Persist USDC balance
+            try {
+              const pk = wallet.getPublicKey?.() ?? publicKey;
+              if (pk) {
+                await AsyncStorage.setItem(`wallet_balance:${pk}:USDC`, JSON.stringify(usdcBal ?? 0));
+              }
+            } catch (e) {
+              console.warn('[useSolanaWallet] Failed to cache USDC balance', e);
+            }
         } else {
           // Wallet manager doesn't support token balances; default to 0
           setUsdcBalance(0);
@@ -74,10 +93,21 @@ export const useSolanaWallet = (config: WalletConfig): UseSolanaWalletReturn => 
       
       setError(null); // Clear any previous errors
     } catch {
-      // Silently fail if offline - don't throw or show error
-      console.log('[useSolanaWallet] Could not fetch balance - possibly offline');
+      // Silently fail if offline - try to load cached balances if available
+      console.log('[useSolanaWallet] Could not fetch balance - possibly offline - loading cached balances');
+      try {
+        const pk = wallet?.getPublicKey?.() ?? publicKey;
+        if (pk) {
+          const storedSol = await AsyncStorage.getItem(`wallet_balance:${pk}:SOL`);
+          const storedUsdc = await AsyncStorage.getItem(`wallet_balance:${pk}:USDC`);
+          if (storedSol) setBalance(Number(JSON.parse(storedSol)) || 0);
+          if (storedUsdc) setUsdcBalance(Number(JSON.parse(storedUsdc)) || 0);
+        }
+      } catch (e) {
+        console.warn('[useSolanaWallet] Failed to load cached balances', e);
+      }
     }
-  }, [wallet, isInitialized]);
+  }, [wallet, isInitialized, publicKey]);
 
   // Initialize wallet with keypair
   const initializeWallet = useCallback(async (pubKeyBase58: string): Promise<boolean> => {

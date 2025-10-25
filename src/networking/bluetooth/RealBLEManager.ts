@@ -1,7 +1,6 @@
 // src/networking/RealBLEManager.ts
-// Improved BLE Manager with enhanced error handling
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
-import { BleError, BleManager, Characteristic, Device } from 'react-native-ble-plx';
+import { BleError, BleManager, Characteristic, Device, Subscription } from 'react-native-ble-plx';
 import { BLEPacketEncoder } from './BLEPacketEncoder';
 import {
   ANON0MESH_SERVICE_UUID,
@@ -11,6 +10,12 @@ import {
 } from './constants/BLEConstants';
 
 import { Anon0MeshPacket } from '../../gossip/types';
+
+// Re-export for backwards compatibility
+export const WRITE_CHAR_UUID = WRITE_CHARACTERISTIC_UUID;
+export const NOTIFY_CHAR_UUID = NOTIFY_CHARACTERISTIC_UUID;
+export const SERVICE_UUID = ANON0MESH_SERVICE_UUID;
+export const CHARACTERISTIC_UUID = BLE_CONFIG.service.characteristics.data;
 
 interface ConnectedDevice {
   device: Device;
@@ -22,25 +27,28 @@ interface ConnectedDevice {
   };
   isReady: boolean;
   failureCount: number;
+  notifySubscription?: Subscription | null;
+  disconnectSubscription?: Subscription | null;
 }
 
-// Re-export for backwards compatibility
-export const WRITE_CHAR_UUID = WRITE_CHARACTERISTIC_UUID;
-export const NOTIFY_CHAR_UUID = NOTIFY_CHARACTERISTIC_UUID;
-export const SERVICE_UUID = ANON0MESH_SERVICE_UUID;
-export const CHARACTERISTIC_UUID = BLE_CONFIG.service.characteristics.data;
+const LOG = (...args: any[]) => console.log('[BLE]', ...args);
 
-// Check if BLE is available on this platform
+/**
+ * Heuristic: detect whether a native BLE module is present.
+ * In Expo Go this will usually be missing. We check a few common native module names.
+ */
 const isBLEAvailable = (): boolean => {
-  if (Platform.OS === 'web') {
-    return false;
-  }
-  
+  if (Platform.OS === 'web') return false;
   try {
-    // Check if the native module exists
-    const BleModule = NativeModules.BleClientManager;
-    return BleModule != null;
-  } catch {
+    const nm = (NativeModules as any) || {};
+    // check a few common modules used by RN BLE libs
+    const hasBlePlx = !!nm.BleClientManager || !!nm.BleManager || !!nm.BleModule || !!nm.REACT_NATIVE_BLE_PLX;
+    if (!hasBlePlx) {
+      LOG('Native BLE module not found in NativeModules:', Object.keys(nm).join(', '));
+      return false;
+    }
+    return true;
+  } catch (e) {
     return false;
   }
 };
@@ -55,312 +63,316 @@ export class RealBLEManager {
   private isScanning = false;
   private isInitialized = false;
   private bleAvailable = false;
-  
+
+  // store subscriptions to clean up
+  private stateSubscription: Subscription | null = null;
+
   // Configuration from BLE_CONFIG
   private MAX_FAILURES = BLE_CONFIG.connection.maxFailures;
   private MTU_SIZE = BLE_CONFIG.connection.mtuSize;
   private WRITE_TIMEOUT = BLE_CONFIG.connection.writeTimeout;
-  
+
   constructor() {
     this.bleAvailable = isBLEAvailable();
-    
-    if (this.bleAvailable) {
-      try {
-        this.manager = new BleManager();
-        console.log('[BLE] ✅ BleManager instance created');
-      } catch (error: any) {
-        console.log('[BLE] ❌ Failed to create BleManager:', error?.message);
-        this.bleAvailable = false;
-        this.manager = null;
-      }
-    } else {
-      console.log('[BLE] ⚠️ BLE not available on this platform');
+
+    if (!this.bleAvailable) {
+      LOG('⚠️ BLE not available on this platform (native module missing)');
+      return;
+    }
+
+    try {
+      // Only create manager when a native implementation exists
+      this.manager = new BleManager();
+      LOG('✅ BleManager instance created');
+    } catch (error: any) {
+      LOG('❌ Failed to create BleManager:', error?.message ?? error);
+      this.bleAvailable = false;
+      this.manager = null;
     }
   }
 
-  /**
-   * Check if BLE is available
-   */
   isAvailable(): boolean {
     return this.bleAvailable && this.manager != null;
   }
 
-  /**
-   * Initialize BLE with permissions
-   */
   async initialize(): Promise<boolean> {
     if (!this.isAvailable()) {
-      console.log('[BLE] ⚠️ BLE not available, skipping initialization');
+      LOG('⚠️ BLE not available, skipping initialization');
       return false;
     }
 
     if (this.isInitialized) {
-      console.log('[BLE] Already initialized');
+      LOG('Already initialized');
       return true;
     }
 
     try {
-      console.log('[BLE] 🚀 Initializing BLE Manager...');
-      
-      // Request permissions
+      LOG('🚀 Initializing BLE Manager...');
+
       const hasPermissions = await this.requestPermissions();
       if (!hasPermissions) {
-        console.log('[BLE] ❌ Permissions denied');
+        LOG('❌ Permissions denied');
         return false;
       }
-      
-      // Check Bluetooth state
-      const state = await this.manager!.state();
-      console.log('[BLE] 📡 Bluetooth state:', state);
-      
-      if (state !== 'PoweredOn') {
-        console.log(`[BLE] [DEBUG] Scanning for service UUID: ${SERVICE_UUID}`);
-        console.log('[BLE] ⚠️ Bluetooth is not powered on');
-        
-        // Listen for state changes
-        this.manager!.onStateChange((newState) => {
-          console.log('[BLE] 📡 Bluetooth state changed:', newState);
-          if (newState === 'PoweredOn') {
-            console.log('[BLE] ✅ Bluetooth is now ready');
-          }
-        }, true);
-        
-        return false;
+
+      // Attempt to get current Bluetooth state (may throw on some platforms)
+      try {
+        // ble-plx exposes manager.state() returning a Promise<string>
+        const state = await (this.manager as BleManager).state();
+        LOG('📡 Bluetooth state:', state);
+        if (state !== 'PoweredOn') {
+          // subscribe to state changes and return false for now;
+          this.stateSubscription = (this.manager as BleManager).onStateChange((newState) => {
+            LOG('📡 Bluetooth state changed:', newState);
+            if (newState === 'PoweredOn') {
+              LOG('✅ Bluetooth is now ready');
+            }
+          }, true);
+          LOG('⚠️ Bluetooth is not powered on - initialize will complete once powered on');
+          // do not mark initialized — caller should retry initialize or call startScanning later
+          return false;
+        }
+      } catch (sErr) {
+        // Non-fatal: some platforms/versions behave differently; continue but warn
+        LOG('[WARN] Could not query bluetooth state:', (sErr as any)?.message ?? sErr);
       }
-      
-      // Start health check
+
+      // Start health check loop and any other background timers
       this.startHealthCheck();
-      
-      console.log('[BLE] [DEBUG] Scan callback: no device found in this callback');
+
       this.isInitialized = true;
-      console.log('[BLE] ✅ BLE Manager initialized');
+      LOG('✅ BLE Manager initialized');
       return true;
-      
     } catch (error: any) {
-      console.log('[BLE] ❌ Initialization failed:', error?.message);
+      LOG('❌ Initialization failed:', error?.message ?? error);
       return false;
     }
   }
 
-  /**
-   * Request necessary BLE permissions
-   */
   private async requestPermissions(): Promise<boolean> {
     if (Platform.OS === 'android') {
       try {
+        // On Android 12+ (API 31+) use bluetooth permissions; include ACCESS_FINE_LOCATION as fallback for scanning reliability
         if (Platform.Version >= 31) {
-          // Android 12+
-          const granted = await PermissionsAndroid.requestMultiple([
+          const perms = [
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
-          ]);
-          return Object.values(granted).every(
-            (status) => status === PermissionsAndroid.RESULTS.GRANTED
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION, // optional but often required by OEMs
+          ];
+          const granted = await PermissionsAndroid.requestMultiple(perms as any);
+          const ok = Object.values(granted).every(
+            (status) => status === PermissionsAndroid.RESULTS.GRANTED,
           );
+          if (!ok) LOG('Permission results (android >=31):', granted);
+          return ok;
         } else {
-          // Android 11 and below
+          // Android 11 and below: location permission is used for BLE scanning
           const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
           );
-          return granted === PermissionsAndroid.RESULTS.GRANTED;
+          const ok = granted === PermissionsAndroid.RESULTS.GRANTED;
+          if (!ok) LOG('ACCESS_FINE_LOCATION not granted');
+          return ok;
         }
-      } catch (error) {
-        console.log('[BLE] Permission request error:', error);
+      } catch (err) {
+        LOG('Permission request error:', err);
         return false;
       }
     }
-    return true; // iOS permissions handled via Info.plist
+
+    // iOS: expected to be declared in Info.plist; return true here
+    return true;
   }
 
   /**
-   * Start scanning for BLE devices
+   * Start scanning for BLE devices.
+   * Stops a previous scan if one is active.
    */
   async startScanning() {
     if (!this.isAvailable()) {
-      console.log('[BLE] ⚠️ Cannot scan: BLE not available');
+      LOG('⚠️ Cannot scan: BLE not available');
       return;
     }
 
+    // If not initialized, attempt to initialize
+    if (!this.isInitialized) {
+      const ok = await this.initialize();
+      if (!ok) {
+        LOG('⚠️ BLE not initialized - startScanning aborted');
+        return;
+      }
+    }
+
+    // Ensure we aren't already scanning (gracefully stop first)
     if (this.isScanning) {
-      console.log('[BLE] Already scanning');
-      return;
+      LOG('Scan already in progress — stopping and restarting');
+      this.stopScanning();
+      // small delay to allow native scan state to settle
+      await new Promise((r) => setTimeout(r, 250));
     }
 
     try {
-      console.log('[BLE] 🔍 Starting BLE scan...');
-      
+      LOG('🔍 Starting BLE scan...');
       this.isScanning = true;
-      
-      // Start scanning with service UUID filter
-      this.manager!.startDeviceScan(
+
+      // Use service filter to reduce irrelevant devices
+      (this.manager as BleManager).startDeviceScan(
         [SERVICE_UUID],
         { allowDuplicates: false },
         (error, device) => {
           if (error) {
-            console.log('[BLE] Scan error:', error.message);
+            LOG('Scan error:', error?.message ?? error);
             return;
           }
-          
           if (device) {
-            this.handleDiscoveredDevice(device);
+            // lightweight handler, offload heavy work
+            void this.handleDiscoveredDevice(device);
           }
-        }
+        },
       );
-      
-      console.log('[BLE] ✅ Scanning started');
-      
-    } catch (error: any) {
-      console.log('[BLE] Failed to start scan:', error?.message);
+
+      LOG('✅ Scanning started');
+    } catch (err: any) {
+      LOG('Failed to start scan:', err?.message ?? err);
       this.isScanning = false;
     }
   }
 
-  /**
-   * Handle discovered BLE device during scan.
-   */
   private async handleDiscoveredDevice(device: Device) {
-    if (!device || !device.id) {
-      return;
-    }
-    // Avoid reconnecting to already connected devices
+    if (!device || !device.id) return;
     if (this.connectedDevices.has(device.id)) {
-      // Optionally update RSSI or lastSeen here
+      // optionally update lastSeen or RSSI
+      const entry = this.connectedDevices.get(device.id);
+      if (entry) entry.lastSeen = Date.now();
       return;
     }
-    // Optionally filter devices by name, RSSI, etc.
+    // Connect to promising devices (you could add filtering here)
     await this.connectToDevice(device);
   }
 
-  /**
-   * Connect to a BLE device with proper setup
-   */
   private async connectToDevice(device: Device) {
     try {
-      console.log('[BLE] 🔗 Connecting to device:', device.id);
-      
-      // Connect to device
-      const connectedDevice = await device.connect({
-        requestMTU: this.MTU_SIZE,
-        timeout: 10000, // 10 second connection timeout
-      });
-      
-      console.log('[BLE] ✅ Connected to:', device.id);
-      
-      // Discover services and characteristics
+      LOG('🔗 Connecting to device:', device.id);
+
+      // Connect (do not request MTU inside connect options; request it separately)
+      const connectedDevice = await device.connect();
+      LOG('✅ Connected to:', device.id);
+
+      // Discover services/characteristics
       await connectedDevice.discoverAllServicesAndCharacteristics();
-      console.log('[BLE] 🔍 Services discovered for:', device.id);
-      
-      // Get our service
+      LOG('🔍 Services discovered for:', device.id);
+
       const services = await connectedDevice.services();
-      const meshService = services.find(s => s.uuid === SERVICE_UUID);
-      
+      const meshService = services.find((s) => s.uuid?.toLowerCase() === SERVICE_UUID.toLowerCase());
+
       if (!meshService) {
-        console.log('[BLE] ⚠️ Mesh service not found on device:', device.id);
-        await connectedDevice.cancelConnection();
+        LOG('⚠️ Mesh service not found on device:', device.id);
+        try { await connectedDevice.cancelConnection(); } catch {}
         return;
       }
-      
-      // Get characteristics
+
       const characteristics = await meshService.characteristics();
-      const writeChar = characteristics.find(c => c.uuid === WRITE_CHAR_UUID);
-      const notifyChar = characteristics.find(c => c.uuid === NOTIFY_CHAR_UUID);
-      
+      const writeChar = characteristics.find((c) => c.uuid?.toLowerCase() === WRITE_CHAR_UUID.toLowerCase());
+      const notifyChar = characteristics.find((c) => c.uuid?.toLowerCase() === NOTIFY_CHAR_UUID.toLowerCase());
+
       if (!writeChar || !notifyChar) {
-        console.log('[BLE] ⚠️ Required characteristics not found on device:', device.id);
-        await connectedDevice.cancelConnection();
+        LOG('⚠️ Required characteristics not found on device:', device.id);
+        try { await connectedDevice.cancelConnection(); } catch {}
         return;
       }
-      
-      console.log('[BLE] ✅ Characteristics found for:', device.id);
-      
-      // Check if characteristics are writable/notifiable
+
+      // Validate properties
       if (!writeChar.isWritableWithoutResponse && !writeChar.isWritableWithResponse) {
-        console.log('[BLE] ⚠️ Write characteristic is not writable:', device.id);
-        await connectedDevice.cancelConnection();
+        LOG('⚠️ Write characteristic is not writable:', device.id);
+        try { await connectedDevice.cancelConnection(); } catch {}
         return;
       }
-      
       if (!notifyChar.isNotifiable) {
-        console.log('[BLE] ⚠️ Notify characteristic is not notifiable:', device.id);
-        await connectedDevice.cancelConnection();
+        LOG('⚠️ Notify characteristic is not notifiable:', device.id);
+        try { await connectedDevice.cancelConnection(); } catch {}
         return;
       }
-      
-      // Monitor notify characteristic
-      notifyChar.monitor((error, characteristic) => {
+
+      // Android: request MTU after connection
+      if (Platform.OS === 'android' && typeof (connectedDevice as any).requestMTU === 'function') {
+        try {
+          await (connectedDevice as any).requestMTU(this.MTU_SIZE);
+          LOG('✅ MTU requested:', this.MTU_SIZE, 'for', device.id);
+        } catch (mtuErr) {
+          LOG('MTU request failed (non-fatal):', (mtuErr as any)?.message ?? mtuErr);
+        }
+      }
+
+      // Start notification monitor and keep subscription
+      const notifySubscription = notifyChar.monitor((error, characteristic) => {
         if (error) {
-          console.log('[BLE] Notify error from', device.id, ':', error.message);
+          LOG('Notify error from', device.id, ':', (error as any)?.message ?? error);
           return;
         }
-        
         if (characteristic?.value) {
-          this.handleReceivedData(characteristic.value, device.id);
+          this.handleReceivedData(characteristic.value as string, device.id);
         }
       });
-      
-      console.log('[BLE] 📡 Monitoring notifications from:', device.id);
-      
-      // Store connected device
+
+      // Setup disconnect listener if available (ble-plx exposes onDisconnected on Device)
+      // We store a lightweight disconnect subscription (if API returns one)
+      let disconnectSub: Subscription | null = null;
+      if ((connectedDevice as any).onDisconnected) {
+        try {
+          // onDisconnected returns a subscription in some versions; otherwise it's a callback registration
+          // We wrap it to maintain symmetry with monitor unsubscription
+          (connectedDevice as any).onDisconnected((err: any, d: Device) => {
+            LOG('🔌 Device disconnected:', d?.id ?? device.id, err ? err.message ?? err : '');
+            this.connectedDevices.delete(d?.id ?? device.id);
+            // cleanup notify subscription if present
+            const entry = this.connectedDevices.get(d?.id ?? device.id);
+            if (entry?.notifySubscription) {
+              try { entry.notifySubscription.remove(); } catch {}
+            }
+          });
+        } catch {
+          // ignore if not supported
+        }
+      }
+
+      // Save connected device entry
       this.connectedDevices.set(device.id, {
         device: connectedDevice,
         lastSeen: Date.now(),
-        characteristics: {
-          write: writeChar,
-          notify: notifyChar,
-        },
+        characteristics: { write: writeChar, notify: notifyChar },
         isReady: true,
         failureCount: 0,
+        notifySubscription: notifySubscription || null,
+        disconnectSubscription: disconnectSub,
       });
-      
-      // Set up disconnection handler
-      connectedDevice.onDisconnected((error, disconnectedDevice) => {
-        console.log('[BLE] 🔌 Device disconnected:', disconnectedDevice.id);
-        this.connectedDevices.delete(disconnectedDevice.id);
-      });
-      
-      console.log('[BLE] ✅ Device fully set up:', device.id);
-      console.log('[BLE] 📊 Total connected devices:', this.connectedDevices.size);
-      
+
+      LOG('✅ Device fully set up:', device.id, 'connectedDevices:', this.connectedDevices.size);
     } catch (error: any) {
-      console.log('[BLE] ❌ Connection failed for', device.id, ':', error?.message);
-      
-      // Try to clean up
-      try {
-        await device.cancelConnection();
-      } catch {
-        // Ignore cleanup errors
-      }
+      LOG('❌ Connection failed for', device.id, ':', (error as any)?.message ?? error);
+      try { await device.cancelConnection(); } catch {}
     }
   }
 
-  /**
-   * Send data to connected devices
-   */
   async broadcastPacket(packet: Anon0MeshPacket): Promise<number> {
     if (!this.isAvailable()) {
-      console.log('[BLE] ⚠️ Cannot broadcast: BLE not available');
+      LOG('⚠️ Cannot broadcast: BLE not available');
       return 0;
     }
-
     if (this.connectedDevices.size === 0) {
-      console.log('[BLE] No connected devices to broadcast to');
+      LOG('No connected devices to broadcast to');
       return 0;
     }
 
-    console.log(`[BLE] Broadcasting packet type ${packet.type} to ${this.connectedDevices.size} device(s)`);
+    LOG(`Broadcasting packet type ${packet.type} to ${this.connectedDevices.size} device(s)`);
 
-    // Encode packet using BLEPacketEncoder (chunked)
     const chunks = BLEPacketEncoder.encode(packet);
-
     let successCount = 0;
     const sendPromises: Promise<void>[] = [];
 
     for (const [deviceId, connectedDevice] of Array.from(this.connectedDevices.entries())) {
-      if (!connectedDevice.isReady || connectedDevice.failureCount >= this.MAX_FAILURES) {
-        continue;
-      }
-      // Send all chunks to each device
+      if (!connectedDevice.isReady || connectedDevice.failureCount >= this.MAX_FAILURES) continue;
+
       const promise = (async () => {
         for (const chunk of chunks) {
           await this.sendToDevice(deviceId, Buffer.from(chunk, 'utf8').toString('base64'), packet.type);
@@ -372,87 +384,63 @@ export class RealBLEManager {
         })
         .catch((error) => {
           connectedDevice.failureCount++;
+          LOG(`Send error to ${deviceId}:`, (error as any)?.message ?? error);
           if (connectedDevice.failureCount >= this.MAX_FAILURES) {
-            console.log(`[BLE] 🚫 Device ${deviceId} exceeded failure threshold, disconnecting`);
-            this.disconnectDevice(deviceId);
+            LOG(`🚫 Device ${deviceId} exceeded failure threshold, disconnecting`);
+            void this.disconnectDevice(deviceId);
           }
         });
+
       sendPromises.push(promise);
     }
 
     await Promise.allSettled(sendPromises);
-
-    console.log(`[BLE] ✅ Sent to ${successCount} of ${this.connectedDevices.size} devices`);
+    LOG(`✅ Sent to ${successCount} of ${this.connectedDevices.size} devices`);
     return successCount;
   }
 
-  /**
-   * Send data to a specific device with timeout and retry
-   */
   private async sendToDevice(deviceId: string, data: string, packetType: number): Promise<void> {
     const connectedDevice = this.connectedDevices.get(deviceId);
-    
     if (!connectedDevice || !connectedDevice.characteristics?.write) {
       throw new Error('Device not ready for write');
     }
-    
+
     const { device, characteristics } = connectedDevice;
     const writeChar = characteristics.write;
-    
-    if (!writeChar) {
-      throw new Error('Write characteristic not available');
-    }
-    
+    if (!writeChar) throw new Error('Write characteristic not available');
+
     try {
-      // Check if device is still connected
+      // Verify connection
       const isConnected = await device.isConnected();
-      if (!isConnected) {
-        throw new Error('Device is not connected');
-      }
-      
-      // Create write promise with timeout
+      if (!isConnected) throw new Error('Device is not connected');
+
       const writePromise = writeChar.writeWithoutResponse(data);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Write timeout')), this.WRITE_TIMEOUT)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Write timeout')), this.WRITE_TIMEOUT),
       );
-      
-      // Race between write and timeout
+
       await Promise.race([writePromise, timeoutPromise]);
-      
-      console.log(`[BLE] ✅ Sent packet type ${packetType} to ${deviceId}`);
-      
+      LOG(`✅ Sent packet type ${packetType} to ${deviceId}`);
     } catch (err: any) {
       const errorMessage = this.parseBlError(err);
-      console.error(`[BLE] ❌ Send failed to ${deviceId}:`, errorMessage);
-      
-      // Check if it's a disconnection error
-      if (errorMessage.includes('disconnected') || 
-          errorMessage.includes('not connected') ||
-          errorMessage.includes('device is null')) {
-        console.log(`[BLE] 🔌 Device ${deviceId} appears disconnected, cleaning up`);
-        this.disconnectDevice(deviceId);
+      console.error(`❌ Send failed to ${deviceId}:`, errorMessage);
+      if (errorMessage.includes('disconnected') || errorMessage.includes('not connected') || errorMessage.includes('device is null')) {
+        LOG(`🔌 Device ${deviceId} appears disconnected, cleaning up`);
+        await this.disconnectDevice(deviceId);
       }
-      
       throw err;
     }
   }
 
-  /**
-   * Parse BLE error for better diagnostics
-   */
   private parseBlError(error: any): string {
     if (error instanceof BleError) {
       return `${error.message} (Code: ${error.errorCode}, Reason: ${error.reason || 'N/A'})`;
     }
-    return error?.message || 'Unknown error';
+    return (error && (error.message || String(error))) || 'Unknown error';
   }
 
-  /**
-   * Handle received data from device
-   */
   private handleReceivedData(base64Data: string, fromDevice: string) {
     try {
-      // base64Data is a chunk (base64-encoded utf8 string)
       const chunkStr = Buffer.from(base64Data, 'base64').toString('utf8');
       if (!this.chunkBuffers.has(fromDevice)) this.chunkBuffers.set(fromDevice, new Map());
       const chunkMap = this.chunkBuffers.get(fromDevice)!;
@@ -460,149 +448,122 @@ export class RealBLEManager {
       if (fullBuffer) {
         const packet = BLEPacketEncoder.decode(fullBuffer.toString('base64'));
         if (packet) {
-          console.log(`[BLE] 📥 Received packet type ${packet.type} from ${fromDevice}`);
-          // Update last seen
+          LOG(`📥 Received packet type ${packet.type} from ${fromDevice}`);
           const connectedDevice = this.connectedDevices.get(fromDevice);
-          if (connectedDevice) {
-            connectedDevice.lastSeen = Date.now();
-          }
-          // Call data handler with base64-encoded binary for compatibility
+          if (connectedDevice) connectedDevice.lastSeen = Date.now();
           this.onDataReceived?.(fullBuffer.toString('base64'), fromDevice);
         }
-        // Clear buffer for this device
+        // Reset buffer for this device
         this.chunkBuffers.set(fromDevice, new Map());
       }
     } catch (error: any) {
-      console.log('[BLE] Failed to parse received data:', error?.message);
+      LOG('Failed to parse received data:', error?.message ?? error);
     }
   }
 
-  /**
-   * Disconnect from a specific device
-   */
   private async disconnectDevice(deviceId: string) {
     const connectedDevice = this.connectedDevices.get(deviceId);
     if (!connectedDevice) return;
-    
     try {
-      console.log('[BLE] 🔌 Disconnecting from:', deviceId);
-      await connectedDevice.device.cancelConnection();
-    } catch {
-      // Ignore disconnection errors
+      LOG('🔌 Disconnecting from:', deviceId);
+      // remove notify subscription if present
+      if (connectedDevice.notifySubscription) {
+        try { connectedDevice.notifySubscription.remove(); } catch {}
+      }
+      // attempt graceful cancel
+      try { await connectedDevice.device.cancelConnection(); } catch {}
+    } catch (e) {
+      // ignore
     } finally {
       this.connectedDevices.delete(deviceId);
     }
   }
 
-  /**
-   * Health check for connected devices
-   */
   private startHealthCheck() {
+    // clear prior interval if present
+    if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
     this.healthCheckInterval = setInterval(async () => {
       const now = Date.now();
-      const staleTimeout = 60000; // 1 minute
-      
+      const staleTimeout = 60_000; // 1 minute
       for (const [deviceId, connectedDevice] of Array.from(this.connectedDevices.entries())) {
         try {
-          // Check if device is still connected
           const isConnected = await connectedDevice.device.isConnected();
-          
           if (!isConnected) {
-            console.log(`[BLE] 🔌 Device ${deviceId} no longer connected`);
+            LOG(`🔌 Device ${deviceId} no longer connected`);
             this.connectedDevices.delete(deviceId);
             continue;
           }
-          
-          // Check if device has been inactive
           if (now - connectedDevice.lastSeen > staleTimeout) {
-            console.log(`[BLE] 🕐 Device ${deviceId} is stale, disconnecting`);
+            LOG(`🕐 Device ${deviceId} is stale, disconnecting`);
             await this.disconnectDevice(deviceId);
           }
-          
         } catch {
-          console.log(`[BLE] Health check failed for ${deviceId}`);
+          LOG(`Health check failed for ${deviceId}`);
           this.connectedDevices.delete(deviceId);
         }
       }
-    }, 30000); // Check every 30 seconds
+    }, 30_000);
   }
 
-  /**
-   * Stop scanning
-   */
   stopScanning() {
-    if (!this.isAvailable() || !this.isScanning) {
-      return;
-    }
-    
+    if (!this.isAvailable() || !this.isScanning) return;
     try {
-      this.manager!.stopDeviceScan();
+      (this.manager as BleManager).stopDeviceScan();
       this.isScanning = false;
-      console.log('[BLE] 🛑 Scanning stopped');
+      LOG('🛑 Scanning stopped');
     } catch (error: any) {
-      console.log('[BLE] Error stopping scan:', error?.message);
+      LOG('Error stopping scan:', (error as any)?.message ?? error);
     }
   }
 
-  /**
-   * Set data handler
-   */
   setDataHandler(handler: (data: string, from: string) => void) {
     this.onDataReceived = handler;
-    console.log('[BLE] Data handler registered');
+    LOG('Data handler registered');
   }
 
-  /**
-   * Get connected device count
-   */
   getConnectedCount(): number {
     return this.connectedDevices.size;
   }
 
-  /**
-   * Get list of connected device IDs
-   */
   getConnectedDeviceIds(): string[] {
     return Array.from(this.connectedDevices.keys());
   }
 
-  /**
-   * Cleanup and destroy
-   */
   async destroy() {
-    console.log('[BLE] 🧹 Cleaning up BLE Manager...');
-    
-    // Stop scanning
+    LOG('🧹 Cleaning up BLE Manager...');
+
+    // Stop scanning and intervals
     this.stopScanning();
-    
-    // Clear intervals
     if (this.scanInterval) {
       clearInterval(this.scanInterval);
       this.scanInterval = undefined;
     }
-    
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = undefined;
     }
-    
-    // Disconnect all devices
-    for (const deviceId of Array.from(this.connectedDevices.keys())) {
-      await this.disconnectDevice(deviceId);
-    }
-    
+
+    // Disconnect all devices concurrently
+    const disconnectPromises = Array.from(this.connectedDevices.keys()).map((id) => this.disconnectDevice(id));
+    await Promise.allSettled(disconnectPromises);
     this.connectedDevices.clear();
-    
-    // Destroy manager if it exists
+
+    // unsubscribe state listener
+    if (this.stateSubscription) {
+      try { this.stateSubscription.remove(); } catch {}
+      this.stateSubscription = null;
+    }
+
     if (this.manager) {
       try {
         await this.manager.destroy();
       } catch (error: any) {
-        console.log('[BLE] Error destroying manager:', error?.message);
+        LOG('Error destroying manager:', (error as any)?.message ?? error);
       }
+      this.manager = null;
     }
-    
+
     this.isInitialized = false;
-    console.log('[BLE] ✅ Cleanup complete');
+    LOG('✅ Cleanup complete');
   }
 }

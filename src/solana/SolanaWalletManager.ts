@@ -1,8 +1,9 @@
+import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
 import {
     ASSOCIATED_TOKEN_PROGRAM_ID,
     Token,
-    TOKEN_PROGRAM_ID
-} from '@solana/spl-token';
+    TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import {
     ComputeBudgetProgram,
     Connection,
@@ -13,15 +14,16 @@ import {
     SystemProgram,
     Transaction,
     TransactionInstruction,
-} from '@solana/web3.js';
-import { Buffer } from 'buffer';
-import Constants from 'expo-constants';
-import * as SecureStore from 'expo-secure-store';
-import { SolanaTransactionManager } from './SolanaTransactionManager';
-import { getUSDCMint, usdcBaseToUsdc } from './constants';
+} from "@solana/web3.js";
+import { Buffer } from "buffer";
+import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
+import { isSeekerDevice } from "../types/solana";
+import { SolanaTransactionManager } from "./SolanaTransactionManager";
+import { getUSDCMint, usdcBaseToUsdc } from "./constants";
 
 export interface WalletConfig {
-    network: 'mainnet-beta' | 'testnet' | 'devnet' | 'localnet';
+    network: "mainnet-beta" | "testnet" | "devnet" | "localnet";
     rpcUrl?: string;
 }
 
@@ -38,118 +40,68 @@ export class SolanaWalletManager {
 
     constructor(config: WalletConfig) {
         this.config = config;
-        
-        // Set up connection based on network
         const rpcUrl = config.rpcUrl || this.getDefaultRPCUrl(config.network);
-        this.connection = new Connection(rpcUrl, 'confirmed');
+        this.connection = new Connection(rpcUrl, "confirmed");
     }
 
-    /**
-     * Get default RPC URL for network
-     */
+    /** Get default RPC URL for network */
     private getDefaultRPCUrl(network: string): string {
-        // Allow overriding the devnet RPC with a Bonfida (or other) RPC provider
-        // via Expo config `extra.bonfidaDevnetRpc` or the environment variable
-        // `BONFIDA_DEVNET_RPC`. If not provided, fall back to the default
-        // Solana public RPC endpoints.
         const bonfidaDevnetRpc =
-            (Constants.expoConfig?.extra as any)?.bonfidaDevnetRpc ||
-            (process.env.BONFIDA_DEVNET_RPC as string | undefined) ||
-            undefined;
+        (Constants.expoConfig?.extra as any)?.bonfidaDevnetRpc ||
+        (process.env.BONFIDA_DEVNET_RPC as string | undefined) ||
+        undefined;
 
         switch (network) {
-        case 'mainnet-beta':
-            return 'https://api.mainnet-beta.solana.com';
-        case 'testnet':
-            return 'https://api.testnet.solana.com';
-        case 'devnet':
-            // Prefer Bonfida/devnet override when available
-            return bonfidaDevnetRpc || 'https://api.devnet.solana.com';
-        case 'localnet':
-            return 'http://127.0.0.1:8899';
+        case "mainnet-beta":
+            return "https://api.mainnet-beta.solana.com";
+        case "testnet":
+            return "https://api.testnet.solana.com";
+        case "devnet":
+            return bonfidaDevnetRpc || "https://api.devnet.solana.com";
+        case "localnet":
+            return "http://127.0.0.1:8899";
         default:
-            return bonfidaDevnetRpc || 'https://api.devnet.solana.com';
+            return bonfidaDevnetRpc || "https://api.devnet.solana.com";
         }
     }
 
-    /**
-     * Initialize wallet with existing keypair from secure storage
-     */
+    /** Initialize wallet with existing keypair from secure storage */
     async initializeFromStorage(pubKeyBase58: string): Promise<boolean> {
-        try {
-        console.log('[SolanaWalletManager] Initializing from storage...');
-        console.log('[SolanaWalletManager] Received pubKey (Base58):', pubKeyBase58);
-        
-        const privKeyHex = await SecureStore.getItemAsync('privKey');
-        if (!privKeyHex) {
-            console.error('[SolanaWalletManager] No private key found in secure storage');
-            return false;
-        }
-
-        console.log('[SolanaWalletManager] Found privKey, length:', privKeyHex.length);
-
-        // Validate private key hex string
-        if (!/^[0-9a-fA-F]+$/.test(privKeyHex)) {
-            console.error('[SolanaWalletManager] Invalid private key format - not hex');
-            return false;
-        }
-
-        // Check if hex string is correct length (should be 128 chars = 64 bytes)
-        if (privKeyHex.length !== 128) {
-            console.error(`[SolanaWalletManager] Invalid hex string length: ${privKeyHex.length} chars (expected 128)`);
-            console.error('[SolanaWalletManager] This suggests corrupted or old wallet data - please reset wallet');
-            return false;
-        }
-
-        const secretKey = Buffer.from(privKeyHex, 'hex');
-        console.log('[SolanaWalletManager] Secret key decoded, size:', secretKey.length, 'bytes');
-        
-        // Solana secret keys must be exactly 64 bytes
-        if (secretKey.length !== 64) {
-            console.error(`[SolanaWalletManager] Invalid secret key size: ${secretKey.length} bytes (expected 64)`);
-            return false;
-        }
-
-        this.keypair = Keypair.fromSecretKey(secretKey);
-        console.log('[SolanaWalletManager] Keypair created successfully');
-        
-        // Verify the public key matches (pubKeyBase58 is already in Base58 format)
-        const expectedPubKey = this.keypair.publicKey.toBase58();
-        console.log('[SolanaWalletManager] Expected pubKey:', expectedPubKey);
-        console.log('[SolanaWalletManager] Provided pubKey:', pubKeyBase58);
-        
-        if (expectedPubKey !== pubKeyBase58) {
-            console.error('[SolanaWalletManager] Public key mismatch!');
-            return false;
-        }
-
-        console.log('[SolanaWalletManager] ✅ Wallet initialized successfully');
+        // Skip local wallet initialization if on Seeker
+        if (isSeekerDevice()) {
+        console.log("[SolanaWalletManager] Seeker device detected — using MWA wallet");
         return true;
-        } catch (error) {
-        console.error('[SolanaWalletManager] ❌ Exception caught:', error);
-        if (error instanceof Error) {
-            console.error('[SolanaWalletManager] Error message:', error.message);
-            console.error('[SolanaWalletManager] Error stack:', error.stack);
         }
+
+        try {
+        console.log("[SolanaWalletManager] Initializing from storage...");
+        const privKeyHex = await SecureStore.getItemAsync("privKey");
+        if (!privKeyHex) return false;
+
+        const secretKey = Buffer.from(privKeyHex, "hex");
+        this.keypair = Keypair.fromSecretKey(secretKey);
+
+        const expectedPubKey = this.keypair.publicKey.toBase58();
+        return expectedPubKey === pubKeyBase58;
+        } catch (error) {
+        console.error("[SolanaWalletManager] ❌ Exception caught:", error);
         return false;
         }
     }
 
-    /**
-     * Create a simple SOL transfer transaction
-     */
+    /** Create a simple SOL transfer transaction */
     async createTransferTransaction(
         toAddress: string,
         amountSOL: number,
         metadata?: TransactionMetadata
     ): Promise<Transaction> {
-        if (!this.keypair) {
-        throw new Error('Wallet not initialized');
+        if (!this.keypair && !isSeekerDevice()) {
+        throw new Error("Wallet not initialized");
         }
 
         const transaction = new Transaction();
-        
-        // Add compute budget instructions if specified
+
+        // Optional compute budget adjustments
         if (metadata?.computeUnitLimit) {
         transaction.add(
             ComputeBudgetProgram.setComputeUnitLimit({
@@ -166,156 +118,154 @@ export class SolanaWalletManager {
         );
         }
 
-        // Add transfer instruction
+        // Transfer instruction
         transaction.add(
         SystemProgram.transfer({
-            fromPubkey: this.keypair.publicKey,
+            fromPubkey:
+            this.keypair?.publicKey || new PublicKey("11111111111111111111111111111111"), // placeholder for MWA
             toPubkey: new PublicKey(toAddress),
             lamports: amountSOL * LAMPORTS_PER_SOL,
         })
         );
 
-        // Add memo if provided
+        // Memo (optional)
         if (metadata?.memo) {
         transaction.add(
             new TransactionInstruction({
             keys: [],
-            programId: new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'),
-            data: Buffer.from(metadata.memo, 'utf-8'),
+            programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+            data: Buffer.from(metadata.memo, "utf-8"),
             })
         );
         }
 
-        // Set recent blockhash and fee payer
         const { blockhash } = await this.connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
-        transaction.feePayer = this.keypair.publicKey;
+        transaction.feePayer =
+        this.keypair?.publicKey || new PublicKey("11111111111111111111111111111111");
 
         return transaction;
     }
 
-    /**
-     * Sign a transaction
-     */
+    /** Sign a transaction (local only) */
     signTransaction(transaction: Transaction): Transaction {
         if (!this.keypair) {
-        throw new Error('Wallet not initialized');
+        throw new Error("Wallet not initialized");
         }
 
         transaction.sign(this.keypair);
         return transaction;
     }
 
-    /**
-     * Submit transaction to the network directly (not through mesh)
-     */
+    /** Submit transaction to the network directly (supports Seeker + Local) */
     async submitTransactionDirect(transaction: Transaction): Promise<string> {
-        if (!this.keypair) {
-        throw new Error('Wallet not initialized');
+        try {
+        // Case 1: Seeker — use Mobile Wallet Adapter
+        if (isSeekerDevice()) {
+            console.log("[SolanaWalletManager] Using Mobile Wallet Adapter (Seeker)");
+
+            const signedTxArray = await transact(async (wallet) => {
+            return await wallet.signTransactions({ transactions: [transaction] });
+            });
+
+            const signedTx = signedTxArray[0];
+            const txSignature = await this.connection.sendRawTransaction(signedTx.serialize());
+            await this.connection.confirmTransaction(txSignature, "confirmed");
+
+            console.log("✅ Seeker transaction submitted:", txSignature);
+            return txSignature;
         }
 
-        try {
+        // Case 2: Local keypair
+        if (!this.keypair) {
+            throw new Error("Wallet not initialized");
+        }
+
         const signature = await sendAndConfirmTransaction(
             this.connection,
             transaction,
             [this.keypair],
             {
-            commitment: 'confirmed',
-            preflightCommitment: 'confirmed',
+            commitment: "confirmed",
+            preflightCommitment: "confirmed",
             }
         );
 
-        console.log('Transaction submitted directly:', signature);
+        console.log("✅ Local transaction submitted:", signature);
         return signature;
         } catch (error) {
-        console.error('Failed to submit transaction:', error);
+        console.error("❌ Transaction submission failed:", error);
         throw error;
         }
     }
 
-    /**
-     * Get wallet balance
-     */
+    /** Get wallet balance */
     async getBalance(): Promise<number> {
-        if (!this.keypair) {
-        throw new Error('Wallet not initialized');
+        if (!this.keypair && !isSeekerDevice()) {
+        throw new Error("Wallet not initialized");
         }
 
         try {
-        const balance = await this.connection.getBalance(this.keypair.publicKey);
+        const publicKey =
+            this.keypair?.publicKey || new PublicKey("11111111111111111111111111111111");
+        const balance = await this.connection.getBalance(publicKey);
         return balance / LAMPORTS_PER_SOL;
         } catch (error) {
-        console.error('Failed to get balance:', error);
+        console.error("Failed to get balance:", error);
         throw error;
         }
     }
 
-    /**
-     * Get token balance (e.g., USDC)
-     */
-    async getTokenBalance(tokenSymbol: 'USDC'): Promise<number> {
-        if (!this.keypair) {
-            throw new Error('Wallet not initialized');
+    /** Get token balance (e.g., USDC) */
+    async getTokenBalance(tokenSymbol: "USDC"): Promise<number> {
+        if (!this.keypair && !isSeekerDevice()) {
+        throw new Error("Wallet not initialized");
         }
 
         try {
-            // Get the mint address for the token
-            const mintAddress = getUSDCMint(this.config.network);
-            
-            // Get the associated token account address (v0.1.8 API)
-            const tokenAccount = await Token.getAssociatedTokenAddress(
-                ASSOCIATED_TOKEN_PROGRAM_ID,
-                TOKEN_PROGRAM_ID,
-                new PublicKey(mintAddress),
-                this.keypair.publicKey
-            );
+        const mintAddress = getUSDCMint(this.config.network);
+        const publicKey =
+            this.keypair?.publicKey || new PublicKey("11111111111111111111111111111111");
 
-            // Get the account info (v0.1.8 API)
-            const accountInfo = await this.connection.getAccountInfo(tokenAccount);
-            
-            if (!accountInfo) {
-                console.log(`[SolanaWalletManager] Token account for ${tokenSymbol} not found`);
-                return 0;
-            }
-            
-            // Parse token account data to get balance
-            // Token account layout: 32 bytes (mint) + 32 bytes (owner) + 8 bytes (amount)
-            const data = Buffer.from(accountInfo.data);
-            const amount = data.readBigUInt64LE(64); // Amount is at offset 64
-            
-            // Convert from base units to token units
-            return usdcBaseToUsdc(Number(amount));
+        const tokenAccount = await Token.getAssociatedTokenAddress(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            new PublicKey(mintAddress),
+            publicKey
+        );
+
+        const accountInfo = await this.connection.getAccountInfo(tokenAccount);
+        if (!accountInfo) return 0;
+
+        const data = Buffer.from(accountInfo.data);
+        const amount = data.readBigUInt64LE(64);
+        return usdcBaseToUsdc(Number(amount));
         } catch (error) {
-            // Token account might not exist yet
-            console.log(`[SolanaWalletManager] Token account for ${tokenSymbol} not found or error:`, error);
-            return 0;
+        console.log(`[SolanaWalletManager] Token account not found:`, error);
+        return 0;
         }
     }
 
-    /**
-     * Get wallet public key
-     */
     getPublicKey(): string | null {
         return this.keypair?.publicKey.toBase58() || null;
     }
 
-    /**
-     * Get connection for external use
-     */
     getConnection(): Connection {
         return this.connection;
     }
 
-    /**
-     * Airdrop SOL (devnet/testnet only)
-     */
+    /** Airdrop SOL (devnet/testnet only) */
     async requestAirdrop(amount: number = 1): Promise<string> {
-        if (!this.keypair) {
-        throw new Error('Wallet not initialized');
+        if (isSeekerDevice()) {
+        throw new Error("Airdrop not supported via MWA");
         }
 
-        if (this.config.network === 'mainnet-beta') {
-        throw new Error('Airdrop not available on mainnet');
+        if (!this.keypair) {
+        throw new Error("Wallet not initialized");
+        }
+
+        if (this.config.network === "mainnet-beta") {
+        throw new Error("Airdrop not available on mainnet");
         }
 
         try {
@@ -323,26 +273,19 @@ export class SolanaWalletManager {
             this.keypair.publicKey,
             amount * LAMPORTS_PER_SOL
         );
-
         await this.connection.confirmTransaction(signature);
-        console.log('Airdrop successful:', signature);
+        console.log("Airdrop successful:", signature);
         return signature;
         } catch (error) {
-        console.error('Airdrop failed:', error);
+        console.error("Airdrop failed:", error);
         throw error;
         }
     }
 
-    /**
-     * Create a transaction manager instance
-     */
     createTransactionManager(): SolanaTransactionManager {
         return new SolanaTransactionManager(this.connection, this.keypair);
     }
 
-    /**
-     * Validate an address
-     */
     static isValidAddress(address: string): boolean {
         try {
         new PublicKey(address);
@@ -352,17 +295,11 @@ export class SolanaWalletManager {
         }
     }
 
-    /**
-     * Format SOL amount for display
-     */
     static formatSOL(lamports: number): string {
         const sol = lamports / LAMPORTS_PER_SOL;
-        return sol.toFixed(4) + ' SOL';
+        return sol.toFixed(4) + " SOL";
     }
 
-    /**
-     * Get transaction status
-     */
     async getTransactionStatus(signature: string): Promise<{
         confirmed: boolean;
         confirmations: number | null;
@@ -371,13 +308,14 @@ export class SolanaWalletManager {
         try {
         const result = await this.connection.getSignatureStatus(signature);
         return {
-            confirmed: result.value?.confirmationStatus === 'confirmed' || 
-                    result.value?.confirmationStatus === 'finalized',
+            confirmed:
+            result.value?.confirmationStatus === "confirmed" ||
+            result.value?.confirmationStatus === "finalized",
             confirmations: result.value?.confirmations || null,
             err: result.value?.err,
         };
         } catch (error) {
-        console.error('Failed to get transaction status:', error);
+        console.error("Failed to get transaction status:", error);
         return {
             confirmed: false,
             confirmations: null,
@@ -386,23 +324,21 @@ export class SolanaWalletManager {
         }
     }
 
-    /**
-     * Get recent transactions
-     */
     async getRecentTransactions(limit: number = 10): Promise<any[]> {
-        if (!this.keypair) {
-        throw new Error('Wallet not initialized');
+        if (!this.keypair && !isSeekerDevice()) {
+        throw new Error("Wallet not initialized");
         }
 
         try {
-        const signatures = await this.connection.getSignaturesForAddress(
-            this.keypair.publicKey,
-            { limit }
-        );
+        const publicKey =
+            this.keypair?.publicKey || new PublicKey("11111111111111111111111111111111");
+        const signatures = await this.connection.getSignaturesForAddress(publicKey, {
+            limit,
+        });
 
         return signatures;
         } catch (error) {
-        console.error('Failed to get recent transactions:', error);
+        console.error("Failed to get recent transactions:", error);
         throw error;
         }
     }

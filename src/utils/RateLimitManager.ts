@@ -21,8 +21,14 @@ export class RateLimitManager {
   private userId: string;
   
   constructor(userId: string) {
-    this.userId = userId;
+    if (!userId) {
+      throw new Error("RateLimitManager: userId is empty");
+    }
+
+    // Sanitize userId to ensure valid SecureStore key characters
+    this.userId = userId.replace(/[^a-zA-Z0-9._-]/g, "_");
   }
+
   
   /**
    * Get the storage key for this user's rate limit data
@@ -30,6 +36,7 @@ export class RateLimitManager {
   private getStorageKey(): string {
     return `${RATE_LIMIT_KEY_PREFIX}${this.userId}`;
   }
+
 
   /**
    * Get the end of today (midnight UTC tomorrow)

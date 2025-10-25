@@ -12,7 +12,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@bonfida/spl-name-service": "^3.0.16",
+    "@bonfida/spl-name-service": "^0.1.67",
     "@expo-google-fonts/lexend": "^0.4.1",
     "@expo/html-elements": "^0.10.1",
     "@expo/metro-runtime": "~6.1.2",

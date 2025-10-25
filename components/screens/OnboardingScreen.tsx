@@ -11,6 +11,7 @@ interface Props {
   tempNickname: string;
   setTempNickname: (v: string) => void;
   onboard: () => void;
+  isSeeker: boolean;
 }
 
 // Generate random nickname
@@ -38,6 +39,7 @@ export default function OnboardingScreen({
   tempNickname,
   setTempNickname,
   onboard,
+  isSeeker,
 }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -66,7 +68,7 @@ export default function OnboardingScreen({
       }),
     ]).start();
 
-    // Animate the floating keys
+    // Animate floating keys (keep for both Seeker and non-Seeker)
     const animateKeys = () => {
       const keyAnimationSequence = keyAnimations.map((anim, index) =>
         Animated.loop(
@@ -84,7 +86,6 @@ export default function OnboardingScreen({
           ])
         )
       );
-      
       Animated.parallel(keyAnimationSequence).start();
     };
 
@@ -125,7 +126,6 @@ export default function OnboardingScreen({
           },
         ]}
       >
-        {/* Key shape with gradient effect */}
         <View style={[styles.keyBody, { width: size * 0.8, height: size * 0.4 }]} />
         <View style={[styles.keyHead, { 
           width: size * 0.3, 
@@ -170,7 +170,9 @@ export default function OnboardingScreen({
         </View>
 
         <Text style={styles.description}>
-          To get started, you&apos;ll need to create your own wallet that is stored securely on your device. Your nickname will be generated automatically.
+          {isSeeker
+            ? `Welcome to anon0mesh! Since you're using a Seeker device, your secure wallet is already integrated just connect it to get started.`
+            : `To get started, you’ll create a secure wallet stored on your device. Your nickname will be generated automatically.`}
         </Text>
 
         <TouchableOpacity 
@@ -178,12 +180,14 @@ export default function OnboardingScreen({
           onPress={onboard} 
           activeOpacity={0.85}
         >
-          <Text style={styles.buttonText}>Get Started</Text>
+          <Text style={styles.buttonText}>
+            {isSeeker ? 'Connect with Seed Vault' : 'Get Started'}
+          </Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {

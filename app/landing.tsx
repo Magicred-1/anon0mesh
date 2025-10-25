@@ -1,4 +1,5 @@
 import IndexScreen from '@/components/screens/IndexScreen';
+import { isSeekerDevice } from '@/src/types/solana';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
@@ -10,20 +11,29 @@ export default function LandingPage() {
     const [isReturningUser, setIsReturningUser] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
-    useEffect(() => {
+   useEffect(() => {
         (async () => {
-        // Check if wallet is valid (both keys exist)
+        // Check if wallet is valid
         const savedPubKey = await SecureStore.getItemAsync('pubKey');
         const savedPrivKey = await SecureStore.getItemAsync('privKey');
+        const useSeeker = await SecureStore.getItemAsync('useSeeker');
 
-        // If wallet isn't initialized or is corrupted, go to onboarding
-        if (!savedPubKey || !savedPrivKey) {
-            console.log('[Landing] Missing keys - redirecting to onboarding');
-            // Clean up any partial data
-            router.replace('/onboarding');
-            return;
+        // For Seeker devices, only pubKey is needed (no private key stored locally)
+        if (isSeekerDevice() && useSeeker === 'true') {
+            if (!savedPubKey) {
+                console.log('[Landing] Seeker device without pubKey - redirecting to onboarding');
+                router.replace('/onboarding');
+                return;
+            }
+            console.log('[Landing] Seeker device detected - proceeding to app');
+        } else {
+            // For standard Android, both keys must exist
+            if (!savedPubKey || !savedPrivKey) {
+                console.log('[Landing] Missing keys - redirecting to onboarding');
+                router.replace('/onboarding');
+                return;
+            }
         }
-
 
         // Check if user has seen the index before
         const seenIndex = await SecureStore.getItemAsync('hasSeenIndex');

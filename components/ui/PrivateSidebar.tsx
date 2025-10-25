@@ -316,6 +316,7 @@ export default function PrivateSidebar({
                             )}
                         </ScrollView>
                     )}
+                </Animated.View>
             </View>
         </Modal>
     );
