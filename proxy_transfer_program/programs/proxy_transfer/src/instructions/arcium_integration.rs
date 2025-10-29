@@ -1,4 +1,4 @@
-use crate::state::ProxyTransfer;
+use crate::state::{ProxyTransfer, TransferStatus};
 use crate::error::ProxyTransferError;
 use anchor_lang::prelude::*;
 use arcis_sdk::{
@@ -151,8 +151,11 @@ pub fn handler(
     pub_key: [u8; 32],
     encryption_nonce: u128,
 ) -> Result<()> {
-    // No explicit `status` field on ProxyTransfer; skip completed check here.
-    // If you have a status field in your state later, reintroduce a check here.
+    // Validate that the proxy transfer is not already completed
+    require!(
+        ctx.accounts.proxy_transfer.status != TransferStatus::Completed,
+        ProxyTransferError::TransferAlreadyCompleted
+    );
 
     // Validate that the sender is the proxy transfer owner
     require!(
@@ -186,8 +189,8 @@ pub fn handler(
     // Update status to indicate computation is pending
     ctx.accounts.proxy_transfer.status = TransferStatus::ArciumPending;
 
-    // Computation queued; do not update a non-existent status field here.
-    // If ProxyTransfer later includes a status field, update it accordingly.
+    Ok(())
+}
 
 /// Callback instruction invoked when Arcium computation completes
 ///
@@ -216,14 +219,16 @@ pub fn arcium_callback_handler(
     // Update proxy transfer state based on computation result
     if result.0 {
         ctx.accounts.proxy_transfer.status = TransferStatus::Completed;
-    // Update proxy transfer state based on computation result (no status field available)
-    if result.0 {
-        // Transfer verified; log the processed amount. Persist updates to your
-        // ProxyTransfer struct here if you add fields like `status` or `verified_amount`.
-        msg!("Transfer verified and completed via Arcium MPC: processed_amount={}", result.1);
+        ctx.accounts.proxy_transfer.verified_amount = result.1;
+        
+        msg!("Transfer verified and completed via Arcium MPC");
     } else {
+        ctx.accounts.proxy_transfer.status = TransferStatus::Failed;
         msg!("Transfer verification failed");
     }
+
+    Ok(())
+}
 
 // Define the expected output structure
 // This should match what your encrypted instruction returns
