@@ -53,7 +53,7 @@ const isBLEAvailable = (): boolean => {
   }
 };
 
-export class RealBLEManager {
+export class BLECentralServer {
   private manager: BleManager | null = null;
   private connectedDevices: Map<string, ConnectedDevice> = new Map();
   private onDataReceived?: (data: string, from: string) => void;

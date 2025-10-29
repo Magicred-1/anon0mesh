@@ -24,12 +24,48 @@ pub enum ProxyTransferError {
     InvalidTreasuryAccount,
     #[msg("Invalid amount")]
     InvalidAmount,
-    #[msg("PER not delegated")]
-    PerNotDelegated,
-    #[msg("PER not integrated")]
-    PerNotIntegrated,
-    #[msg("PER not committed")]
-    PerNotCommitted,
     #[msg("Invalid tax payer")]
     InvalidTaxPayer,
+    #[msg("Arcium computation was aborted")]
+    ComputationAborted,
+
+    /// Arcium computation failed
+    #[msg("Arcium computation failed")]
+    ComputationFailed,
+
+    /// Invalid escrow state for the requested operation
+    #[msg("Invalid escrow state")]
+    InvalidEscrowState,
+
+    /// Verified amount is missing from proxy transfer
+    #[msg("Missing verified amount from Arcium computation")]
+    MissingVerifiedAmount,
+
+    /// Emergency release not allowed in current state
+    #[msg("Emergency release not allowed in current transfer state")]
+    EmergencyReleaseNotAllowed,
+
+    /// Invalid timestamp calculation
+    #[msg("Invalid timestamp calculation")]
+    InvalidTimestamp,
+
+    /// Emergency timeout not met
+    #[msg("Emergency release timeout period not met")]
+    EmergencyTimeoutNotMet,
+
+    /// Invalid emergency proof provided
+    #[msg("Invalid emergency release proof")]
+    InvalidEmergencyProof,
+
+    /// Transfer not executed yet
+    #[msg("Transfer has not been executed")]
+    TransferNotExecuted,
+
+    /// Invalid recipient
+    #[msg("Invalid recipient address")]
+    InvalidRecipient,
+
+    /// Computation still pending
+    #[msg("Arcium computation is still pending")]
+    ComputationPending,
 }

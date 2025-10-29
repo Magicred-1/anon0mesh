@@ -1,90 +1,106 @@
-use crate::state::{ProxyTransfer, PerStatus};
-use crate::error::ProxyTransferError;
 use anchor_lang::prelude::*;
-use std::str::FromStr;
 
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
-};
+// Then re-export them
+pub use constants::*;
+pub use error::*;
+pub use state::*;
+pub use instructions::*;
 
-#[derive(Accounts)]
-#[instruction(
-    recipient: Pubkey,
-    amount: u64,
-    token_mint: Option<Pubkey>,
-    nonce: u64,
-    referral: Option<Pubkey>,
-)]
-pub struct InitializeProxyTransfer<'info> {
-    #[account(
-        mut,
-    )]
-    pub fee_payer: Signer<'info>,
+declare_id!("EPMnEyFDUz6mf8vTMcfq7J9jbhy3wZgRVsuSUZjjC5CZ");
 
-    #[account(
-        init,
-        space=180,
-        payer=fee_payer,
-        seeds = [
-            b"proxy_transfer",
-            sender.key().as_ref(),
-            nonce.to_le_bytes().as_ref(),
-        ],
-        bump,
-    )]
-    pub proxy_transfer: Account<'info, ProxyTransfer>,
+#[program]
+pub mod proxy_transfer {
+    use super::*;
 
-    pub sender: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Initialize a new proxy transfer
-///
-/// Accounts:
-/// 0. `[writable, signer]` fee_payer: [AccountInfo] 
-/// 1. `[writable]` proxy_transfer: [ProxyTransfer] The proxy transfer account to initialize
-/// 2. `[signer]` sender: [AccountInfo] The original sender
-/// 3. `[]` system_program: [AccountInfo] Auto-generated, for account initialization
-///
-/// Data:
-/// - recipient: [Pubkey] The intended recipient
-/// - amount: [u64] The amount to transfer
-/// - token_mint: [Option<Pubkey>] The token mint (None for SOL)
-/// - nonce: [u64] Nonce to prevent replay attacks
-/// - referral: [Option<Pubkey>] Optional referral address
-pub fn handler(
-    ctx: Context<InitializeProxyTransfer>,
-    recipient: Pubkey,
-    amount: u64,
-    token_mint: Option<Pubkey>,
-    nonce: u64,
-    referral: Option<Pubkey>,
-) -> Result<()> {
-    // Validate nonce is not zero to prevent replay attacks
-    require!(nonce != 0, ProxyTransferError::InvalidNonce);
-
-    // Validate token mint for non-SOL transfers
-    if token_mint.is_some() {
-        require!(token_mint != Some(Pubkey::default()), ProxyTransferError::InvalidTokenMint);
+    /// Initialize a new proxy transfer
+    pub fn initialize_proxy_transfer(
+        ctx: Context<InitializeProxyTransfer>, 
+        recipient: Pubkey, 
+        amount: u64, 
+        token_mint: Option<Pubkey>, 
+        nonce: u64, 
+        referral: Option<Pubkey>
+    ) -> Result<()> {
+        instructions::initialize_proxy_transfer::handler(ctx, recipient, amount, token_mint, nonce, referral)
     }
 
-    // Validate amount is greater than zero
-    require!(amount > 0, ProxyTransferError::InvalidAmount);
+    /// Execute a proxy transfer with tax and referral rewards
+    pub fn execute_proxy_transfer(ctx: Context<ExecuteProxyTransfer>, nonce: u64) -> Result<()> {
+        instructions::execute_proxy_transfer::handler(ctx, nonce)
+    }
 
-    // Initialize the proxy transfer account
-    let proxy_transfer = &mut ctx.accounts.proxy_transfer;
-    proxy_transfer.sender = ctx.accounts.sender.key();
-    proxy_transfer.recipient = recipient;
-    proxy_transfer.amount = amount;
-    proxy_transfer.token_mint = token_mint;
-    proxy_transfer.nonce = nonce;
-    proxy_transfer.referral = referral;
-    proxy_transfer.tax_collected = 0;
-    proxy_transfer.is_completed = false;
-    proxy_transfer.bump = ctx.bumps.proxy_transfer;
-    proxy_transfer.per_status = PerStatus::None;
+    /// Collect referral rewards
+    pub fn collect_referral_reward(ctx: Context<CollectReferralReward>, sender: Pubkey) -> Result<()> {
+        instructions::collect_referral_reward::handler(ctx, sender)
+    }
 
-    Ok(())
+    /// Setup tax payer for a sender
+    pub fn setup_tax_payer(ctx: Context<SetupTaxPayer>, tax_payer_address: Pubkey, tax_rate_bps: u16) -> Result<()> {
+        instructions::setup_tax_payer::handler(ctx, tax_payer_address, tax_rate_bps)
+    }
+
+    /// Queue confidential verification computation with Arcium MPC
+    /// 
+    /// This instruction submits encrypted transfer data to Arcium's MPC network
+    /// for confidential verification and processing.
+    pub fn arcium_verify_transfer(
+        ctx: Context<ArciumProxyIntegration>, 
+        nonce: u64,
+        computation_offset: u64,
+        encrypted_amount: [u8; 32],
+        pub_key: [u8; 32],
+        encryption_nonce: u128,
+    ) -> Result<()> {
+        instructions::arcium_integration::handler(
+            ctx, 
+            nonce, 
+            computation_offset, 
+            encrypted_amount, 
+            pub_key, 
+            encryption_nonce
+        )
+    }
+
+    /// Callback handler invoked by Arcium after MPC computation completes
+    /// 
+    /// This instruction is automatically called by the Arcium program when
+    /// the confidential computation finishes processing.
+    pub fn arcium_verify_callback(
+        ctx: Context<ArciumProxyCallback>,
+        output: ComputationOutputs<VerifyTransferOutput>,
+    ) -> Result<()> {
+        instructions::arcium_integration::arcium_callback_handler(ctx, output)
+    }
+
+    /// Initialize encrypted escrow with Arcium
+    /// 
+    /// Prepares escrow accounts for confidential operations on Arcium's MPC network.
+    pub fn initialize_arcium_escrow(
+        ctx: Context<InitializeArciumEscrow>, 
+        nonce: u64,
+        computation_offset: u64,
+    ) -> Result<()> {
+        instructions::initialize_arcium_escrow::handler(ctx, nonce, computation_offset)
+    }
+
+    /// Finalize escrow after Arcium computation
+    /// 
+    /// Completes escrow operations after confidential verification is done.
+    pub fn finalize_arcium_escrow(
+        ctx: Context<FinalizeArciumEscrow>, 
+        nonce: u64
+    ) -> Result<()> {
+        instructions::finalize_arcium_escrow::handler(ctx, nonce)
+    }
+
+    /// Emergency release of escrow (with proofs)
+    /// 
+    /// Allows releasing escrowed funds in emergency scenarios with proper authorization.
+    pub fn emergency_release_escrow(
+        ctx: Context<EmergencyReleaseEscrow>, 
+        nonce: u64,
+        proof: [u8; 64], // Signature or other proof mechanism
+    ) -> Result<()> {
+        instructions::emergency_release_escrow::handler(ctx, nonce, proof)
+    }
 }

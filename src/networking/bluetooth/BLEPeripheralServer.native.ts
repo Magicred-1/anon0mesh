@@ -1,23 +1,43 @@
 // src/networking/bluetooth/BLEPeripheralServer.native.ts
-// Fixed: Proper BLE advertising sequence
+// Using react-native-multi-ble-peripheral for full GATT server functionality
 
 import { Buffer } from 'buffer';
+import { NativeModules, Platform } from 'react-native';
 import { BLEPacketEncoder } from './BLEPacketEncoder';
 import {
     ANON0MESH_SERVICE_UUID,
-    MESH_DATA_CHARACTERISTIC_UUID,
     NOTIFY_CHARACTERISTIC_UUID,
     WRITE_CHARACTERISTIC_UUID,
     generateDeviceName,
 } from './constants/BLEConstants';
 
-import { NativeModules } from 'react-native';
-import PeripheralModule, { Permission, Property } from 'react-native-multi-ble-peripheral';
-
-const PeripheralClass: any = (PeripheralModule as any)?.default || (PeripheralModule as any);
+// Import react-native-multi-ble-peripheral
+let PeripheralModule: any = null;
+try {
+    PeripheralModule = require('react-native-multi-ble-peripheral');
+} catch (e) {
+    console.warn('[PERIPHERAL] react-native-multi-ble-peripheral not found');
+}
 
 export const SERVICE_UUID = ANON0MESH_SERVICE_UUID;
-export const CHARACTERISTIC_UUID = MESH_DATA_CHARACTERISTIC_UUID;
+export const CHARACTERISTIC_UUID = NOTIFY_CHARACTERISTIC_UUID;
+
+// Permission constants (Android BluetoothGattCharacteristic)
+const Permission = {
+    READABLE: 0x01,
+    WRITEABLE: 0x10,
+    READ_ENCRYPTED_MITM: 0x04,
+    WRITE_ENCRYPTED_MITM: 0x40,
+};
+
+// Property constants (Android BluetoothGattCharacteristic)
+const Property = {
+    READ: 0x02,
+    WRITE_NO_RESPONSE: 0x04,
+    WRITE: 0x08,
+    NOTIFY: 0x10,
+    INDICATE: 0x20,
+};
 
 // ============================================================================
 // ADVERTISING DATA BUILDER
@@ -49,8 +69,41 @@ class BLEAdvertisingDataBuilder {
 // ENHANCED BLE PERIPHERAL SERVER
 // ============================================================================
 
+/**
+ * Detect if native peripheral module is available
+ */
+const isPeripheralAvailable = (): boolean => {
+    if (Platform.OS === 'web') return false;
+    
+    try {
+        const nm = NativeModules as any;
+        // Check for react-native-multi-ble-peripheral native module
+        const hasPeripheral = !!(
+            nm.ReactNativeMultiBlePeripheral ||
+            nm.MultiBlePeripheral ||
+            nm.BlePeripheral
+        );
+        
+        if (!hasPeripheral) {
+            console.log('[PERIPHERAL] Native peripheral module not found');
+            return false;
+        }
+        
+        // Also verify JS wrapper is available
+        if (!PeripheralModule) {
+            console.log('[PERIPHERAL] JS wrapper not imported');
+            return false;
+        }
+        
+        return true;
+    } catch (e) {
+        console.error('[PERIPHERAL] Error checking availability:', e);
+        return false;
+    }
+};
+
 export class BLEPeripheralServer {
-    private peripheral: any | null = null;
+    private peripheral: any = null;
     private isAdvertising = false;
     private deviceId: string;
     private isAvailable = false;
@@ -64,45 +117,45 @@ export class BLEPeripheralServer {
         deviceCapabilities: 0x01,
         meshLoad: 0,
     };
+    private connectedDevices: Set<string> = new Set();
 
     constructor(deviceId: string) {
         this.deviceId = deviceId;
-
-        const nativePresent = !!(NativeModules && (NativeModules as any).ReactNativeMultiBlePeripheral);
-        this.isAvailable = !!PeripheralClass && nativePresent;
+        this.isAvailable = isPeripheralAvailable();
         
         if (this.isAvailable) {
-            console.log('[PERIPHERAL.native] ✅ Native peripheral module available');
-        } else if (!!PeripheralClass && !nativePresent) {
-            console.warn('[PERIPHERAL.native] ⚠️ JS wrapper present but native module missing. Rebuild required.');
+            console.log('[PERIPHERAL] ✅ Native peripheral module available');
         } else {
-            console.warn('[PERIPHERAL.native] ⚠️ Native peripheral module NOT available');
+            console.warn('[PERIPHERAL] ⚠️ Native peripheral module NOT available');
         }
     }
 
     async start() {
         if (this.startFailed || this.hasAttemptedStart) {
-            console.log('[PERIPHERAL.native] Start already attempted, skipping...');
+            console.log('[PERIPHERAL] Start already attempted, skipping...');
             return;
         }
         this.hasAttemptedStart = true;
 
-        if (!this.isAvailable) {
+        if (!this.isAvailable || !PeripheralModule) {
             this.startFailed = true;
-            console.warn('[PERIPHERAL.native] ⚠️ Module unavailable - cannot start peripheral mode');
+            console.warn('[PERIPHERAL] ⚠️ Module unavailable - cannot start peripheral mode');
             return;
         }
 
         try {
-            console.log('[PERIPHERAL.native] 🚀 Initializing GATT server...');
+            console.log('[PERIPHERAL] 🚀 Initializing GATT server...');
 
+            // Get the correct class/constructor from the module
+            const PeripheralClass = PeripheralModule.default || PeripheralModule;
+            
             // Instantiate peripheral
             try {
                 this.peripheral = new PeripheralClass();
-                console.log('[PERIPHERAL.native] ✅ Peripheral instance created');
+                console.log('[PERIPHERAL] ✅ Peripheral instance created');
             } catch (err: any) {
                 this.startFailed = true;
-                console.error('[PERIPHERAL.native] ❌ Failed to create peripheral:', err?.message ?? err);
+                console.error('[PERIPHERAL] ❌ Failed to create peripheral:', err?.message ?? err);
                 return;
             }
 
@@ -112,37 +165,37 @@ export class BLEPeripheralServer {
             this.setupEventListeners();
 
             // Wait for ready event with timeout
-            console.log('[PERIPHERAL.native] ⏳ Waiting for Bluetooth ready...');
+            console.log('[PERIPHERAL] ⏳ Waiting for Bluetooth ready...');
             await this.waitForReady();
-            console.log('[PERIPHERAL.native] ✅ Bluetooth ready');
+            console.log('[PERIPHERAL] ✅ Bluetooth ready');
 
             // Set device name
             if (typeof this.peripheral.setName === 'function') {
                 try {
                     await this.peripheral.setName(deviceName);
-                    console.log('[PERIPHERAL.native] ✅ Device name set:', deviceName);
+                    console.log('[PERIPHERAL] ✅ Device name set:', deviceName);
                 } catch (err) {
-                    console.warn('[PERIPHERAL.native] ⚠️ Failed to set name:', err);
+                    console.warn('[PERIPHERAL] ⚠️ Failed to set name:', err);
                 }
             }
 
             // CRITICAL: Add services and characteristics BEFORE starting advertising
-            console.log('[PERIPHERAL.native] 🔧 Configuring GATT services (before advertising)...');
+            console.log('[PERIPHERAL] 🔧 Configuring GATT services (before advertising)...');
             await this.configureGattServices();
 
             // NOW start advertising with the configured services
-            console.log('[PERIPHERAL.native] 📡 Starting BLE advertising...');
+            console.log('[PERIPHERAL] 📡 Starting BLE advertising...');
             await this.startAdvertising(deviceName);
 
-            console.log(`[PERIPHERAL.native] ✅ GATT server running, advertising as: ${deviceName}`);
+            console.log(`[PERIPHERAL] ✅ GATT server running, advertising as: ${deviceName}`);
             this.isAdvertising = true;
             this.gattServerReady = true;
 
         } catch (error: any) {
             this.startFailed = true;
-            console.error('[PERIPHERAL.native] ❌ Fatal error during startup:', error?.message ?? error);
+            console.error('[PERIPHERAL] ❌ Fatal error during startup:', error?.message ?? error);
             if (error?.stack) {
-                console.error('[PERIPHERAL.native] Stack trace:', error.stack);
+                console.error('[PERIPHERAL] Stack trace:', error.stack);
             }
         }
     }
@@ -165,54 +218,39 @@ export class BLEPeripheralServer {
 
         try {
             // Step 1: Add primary service
-            console.log('[PERIPHERAL.native] 📝 Adding service:', ANON0MESH_SERVICE_UUID);
-            try {
-                await this.peripheral.addService(ANON0MESH_SERVICE_UUID, true);
-                console.log('[PERIPHERAL.native] ✅ Service added');
-            } catch (err: any) {
-                console.error('[PERIPHERAL.native] ❌ addService failed:', err?.message);
-                throw new Error(`Failed to add service: ${err?.message}`);
-            }
+            console.log('[PERIPHERAL] 📝 Adding service:', ANON0MESH_SERVICE_UUID);
+            await this.peripheral.addService(ANON0MESH_SERVICE_UUID, true);
+            console.log('[PERIPHERAL] ✅ Service added');
 
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await this.delay(150);
 
-            // Step 2: Add write characteristic
-            console.log('[PERIPHERAL.native] 📝 Adding write characteristic:', WRITE_CHARACTERISTIC_UUID);
-            try {
-                await this.peripheral.addCharacteristic(
-                    ANON0MESH_SERVICE_UUID,
-                    WRITE_CHARACTERISTIC_UUID,
-                    Property.WRITE | Property.WRITE_NO_RESPONSE,
-                    Permission.WRITEABLE
-                );
-                console.log('[PERIPHERAL.native] ✅ Write characteristic added');
-            } catch (err: any) {
-                console.error('[PERIPHERAL.native] ❌ Write characteristic failed:', err?.message);
-                throw new Error(`Failed to add write characteristic: ${err?.message}`);
-            }
+            // Step 2: Add write characteristic (for receiving data)
+            console.log('[PERIPHERAL] 📝 Adding write characteristic:', WRITE_CHARACTERISTIC_UUID);
+            await this.peripheral.addCharacteristic(
+                ANON0MESH_SERVICE_UUID,
+                WRITE_CHARACTERISTIC_UUID,
+                Property.WRITE | Property.WRITE_NO_RESPONSE,
+                Permission.WRITEABLE
+            );
+            console.log('[PERIPHERAL] ✅ Write characteristic added');
 
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await this.delay(150);
 
-            // Step 3: Add notify characteristic
-            console.log('[PERIPHERAL.native] 📝 Adding notify characteristic:', NOTIFY_CHARACTERISTIC_UUID);
-            try {
-                await this.peripheral.addCharacteristic(
-                    ANON0MESH_SERVICE_UUID,
-                    NOTIFY_CHARACTERISTIC_UUID,
-                    Property.READ | Property.NOTIFY,
-                    Permission.READABLE
-                );
-                console.log('[PERIPHERAL.native] ✅ Notify characteristic added');
-            } catch (err: any) {
-                console.error('[PERIPHERAL.native] ❌ Notify characteristic failed:', err?.message);
-                throw new Error(`Failed to add notify characteristic: ${err?.message}`);
-            }
+            // Step 3: Add notify characteristic (for sending data)
+            console.log('[PERIPHERAL] 📝 Adding notify characteristic:', NOTIFY_CHARACTERISTIC_UUID);
+            await this.peripheral.addCharacteristic(
+                ANON0MESH_SERVICE_UUID,
+                NOTIFY_CHARACTERISTIC_UUID,
+                Property.READ | Property.NOTIFY,
+                Permission.READABLE
+            );
+            console.log('[PERIPHERAL] ✅ Notify characteristic added');
 
-            await new Promise(resolve => setTimeout(resolve, 150));
-            console.log('[PERIPHERAL.native] ✅ All GATT services and characteristics configured');
+            await this.delay(150);
+            console.log('[PERIPHERAL] ✅ All GATT services and characteristics configured');
 
         } catch (err: any) {
-            console.error('[PERIPHERAL.native] ❌ GATT configuration failed:', err?.message ?? err);
+            console.error('[PERIPHERAL] ❌ GATT configuration failed:', err?.message ?? err);
             throw err;
         }
     }
@@ -221,11 +259,11 @@ export class BLEPeripheralServer {
         if (!this.peripheral) throw new Error('No peripheral instance');
         
         if (typeof this.peripheral.startAdvertising !== 'function') {
-            console.warn('[PERIPHERAL.native] ⚠️ startAdvertising method not available');
+            console.warn('[PERIPHERAL] ⚠️ startAdvertising method not available');
             return;
         }
 
-        console.log('[PERIPHERAL.native] 📡 Starting advertising with service UUIDs...');
+        console.log('[PERIPHERAL] 📡 Starting advertising with service UUIDs...');
 
         // Try multiple advertising strategies in order of preference
         
@@ -247,10 +285,10 @@ export class BLEPeripheralServer {
                 includeTxPowerLevel: true,
                 connectable: true,
             });
-            console.log('[PERIPHERAL.native] ✅ Advertising started (full featured)');
+            console.log('[PERIPHERAL] ✅ Advertising started (full featured)');
             return;
         } catch (err1) {
-            console.warn('[PERIPHERAL.native] ⚠️ Full featured advertising failed:', err1);
+            console.warn('[PERIPHERAL] ⚠️ Full featured advertising failed:', err1);
         }
 
         // Strategy 2: Basic advertising with service UUID only
@@ -260,28 +298,19 @@ export class BLEPeripheralServer {
                 localName: deviceName,
                 connectable: true,
             });
-            console.log('[PERIPHERAL.native] ✅ Advertising started (basic with service UUID)');
+            console.log('[PERIPHERAL] ✅ Advertising started (basic with service UUID)');
             return;
         } catch (err2) {
-            console.warn('[PERIPHERAL.native] ⚠️ Basic advertising with options failed:', err2);
+            console.warn('[PERIPHERAL] ⚠️ Basic advertising with options failed:', err2);
         }
 
-        // Strategy 3: Minimal advertising (service UUID as first param)
-        try {
-            await this.peripheral.startAdvertising(ANON0MESH_SERVICE_UUID, deviceName);
-            console.log('[PERIPHERAL.native] ✅ Advertising started (minimal parameters)');
-            return;
-        } catch (err3) {
-            console.warn('[PERIPHERAL.native] ⚠️ Minimal advertising failed:', err3);
-        }
-
-        // Strategy 4: No-parameter advertising
+        // Strategy 3: Minimal advertising
         try {
             await this.peripheral.startAdvertising();
-            console.log('[PERIPHERAL.native] ⚠️ Advertising started (no parameters - service may not be advertised!)');
+            console.log('[PERIPHERAL] ⚠️ Advertising started (no parameters - service may not be advertised!)');
             return;
-        } catch (err4) {
-            console.error('[PERIPHERAL.native] ❌ All advertising strategies failed:', err4);
+        } catch (err3) {
+            console.error('[PERIPHERAL] ❌ All advertising strategies failed:', err3);
             throw new Error('Failed to start advertising');
         }
     }
@@ -289,20 +318,22 @@ export class BLEPeripheralServer {
     private setupEventListeners() {
         if (!this.peripheral) return;
 
-        console.log('[PERIPHERAL.native] 🎧 Setting up event listeners...');
+        console.log('[PERIPHERAL] 🎧 Setting up event listeners...');
 
         // Connection events
         this.peripheral.on('connected', (addr: string) => {
-            console.log(`[PERIPHERAL.native] 🔗 Device connected: ${addr.slice(0, 8)}...`);
+            console.log(`[PERIPHERAL] 🔗 Device connected: ${addr.slice(0, 8)}...`);
+            this.connectedDevices.add(addr);
             this.chunkBuffers.set(addr, new Map());
         });
 
         this.peripheral.on('disconnected', (addr: string) => {
-            console.log(`[PERIPHERAL.native] 🔌 Device disconnected: ${addr.slice(0, 8)}...`);
+            console.log(`[PERIPHERAL] 🔌 Device disconnected: ${addr.slice(0, 8)}...`);
+            this.connectedDevices.delete(addr);
             this.chunkBuffers.delete(addr);
         });
 
-        // Write request handler
+        // Write request handler (when central writes to our characteristic)
         this.peripheral.on('writeRequest', async (
             addr: string,
             reqId: number,
@@ -310,11 +341,12 @@ export class BLEPeripheralServer {
             char: string,
             val: any
         ) => {
-            console.log(`[PERIPHERAL.native] 📥 Write from ${addr.slice(0, 8)}... to char ${char.slice(-8)}`);
+            console.log(`[PERIPHERAL] 📥 Write from ${addr.slice(0, 8)}... to char ${char.slice(-8)}`);
             
             try {
                 let base64Chunk: string;
                 
+                // Handle different value formats
                 if (Buffer.isBuffer(val)) {
                     base64Chunk = val.toString('base64');
                 } else if (typeof val === 'string') {
@@ -324,46 +356,51 @@ export class BLEPeripheralServer {
                     } catch {
                         base64Chunk = Buffer.from(val, 'utf8').toString('base64');
                     }
+                } else if (Array.isArray(val)) {
+                    // Handle byte array
+                    base64Chunk = Buffer.from(val).toString('base64');
                 } else {
                     throw new Error('Unexpected value type in write request');
                 }
 
+                // Buffer chunks for this device
                 if (!this.chunkBuffers.has(addr)) {
                     this.chunkBuffers.set(addr, new Map());
                 }
                 const deviceChunks = this.chunkBuffers.get(addr)!;
                 
+                // Try to assemble complete packet
                 const fullPacketBuffer = BLEPacketEncoder.addChunk(deviceChunks, base64Chunk);
                 
                 if (fullPacketBuffer) {
-                    console.log(`[PERIPHERAL.native] ✅ Complete packet from ${addr.slice(0, 8)}...`);
+                    console.log(`[PERIPHERAL] ✅ Complete packet from ${addr.slice(0, 8)}...`);
                     
+                    // Decode and forward to handler
                     const packet = BLEPacketEncoder.decode(fullPacketBuffer.toString('base64'));
                     
                     if (packet && this.onDataReceived) {
                         this.onDataReceived(JSON.stringify(packet), addr);
                     } else {
-                        console.error('[PERIPHERAL.native] ❌ Failed to decode packet');
+                        console.error('[PERIPHERAL] ❌ Failed to decode packet');
                     }
                     
+                    // Clear buffer for next packet
                     this.chunkBuffers.set(addr, new Map());
                 } else {
-                    console.log(`[PERIPHERAL.native] 📦 Chunk ${deviceChunks.size} buffered`);
+                    console.log(`[PERIPHERAL] 📦 Chunk ${deviceChunks.size} buffered`);
                 }
                 
+                // Send success response
                 if (typeof this.peripheral.sendResponse === 'function') {
                     await this.peripheral.sendResponse(reqId, 0, val);
-                } else if (typeof this.peripheral.sendNotification === 'function') {
-                    await this.peripheral.sendNotification(String(reqId), String(0), val);
                 }
                 
             } catch (err: any) {
-                console.error(`[PERIPHERAL.native] ❌ Write error:`, err?.message ?? err);
+                console.error(`[PERIPHERAL] ❌ Write error:`, err?.message ?? err);
                 
+                // Send error response
                 if (typeof this.peripheral.sendResponse === 'function') {
                     await this.peripheral.sendResponse(reqId, 1, val);
-                } else if (typeof this.peripheral.sendNotification === 'function') {
-                    await this.peripheral.sendNotification(String(reqId), String(1), val);
                 }
             }
         });
@@ -375,7 +412,7 @@ export class BLEPeripheralServer {
             svc: string,
             char: string
         ) => {
-            console.log(`[PERIPHERAL.native] 📖 Read request from ${addr.slice(0, 8)}...`);
+            console.log(`[PERIPHERAL] 📖 Read request from ${addr.slice(0, 8)}...`);
             
             if (typeof this.peripheral.sendResponse === 'function') {
                 const response = Buffer.from('OK', 'utf8');
@@ -385,29 +422,34 @@ export class BLEPeripheralServer {
 
         // Subscription events
         this.peripheral.on('subscribedToCharacteristic', (addr: string, svc: string, char: string) => {
-            console.log(`[PERIPHERAL.native] 🔔 ${addr.slice(0, 8)}... subscribed to ${char.slice(-8)}`);
+            console.log(`[PERIPHERAL] 🔔 ${addr.slice(0, 8)}... subscribed to ${char.slice(-8)}`);
         });
 
         this.peripheral.on('unsubscribedFromCharacteristic', (addr: string, svc: string, char: string) => {
-            console.log(`[PERIPHERAL.native] 🔕 ${addr.slice(0, 8)}... unsubscribed from ${char.slice(-8)}`);
+            console.log(`[PERIPHERAL] 🔕 ${addr.slice(0, 8)}... unsubscribed from ${char.slice(-8)}`);
         });
 
         // State change events
         this.peripheral.on('stateChanged', (state: string) => {
-            console.log(`[PERIPHERAL.native] 🔄 BLE state changed: ${state}`);
+            console.log(`[PERIPHERAL] 🔄 BLE state changed: ${state}`);
         });
 
-        console.log('[PERIPHERAL.native] ✅ Event listeners configured');
+        console.log('[PERIPHERAL] ✅ Event listeners configured');
     }
 
     async sendData(data: string): Promise<void> {
         if (!this.peripheral || !this.isAdvertising) {
-            console.warn('[PERIPHERAL.native] ⚠️ Cannot send - not advertising');
+            console.warn('[PERIPHERAL] ⚠️ Cannot send - not advertising');
             return;
         }
 
         if (!this.gattServerReady) {
-            console.warn('[PERIPHERAL.native] ⚠️ Cannot send - GATT server not ready');
+            console.warn('[PERIPHERAL] ⚠️ Cannot send - GATT server not ready');
+            return;
+        }
+
+        if (this.connectedDevices.size === 0) {
+            console.warn('[PERIPHERAL] ⚠️ No connected devices to send to');
             return;
         }
 
@@ -415,7 +457,7 @@ export class BLEPeripheralServer {
         try {
             packet = JSON.parse(data);
         } catch {
-            console.warn('[PERIPHERAL.native] ⚠️ Non-JSON data, sending as raw UTF-8');
+            console.warn('[PERIPHERAL] ⚠️ Non-JSON data, sending as raw UTF-8');
             try {
                 const rawBuffer = Buffer.from(data, 'utf8');
                 await this.peripheral.updateValue(
@@ -423,14 +465,15 @@ export class BLEPeripheralServer {
                     NOTIFY_CHARACTERISTIC_UUID,
                     rawBuffer
                 );
-                console.log('[PERIPHERAL.native] ✅ Raw data sent');
+                console.log('[PERIPHERAL] ✅ Raw data sent');
             } catch (err) {
-                console.error('[PERIPHERAL.native] ❌ Send failed:', err);
+                console.error('[PERIPHERAL] ❌ Send failed:', err);
             }
             return;
         }
 
         try {
+            // Check if it's a mesh packet
             if (
                 typeof packet === 'object' &&
                 packet.type !== undefined &&
@@ -439,7 +482,7 @@ export class BLEPeripheralServer {
             ) {
                 const base64Chunks = BLEPacketEncoder.encode(packet);
                 
-                console.log(`[PERIPHERAL.native] 📤 Sending ${base64Chunks.length} chunk(s)`);
+                console.log(`[PERIPHERAL] 📤 Sending ${base64Chunks.length} chunk(s) to ${this.connectedDevices.size} device(s)`);
                 
                 for (let i = 0; i < base64Chunks.length; i++) {
                     const chunk = base64Chunks[i];
@@ -452,52 +495,52 @@ export class BLEPeripheralServer {
                     );
                     
                     if (i < base64Chunks.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 20));
+                        await this.delay(20);
                     }
                 }
                 
-                console.log('[PERIPHERAL.native] ✅ All chunks sent');
+                console.log('[PERIPHERAL] ✅ All chunks sent');
             } else {
-                console.log('[PERIPHERAL.native] 📤 Sending non-mesh data');
+                console.log('[PERIPHERAL] 📤 Sending non-mesh data');
                 const buffer = Buffer.from(data, 'utf8');
                 await this.peripheral.updateValue(
                     ANON0MESH_SERVICE_UUID,
                     NOTIFY_CHARACTERISTIC_UUID,
                     buffer
                 );
-                console.log('[PERIPHERAL.native] ✅ Data sent');
+                console.log('[PERIPHERAL] ✅ Data sent');
             }
         } catch (err: any) {
-            console.error('[PERIPHERAL.native] ❌ Send failed:', err?.message ?? err);
+            console.error('[PERIPHERAL] ❌ Send failed:', err?.message ?? err);
         }
     }
 
     async stop() {
-        console.log('[PERIPHERAL.native] 🛑 Stopping peripheral...');
+        console.log('[PERIPHERAL] 🛑 Stopping peripheral...');
         
         if (this.peripheral && this.isAdvertising) {
             try {
                 await this.peripheral.stopAdvertising();
-                console.log('[PERIPHERAL.native] ✅ Advertising stopped');
+                console.log('[PERIPHERAL] ✅ Advertising stopped');
             } catch (err) {
-                console.warn('[PERIPHERAL.native] ⚠️ Stop advertising error:', err);
+                console.warn('[PERIPHERAL] ⚠️ Stop advertising error:', err);
             }
             
             if (typeof this.peripheral.closeServer === 'function') {
                 try {
                     await this.peripheral.closeServer();
-                    console.log('[PERIPHERAL.native] ✅ GATT server closed');
+                    console.log('[PERIPHERAL] ✅ GATT server closed');
                 } catch (err) {
-                    console.warn('[PERIPHERAL.native] ⚠️ Close server error:', err);
+                    console.warn('[PERIPHERAL] ⚠️ Close server error:', err);
                 }
             }
             
             if (typeof this.peripheral.close === 'function') {
                 try {
                     await this.peripheral.close();
-                    console.log('[PERIPHERAL.native] ✅ Peripheral closed');
+                    console.log('[PERIPHERAL] ✅ Peripheral closed');
                 } catch (err) {
-                    console.warn('[PERIPHERAL.native] ⚠️ Close error:', err);
+                    console.warn('[PERIPHERAL] ⚠️ Close error:', err);
                 }
             }
             
@@ -507,31 +550,39 @@ export class BLEPeripheralServer {
         }
         
         this.chunkBuffers.clear();
+        this.connectedDevices.clear();
         this.isAdvertising = false;
         this.gattServerReady = false;
-        console.log('[PERIPHERAL.native] ✅ Peripheral stopped');
+        console.log('[PERIPHERAL] ✅ Peripheral stopped');
     }
 
     setDataReceivedCallback(callback: (data: string, from: string) => void) {
         this.onDataReceived = callback;
     }
 
-    
     isAdvertisingActive(): boolean {
-        return this.isAdvertising && this.gattServerReady;          
+        return this.isAdvertising && this.gattServerReady;
     }
 
     updateCapabilities(capabilities: number) {
         this.meshData.deviceCapabilities = capabilities & 0xFF;
-        console.log(`[PERIPHERAL.native] 🔧 Capabilities updated: 0x${capabilities.toString(16)}`);
+        console.log(`[PERIPHERAL] 🔧 Capabilities updated: 0x${capabilities.toString(16)}`);
     }
 
     getMeshData(): MeshAdvertisingData {
         return { ...this.meshData };
     }
 
-    // Backwards-compatible alias for older callers
+    getConnectedCount(): number {
+        return this.connectedDevices.size;
+    }
+
+    // Backwards-compatible alias
     setDataHandler(callback: (data: string, from: string) => void) {
         this.onDataReceived = callback;
+    }
+
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
