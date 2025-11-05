@@ -66,8 +66,8 @@ export default function RootLayout() {
         <StatusBar style="light" translucent backgroundColor="transparent" />
 
         <EdgeSwipeHandler
-          onOpenLeft={() => setPrivateOpen(false)}
-          onOpenRight={() => setPrivateOpen(true)}
+          onOpenLeft={() => setPrivateOpen(true)}
+          onOpenRight={() => setPrivateOpen(false)}
         >
           <GluestackUIProvider mode="dark">
             <ChannelProvider>

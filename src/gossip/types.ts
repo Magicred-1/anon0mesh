@@ -4,6 +4,9 @@ export enum MessageType {
     REQUEST_SYNC = 2,
     SOLANA_TRANSACTION = 3,
     LEAVE = 4,
+    NOISE_HANDSHAKE_INIT,
+    NOISE_HANDSHAKE_RESPONSE,
+    NOISE_HANDSHAKE_FINAL,
 }
 
 export interface Anon0MeshPacket {

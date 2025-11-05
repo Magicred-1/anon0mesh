@@ -3,16 +3,15 @@
 //  * Manages Noise Protocol sessions for multiple peers
 //  */
 
-// import { NoiseSession, NoiseState, KeyPair } from './NoiseSession';
-// import {  
-//     truncatePeerId,
-//     PacketFlags
-// } from '../types/protocol';
-// import { Anon0MeshPacket, MessageType } from '../gossip/types';
 // import * as SecureStore from 'expo-secure-store';
+// import { Anon0MeshPacket, MessageType } from '../gossip/types';
+// import {
+//     truncatePeerId
+// } from '../types/protocol';
+// import { KeyPair, NoiseSession, NoiseState } from './NoiseSession';
 // // @ts-ignore - noise-c.wasm has no TypeScript declarations
-// import Noise from 'noise-c.wasm';
 // import { Buffer } from 'buffer';
+// import Noise from 'noise-c.wasm';
 
 // const STATIC_KEY_PAIR_KEY = 'noise_static_keypair';
 
@@ -31,7 +30,23 @@
 //      */
 //     private async initialize(): Promise<void> {
 //         await Noise.ready;
-//         this.staticKeyPair = await this.loadOrGenerateStaticKey();
+//         // Prefer keys stored by the wallet (if present), otherwise load/generate our own
+//         try {
+//             const walletPub = await SecureStore.getItemAsync('wallet_public_key');
+//             const walletPriv = await SecureStore.getItemAsync('wallet_private_key');
+//             if (walletPub && walletPriv) {
+//             this.staticKeyPair = {
+//                 publicKey: Uint8Array.from(Buffer.from(walletPub, 'hex')),
+//                 privateKey: Uint8Array.from(Buffer.from(walletPriv, 'hex')),
+//             };
+//             console.log('[NOISE] Using wallet public/private keys from secure store');
+//             } else {
+//             this.staticKeyPair = await this.loadOrGenerateStaticKey();
+//             }
+//         } catch (err) {
+//             console.warn('[NOISE] Failed to load wallet keys, falling back to generated keys:', err);
+//             this.staticKeyPair = await this.loadOrGenerateStaticKey();
+//         }
 //         console.log('[NOISE] Initialized with public key:', 
 //             Buffer.from(this.staticKeyPair.publicKey).toString('hex').slice(0, 16) + '...'
 //         );
@@ -62,13 +77,11 @@
 //         const handshakeMessage = await session.initiateHandshake();
         
 //         return {
-//             version: 1,
-//             type: MessageType.MESSAGE as MessageType,
+//             type: MessageType.NOISE_HANDSHAKE_INIT,
 //             ttl: 1, // Direct only, no relay
 //             timestamp: BigInt(Date.now()),
-//             flags: PacketFlags.HAS_RECIPIENT,
-//             senderId: truncatePeerId(this.getPublicKeyHex()),
-//             recipientId: truncatePeerId(peerId),
+//             senderID: truncatePeerId(this.getPublicKeyHex()),
+//             recipientID: truncatePeerId(peerId),
 //             payload: handshakeMessage,
 //         };
 //     }
@@ -77,10 +90,10 @@
 //      * Process received handshake packet
 //      * Returns a response packet if one should be sent, or null if handshake is complete
 //      */
-//     async processHandshake(packet: BitchatPacket): Promise<BitchatPacket | null> {
+//     async processHandshake(packet: Anon0MeshPacket): Promise<Anon0MeshPacket | null> {
 //         await this.ensureInitialized();
         
-//         const peerId = packet.senderId.toString('hex');
+//         const peerId = Buffer.from(packet.senderID).toString('hex');
 //         let session = this.sessions.get(peerId);
         
 //         // If this is a new handshake, create session
@@ -120,18 +133,14 @@
 //         console.log('[NOISE] Sending handshake response to', peerId.slice(0, 8) + '...');
         
 //         return {
-//             version: 1,
 //             type: responseType,
 //             ttl: 1,
 //             timestamp: BigInt(Date.now()),
-//             flags: PacketFlags.HAS_RECIPIENT,
-//             senderId: truncatePeerId(this.getPublicKeyHex()),
-//             recipientId: packet.senderId,
+//             senderID: truncatePeerId(this.getPublicKeyHex()),
+//             recipientID: packet.senderID,
 //             payload: response,
 //         };
 //     }
-    
-//     /**
 //      * Encrypt a message for a peer
 //      * Returns the encrypted payload ready to be put in a BitchatPacket
 //      */

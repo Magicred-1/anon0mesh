@@ -3,6 +3,7 @@ import {
     Animated,
     Dimensions,
     Modal,
+    PanResponder,
     ScrollView,
     StyleSheet,
     Text,
@@ -41,12 +42,32 @@ export default function PrivateSidebar({
     currentPrivate,
     onClearPrivate,
 }: Props) {
-    const slideAnim = React.useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
+    const slideAnim = React.useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
     const opacityAnim = React.useRef(new Animated.Value(0)).current;
     // Tabs removed: always show peers
     const [activePeer, setActivePeer] = React.useState<string | null>(null);
     const [messagesMap, setMessagesMap] = React.useState<Record<string, { from: 'me' | 'them'; text: string; }[]>>({});
     const [composed, setComposed] = React.useState('');
+
+    // PanResponder to prevent Android back gesture
+    const panResponder = React.useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: (evt, gestureState) => {
+                // Capture horizontal gestures
+                return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+            },
+            onPanResponderGrant: () => {
+                // Prevent default
+            },
+            onPanResponderMove: () => {
+                // Do nothing, just capture
+            },
+            onPanResponderRelease: () => {
+                // Do nothing
+            },
+        })
+    ).current;
 
     // Generate random mock peers if none exist
     const generateMockPeers = (count: number) => {
@@ -78,7 +99,7 @@ export default function PrivateSidebar({
             ]).start();
         } else {
             Animated.parallel([
-                Animated.timing(slideAnim, { toValue: SIDEBAR_WIDTH, duration: 250, useNativeDriver: true }),
+                Animated.timing(slideAnim, { toValue: -SIDEBAR_WIDTH, duration: 250, useNativeDriver: true }),
                 Animated.timing(opacityAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
             ]).start();
         }
@@ -159,19 +180,21 @@ export default function PrivateSidebar({
                 <Animated.View
                     style={{
                         position: 'absolute',
-                        right: 0,
+                        left: 0,
                         top: 0,
                         bottom: 0,
                         width: SIDEBAR_WIDTH,
                         backgroundColor: '#121212',
                         transform: [{ translateX: slideAnim }],
-                        borderLeftWidth: 2,
-                        borderLeftColor: '#444',
+                        borderRightWidth: 2,
+                        borderRightColor: '#444',
                         shadowColor: '#000',
-                        shadowOffset: { width: -3, height: 0 },
+                        shadowOffset: { width: 3, height: 0 },
                         shadowOpacity: 0.4,
                         shadowRadius: 6,
                     }}
+                    pointerEvents="auto"
+                    {...panResponder.panHandlers}
                 >
                     {/* Header */}
                     <View style={{ paddingTop: 60, paddingHorizontal: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' }}>

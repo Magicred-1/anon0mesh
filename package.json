@@ -69,7 +69,6 @@
     "react-aria": "^3.43.2",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
-    "react-native-ble-peripheral": "^2.0.1",
     "react-native-ble-plx": "^3.5.0",
     "react-native-crypto": "^2.2.1",
     "react-native-device-info": "^10.14.0",

@@ -1,6 +1,6 @@
 // Hybrid BLEFactory - single clean implementation
 import { BLECentralServer } from './BLECentralServer';
-import { BLEPeripheralServer } from './BLEPeripheralServer';
+import { BLEPeripheralServer } from './BLEPeripheralServer.native';
 
 /**
  * Hybrid BLE Factory
@@ -186,7 +186,7 @@ class BLEFactory {
 
   async isPeripheralAvailable(): Promise<boolean> {
     try {
-      await import('react-native-ble-peripheral');
+      await import('react-native-multi-ble-peripheral');
       return true;
     } catch {
       return false;

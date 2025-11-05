@@ -7,6 +7,7 @@ import { AppState, AppStateStatus, NativeModules, PermissionsAndroid, Platform }
 import { addPacketToBackgroundQueue, getBackgroundMeshStatus, initializeBackgroundMesh, stopBackgroundMesh } from '@/src/background/BackgroundMeshManager';
 import { GossipSyncConfig, GossipSyncManager, GossipSyncManagerDelegate } from '@/src/gossip/GossipSyncManager';
 import { Anon0MeshPacket, MessageType } from '@/src/gossip/types';
+import { BLEPeripheralServer } from '@/src/networking/bluetooth/BLEPeripheralServer.native';
 import { Connection } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import { useEffect, useRef } from 'react';
@@ -16,7 +17,6 @@ import {
   getBLEConfig,
 } from '../../src/networking/bluetooth/BLEFactory';
 import { BLEPacketEncoder } from '../../src/networking/bluetooth/BLEPacketEncoder';
-import { BLEPeripheralServer } from '../../src/networking/bluetooth/BLEPeripheralServer';
 // ✅ ADD THESE IMPORTS
 import { isBLEAvailable, waitForBluetoothReady } from '../../src/networking/bluetooth/BLEUtils';
 import {
