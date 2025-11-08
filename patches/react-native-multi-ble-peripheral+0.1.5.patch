@@ -1,0 +1,72 @@
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/.project b/node_modules/react-native-multi-ble-peripheral/android/.project
+new file mode 100644
+index 0000000..863b739
+--- /dev/null
++++ b/node_modules/react-native-multi-ble-peripheral/android/.project
+@@ -0,0 +1,34 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>react-native-multi-ble-peripheral</name>
++	<comment>Project react-native-multi-ble-peripheral created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.jdt.core.javabuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.jdt.core.javanature</nature>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1760386026181</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt b/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt
+index d3d31af..03eb665 100644
+--- a/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt
++++ b/node_modules/react-native-multi-ble-peripheral/android/src/main/java/com/fugood/reactnativemultibleperipheral/ReactNativeMultiBlePeripheralModule.kt
+@@ -445,13 +445,21 @@ class ReactNativeMultiBlePeripheralModule(reactContext: ReactApplicationContext)
+       )
+     }
+     if (advServices != null) {
+-      for (service in advServices.getEntryIterator()) {
+-        val uuid = UUID.fromString(service.key)
+-        if (service.value is String) {
+-          val data = Base64.decode(service.value as String, Base64.DEFAULT)
+-          advertiseDataBuilder.addServiceData(ParcelUuid(uuid), data)
++      // React Native ReadableMap does not support entrySet or getEntryIterator, so use keySetIterator for compatibility
++      val keyIter = advServices.keySetIterator()
++      while (keyIter.hasNextKey()) {
++        val key = keyIter.nextKey()
++        try {
++          val maybeValue = advServices.getString(key)
++          val uuid = UUID.fromString(key)
++          if (maybeValue != null) {
++            val data = Base64.decode(maybeValue, Base64.DEFAULT)
++            advertiseDataBuilder.addServiceData(ParcelUuid(uuid), data)
++          }
++          advertiseDataBuilder.addServiceUuid(ParcelUuid(uuid))
++        } catch (e: Exception) {
++          Log.w(NAME, "Invalid advertise service entry: $key - ${e.message}")
+         }
+-        advertiseDataBuilder.addServiceUuid(ParcelUuid(uuid))
+       }
+     }
+ 
