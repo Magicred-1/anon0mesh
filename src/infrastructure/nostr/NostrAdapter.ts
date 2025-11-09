@@ -46,7 +46,14 @@ export class NostrAdapter implements INostrAdapter {
   private initialized = false;
 
   constructor() {
-    this.pool = new SimplePool();
+    // Initialize SimplePool with reconnection handling
+    // Updates 'since' filter on reconnect to avoid duplicate events
+    this.pool = new SimplePool({
+      enableReconnect: (filters: NostrFilter[]) => {
+        const newSince = Math.floor(Date.now() / 1000);
+        return filters.map((filter: NostrFilter) => ({ ...filter, since: newSince }));
+      }
+    });
   }
 
   // ============================================
@@ -266,6 +273,78 @@ export class NostrAdapter implements INostrAdapter {
     return this.publishEvent(event);
   }
 
+  async publishMeshMessage(
+    recipientPubkey: string,
+    content: string,
+    tags: string[][] = []
+  ): Promise<NostrPublishResult[]> {
+    if (!this.initialized || !this.privateKey) {
+      throw new Error('NostrAdapter not initialized');
+    }
+
+    console.log(`[Nostr] Publishing mesh message for ${recipientPubkey.slice(0, 8)}...`);
+
+    // Encrypt content (NIP-04)
+    const encryptedContent = await nip04.encrypt(this.privateKey, recipientPubkey, content);
+
+    // Import event kind constant
+    const { NOSTR_EVENT_KINDS } = await import('./INostrAdapter');
+
+    // Create mesh message event (kind 30000)
+    const event: Omit<NostrEvent, 'id' | 'sig'> = {
+      kind: NOSTR_EVENT_KINDS.MESH_MESSAGE,
+      pubkey: this.publicKey!,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ['p', recipientPubkey], // Recipient
+        ['t', 'anon0mesh'], // App tag
+        ...tags,
+      ],
+      content: encryptedContent,
+    };
+
+    return this.publishEvent(event);
+  }
+
+  async publishSolanaTransaction(
+    transactionData: string,
+    recipientPubkey?: string,
+    tags: string[][] = []
+  ): Promise<NostrPublishResult[]> {
+    if (!this.initialized || !this.privateKey) {
+      throw new Error('NostrAdapter not initialized');
+    }
+
+    console.log(`[Nostr] Publishing Solana transaction...`);
+
+    // Import event kind constant
+    const { NOSTR_EVENT_KINDS } = await import('./INostrAdapter');
+
+    let content = transactionData;
+    const eventTags: string[][] = [
+      ['t', 'anon0mesh'], // App tag
+      ['t', 'solana'], // Solana tag
+      ...tags,
+    ];
+
+    // If recipient specified, encrypt the transaction data
+    if (recipientPubkey) {
+      content = await nip04.encrypt(this.privateKey, recipientPubkey, transactionData);
+      eventTags.push(['p', recipientPubkey]); // Add recipient tag
+    }
+
+    // Create Solana transaction event (kind 30001)
+    const event: Omit<NostrEvent, 'id' | 'sig'> = {
+      kind: NOSTR_EVENT_KINDS.SOLANA_TRANSACTION,
+      pubkey: this.publicKey!,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: eventTags,
+      content,
+    };
+
+    return this.publishEvent(event);
+  }
+
   // ============================================
   // SUBSCRIBING (RECEIVE MESSAGES)
   // ============================================
@@ -285,21 +364,36 @@ export class NostrAdapter implements INostrAdapter {
     console.log(`[Nostr] Creating subscription: ${subscriptionId}`);
     console.log(`[Nostr] Filters:`, JSON.stringify(filters));
 
-    // v2.x API: subscribe returns a Sub object
-    const sub = this.pool.subscribeMany(
-      relayUrls,
-      filters as any,
-      {
-        onevent: (event: NostrToolsEvent) => {
-          console.log(`[Nostr] Event received: ${event.id.slice(0, 8)}... (kind ${event.kind})`);
-          onEvent(event as NostrEvent);
-        },
-        oneose: () => {
-          console.log(`[Nostr] End of stored events for ${subscriptionId}`);
-          if (onEOSE) onEOSE();
-        },
-      }
-    );
+    // Clean filters: Remove any undefined/null properties that could cause issues
+    const cleanFilters = filters.map(filter => {
+      const cleaned: any = {};
+      Object.entries(filter).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          cleaned[key] = value;
+        }
+      });
+      return cleaned;
+    });
+
+    console.log(`[Nostr] Clean Filters:`, JSON.stringify(cleanFilters));
+
+    // v2.x API: Use pool.subscribe (previously subscribeMany in older versions)
+    // According to nostr-tools v2 docs, the method is now just 'subscribe'
+    const sub = this.pool.subscribe(
+    relayUrls,
+    cleanFilters[0],   // ✅ pass object, not array
+    {
+      onevent: (event: NostrToolsEvent) => {
+        console.log(`[Nostr] Event received: ${event.id.slice(0, 8)}... (kind ${event.kind})`);
+        onEvent(event as NostrEvent);
+      },
+      oneose: () => {
+        console.log(`[Nostr] End of stored events for ${subscriptionId}`);
+        if (onEOSE) onEOSE();
+      },
+    }
+  );
+
 
     this.subscriptions.set(subscriptionId, sub);
 
@@ -322,6 +416,38 @@ export class NostrAdapter implements INostrAdapter {
     } else {
       console.warn(`[Nostr] Subscription not found: ${subscriptionId}`);
     }
+  }
+
+  /**
+   * Subscribe to anon0mesh-specific events only
+   * Filters for: Encrypted DMs (kind 4), Mesh Messages (30000), Solana Transactions (30001)
+   * @param onEvent Callback for each received event
+   * @param onEOSE Optional callback for end of stored events
+   * @returns Subscription object
+   */
+  async subscribeMeshEvents(
+    onEvent: (event: NostrEvent) => void,
+    onEOSE?: () => void
+  ): Promise<NostrSubscription> {
+    const { NOSTR_EVENT_KINDS } = await import('./INostrAdapter');
+    const myPubkey = this.getPublicKey();
+
+    // Subscribe to mesh-specific event kinds only
+    const filters: NostrFilter[] = [
+      {
+        kinds: [
+          NOSTR_EVENT_KINDS.ENCRYPTED_DM,
+          NOSTR_EVENT_KINDS.MESH_MESSAGE,
+          NOSTR_EVENT_KINDS.SOLANA_TRANSACTION,
+        ],
+        '#p': [myPubkey], // Only events addressed to me
+        since: Math.floor(Date.now() / 1000) - 3600, // Last hour
+      },
+    ];
+
+    console.log('[Nostr] Subscribing to anon0mesh events only (no general social media)');
+    
+    return this.subscribe(filters, onEvent, onEOSE);
   }
 
   // ============================================

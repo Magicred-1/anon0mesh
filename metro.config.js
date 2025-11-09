@@ -7,4 +7,7 @@ const config = getDefaultConfig(__dirname);
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'mjs'];
 config.resolver.unstable_enablePackageExports = true;
 
+// Add CSV files as assets so they can be imported
+config.resolver.assetExts = [...config.resolver.assetExts, 'csv'];
+
 module.exports = withNativeWind(config, { input: './global.css' });

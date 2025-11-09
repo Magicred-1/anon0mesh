@@ -17,7 +17,7 @@
 // import BackgroundMeshStatusIndicator from '../ui/BackgroundMeshStatusIndicator';
 // import EditNicknameModal from '../ui/EditNicknameModal';
 // import Header from '../ui/Header';
-// import { MeshBackground } from '../ui/MeshBackground';
+// // import { MeshBackground } from '../ui/MeshBackground';
 // import MessageInput from '../ui/MessageInput';
 // import MessageList, { Message } from '../ui/MessageList';
 // import WalletScreen from './WalletScreen';

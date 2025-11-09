@@ -1,4 +1,3 @@
-import { runNostrTests } from "@/src/infrastructure/nostr/NostrTest";
 import { DeviceDetector, LocalWalletAdapter } from '@/src/infrastructure/wallet';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -19,7 +18,7 @@ export default function Index() {
             const isIOS = Platform.OS === 'ios';
             const isAndroid = Platform.OS === 'android';
 
-            await runNostrTests();
+            // await runNostrTests();
 
             console.log('[Index] Device Detection:', {
                 platform: Platform.OS,

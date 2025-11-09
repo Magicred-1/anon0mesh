@@ -17,11 +17,28 @@
  * - WebSocket-based real-time communication
  */
 
+/**
+ * Nostr Event Kinds for anon0mesh
+ * 
+ * Using custom event kinds (30000-39999 range for application-specific events)
+ * to avoid mixing with general Nostr social media content
+ */
+export const NOSTR_EVENT_KINDS = {
+  // Standard Nostr kinds we use
+  ENCRYPTED_DM: 4,                    // NIP-04 Encrypted Direct Message
+  
+  // Custom anon0mesh kinds (30000+ range)
+  MESH_MESSAGE: 30000,                // Private mesh network message (encrypted)
+  SOLANA_TRANSACTION: 30001,          // Serialized Solana transaction data
+  MESH_BROADCAST: 30002,              // Public mesh broadcast message
+  MESH_PEER_DISCOVERY: 30003,         // Peer discovery/announcement
+} as const;
+
 export interface NostrEvent {
   id: string;
   pubkey: string; // Hex-encoded public key
   created_at: number; // Unix timestamp
-  kind: number; // Event type (1=note, 4=encrypted DM, etc.)
+  kind: number; // Event type (4=encrypted DM, 30000+=custom mesh events)
   tags: string[][]; // Metadata tags
   content: string; // Message payload (encrypted for DMs)
   sig: string; // Schnorr signature
@@ -131,6 +148,32 @@ export interface INostrAdapter {
   publishEncryptedMessage(
     recipientPubkey: string,
     content: string,
+    tags?: string[][]
+  ): Promise<NostrPublishResult[]>;
+
+  /**
+   * Publish mesh network message (custom kind 30000)
+   * @param recipientPubkey Recipient's public key (hex)
+   * @param content Plaintext message
+   * @param tags Additional tags (e.g., message type, routing info)
+   * @returns Array of publish results per relay
+   */
+  publishMeshMessage(
+    recipientPubkey: string,
+    content: string,
+    tags?: string[][]
+  ): Promise<NostrPublishResult[]>;
+
+  /**
+   * Publish serialized Solana transaction (custom kind 30001)
+   * @param transactionData Base64-encoded serialized transaction
+   * @param recipientPubkey Optional recipient public key for encrypted transactions
+   * @param tags Additional tags (e.g., transaction type, amount)
+   * @returns Array of publish results per relay
+   */
+  publishSolanaTransaction(
+    transactionData: string,
+    recipientPubkey?: string,
     tags?: string[][]
   ): Promise<NostrPublishResult[]>;
 
