@@ -12,18 +12,19 @@
  * - Secure key storage (Expo SecureStore)
  */
 
-import * as SecureStore from 'expo-secure-store';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-// Direct imports from nostr-tools lib (React Native/Metro doesn't support package exports well)
-import type { Event as NostrToolsEvent, EventTemplate } from 'nostr-tools/lib/types/core';
-import * as nip04 from 'nostr-tools/lib/types/nip04';
-import * as nip19 from 'nostr-tools/lib/types/nip19';
-import { SimplePool } from 'nostr-tools/lib/types/pool';
+import * as SecureStore from 'expo-secure-store';
+
+// CORRECT imports for nostr-tools v2 (from implementation, not types)
+import type { EventTemplate, Event as NostrToolsEvent } from 'nostr-tools/core';
+import * as nip04 from 'nostr-tools/nip04';
+import * as nip19 from 'nostr-tools/nip19';
+import { SimplePool } from 'nostr-tools/pool';
 import {
+  finalizeEvent,
   generateSecretKey,
   getPublicKey,
-  finalizeEvent,
-} from 'nostr-tools/lib/types/pure';
+} from 'nostr-tools/pure';
 
 import {
   INostrAdapter,
@@ -69,7 +70,7 @@ export class NostrAdapter implements INostrAdapter {
           console.log('[Nostr] Loaded existing private key');
         } else {
           this.privateKey = generateSecretKey();
-          await SecureStore.setItemAsync(NOSTR_PRIVATE_KEY_STORAGE, bytesToHex(this.privateKey));
+          await SecureStore.setItemAsync(NOSTR_PRIVATE_KEY_STORAGE, bytesToHex(this.privateKey!));
           console.log('[Nostr] Generated new private key');
         }
       }
@@ -93,7 +94,7 @@ export class NostrAdapter implements INostrAdapter {
     // Unsubscribe from all
     for (const [id, sub] of this.subscriptions) {
       try {
-        sub.unsub();
+        sub.close();
       } catch (error) {
         console.warn(`[Nostr] Error unsubscribing ${id}:`, error);
       }
@@ -205,7 +206,6 @@ export class NostrAdapter implements INostrAdapter {
             eventId: signedEvent.id,
           });
         } else {
-          // response is a PromiseRejectedResult; try to read a message if available
           const reasonMessage =
             (response as PromiseRejectedResult).reason?.message ||
             (response as any).reason ||
@@ -286,7 +286,7 @@ export class NostrAdapter implements INostrAdapter {
     console.log(`[Nostr] Filters:`, JSON.stringify(filters));
 
     // v2.x API: subscribe returns a Sub object
-    const sub = this.pool.subscribe(
+    const sub = this.pool.subscribeMany(
       relayUrls,
       filters as any,
       {
@@ -316,7 +316,7 @@ export class NostrAdapter implements INostrAdapter {
   async unsubscribe(subscriptionId: string): Promise<void> {
     const sub = this.subscriptions.get(subscriptionId);
     if (sub) {
-      sub.unsub();
+      sub.close();
       this.subscriptions.delete(subscriptionId);
       console.log(`[Nostr] Unsubscribed: ${subscriptionId}`);
     } else {

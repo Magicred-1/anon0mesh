@@ -1,3 +1,4 @@
+import { runNostrTests } from "@/src/infrastructure/nostr/NostrTest";
 import { DeviceDetector, LocalWalletAdapter } from '@/src/infrastructure/wallet';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -6,6 +7,7 @@ import { Platform } from 'react-native';
 
 export default function Index() {
     const router = useRouter();
+
 
     useEffect(() => {
         (async () => {
@@ -16,6 +18,8 @@ export default function Index() {
             const isSaga = DeviceDetector.isSagaDevice();
             const isIOS = Platform.OS === 'ios';
             const isAndroid = Platform.OS === 'android';
+
+            await runNostrTests();
 
             console.log('[Index] Device Detection:', {
                 platform: Platform.OS,
