@@ -179,9 +179,9 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                     }}
                 >
                     <TouchableOpacity onPress={handleClose}>
-                        <Text style={{ color: '#007AFF', fontSize: 16, fontFamily: 'monospace' }}>Cancel</Text>
+                        <Text style={{ color: '#007AFF', fontSize: 16}}>Cancel</Text>
                     </TouchableOpacity>
-                    <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '600', fontFamily: 'Lexend_400Regular' }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '600' }}>
                         Edit Nickname
                     </Text>
                     <TouchableOpacity
@@ -189,7 +189,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                         disabled={isValidating || ((useSns && !snsNickname) || (!useSns && nickname.trim() === currentNickname))}
                         style={{ opacity: isValidating || ((useSns && !snsNickname) || (!useSns && nickname.trim() === currentNickname)) ? 0.5 : 1 }}
                     >
-                        <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '600', fontFamily: 'Lexend_400Regular' }}>
+                        <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '600' }}>
                             {isValidating ? 'Saving...' : 'Save'}
                         </Text>
                     </TouchableOpacity>
@@ -258,7 +258,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                             borderWidth: 1,
                             borderColor: '#333',
                         }}>
-                            <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Lexend_400Regular', marginBottom: 8 }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 16,  marginBottom: 8 }}>
                                 Custom Nickname
                             </Text>
                             <TextInput
@@ -269,7 +269,6 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                                     paddingVertical: 14,
                                     color: '#FFFFFF',
                                     fontSize: 16,
-                                    fontFamily: 'Lexend_400Regular',
                                     borderWidth: 1,
                                     borderColor: '#444',
                                 }}
@@ -285,7 +284,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                                 blurOnSubmit={true}
                             />
                             {/* Character count */}
-                            <Text style={{ color: '#888', fontSize: 14, fontFamily: 'Lexend_400Regular', marginTop: 8, textAlign: 'right' }}>
+                            <Text style={{ color: '#888', fontSize: 14,  marginTop: 8, textAlign: 'right' }}>
                                 {nickname.length}/20
                             </Text>
                         </View>
@@ -305,7 +304,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                                 marginTop: 0,
                             }}
                         >
-                            <Text style={{ color: '#AAAAAA', fontSize: 14, fontFamily: 'Lexend_400Regular', marginBottom: 8 }}>
+                            <Text style={{ color: '#AAAAAA', fontSize: 14,  marginBottom: 8 }}>
                                 Preview (tap once to save, tap 3x to go to landing):
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -322,7 +321,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                     ) : null}
                     {/* Guidelines */}
                     <View style={{ marginTop: 10 }}>
-                        <Text style={{ color: '#AAAAAA', fontSize: 16, fontWeight: '600', fontFamily: 'Lexend_400Regular', marginBottom: 12 }}>
+                        <Text style={{ color: '#AAAAAA', fontSize: 16, fontWeight: '600',  marginBottom: 12 }}>
                             Guidelines:
                         </Text>
                         <View style={{ marginLeft: 10 }}>

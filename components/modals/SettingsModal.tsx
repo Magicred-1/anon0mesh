@@ -37,7 +37,7 @@ export default function SettingsModal({ visible, onClose, walletAddress }: Props
           </View>
 
           <ScrollView style={styles.modalBody}>
-            <Text style={styles.sectionTitle}>Disposable Address(es) (usable offline)</Text>
+            <Text style={styles.walletTitle}>Disposable Address(es) (usable offline)</Text>
             <TouchableOpacity style={styles.addressDropdown}>
               <Text style={styles.addressText}>8nXFVo...bPP6kQyaS</Text>
               <Text style={styles.dropdownIcon}>▼</Text>

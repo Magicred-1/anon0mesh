@@ -51,7 +51,7 @@
         {
           "fonts": [
             "./components/fonts/Primal/Primal.ttf",
-            "./components/fonts/Space_Gortesk/SpaceGrotesk-VariableFont_wght.ttf"
+            "./components/fonts/Space_Grotesk/SpaceGrotesk-VariableFont_wght.ttf"
           ]
         }
       ],

@@ -76,37 +76,25 @@ export default function WalletScreen({ hideHeader = false }: { hideHeader?: bool
 
       {/* QR Code */}
       <View style={styles.qrContainer}>
-        <View style={styles.qrBox}>
-          {/* QR Code corners */}
-          <View style={[styles.qrCorner, styles.qrCornerTL]} />
-          <View style={[styles.qrCorner, styles.qrCornerTR]} />
-          <View style={[styles.qrCorner, styles.qrCornerBL]} />
-          <View style={[styles.qrCorner, styles.qrCornerBR]} />
-          
-          {/* QR code: render actual QR when publicKey available */}
-          <View style={styles.qrContent}>
-            {publicKey ? (
-              // size chosen to fit inside qrBox (320 - padding)
-              <QRCode value={publicKey} size={260} backgroundColor="transparent" color="#D4F9FF" />
-            ) : (
-              <View style={styles.qrPattern}>
-                {[...Array(10)].map((_, row) => (
-                  <View key={row} style={styles.qrRow}>
-                    {[...Array(10)].map((_, col) => (
-                      <View
-                        key={col}
-                        style={[
-                          styles.qrDot,
-                          (row + col) % 2 === 0 && styles.qrDotFilled,
-                        ]}
-                      />
-                    ))}
-                  </View>
+        {publicKey ? (
+          <QRCode value={publicKey} size={320} backgroundColor="transparent" color="#D4F9FF" />
+        ) : (
+          <View style={styles.qrPattern}>
+            {[...Array(10)].map((_, row) => (
+              <View key={row} style={styles.qrRow}>
+                {[...Array(10)].map((_, col) => (
+                  <View
+                    key={col}
+                    style={[
+                      styles.qrDot,
+                      (row + col) % 2 === 0 && styles.qrDotFilled,
+                    ]}
+                  />
                 ))}
               </View>
-            )}
+            ))}
           </View>
-        </View>
+        )}
       </View>
 
       {/* Address Display */}
@@ -169,51 +157,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 32,
     paddingHorizontal: 32,
-  },
-  qrBox: {
-    width: 320,
-    height: 320,
-    backgroundColor: 'transparent',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#00d9ff',
-    position: 'relative',
-    padding: 20,
-  },
-  qrCorner: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderColor: '#000',
-  },
-  qrCornerTL: {
-    top: 10,
-    left: 10,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-  },
-  qrCornerTR: {
-    top: 10,
-    right: 10,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-  },
-  qrCornerBL: {
-    bottom: 10,
-    left: 10,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-  },
-  qrCornerBR: {
-    bottom: 10,
-    right: 10,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-  },
-  qrContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   qrPattern: {
     flexDirection: 'column',

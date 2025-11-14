@@ -1,10 +1,14 @@
 import { WalletFactory } from '@/src/infrastructure/wallet';
+import type { ConnectivityStatus } from '@/src/infrastructure/wallet/utils/connectivity';
+import * as ConnectivityUtils from '@/src/infrastructure/wallet/utils/connectivity';
 import '@/src/polyfills';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Clipboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,9 +23,27 @@ export default function SendScreen({ hideHeader = false }: { hideHeader?: boolea
   const tabs = useWalletTabs();
   const [publicKey, setPublicKey] = useState<string>('');
   const [amount, setAmount] = useState('0.00');
+  // TODO: Token Selector
   const [token, setToken] = useState('SOL');
   const [recipient, setRecipient] = useState('');
+  //TODO: Fetch actual balance from blockchain (native token balance and selected token balance)
   const [balance, setBalance] = useState('0.0000');
+  const [connectivity, setConnectivity] = useState<ConnectivityStatus | null>(null);
+
+  // Check connectivity
+  useEffect(() => {
+    const checkConnectivity = async () => {
+      const status = await ConnectivityUtils.getConnectivityStatus();
+      setConnectivity(status);
+    };
+
+    checkConnectivity();
+    const unsubscribe = ConnectivityUtils.subscribeToConnectivityChanges(checkConnectivity);
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Initialize wallet
   useEffect(() => {
@@ -51,25 +73,6 @@ export default function SendScreen({ hideHeader = false }: { hideHeader?: boolea
     })();
   }, [router]);
 
-  const handleClose = () => {
-    router.back();
-  };
-
-  const handleReceive = () => {
-    tabs.setTab('wallet');
-  };
-
-  const handleSend = () => {
-    // Already on send tab
-  };
-
-  const handleCopyAddress = () => {
-    if (publicKey) {
-      Clipboard.setString(publicKey);
-      Alert.alert('Copied!', 'Wallet address copied to clipboard');
-    }
-  };
-
   const handleQRScan = () => {
     Alert.alert('QR Scanner', 'QR scanner coming soon');
   };
@@ -83,22 +86,66 @@ export default function SendScreen({ hideHeader = false }: { hideHeader?: boolea
     setAmount(balance);
   };
 
-  const handleSettings = () => {
-    tabs.setShowSettings(true);
-  };
-
-  const handleSendTransaction = () => {
+  const handleSendTransaction = async () => {
     if (!recipient) {
       Alert.alert('Error', 'Please enter recipient address');
       return;
     }
-    Alert.alert('Send', `Sending ${amount} ${token} to ${recipient.slice(0, 8)}...`);
+
+    if (!amount || parseFloat(amount) <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
+      return;
+    }
+
+    // Check connectivity before sending
+    const sendCheck = await ConnectivityUtils.canSendTransaction();
+    
+    if (!sendCheck.canSend) {
+      Alert.alert(
+        'Cannot Send',
+        sendCheck.reason || 'No internet or Bluetooth connection available',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Determine send method based on connectivity
+    const mode = sendCheck.useOfflineMode ? 'Bluetooth Mesh' : 'Internet';
+    Alert.alert(
+      'Send Transaction',
+      `Sending ${amount} ${token} to ${recipient.slice(0, 8)}... via ${mode}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: () => {
+            // TODO: Implement actual transaction logic
+            console.log(`[Send] Transaction via ${mode}:`, {
+              amount,
+              token,
+              recipient,
+              useOfflineMode: sendCheck.useOfflineMode
+            });
+          }
+        }
+      ]
+    );
   };
 
   return (
-    <View style={styles.container}>
-      {/* Amount Section */}
-      <View style={styles.amountSection}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Amount Section */}
+        <View style={styles.amountSection}>
         <Text style={styles.amountLabel}>Amount</Text>
         <View style={styles.amountInputContainer}>
           <TextInput
@@ -120,13 +167,6 @@ export default function SendScreen({ hideHeader = false }: { hideHeader?: boolea
 
       {/* Token Selector */}
       <View style={styles.tokenSelectorContainer}>
-        <TouchableOpacity onPress={handleSettings} style={styles.menuButtonTouchable}>
-          <View style={styles.menuButton}>
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-          </View>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.tokenSelector} onPress={handleTokenDropdown}>
           <Text style={styles.tokenText}>{token}</Text>
           <Text style={styles.dropdownIcon}>▼</Text>
@@ -152,21 +192,89 @@ export default function SendScreen({ hideHeader = false }: { hideHeader?: boolea
         </TouchableOpacity>
       </View>
 
+      {/* Connectivity Status */}
+      {connectivity && (
+        <TouchableOpacity 
+          style={styles.connectivityBanner}
+          onPress={async () => {
+            if (!connectivity.isBluetoothAvailable) {
+              const btStatus = await ConnectivityUtils.getBluetoothStateString();
+              Alert.alert(
+                'Bluetooth Status',
+                btStatus,
+                [
+                  { text: 'OK' },
+                  {
+                    text: 'Check Again',
+                    onPress: async () => {
+                      const status = await ConnectivityUtils.getConnectivityStatus();
+                      setConnectivity(status);
+                    }
+                  }
+                ]
+              );
+            } else {
+              Alert.alert(
+                'Connection Status',
+                connectivity.isInternetConnected 
+                  ? `You're connected to the internet via ${connectivity.connectionType}. Transactions will be sent directly to the Solana network.`
+                  : 'You\'re in offline mode. Transactions will be sent via Bluetooth mesh network to nearby devices.',
+                [{ text: 'Got it' }]
+              );
+            }
+          }}
+        >
+          <View style={[
+            styles.statusDot,
+            { backgroundColor: connectivity.isInternetConnected ? '#00d9ff' : 
+                              connectivity.isBluetoothAvailable ? '#ffa500' : '#ff4444' }
+          ]} />
+          <Text style={styles.connectivityText}>
+            {connectivity.isInternetConnected 
+              ? `Connected via ${connectivity.connectionType || 'Internet'}`
+              : connectivity.isBluetoothAvailable
+              ? 'Offline mode - Using Bluetooth Mesh'
+              : 'No connection available - Tap for details'
+            }
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Send Button */}
+      <TouchableOpacity
+        style={[
+          styles.sendButton,
+          (!recipient || !amount || parseFloat(amount) <= 0) && styles.sendButtonDisabled
+        ]}
+        onPress={handleSendTransaction}
+        disabled={!recipient || !amount || parseFloat(amount) <= 0}
+      >
+        <Text style={styles.sendButtonText}>Send {token}</Text>
+      </TouchableOpacity>
+
+      </ScrollView>
+
       {/* Settings Modal */}
       <SendSettingsModal
         visible={tabs.showSettings}
         onClose={() => tabs.setShowSettings(false)}
         walletAddress={publicKey}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 32,
+    paddingBottom: 24,
   },
   // Amount Section
   amountSection: {
@@ -328,5 +436,44 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderRightWidth: 2,
     borderColor: '#00d9ff',
+  },
+  // Connectivity Status
+  connectivityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0d4d4d',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  connectivityText: {
+    color: '#7a9999',
+    fontSize: 13,
+    flex: 1,
+  },
+  // Send Button
+  sendButton: {
+    backgroundColor: '#00d9ff',
+    borderRadius: 12,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#0d4d4d',
+    opacity: 0.5,
+  },
+  sendButtonText: {
+    color: '#000',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });

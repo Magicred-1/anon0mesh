@@ -15,6 +15,7 @@ import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import * as nip19 from 'nostr-tools/nip19';
+//@ts-ignore
 import nostrRelaysCsv from '../../../relays/nostr_relays.csv';
 import { NostrAdapter } from './NostrAdapter';
 import { NostrRelayManager } from './NostrRelayManager';
