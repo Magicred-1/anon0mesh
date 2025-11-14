@@ -14,12 +14,12 @@
 
 // Import polyfills FIRST (before any other imports)
 import '@/src/polyfills';
-import { Keypair, PublicKey, Transaction, VersionedTransaction, Connection } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { decode as bs58decode, encode as bs58encode } from 'bs58';
 import * as SecureStore from 'expo-secure-store';
-import { encode as bs58encode, decode as bs58decode } from 'bs58';
 import nacl from 'tweetnacl';
 
-import { IWalletAdapter, WalletMode, WalletInfo } from './IWalletAdapter';
+import { IWalletAdapter, WalletInfo, WalletMode } from '../IWalletAdapter';
 
 const STORAGE_KEY = 'anon0mesh_wallet_keypair_v1';
 

@@ -17,7 +17,7 @@
 import { bytesToHex } from '@noble/hashes/utils';
 import { encode as bs58encode } from 'bs58';
 
-import { LocalWalletAdapter } from '../wallet/LocalWalletAdapter';
+import { LocalWalletAdapter } from '../wallet/LocalWallet/LocalWalletAdapter';
 import { NOSTR_EVENT_KINDS, NostrEvent } from './INostrAdapter';
 import { NostrAdapter } from './NostrAdapter';
 

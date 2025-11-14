@@ -16,10 +16,10 @@
  * - https://docs.solanamobile.com/react-native/using_mobile_wallet_adapter
  */
 
-import { PublicKey, Transaction, VersionedTransaction, Connection } from '@solana/web3.js';
+import { Connection, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 import { Platform } from 'react-native';
 
-import { IWalletAdapter, WalletMode, WalletInfo } from './IWalletAdapter';
+import { IWalletAdapter, WalletInfo, WalletMode } from '../IWalletAdapter';
 
 // Lazy-load MWA only on Android to avoid native module errors on iOS/web
 const loadMWA = async () => {

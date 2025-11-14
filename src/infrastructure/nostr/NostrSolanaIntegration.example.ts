@@ -9,7 +9,7 @@
 
 import { NostrRelayManager } from '@/src/infrastructure/nostr/NostrRelayManager';
 import { NostrSolanaAdapter } from '@/src/infrastructure/nostr/NostrSolanaAdapter';
-import { LocalWalletAdapter } from '@/src/infrastructure/wallet/LocalWalletAdapter';
+import { LocalWalletAdapter } from '@/src/infrastructure/wallet/LocalWallet/LocalWalletAdapter';
 import { Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 
 // ============================================

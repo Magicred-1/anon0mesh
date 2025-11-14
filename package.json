@@ -12,11 +12,13 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@bonfida/spl-name-service": "^3.0.16",
     "@expo/html-elements": "^0.10.1",
     "@expo/vector-icons": "^15.0.3",
     "@gluestack-ui/core": "^3.0.12",
     "@gluestack-ui/utils": "^3.0.12",
     "@legendapp/motion": "^2.5.3",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
@@ -32,6 +34,7 @@
     "expo-font": "~14.0.9",
     "expo-haptics": "~15.0.7",
     "expo-image": "~3.0.10",
+    "expo-linear-gradient": "^15.0.7",
     "expo-linking": "~8.0.8",
     "expo-local-authentication": "^17.0.7",
     "expo-router": "~6.0.14",
@@ -68,7 +71,8 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "react-native-svg-transformer": "^1.1.0"
   },
   "private": true
 }

@@ -129,31 +129,45 @@ export class NostrAdapter implements INostrAdapter {
       throw new Error('NostrAdapter not initialized');
     }
 
+    if (relayUrls.length === 0) {
+      throw new Error('No relay URLs provided');
+    }
+
     console.log(`[Nostr] Connecting to ${relayUrls.length} relays...`);
 
+    // Clear existing relays
+    this.relays.clear();
+
+    // Add all relays to the pool
+    // SimplePool automatically connects on first use
     for (const url of relayUrls) {
-      const startTime = Date.now();
-      
       try {
-        // SimplePool automatically connects on first use
-        // We track relay info for monitoring
+        // Validate URL format
+        if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+          console.warn(`[Nostr] Invalid relay URL (must start with ws:// or wss://): ${url}`);
+          continue;
+        }
+
+        // Add relay to tracking
         this.relays.set(url, {
           url,
-          connected: true,
-          latency: Date.now() - startTime,
+          connected: true, // SimplePool will connect on first use
+          latency: 0,
         });
         
-        console.log(`[Nostr] Added relay: ${url}`);
+        console.log(`[Nostr] ✅ Added relay: ${url}`);
       } catch (error) {
         console.error(`[Nostr] Failed to add relay ${url}:`, error);
-        this.relays.set(url, {
-          url,
-          connected: false,
-        });
       }
     }
 
-    console.log(`[Nostr] ✅ Configured ${this.getConnectedRelays().length} relays`);
+    const connectedCount = this.getConnectedRelays().length;
+    
+    if (connectedCount === 0) {
+      throw new Error('No valid relays could be added');
+    }
+
+    console.log(`[Nostr] ✅ Configured ${connectedCount} relays`);
   }
 
   async disconnectFromRelay(relayUrl: string): Promise<void> {
@@ -357,8 +371,11 @@ export class NostrAdapter implements INostrAdapter {
     const subscriptionId = `sub-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const relayUrls = Array.from(this.relays.keys());
 
+    console.log(`[Nostr] Relays in map: ${this.relays.size}`);
+    console.log(`[Nostr] Relay URLs:`, relayUrls);
+
     if (relayUrls.length === 0) {
-      throw new Error('No relays connected');
+      throw new Error('No relays connected. Call connectToRelays() first.');
     }
 
     console.log(`[Nostr] Creating subscription: ${subscriptionId}`);
@@ -423,14 +440,21 @@ export class NostrAdapter implements INostrAdapter {
    * Filters for: Encrypted DMs (kind 4), Mesh Messages (30000), Solana Transactions (30001)
    * @param onEvent Callback for each received event
    * @param onEOSE Optional callback for end of stored events
+   * @param sinceHoursAgo Optional hours to look back (default: 24 hours, use 0 for all history)
    * @returns Subscription object
    */
   async subscribeMeshEvents(
     onEvent: (event: NostrEvent) => void,
-    onEOSE?: () => void
+    onEOSE?: () => void,
+    sinceHoursAgo: number = 24
   ): Promise<NostrSubscription> {
     const { NOSTR_EVENT_KINDS } = await import('./INostrAdapter');
     const myPubkey = this.getPublicKey();
+
+    // Calculate since timestamp (0 means get all history)
+    const sinceTimestamp = sinceHoursAgo === 0 
+      ? undefined 
+      : Math.floor(Date.now() / 1000) - (sinceHoursAgo * 3600);
 
     // Subscribe to mesh-specific event kinds only
     const filters: NostrFilter[] = [
@@ -441,11 +465,11 @@ export class NostrAdapter implements INostrAdapter {
           NOSTR_EVENT_KINDS.SOLANA_TRANSACTION,
         ],
         '#p': [myPubkey], // Only events addressed to me
-        since: Math.floor(Date.now() / 1000) - 3600, // Last hour
+        ...(sinceTimestamp && { since: sinceTimestamp }), // Only add 'since' if defined
       },
     ];
 
-    console.log('[Nostr] Subscribing to anon0mesh events only (no general social media)');
+    console.log(`[Nostr] Subscribing to anon0mesh events (last ${sinceHoursAgo === 0 ? 'all history' : `${sinceHoursAgo}h`})`);
     
     return this.subscribe(filters, onEvent, onEOSE);
   }

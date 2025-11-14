@@ -9,9 +9,9 @@
  */
 
 import { IWalletAdapter, WalletMode } from './IWalletAdapter';
-import { LocalWalletAdapter } from './LocalWalletAdapter';
-import { MWAWalletAdapter } from './MWAWalletAdapter';
-import { DeviceDetector } from './DeviceDetector';
+import { LocalWalletAdapter } from './LocalWallet/LocalWalletAdapter';
+import { MWAWalletAdapter } from './MWA/MWAWalletAdapter';
+import { DeviceDetector } from './utils/DeviceDetector';
 
 export class WalletFactory {
   /**

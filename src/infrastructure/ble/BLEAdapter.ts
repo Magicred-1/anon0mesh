@@ -18,22 +18,23 @@
  * - Android: Full support (requires AndroidManifest.xml permissions)
  */
 
+import { Buffer } from 'buffer';
+import * as SecureStore from 'expo-secure-store';
 import { BleManager, Device, State } from 'react-native-ble-plx';
 import Peripheral, { Permission, Property } from 'react-native-multi-ble-peripheral';
-import { Buffer } from 'buffer';
 
 import { Packet } from '../../domain/entities/Packet';
 import { Peer } from '../../domain/entities/Peer';
-import { PeerId } from '../../domain/value-objects/PeerId';
 import { Nickname } from '../../domain/value-objects/Nickname';
+import { PeerId } from '../../domain/value-objects/PeerId';
 import {
-  IBLEAdapter,
   BLE_UUIDS,
-  BLEDeviceInfo,
-  BLEConnectionState,
-  BLEScanOptions,
   BLEAdvertisingOptions,
+  BLEConnectionState,
+  BLEDeviceInfo,
+  BLEScanOptions,
   BLETransmissionResult,
+  IBLEAdapter,
 } from './IBLEAdapter';
 
 /**
@@ -107,9 +108,11 @@ export class BLEAdapter implements IBLEAdapter {
     // Initialize Peripheral mode (react-native-multi-ble-peripheral)
     console.log('[BLE Peripheral] Initializing...');
     
-    // Set device name
-    await Peripheral.setDeviceName('anon0mesh-device');
-    
+    // Set deviceName from secure store username
+    const username = await SecureStore.getItemAsync('username');
+    const deviceName = username ? `${username}'s Device` : 'anon0mesh-device';
+    await Peripheral.setDeviceName(deviceName);
+
     // Create peripheral instance
     this.peripheralManager = new Peripheral();
     

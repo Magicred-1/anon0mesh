@@ -3,7 +3,8 @@
  */
 
 export * from './IWalletAdapter';
-export * from './LocalWalletAdapter';
-export * from './MWAWalletAdapter';
+export * from './LocalWallet/LocalWalletAdapter';
+export * from './MWA/MWAWalletAdapter';
+export * from './utils/DeviceDetector';
 export * from './WalletFactory';
-export * from './DeviceDetector';
+

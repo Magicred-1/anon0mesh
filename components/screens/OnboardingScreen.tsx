@@ -1,4 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import SolanaLogo from '@/components/ui/SolanaLogo';
+import {
+    DeviceDetector,
+    LocalWalletAdapter,
+    MWAWalletAdapter,
+} from '@/src/infrastructure/wallet';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
     StyleSheet,
@@ -6,14 +15,10 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import SolanaLogo from '@/components/ui/SolanaLogo';
 
 interface Props {
-    tempNickname: string;
-    setTempNickname: (nickname: string) => void;
-    onboard: () => void;
-    isSeeker: boolean;
-    loading: boolean;
+    // Optional props for external control (if needed)
+    onComplete?: () => void;
 }
 
 // Generate random nickname
@@ -37,70 +42,248 @@ const generateRandomNickname = (): string => {
     return `${randomAdjective}${randomNoun}${randomNumber}`;
 };
 
-export default function OnboardingScreen({
-    tempNickname,
-    setTempNickname,
-    onboard,
-    isSeeker,
-    loading,
-}: Props) {
+export default function OnboardingScreen({ onComplete }: Props) {
+    // State
+    const [nickname, setNickname] = useState<string>('');
+    const [loading, setLoading] = useState<boolean>(false);
+    const [isSeeker, setIsSeeker] = useState<boolean>(false);
+    
+    // Hooks
+    const router = useRouter();
+    
+    // Animation refs
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(50)).current;
-    const keyAnimations = useRef([
-        new Animated.Value(0),
-        new Animated.Value(0),
-    ]).current;
     const loadingRotation = useRef(new Animated.Value(0)).current;
     const loadingScale = useRef(new Animated.Value(1)).current;
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const loadingDotAnim = useRef(new Animated.Value(0)).current;
+    
+    // Loading overlay animation states
+    const loadingOverlayOpacity = useRef(new Animated.Value(0)).current;
+    const enteringTextOpacity = useRef(new Animated.Value(0)).current;
+    const logoFadeIn = useRef(new Animated.Value(0)).current;
+    const statusFadeIn = useRef(new Animated.Value(0)).current;
+    const nicknameFadeIn = useRef(new Animated.Value(0)).current;
+    const buttonFadeIn = useRef(new Animated.Value(0)).current;
+
+    // Detect device type on mount
+    useEffect(() => {
+        const info = DeviceDetector.getDeviceInfo();
+        setIsSeeker(info.isSolanaMobile);
+
+        console.log('[Onboarding] Device detected:', {
+            device: info.device,
+            model: info.model,
+            isSolanaMobile: info.isSolanaMobile,
+        });
+    }, []);
 
     useEffect(() => {
         // Generate random nickname if none exists
-        if (!tempNickname) {
-        setTempNickname(generateRandomNickname());
+        if (!nickname) {
+            setNickname(generateRandomNickname());
         }
 
         // Animate the content entrance
         Animated.parallel([
-        Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 800,
-            useNativeDriver: true,
-        }),
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 800,
+                useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+                toValue: 0,
+                duration: 800,
+                useNativeDriver: true,
+            }),
         ]).start();
 
-        // Animate floating keys (keep for both Seeker and non-Seeker)
-        const animateKeys = () => {
-        const keyAnimationSequence = keyAnimations.map((anim, index) =>
-            Animated.loop(
+        // Button pulse animation
+        Animated.loop(
             Animated.sequence([
-                Animated.timing(anim, {
-                toValue: 1,
-                duration: 2000 + index * 500,
-                useNativeDriver: true,
+                Animated.timing(pulseAnim, {
+                    toValue: 1.02,
+                    duration: 2000,
+                    useNativeDriver: true,
                 }),
-                Animated.timing(anim, {
-                toValue: 0,
-                duration: 2000 + index * 500,
-                useNativeDriver: true,
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 2000,
+                    useNativeDriver: true,
                 }),
             ])
-            )
-        );
-        Animated.parallel(keyAnimationSequence).start();
-        };
+        ).start();
+    }, [fadeAnim, slideAnim, pulseAnim, nickname]);
 
-        setTimeout(animateKeys, 500);
-    }, [fadeAnim, slideAnim, keyAnimations, tempNickname, setTempNickname]);
+    /**
+     * Onboard with Solana Mobile (MWA)
+     */
+    async function onboardWithMWA() {
+        setLoading(true);
+        console.log('[Onboarding] 📱 Setting up MWA wallet...');
 
-    // Loading animation
+        try {
+            const wallet = new MWAWalletAdapter();
+            await wallet.initialize();
+            
+            // Connect to wallet
+            await wallet.connect();
+
+            if (!wallet.isConnected()) {
+                throw new Error('Failed to connect to mobile wallet');
+            }
+
+            const publicKey = wallet.getPublicKey();
+            if (!publicKey) {
+                throw new Error('No public key received from wallet');
+            }
+
+            console.log('[Onboarding] ✅ MWA wallet connected:', publicKey.toBase58());
+
+            // Save nickname (optional)
+            if (nickname) {
+                await SecureStore.setItemAsync('nickname', nickname);
+            }
+
+            // Mark as seen
+            await SecureStore.setItemAsync('hasSeenIndex', 'true');
+
+            console.log('[Onboarding] ✅ Success! Redirecting...');
+
+            // Navigate after short delay
+            setTimeout(() => {
+                if (onComplete) {
+                    onComplete();
+                } else {
+                    router.replace('/(tabs)');
+                }
+            }, 2000);
+
+        } catch (error: any) {
+            console.error('[Onboarding] MWA error:', error);
+            alert(error?.message || 'Failed to connect to mobile wallet. Make sure you have a Solana wallet installed.');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    /**
+     * Onboard with Local Wallet
+     */
+    async function onboardWithLocalWallet() {
+        setLoading(true);
+        console.log('[Onboarding] 🔐 Creating local wallet...');
+
+        try {
+            // Create local wallet (generates new keypair)
+            const wallet = new LocalWalletAdapter();
+            await wallet.initialize();
+
+            const publicKey = wallet.getPublicKey();
+            if (!publicKey) {
+                throw new Error('Failed to generate wallet');
+            }
+
+            console.log('[Onboarding] ✅ Local wallet created:', publicKey.toBase58());
+
+            // Save nickname (optional)
+            if (nickname) {
+                await SecureStore.setItemAsync('nickname', nickname);
+            }
+
+            // Mark as seen
+            await SecureStore.setItemAsync('hasSeenIndex', 'true');
+
+            console.log('[Onboarding] ✅ Success! Redirecting...');
+
+            // Navigate after short delay
+            setTimeout(() => {
+                if (onComplete) {
+                    onComplete();
+                } else {
+                    router.replace('/(tabs)');
+                }
+            }, 2000);
+
+        } catch (error: any) {
+            console.error('[Onboarding] Local wallet error:', error);
+            alert(error?.message || 'Failed to create local wallet.');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    /**
+     * Auto-detect and onboard
+     */
+    async function handleOnboard() {
+        if (loading) return;
+
+        if (isSeeker) {
+            await onboardWithMWA();
+        } else {
+            await onboardWithLocalWallet();
+        }
+    }
+
+    // Loading animation with staggered timing
     useEffect(() => {
         if (loading) {
-            // Slow rotation animation (6 seconds per rotation)
+            // Reset all animations
+            loadingOverlayOpacity.setValue(0);
+            enteringTextOpacity.setValue(0);
+            logoFadeIn.setValue(0);
+            statusFadeIn.setValue(0);
+            nicknameFadeIn.setValue(0);
+            buttonFadeIn.setValue(0);
+
+            // Staggered sequence of animations
+            Animated.sequence([
+                // 1. Fade in overlay (200ms)
+                Animated.timing(loadingOverlayOpacity, {
+                    toValue: 1,
+                    duration: 200,
+                    useNativeDriver: true,
+                }),
+                // 2. Show "ENTERING..." (300ms delay + 400ms fade)
+                Animated.timing(enteringTextOpacity, {
+                    toValue: 1,
+                    duration: 400,
+                    delay: 300,
+                    useNativeDriver: true,
+                }),
+                // 3. Show logo (200ms delay + 500ms fade)
+                Animated.timing(logoFadeIn, {
+                    toValue: 1,
+                    duration: 500,
+                    delay: 200,
+                    useNativeDriver: true,
+                }),
+                // 4. Show status (300ms delay + 400ms fade)
+                Animated.timing(statusFadeIn, {
+                    toValue: 1,
+                    duration: 400,
+                    delay: 300,
+                    useNativeDriver: true,
+                }),
+                // 5. Show nickname (500ms delay + 500ms fade) - increased delay
+                Animated.timing(nicknameFadeIn, {
+                    toValue: 1,
+                    duration: 500,
+                    delay: 500,
+                    useNativeDriver: true,
+                }),
+                // 6. Show loading button (400ms delay + 500ms fade)
+                Animated.timing(buttonFadeIn, {
+                    toValue: 1,
+                    duration: 500,
+                    delay: 400,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+
+            // Slow rotation animation for Solana logo (6 seconds per rotation)
             Animated.loop(
                 Animated.timing(loadingRotation, {
                     toValue: 1,
@@ -109,7 +292,7 @@ export default function OnboardingScreen({
                 })
             ).start();
 
-            // Subtle pulse animation
+            // Subtle pulse animation for Solana logo
             Animated.loop(
                 Animated.sequence([
                     Animated.timing(loadingScale, {
@@ -124,316 +307,481 @@ export default function OnboardingScreen({
                     }),
                 ])
             ).start();
+
+            // Dot animation for "LOADING..."
+            Animated.loop(
+                Animated.timing(loadingDotAnim, {
+                    toValue: 3,
+                    duration: 1500,
+                    useNativeDriver: true,
+                })
+            ).start();
         } else {
             loadingRotation.setValue(0);
             loadingScale.setValue(1);
+            loadingDotAnim.setValue(0);
+            loadingOverlayOpacity.setValue(0);
+            enteringTextOpacity.setValue(0);
+            logoFadeIn.setValue(0);
+            statusFadeIn.setValue(0);
+            nicknameFadeIn.setValue(0);
+            buttonFadeIn.setValue(0);
         }
-    }, [loading, loadingRotation, loadingScale]);
-
-    const renderFloatingKey = (index: number, size: number, leftPercent: number, topPercent: number) => {
-        const animValue = keyAnimations[index] || new Animated.Value(0);
-        
-        return (
-        <Animated.View
-            key={index}
-            style={[
-            styles.floatingKey,
-            {
-                width: size,
-                height: size * 0.6,
-                left: `${leftPercent}%`,
-                top: `${topPercent}%`,
-                transform: [
-                {
-                    translateY: animValue.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -20],
-                    }),
-                },
-                {
-                    rotate: animValue.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0deg', '5deg'],
-                    }),
-                },
-                ],
-                opacity: animValue.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0.7, 1, 0.7],
-                }),
-            },
-            ]}
-        >
-            <View style={[styles.keyBody, { width: size * 0.8, height: size * 0.4 }]} />
-            <View style={[styles.keyHead, { 
-            width: size * 0.3, 
-            height: size * 0.3,
-            top: -size * 0.1,
-            left: size * 0.1,
-            }]} />
-            <View style={[styles.keyTeeth, { 
-            width: size * 0.4, 
-            height: size * 0.1,
-            right: size * 0.05,
-            top: size * 0.15,
-            }]} />
-        </Animated.View>
-        );
-    };
+    }, [
+        loading,
+        loadingRotation,
+        loadingScale,
+        loadingDotAnim,
+        loadingOverlayOpacity,
+        enteringTextOpacity,
+        logoFadeIn,
+        statusFadeIn,
+        nicknameFadeIn,
+        buttonFadeIn,
+    ]);
 
     return (
-        <View style={styles.container}>
-        {/* Floating Keys Background */}
-        <View style={styles.keysContainer}>
-            {renderFloatingKey(0, 120, 15, 20)}
-            {renderFloatingKey(1, 100, 70, 15)}
-        </View>
-
-        <Animated.View 
-            style={[
-            styles.inner,
-            {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }],
-            }
-            ]}
+        <LinearGradient
+            colors={['#0a1a1a', '#0d2626', '#0a1a1a']}
+            locations={[0, 0.5, 1]}
+            style={styles.container}
         >
-            {/* Main Key Visual */}
-            <View style={styles.mainKeyContainer}>
-            <View style={styles.mainKey}>
-                <View style={styles.mainKeyBody} />
-                <View style={styles.mainKeyHead} />
-                <View style={styles.mainKeyTeeth} />
-            </View>
-            </View>
+            {/* Subtle radial glow effect */}
+            <View style={styles.glowTop} />
+            <View style={styles.glowBottom} />
 
-            <Text style={styles.description}>
-            {isSeeker
-                ? `Welcome to anon0mesh! Since you're using a Seeker device, your secure wallet is already integrated just connect it to get started.`
-                : `To get started, you’ll create a secure wallet stored on your device. Your nickname will be generated automatically.`}
-            </Text>
-
-            <TouchableOpacity 
-            style={[styles.button, loading && styles.buttonDisabled]} 
-            onPress={onboard} 
-            activeOpacity={0.85}
-            disabled={loading}
+            <Animated.View 
+                style={[
+                    styles.inner,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideAnim }],
+                    }
+                ]}
             >
-            <Text style={styles.buttonText}>
-                {isSeeker ? 'Connect with Seed Vault' : 'Get Started'}
-            </Text>
-            </TouchableOpacity>
-        </Animated.View>
+                {/* Logo Section */}
+                <View style={styles.logoContainer}>
+                    <Text style={styles.logoText}>
+                        ANON<Text style={styles.logoAccent}>⬡</Text>MESH
+                    </Text>
+                    
+                    <Text style={styles.tagline}>
+                        [ DECENTRALIZED P2P MESSAGING ]
+                    </Text>
+                    
+                    {/* Show generated nickname */}
+                    {nickname && !loading && (
+                        <Text style={styles.generatedNickname}>
+                            {"( "}@{nickname}{" )"}
+                        </Text>
+                    )}
+                </View>
 
-        {/* Loading Overlay */}
-        {loading && (
-            <View style={styles.loadingOverlay}>
-                <Animated.View 
-                    style={[
-                        styles.loadingSolanaContainer,
-                        {
-                            transform: [
-                                {
-                                    rotate: loadingRotation.interpolate({
-                                        inputRange: [0, 1],
-                                        outputRange: ['0deg', '360deg'],
-                                    }),
-                                },
-                                { scale: loadingScale },
-                            ],
-                        },
-                    ]}
-                >
-                    <SolanaLogo size={120} />
+                {/* Instructions */}
+                <View style={styles.instructionsContainer}>
+                    <Text style={styles.instructionsText}>
+                        TO GET STARTED{'\n'}
+                        CREATE A SECURE WALLET{'\n'}
+                        YOUR NICKNAME WILL BE GENERATED{'\n'}
+                        AUTOMATICALLY
+                    </Text>
+                </View>
+
+                {/* Create Wallet Button */}
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                    <TouchableOpacity
+                        onPress={handleOnboard}
+                        disabled={loading}
+                        style={[styles.button, loading && styles.buttonDisabled]}
+                        activeOpacity={0.8}
+                    >
+                        <LinearGradient
+                            colors={['rgba(0, 212, 212, 0.1)', 'rgba(0, 212, 212, 0.05)']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.buttonGradient}
+                        >
+                            <Text style={styles.buttonText}>
+                                {loading ? 'LOADING...' : 'CREATE_WALLET'}
+                            </Text>
+                            {!loading && (
+                                <View style={styles.buttonIcon}>
+                                    <View style={styles.iconBar} />
+                                    <View style={styles.iconBar} />
+                                    <View style={styles.iconBar} />
+                                </View>
+                            )}
+                        </LinearGradient>
+                    </TouchableOpacity>
                 </Animated.View>
-                <Text style={styles.loadingText}>
-                    {isSeeker ? 'Connecting to wallet...' : 'Creating your wallet...'}
-                </Text>
-                <Text style={styles.loadingSubtext}>
-                    {isSeeker 
-                        ? 'Please approve the connection in your wallet app' 
-                        : 'Generating secure keypair'}
-                </Text>
-            </View>
-        )}
-        </View>
+            </Animated.View>
+
+            {/* Loading Overlay */}
+            {loading && (
+                <View style={StyleSheet.absoluteFill}>
+                    <Animated.View style={[StyleSheet.absoluteFill, { opacity: loadingOverlayOpacity }]}>
+                        <LinearGradient
+                            colors={['#0a1a1a', '#0d2626', '#0a1a1a']}
+                            locations={[0, 0.5, 1]}
+                            style={styles.loadingOverlay}
+                        >
+                        {/* Entering Text */}
+                        <Animated.Text 
+                            style={[
+                                styles.enteringText,
+                                { opacity: enteringTextOpacity }
+                            ]}
+                        >
+                            ENTERING...
+                        </Animated.Text>
+
+                        {/* Logo Section */}
+                        <View style={styles.loadingLogoContainer}>
+                            <Animated.Text 
+                                style={[
+                                    styles.logoText,
+                                    { opacity: logoFadeIn }
+                                ]}
+                            >
+                                ANON<Text style={styles.logoAccent}>⬡</Text>MESH
+                            </Animated.Text>
+                            
+                            <Animated.Text 
+                                style={[
+                                    styles.loadingStatus,
+                                    { opacity: statusFadeIn }
+                                ]}
+                            >
+                                [ {isSeeker ? 'WALLET_CONNECTED' : 'WALLET_CREATED'} ]
+                            </Animated.Text>
+                            
+                            {nickname && (
+                                <Animated.Text 
+                                    style={[
+                                        styles.loadingNickname,
+                                        { opacity: nicknameFadeIn }
+                                    ]}
+                                >
+                                    {"( "}@{nickname}{" )"}
+                                </Animated.Text>
+                            )}
+                        </View>
+
+                        {/* Loading Animation */}
+                        <Animated.View 
+                            style={[
+                                styles.loadingButtonContainer,
+                                { opacity: buttonFadeIn }
+                            ]}
+                        >
+                            <View style={styles.loadingButton}>
+                                <LinearGradient
+                                    colors={['rgba(0, 212, 212, 0.15)', 'rgba(0, 212, 212, 0.08)']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.loadingButtonGradient}
+                                >
+                                    <Text style={styles.loadingButtonText}>
+                                        LOADING...
+                                    </Text>
+                                </LinearGradient>
+                            </View>
+                            
+                            <Text style={styles.loadingDetails}>
+                                {isSeeker 
+                                    ? 'CONNECTING TO MOBILE WALLET' 
+                                    : 'GENERATING SECURE KEYPAIR'}
+                            </Text>
+                        </Animated.View>
+
+                        {/* Animated Solana Logo (subtle, bottom) */}
+                        <Animated.View 
+                            style={[
+                                styles.loadingSolanaContainer,
+                                {
+                                    opacity: buttonFadeIn, // Fade in with button
+                                    transform: [
+                                        {
+                                            rotate: loadingRotation.interpolate({
+                                                inputRange: [0, 1],
+                                                outputRange: ['0deg', '360deg'],
+                                            }),
+                                        },
+                                        { scale: loadingScale },
+                                    ],
+                                },
+                            ]}
+                        >
+                            <SolanaLogo size={60} />
+                        </Animated.View>
+                        </LinearGradient>
+                    </Animated.View>
+                </View>
+            )}
+        </LinearGradient>
     );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#212122',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  keysContainer: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1,
-  },
-  floatingKey: {
-    position: 'absolute',
-    zIndex: 1,
-  },
-  keyBody: {
-    backgroundColor: '#26C6DA', // accent color
-    borderRadius: 8,
-    shadowColor: '#26C6DA', // accent color
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  keyHead: {
-    position: 'absolute',
-    backgroundColor: '#26C6DA', // accent color
-    borderRadius: 50,
-    borderWidth: 8,
-    borderColor: '#212122',
-    shadowColor: '#26C6DA', // accent color
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  keyTeeth: {
-    position: 'absolute',
-    backgroundColor: '#26C6DA', // accent color
-    borderRadius: 2,
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 60,
-    zIndex: 2,
-    width: '100%',
-  },
-  mainKeyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  mainKey: {
-    width: 160,
-    height: 100,
-    position: 'relative',
-  },
-  mainKeyBody: {
-    width: 120,
-    height: 60,
-    backgroundColor: '#26C6DA', // accent color
-    borderRadius: 12,
-    shadowColor: '#26C6DA', // accent color
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 16,
-  },
-  mainKeyHead: {
-    position: 'absolute',
-    top: -8,
-    left: 16,
-    width: 40,
-    height: 40,
-    backgroundColor: '#26C6DA', // accent color
-    borderRadius: 20,
-    borderWidth: 12,
-    borderColor: '#212122',
-    shadowColor: '#26C6DA', // accent color
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  mainKeyTeeth: {
-    position: 'absolute',
-    right: 8,
-    top: 20,
-    width: 32,
-    height: 8,
-    backgroundColor: '#26C6DA', // accent color
-    borderRadius: 4,
-  },
-  description: {
-    fontSize: 20,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 30,
-    paddingHorizontal: 16,
-    fontWeight: '400',
-    fontFamily: 'Lexend_400Regular',
-    flex: 0.8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    textAlignVertical: 'center',
-  },
-  button: {
-    backgroundColor: '#26C6DA',
-    borderRadius: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    width: 260,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-    fontFamily: 'Lexend_400Regular',
-    textAlign: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(33, 33, 34, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  loadingSolanaContainer: {
-    marginBottom: 32,
-    shadowColor: '#26C6DA',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 24,
-    elevation: 24,
-  },
-  loadingText: {
-    fontSize: 24,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontFamily: 'Lexend_400Regular',
-    marginBottom: 8,
-  },
-  loadingSubtext: {
-    fontSize: 16,
-    color: '#999999',
-    fontFamily: 'Lexend_400Regular',
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
+    container: {
+        flex: 1,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    glowTop: {
+        position: 'absolute',
+        top: -100,
+        left: '50%',
+        width: 400,
+        height: 400,
+        marginLeft: -200,
+        backgroundColor: '#00d4d4',
+        opacity: 0.03,
+        borderRadius: 200,
+        shadowColor: '#00d4d4',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 100,
+    },
+    glowBottom: {
+        position: 'absolute',
+        bottom: -150,
+        right: '20%',
+        width: 300,
+        height: 300,
+        backgroundColor: '#00d4d4',
+        opacity: 0.02,
+        borderRadius: 150,
+        shadowColor: '#00d4d4',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.2,
+        shadowRadius: 80,
+    },
+    inner: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 60,
+        zIndex: 2,
+        width: '100%',
+    },
+    logoContainer: {
+        alignItems: 'center',
+        marginBottom: 80,
+    },
+    logoText: {
+        fontSize: 48,
+        fontWeight: '900',
+        color: '#ffffff',
+        letterSpacing: 4,
+        marginBottom: 20,
+        textShadowColor: 'rgba(0, 212, 212, 0.3)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 20,
+    },
+    logoAccent: {
+        color: '#00d4d4',
+        textShadowColor: 'rgba(0, 212, 212, 0.6)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 15,
+    },
+    tagline: {
+        fontSize: 14,
+        color: '#00d4d4',
+        letterSpacing: 3,
+        fontFamily: 'monospace',
+        textShadowColor: 'rgba(0, 212, 212, 0.4)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
+    },
+    generatedNickname: {
+        fontSize: 16,
+        color: '#00d4d4',
+        letterSpacing: 2,
+        fontFamily: 'monospace',
+        marginTop: 20,
+        opacity: 0.8,
+    },
+    instructionsContainer: {
+        alignItems: 'center',
+        marginBottom: 80,
+        paddingHorizontal: 20,
+    },
+    instructionsText: {
+        fontSize: 13,
+        color: '#8fa9a9',
+        textAlign: 'center',
+        lineHeight: 24,
+        letterSpacing: 2,
+        fontFamily: 'monospace',
+    },
+    button: {
+        width: 360,
+        height: 60,
+        borderRadius: 8,
+        overflow: 'hidden',
+    },
+    buttonGradient: {
+        flex: 1,
+        borderWidth: 2,
+        borderColor: '#00d4d4',
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#00d4d4',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 15,
+        elevation: 8,
+    },
+    buttonDisabled: {
+        opacity: 0.6,
+    },
+    buttonText: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#00d4d4',
+        letterSpacing: 2,
+        fontFamily: 'monospace',
+        marginRight: 15,
+        textShadowColor: 'rgba(0, 212, 212, 0.5)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 8,
+    },
+    buttonIcon: {
+        flexDirection: 'row',
+        gap: 4,
+    },
+    iconBar: {
+        width: 30,
+        height: 3,
+        backgroundColor: '#00d4d4',
+        shadowColor: '#00d4d4',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 5,
+    },
+    deviceInfo: {
+        marginTop: 30,
+        fontSize: 11,
+        color: '#4a6666',
+        fontFamily: 'monospace',
+        letterSpacing: 1,
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: 80,
+        paddingBottom: 100,
+        zIndex: 10,
+    },
+    enteringText: {
+        fontSize: 14,
+        color: '#8fa9a9',
+        letterSpacing: 3,
+        fontFamily: 'monospace',
+        marginBottom: 20,
+    },
+    loadingLogoContainer: {
+        alignItems: 'center',
+        flex: 1,
+        justifyContent: 'center',
+    },
+    loadingStatus: {
+        fontSize: 14,
+        color: '#00d4d4',
+        letterSpacing: 3,
+        fontFamily: 'monospace',
+        marginTop: 20,
+        textShadowColor: 'rgba(0, 212, 212, 0.4)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
+    },
+    loadingNickname: {
+        fontSize: 16,
+        color: '#00d4d4',
+        letterSpacing: 2,
+        fontFamily: 'monospace',
+        marginTop: 12,
+    },
+    loadingButtonContainer: {
+        alignItems: 'center',
+        width: '100%',
+        paddingHorizontal: 20,
+    },
+    loadingButton: {
+        width: 360,
+        height: 60,
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginBottom: 16,
+    },
+    loadingButtonGradient: {
+        flex: 1,
+        borderWidth: 2,
+        borderColor: '#00d4d4',
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#00d4d4',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 15,
+        elevation: 8,
+    },
+    loadingButtonText: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#00d4d4',
+        letterSpacing: 2,
+        fontFamily: 'monospace',
+        textShadowColor: 'rgba(0, 212, 212, 0.5)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 8,
+    },
+    loadingDetails: {
+        fontSize: 12,
+        color: '#8fa9a9',
+        letterSpacing: 2,
+        fontFamily: 'monospace',
+        textAlign: 'center',
+    },
+    loadingSolanaContainer: {
+        opacity: 0.3,
+        shadowColor: '#00d4d4',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 20,
+        elevation: 16,
+    },
+    loadingText: {
+        fontSize: 24,
+        color: '#FFFFFF',
+        fontWeight: '600',
+        marginBottom: 8,
+        textShadowColor: 'rgba(0, 212, 212, 0.3)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
+    },
+    loadingSubtext: {
+        fontSize: 16,
+        color: '#8fa9a9',
+        textAlign: 'center',
+        paddingHorizontal: 32,
+    },
 });

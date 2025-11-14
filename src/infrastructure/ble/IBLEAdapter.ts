@@ -20,16 +20,17 @@ import { PeerId } from '../../domain/value-objects/PeerId';
 
 /**
  * BLE Service and Characteristic UUIDs for the mesh network
+ * Loaded from environment variables (EXPO_PUBLIC_*)
  */
 export const BLE_UUIDS = {
   // Main mesh service UUID
-  SERVICE_UUID: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+  SERVICE_UUID: process.env.EXPO_PUBLIC_BLE_SERVICE_UUID || '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
   
   // Characteristics
-  TX_CHARACTERISTIC_UUID: '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // Write (receive packets)
-  RX_CHARACTERISTIC_UUID: '6e400003-b5a3-f393-e0a9-e50e24dcca9e', // Notify (send packets)
-  PEER_INFO_UUID: '6e400004-b5a3-f393-e0a9-e50e24dcca9e',         // Read (peer metadata)
-  ZONE_INFO_UUID: '6e400005-b5a3-f393-e0a9-e50e24dcca9e',         // Read (zone info)
+  TX_CHARACTERISTIC_UUID: process.env.EXPO_PUBLIC_BLE_TX_CHARACTERISTIC_UUID || '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // Write (receive packets)
+  RX_CHARACTERISTIC_UUID: process.env.EXPO_PUBLIC_BLE_RX_CHARACTERISTIC_UUID || '6e400003-b5a3-f393-e0a9-e50e24dcca9e', // Notify (send packets)
+  PEER_INFO_UUID: process.env.EXPO_PUBLIC_BLE_PEER_INFO_UUID || '6e400004-b5a3-f393-e0a9-e50e24dcca9e',         // Read (peer metadata)
+  ZONE_INFO_UUID: process.env.EXPO_PUBLIC_BLE_ZONE_INFO_UUID || '6e400005-b5a3-f393-e0a9-e50e24dcca9e',         // Read (zone info)
 } as const;
 
 /**

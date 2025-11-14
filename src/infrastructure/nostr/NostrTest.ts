@@ -50,11 +50,11 @@ async function loadRelayCSV(): Promise<string> {
 
   // Fallback CSV with 5 relays for testing
   return `Relay URL,Latitude,Longitude
-wss://relay.damus.io,37.7749,-122.4194
-wss://relay.nostr.band,40.7128,-74.0060
-wss://nos.lol,51.5074,-0.1278
-wss://relay.primal.net,37.7749,-122.4194
-wss://nostr.wine,40.7128,-74.0060`;
+          wss://relay.damus.io,37.7749,-122.4194
+          wss://relay.nostr.band,40.7128,-74.0060
+          wss://nos.lol,51.5074,-0.1278
+          wss://relay.primal.net,37.7749,-122.4194
+          wss://nostr.wine,40.7128,-74.0060`;
 }
 
 // Load test relays from CSV and select optimal ones

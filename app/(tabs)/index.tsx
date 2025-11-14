@@ -29,8 +29,12 @@ export default function Index() {
                 isSaga,
             });
 
+            // 🔧 UNCOMMENT THIS LINE TO RESET AND TEST FIRST-TIME USER EXPERIENCE
+            // await SecureStore.deleteItemAsync('hasSeenIndex');
+
             // Check if user has seen index (UI state)
             const hasSeenIndex = await SecureStore.getItemAsync('hasSeenIndex');
+            console.log('[Index] hasSeenIndex flag:', hasSeenIndex);
 
             // Solana Mobile devices (Seeker/Saga) can use MWA - don't need local wallet
             if (isSolanaMobile) {
@@ -38,13 +42,14 @@ export default function Index() {
                 
                 // Check if they've completed onboarding
                 if (hasSeenIndex !== 'true') {
-                    console.log('[Index] First time Solana Mobile user - redirect to onboarding');
+                    console.log('[Index] First time Solana Mobile user - redirect to landing page');
                     router.replace('/landing' as any);
                     return;
                 }
                 
-                // Already onboarded - go to app
-                router.replace('/(tabs)');
+                // Already onboarded - go to chat
+                console.log('[Index] Returning Solana Mobile user - redirect to chat');
+                router.replace('/chat' as any);
                 return;
             }
 
@@ -54,16 +59,16 @@ export default function Index() {
                 const hasLocalWallet = await LocalWalletAdapter.hasStoredWallet();
 
                 if (!hasLocalWallet) {
-                    // No wallet - go to onboarding
+                    // No wallet - go to onboarding to create one
                     console.log('[Index] No wallet found - redirecting to onboarding');
                     router.replace('/onboarding' as any);
-                } else if (hasSeenIndex !== 'true') {
-                    // Has wallet but hasn't completed onboarding flow
-                    console.log('[Index] Wallet found, redirecting to landing');
-                    router.replace('/landing' as any);
+                } else if (hasSeenIndex === 'true') {
+                    // Has wallet and has seen index - go directly to chat
+                    console.log('[Index] Returning user - redirecting to chat');
+                    router.replace('/chat' as any);
                 } else {
-                    // Has wallet and completed onboarding - go to app
-                    console.log('[Index] Wallet initialized - redirecting to app');
+                    // Has wallet but first time - show landing page
+                    console.log('[Index] First time with wallet - showing landing page');
                     router.replace('/landing' as any);
                 }
             }
