@@ -60,10 +60,10 @@ export default function ChatHeader({
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
-        {/* Back arrow */}
+        {/* Back arrow
         <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
           <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity onPress={handleTitlePress} activeOpacity={0.7} style={styles.titleTouch}>
           <Text style={styles.headerTitle}>{selectedPeer || nickname}</Text>
         </TouchableOpacity>

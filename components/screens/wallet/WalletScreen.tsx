@@ -1,7 +1,7 @@
 import { WalletFactory } from '@/src/infrastructure/wallet';
 import '@/src/polyfills';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Clipboard,
@@ -12,10 +12,13 @@ import {
 } from 'react-native';
 // QR code
 import QRCode from 'react-native-qrcode-svg';
-import WalletHeader from '../wallet/WalletHeader';
+import SendSettingsModal from '../../modals/SettingsModal';
+import WalletHeader from '../../wallet/WalletHeader';
+import { useWalletTabs } from '../../wallet/WalletTabsContext';
 
 export default function WalletScreen({ hideHeader = false }: { hideHeader?: boolean } = {}) {
   const router = useRouter();
+  const tabs = useWalletTabs();
   const [publicKey, setPublicKey] = useState<string>('');
 
   // Initialize wallet
@@ -60,7 +63,7 @@ export default function WalletScreen({ hideHeader = false }: { hideHeader?: bool
   };
 
   const handleSettings = () => {
-    Alert.alert('Settings', 'Settings coming soon');
+    tabs.setShowSettings(true);
   };
 
   // Format address for display (XXXX...XXXX)
@@ -117,6 +120,13 @@ export default function WalletScreen({ hideHeader = false }: { hideHeader?: bool
           <View style={styles.copyIconFront} />
         </View>
       </TouchableOpacity>
+
+      {/* Settings Modal */}
+      <SendSettingsModal
+        visible={tabs.showSettings}
+        onClose={() => tabs.setShowSettings(false)}
+        walletAddress={publicKey}
+      />
     </View>
   );
 }

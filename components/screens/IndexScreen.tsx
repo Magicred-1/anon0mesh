@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ArciumIcon from '../icons/ArciumIcon';
 import BluetoothIcon from '../icons/BluetoothIcon';
 import GhostIcon from '../icons/GhostIcon';
@@ -56,7 +56,6 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
 
     const renderBottomSheetContent = () => (
         <View style={styles.bottomSheetContent}>
-            <Text style={styles.bottomSheetTitle}>FEATURES</Text>
             <View style={styles.featuresContainer}>
                 {features.map((feature, index) => (
                     <View key={index} style={styles.featureCard}>
@@ -77,8 +76,10 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
 
     return (
         <LinearGradient
-            colors={['#0a1a1a', '#0d2626', '#0a1a1a']}
-            locations={[0, 0.5, 1]}
+            colors={['#0D0D0D', '#06181B', '#072B31']}
+            locations={[0, 0.94, 1]}
+            start={{ x: 0, y: 1 }}
+            end={{ x: 1, y: 0 }}
             style={styles.scrollView}
         >
             <ScrollView contentContainerStyle={styles.container}>
@@ -86,7 +87,10 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
                     {/* Header */}
                     <View style={styles.header}>
                         <Text style={styles.title}>
-                            ANON<Text style={styles.logoAccent}>⬡</Text>MESH
+                            <Image
+                                source={require('../../assets/images/anon0mesh_logo.png')}
+                                style={{ width: 422, height: 100, resizeMode: 'contain' }}
+                            />
                         </Text>
                         <Text style={styles.subtitle}>
                             [ DECENTRALIZED P2P MESSAGING ]
@@ -205,6 +209,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: '#00d4d4',
         borderRadius: 8,
+        backgroundColor: '#041A1D',
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#00d4d4',
@@ -265,6 +270,7 @@ const styles = StyleSheet.create({
     bottomSheetContent: {
         padding: 20,
         paddingBottom: 40,
+        fontFamily: "SpaceGrotesk",
     },
     bottomSheetTitle: {
         color: '#00d4d4',
@@ -317,7 +323,7 @@ const styles = StyleSheet.create({
         lineHeight: 16,
     },
     footer: {
-        color: '#4a6666',
+        color: '#fff',
         fontSize: 11,
         textAlign: 'center',
         fontWeight: '500',
