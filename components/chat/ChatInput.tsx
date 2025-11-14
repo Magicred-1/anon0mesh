@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import SendIcon from '../ui/SendIcon';
 
 interface ChatInputProps {
   value: string;
@@ -18,58 +19,70 @@ export default function ChatInput({
 }: ChatInputProps) {
   return (
     <View style={styles.container}>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#666"
-        multiline
-        maxLength={500}
-        editable={!disabled}
-      />
-      <TouchableOpacity
-        onPress={onSend}
-        style={[styles.sendButton, (!value.trim() || disabled) && styles.sendButtonDisabled]}
-        disabled={!value.trim() || disabled}
-      >
-        <View style={styles.sendIcon} />
-      </TouchableOpacity>
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#22D3EE"
+          multiline={false}
+          maxLength={500}
+          editable={!disabled}
+        />
+        <TouchableOpacity
+          onPress={onSend}
+          style={[styles.sendButton, (!value.trim() || disabled) && styles.sendButtonDisabled]}
+          disabled={!value.trim() || disabled}
+        >
+          {/* <View style={styles.sendIcon}> */}
+            <SendIcon width={16} height={16} color={!value.trim() || disabled ? '#333' : '#00CED1'} />
+          {/* </View> */}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#000',
     borderTopWidth: 1,
-    borderTopColor: '#00d9ff',
+    borderTopColor: '#00CED1',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 50,
+    backgroundColor: '#000',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#00CED1',
+    paddingRight: 8,
   },
   input: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
+    height: '100%',
     backgroundColor: 'transparent',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    color: '#fff',
+    paddingHorizontal: 15,
+    color: '#00CED1',
     fontSize: 16,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: '#00d9ff',
+    borderWidth: 0,
+    fontFamily: 'monospace',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 4,
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#00d9ff',
+    borderColor: '#00CED1',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -80,13 +93,13 @@ const styles = StyleSheet.create({
   sendIcon: {
     width: 0,
     height: 0,
-    borderLeftWidth: 12,
+    borderLeftWidth: 10,
     borderRightWidth: 0,
-    borderTopWidth: 8,
-    borderBottomWidth: 8,
-    borderLeftColor: '#00d9ff',
+    borderTopWidth: 7,
+    borderBottomWidth: 7,
+    borderLeftColor: '#00CED1',
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
-    marginLeft: 3,
+    marginLeft: 2,
   },
 });

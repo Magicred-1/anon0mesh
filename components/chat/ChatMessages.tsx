@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   myMessage: {
-    backgroundColor: '#00d9ff',
+    backgroundColor: '#00CED1',
     borderBottomRightRadius: 4,
   },
   theirMessage: {

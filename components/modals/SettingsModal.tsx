@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { Component } from 'react';
 import {
+  Animated,
+  Dimensions,
   Modal,
+  PanResponder,
+  PanResponderInstance,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import SolanaIcon from '../icons/SolanaIcon';
@@ -15,28 +20,95 @@ type Props = {
   walletAddress?: string;
 };
 
-export default function SettingsModal({ visible, onClose, walletAddress }: Props) {
-  const truncatedAddress = walletAddress
-    ? `${walletAddress.slice(0, 10)}...${walletAddress.slice(-7)}`
-    : 'JDijn6BQvh...DPQqUGU';
+interface SettingsModalState {
+  panY: Animated.Value;
+}
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Settings</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeModal}>✕</Text>
-            </TouchableOpacity>
-          </View>
+export default class SettingsModal extends Component<Props, SettingsModalState> {
+  private _panResponders: PanResponderInstance;
+  private _resetPositionAnim: Animated.CompositeAnimation;
+  private _closeAnim: Animated.CompositeAnimation;
 
-          <ScrollView style={styles.modalBody}>
+  constructor(props: Props) {
+    super(props);
+    
+    this.state = {
+      panY: new Animated.Value(Dimensions.get('screen').height),
+    };
+
+    this._resetPositionAnim = Animated.timing(this.state.panY, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: false,
+    });
+
+    this._closeAnim = Animated.timing(this.state.panY, {
+      toValue: Dimensions.get('screen').height,
+      duration: 500,
+      useNativeDriver: false,
+    });
+
+    this._panResponders = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => false,
+      onPanResponderMove: Animated.event([null, { dy: this.state.panY }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: (e, gs) => {
+        if (gs.dy > 0 && gs.vy > 2) {
+          return this._closeAnim.start(() => this.props.onClose());
+        }
+        return this._resetPositionAnim.start();
+      },
+    });
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    if (prevProps.visible !== this.props.visible && this.props.visible) {
+      this._resetPositionAnim.start();
+    }
+  }
+
+  _handleDismiss = () => {
+    this._closeAnim.start(() => this.props.onClose());
+  }
+
+  render() {
+    const { visible, walletAddress } = this.props;
+
+    const truncatedAddress = walletAddress
+      ? `${walletAddress.slice(0, 10)}...${walletAddress.slice(-7)}`
+      : 'JDijn6BQvh...DPQqUGU';
+
+    const top = this.state.panY.interpolate({
+      inputRange: [-1, 0, 1],
+      outputRange: [0, 0, 1],
+    });
+
+    return (
+      <Modal
+        animated
+        animationType="fade"
+        visible={visible}
+        transparent
+        onRequestClose={this._handleDismiss}
+      >
+        <View style={styles.modalOverlay} {...this._panResponders.panHandlers}>
+          <TouchableWithoutFeedback onPress={this._handleDismiss}>
+            <View style={styles.background} />
+          </TouchableWithoutFeedback>
+          <Animated.View style={[styles.modalContent, { top }]}>
+            <View style={styles.handleContainer}>
+              <View style={styles.handle} />
+            </View>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Settings</Text>
+              <TouchableOpacity onPress={this._handleDismiss}>
+                <Text style={styles.closeModal}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
             <Text style={styles.walletTitle}>Disposable Address(es) (usable offline)</Text>
             <TouchableOpacity style={styles.addressDropdown}>
               <Text style={styles.addressText}>8nXFVo...bPP6kQyaS</Text>
@@ -59,14 +131,15 @@ export default function SettingsModal({ visible, onClose, walletAddress }: Props
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.exportButton}>
-              <Text style={styles.exportButtonText}>Export Private Key</Text>
-            </TouchableOpacity>
-          </ScrollView>
+              <TouchableOpacity style={styles.exportButton}>
+                <Text style={styles.exportButtonText}>Export Private Key</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </Animated.View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -75,12 +148,26 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'flex-end',
   },
+  background: {
+    flex: 1,
+  },
   modalContent: {
     backgroundColor: '#0d2626',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 24,
-    maxHeight: '80%',
+    paddingTop: 12,
+    maxHeight: Dimensions.get('screen').height * 0.8,
+  },
+  handleContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingBottom: 16,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#7a9999',
+    borderRadius: 2,
   },
   modalHeader: {
     flexDirection: 'row',

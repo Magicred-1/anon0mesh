@@ -1,13 +1,13 @@
 import React, { Component } from 'react';
 import {
-    Animated,
-    Dimensions,
-    Modal,
-    PanResponder,
-    PanResponderInstance,
-    StyleSheet,
-    TouchableWithoutFeedback,
-    View,
+  Animated,
+  Dimensions,
+  Modal,
+  PanResponder,
+  PanResponderInstance,
+  StyleSheet,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 
 interface BottomSheetProps {

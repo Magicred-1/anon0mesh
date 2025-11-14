@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#000',
     borderBottomWidth: 1,
-    borderBottomColor: '#00d9ff',
+    borderBottomColor: '#00CED1',
   },
   headerLeft: {
     flex: 1,
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   },
   backArrow: {
     fontSize: 24,
-    color: '#00d9ff',
+    color: '#00CED1',
     fontWeight: 'bold',
   },
   headerTitle: {
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#00d9ff',
+    borderColor: '#00CED1',
     backgroundColor: 'rgba(0, 217, 255, 0.1)',
   },
   // Wallet Icon
@@ -146,14 +146,14 @@ const styles = StyleSheet.create({
   walletTop: {
     width: 20,
     height: 4,
-    backgroundColor: '#00d9ff',
+    backgroundColor: '#00CED1',
     borderTopLeftRadius: 2,
     borderTopRightRadius: 2,
   },
   walletBottom: {
     width: 20,
     height: 12,
-    backgroundColor: '#00d9ff',
+    backgroundColor: '#00CED1',
     borderBottomLeftRadius: 2,
     borderBottomRightRadius: 2,
     marginTop: 0,
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 2,
     borderTopWidth: 2,
     borderBottomWidth: 2,
-    borderColor: '#00d9ff',
+    borderColor: '#00CED1',
     borderTopLeftRadius: 6,
     borderTopRightRadius: 6,
     borderBottomLeftRadius: 6,
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   trashLid: {
     width: 16,
     height: 3,
-    backgroundColor: '#00d9ff',
+    backgroundColor: '#00CED1',
     borderTopLeftRadius: 2,
     borderTopRightRadius: 2,
     marginBottom: 2,
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     height: 10,
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#00d9ff',
+    borderColor: '#00CED1',
     borderBottomLeftRadius: 2,
     borderBottomRightRadius: 2,
   },
