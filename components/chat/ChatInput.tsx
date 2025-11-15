@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
-import SendIcon from '../ui/SendIcon';
+import SendIcon from '../icons/SendIcon';
 
 interface ChatInputProps {
   value: string;

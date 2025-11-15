@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import HashtagIcon from '../icons/HashtagIcon';
 import WalletIcon from '../icons/WalletIcon';
+import NostrZoneSelectorModal from '../modals/NostrZoneSelectorModal';
 
 interface ChatHeaderProps {
   nickname: string;
@@ -27,6 +29,10 @@ export default function ChatHeader({
   onEditNickname,
   onBackPress,
 }: ChatHeaderProps) {
+  // Zone selector state
+  const [showZoneSelector, setShowZoneSelector] = useState(false);
+  const [selectedZone, setSelectedZone] = useState<'local' | 'neighborhood' | 'city' | 'internet'>('local');
+
   // Tap-count refs for title: single tap = edit, triple tap = clear cache
   const tapCountRef = useRef(0);
   const tapTimerRef = useRef<any>(null);
@@ -78,13 +84,24 @@ export default function ChatHeader({
           </View>
         </TouchableOpacity>
 
-        {/* Bluetooth Icon */}
-        <TouchableOpacity style={styles.iconButton}>
+        {/* Bluetooth Icon - Opens Zone Selector */}
+        <TouchableOpacity style={styles.iconButton} onPress={() => setShowZoneSelector(true)}>
           <View style={[styles.bluetoothIcon, bleConnected && styles.bluetoothActive]}>
-            <View style={styles.bluetoothSymbol} />
+            <HashtagIcon width={16} height={16} color={bleConnected ? '#00CED1' : '#333'} />
           </View>
         </TouchableOpacity>
       </View>
+
+      {/* Nostr Zone Selector Modal */}
+      <NostrZoneSelectorModal
+        visible={showZoneSelector}
+        onClose={() => setShowZoneSelector(false)}
+        onSelectZone={(zone) => {
+          setSelectedZone(zone);
+          console.log('Selected Nostr zone:', zone);
+        }}
+        selectedZone={selectedZone}
+      />
     </View>
   );
 }

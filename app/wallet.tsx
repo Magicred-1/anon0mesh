@@ -1,9 +1,9 @@
+import SendIcon from '@/components/icons/SendIcon';
 import ReceiveIcon from '@/components/icons/wallet/ReceiveIcon';
 import SwapIcon from '@/components/icons/wallet/SwapIcon';
 import SendScreen from '@/components/screens/wallet/SendScreen';
 import SwapScreen from '@/components/screens/wallet/SwapScreen';
 import WalletScreen from '@/components/screens/wallet/WalletScreen';
-import SendIcon from '@/components/ui/SendIcon';
 import WalletHeader from '@/components/wallet/WalletHeader';
 import { WalletTabsProvider } from '@/components/wallet/WalletTabsContext';
 import { useRouter } from 'expo-router';

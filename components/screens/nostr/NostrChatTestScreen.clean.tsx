@@ -5,7 +5,7 @@
  * Uses NostrChatPresenter (MVVM pattern) for state management
  */
 
-import SendIcon from '@/components/ui/SendIcon';
+import SendIcon from '@/components/icons/SendIcon';
 import SolanaLogo from '@/components/ui/SolanaLogo';
 import type { NostrChatState } from '@/src/presentation/NostrChatPresenter';
 import { NostrChatPresenter } from '@/src/presentation/NostrChatPresenter';
