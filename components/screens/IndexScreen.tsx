@@ -223,7 +223,6 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontSize: 16,
         letterSpacing: 2,
-        fontFamily: 'monospace',
         textShadowColor: 'rgba(0, 212, 212, 0.5)',
         textShadowOffset: { width: 0, height: 0 },
         textShadowRadius: 8,

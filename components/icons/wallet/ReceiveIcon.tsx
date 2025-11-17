@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import ReceiveSvg from '../../../assets/images/receive_icon.svg';
+import ReceiveSvg from '../../../assets/images/icons/receive_icon.svg';
 
 const ReceiveIcon = ({ size = 32 }: { size?: number }) => {
   return (

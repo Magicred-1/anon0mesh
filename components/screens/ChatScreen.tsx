@@ -1,3 +1,4 @@
+import BluetoothPermissionRequest from '@/components/bluetooth/BluetoothPermissionRequest';
 import ChatHeader from '@/components/chat/ChatHeader';
 import ChatInput from '@/components/chat/ChatInput';
 import ChatMessages, { Message } from '@/components/chat/ChatMessages';
@@ -36,6 +37,8 @@ export default function ChatScreen() {
   const [selectedPeer, setSelectedPeer] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);
+  const [showPermissionRequest, setShowPermissionRequest] = useState(false);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
 
   // Initialize wallet and user data
@@ -56,6 +59,11 @@ export default function ChatScreen() {
 
         const storedNickname = await SecureStore.getItemAsync('nickname');
         setNickname(storedNickname || 'Anonymous');
+
+        // Show Bluetooth permission request after a short delay
+        setTimeout(() => {
+          setShowPermissionRequest(true);
+        }, 1000);
 
         // Mock messages for demo
         setMessages([
@@ -225,6 +233,24 @@ export default function ChatScreen() {
           onClose={() => setEditNickVisible(false)}
           pubKey={pubKey}
         />
+
+        {/* Bluetooth Permission Request */}
+        {showPermissionRequest && !permissionsGranted && (
+          <View style={StyleSheet.absoluteFill}>
+            <BluetoothPermissionRequest
+              onPermissionsGranted={() => {
+                setPermissionsGranted(true);
+                setShowPermissionRequest(false);
+                console.log('[Chat] Bluetooth permissions granted');
+              }}
+              onPermissionsDenied={() => {
+                setShowPermissionRequest(false);
+                console.log('[Chat] Bluetooth permissions denied');
+              }}
+              autoRequest={true}
+            />
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

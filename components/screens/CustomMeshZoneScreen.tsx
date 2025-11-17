@@ -1,152 +1,152 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ZoneRadius = 'local' | 'neighborhood' | 'city' | 'regional' | 'national' | 'global';
 
 interface Zone {
-  id: string;
-  label: string;
-  range: string;
-  icon: string;
+    id: string;
+    label: string;
+    range: string;
+    icon: string;
 }
 
 const ZONES: Zone[] = [
-  { id: 'local', label: 'Local', range: '100m', icon: '📍' },
-  { id: 'neighborhood', label: 'Neighborhood', range: '10km', icon: '🏠' },
-  { id: 'city', label: 'City', range: '100km', icon: '🏙️' },
-  { id: 'regional', label: 'Regional', range: '1 000km', icon: '👥' },
-  { id: 'national', label: 'National', range: '5 000km', icon: '📖' },
-  { id: 'global', label: 'Global', range: '', icon: '🌐' },
+    { id: 'local', label: 'Local', range: '100m', icon: '📍' },
+    { id: 'neighborhood', label: 'Neighborhood', range: '10km', icon: '🏠' },
+    { id: 'city', label: 'City', range: '100km', icon: '🏙️' },
+    { id: 'regional', label: 'Regional', range: '1 000km', icon: '👥' },
+    { id: 'national', label: 'National', range: '5 000km', icon: '📖' },
+    { id: 'global', label: 'Global', range: '', icon: '🌐' },
 ];
 
 interface CustomMeshZoneScreenProps {
-  onBack?: () => void;
-  onCreate?: (zoneName: string, zoneRadius: ZoneRadius) => void;
+    onBack?: () => void;
+    onCreate?: (zoneName: string, zoneRadius: ZoneRadius) => void;
 }
 
 export default function CustomMeshZoneScreen({
-  onBack,
-  onCreate,
+    onBack,
+    onCreate,
 }: CustomMeshZoneScreenProps) {
-  const [zoneName, setZoneName] = useState('');
-  const [selectedRadius, setSelectedRadius] = useState<string>('local');
+    const [zoneName, setZoneName] = useState('');
+    const [selectedRadius, setSelectedRadius] = useState<string>('local');
 
-  const handleCreate = () => {
-    if (zoneName.trim() && onCreate) {
-      onCreate(zoneName.trim(), selectedRadius as ZoneRadius);
-    }
-  };
+    const handleCreate = () => {
+        if (zoneName.trim() && onCreate) {
+        onCreate(zoneName.trim(), selectedRadius as ZoneRadius);
+        }
+    };
 
-  const isCreateEnabled = zoneName.trim().length > 0;
+    const isCreateEnabled = zoneName.trim().length > 0;
 
-  return (
-    <LinearGradient
-      colors={['#0D0D0D', '#06181B', '#072B31']}
-      locations={[0, 0.94, 1]}
-      start={{ x: 0.2125, y: 0 }}
-      end={{ x: 0.7875, y: 1 }}
-      style={styles.container}
-    >
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoid}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    return (
+        <LinearGradient
+        colors={['#0D0D0D', '#06181B', '#072B31']}
+        locations={[0, 0.94, 1]}
+        start={{ x: 0.2125, y: 0 }}
+        end={{ x: 0.7875, y: 1 }}
+        style={styles.container}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={onBack}
-              activeOpacity={0.7}
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <KeyboardAvoidingView
+            style={styles.keyboardAvoid}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-              <Text style={styles.backIcon}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Custom Mesh Zone</Text>
-            <TouchableOpacity
-              style={[
-                styles.createButton,
-                !isCreateEnabled && styles.createButtonDisabled,
-              ]}
-              onPress={handleCreate}
-              disabled={!isCreateEnabled}
-              activeOpacity={0.7}
-            >
-              <Text style={[
-                styles.createButtonText,
-                !isCreateEnabled && styles.createButtonTextDisabled,
-              ]}>
-                Create
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView 
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Zone Name Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Zone name</Text>
-              <TextInput
-                style={styles.input}
-                value={zoneName}
-                onChangeText={setZoneName}
-                placeholder="Type_custom_nickname"
-                placeholderTextColor="#22D3EE"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity 
+                style={styles.backButton}
+                onPress={onBack}
+                activeOpacity={0.7}
+                >
+                <Text style={styles.backIcon}>‹</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Custom Mesh Zone</Text>
+                <TouchableOpacity
+                style={[
+                    styles.createButton,
+                    !isCreateEnabled && styles.createButtonDisabled,
+                ]}
+                onPress={handleCreate}
+                disabled={!isCreateEnabled}
+                activeOpacity={0.7}
+                >
+                <Text style={[
+                    styles.createButtonText,
+                    !isCreateEnabled && styles.createButtonTextDisabled,
+                ]}>
+                    Create
+                </Text>
+                </TouchableOpacity>
             </View>
 
-            {/* Mesh Zone Radius Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Mesh Zone radius</Text>
-              <View style={styles.zonesContainer}>
-                {ZONES.map((zone) => {
-                  const isSelected = selectedRadius === zone.id;
-                  
-                  return (
-                    <TouchableOpacity
-                      key={zone.id}
-                      style={[
-                        styles.zoneButton,
-                        isSelected && styles.zoneButtonSelected,
-                      ]}
-                      onPress={() => setSelectedRadius(zone.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.zoneContent}>
-                        <Text style={styles.zoneIcon}>{zone.icon}</Text>
-                        <View style={styles.zoneTextContainer}>
-                          <Text style={styles.zoneLabel}>{zone.label}</Text>
+            <ScrollView 
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Zone Name Section */}
+                <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Zone name</Text>
+                <TextInput
+                    style={styles.input}
+                    value={zoneName}
+                    onChangeText={setZoneName}
+                    placeholder="Type_custom_channel"
+                    placeholderTextColor="#22D3EE"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                />
+                </View>
+
+                {/* Mesh Zone Radius Section */}
+                <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Mesh Zone radius</Text>
+                <View style={styles.zonesContainer}>
+                    {ZONES.map((zone) => {
+                    const isSelected = selectedRadius === zone.id;
+                    
+                    return (
+                        <TouchableOpacity
+                        key={zone.id}
+                        style={[
+                            styles.zoneButton,
+                            isSelected && styles.zoneButtonSelected,
+                        ]}
+                        onPress={() => setSelectedRadius(zone.id)}
+                        activeOpacity={0.7}
+                        >
+                        <View style={styles.zoneContent}>
+                            <Text style={styles.zoneIcon}>{zone.icon}</Text>
+                            <View style={styles.zoneTextContainer}>
+                            <Text style={styles.zoneLabel}>{zone.label}</Text>
+                            </View>
+                            {zone.range && (
+                            <Text style={styles.zoneRange}>{zone.range}</Text>
+                            )}
                         </View>
-                        {zone.range && (
-                          <Text style={styles.zoneRange}>{zone.range}</Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </LinearGradient>
-  );
+                        </TouchableOpacity>
+                    );
+                    })}
+                </View>
+                </View>
+            </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
+        </LinearGradient>
+    );
 }
 
 const styles = StyleSheet.create({

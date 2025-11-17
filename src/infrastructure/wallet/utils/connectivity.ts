@@ -9,10 +9,21 @@ export type ConnectivityStatus = {
 
 // Initialize BLE manager singleton
 let bleManager: BleManager | null = null;
+let bleInitError: Error | null = null;
 
-function getBleManager(): BleManager {
+function getBleManager(): BleManager | null {
+    if (bleInitError) {
+        return null; // Already tried and failed
+    }
+    
     if (!bleManager) {
-        bleManager = new BleManager();
+        try {
+            bleManager = new BleManager();
+        } catch (error) {
+            console.error('[Connectivity] Failed to initialize BLE manager:', error);
+            bleInitError = error as Error;
+            return null;
+        }
     }
     return bleManager;
 }
@@ -37,6 +48,11 @@ export async function checkInternetConnectivity(): Promise<boolean> {
 export async function checkBluetoothAvailability(): Promise<boolean> {
     try {
         const manager = getBleManager();
+        if (!manager) {
+            console.warn('[Connectivity] BLE manager not available');
+            return false;
+        }
+        
         const state = await manager.state();
         
         // Bluetooth is available if it's powered on
@@ -108,11 +124,18 @@ export function subscribeToConnectivityChanges(
     callback(status);
   });
 
-  // Subscribe to Bluetooth state changes
-  const bleSubscription = manager.onStateChange(async () => {
-    const status = await getConnectivityStatus();
-    callback(status);
-  }, true); // true = emit current state immediately
+  // Subscribe to Bluetooth state changes (only if manager is available)
+  let bleSubscription: any = null;
+  if (manager) {
+    try {
+      bleSubscription = manager.onStateChange(async () => {
+        const status = await getConnectivityStatus();
+        callback(status);
+      }, true); // true = emit current state immediately
+    } catch (error) {
+      console.error('[Connectivity] Error subscribing to BLE changes:', error);
+    }
+  }
 
   // Return combined unsubscribe function
   return () => {
@@ -128,6 +151,11 @@ export function subscribeToConnectivityChanges(
 export async function requestBluetoothAccess(): Promise<boolean> {
   try {
     const manager = getBleManager();
+    if (!manager) {
+      console.warn('[Connectivity] BLE manager not available');
+      return false;
+    }
+    
     const state = await manager.state();
     
     if (state === BleState.PoweredOn) {
@@ -158,6 +186,10 @@ export async function requestBluetoothAccess(): Promise<boolean> {
 export async function getBluetoothStateString(): Promise<string> {
   try {
     const manager = getBleManager();
+    if (!manager) {
+      return 'Bluetooth not available';
+    }
+    
     const state = await manager.state();
     
     switch (state) {
@@ -219,10 +251,3 @@ export async function canSendTransaction(): Promise<{
  * Cleanup function to destroy BLE manager
  * Call this when the app is closing or when you no longer need BLE functionality
  */
-export function cleanupBluetooth(): void {
-  if (bleManager) {
-    bleManager.destroy();
-    bleManager = null;
-    console.log('[Connectivity] BLE manager cleaned up');
-  }
-}

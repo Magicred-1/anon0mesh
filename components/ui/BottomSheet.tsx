@@ -92,6 +92,7 @@ export default class BottomSheet extends Component<BottomSheetProps, BottomSheet
           <Animated.View style={[styles.container, { top }]}>
             <View style={styles.handleContainer}>
               <View style={styles.handle} />
+              <View style={styles.handle} />
             </View>
             {children}
           </Animated.View>
@@ -125,6 +126,7 @@ const styles = StyleSheet.create({
   handleContainer: {
     alignItems: 'center',
     paddingVertical: 12,
+    gap: 6,
   },
   handle: {
     width: 40,

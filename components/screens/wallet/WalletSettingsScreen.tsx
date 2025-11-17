@@ -1,191 +1,252 @@
 import SolanaIcon from '@/components/icons/SolanaIcon';
+import { useWallet } from '@/src/contexts/WalletContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type DisposableAddress = {
-  id: string;
-  address: string;
-  balances: {
-    sol: number;
-    usdc: number;
-    zec: number;
-  };
+    id: string;
+    address: string;
+    balances: {
+        sol: number;
+        usdc: number;
+        zec: number;
+    };
 };
 
 // Mock data
-const MOCK_PRIMARY_WALLET = 'XXXX...XXXX';
 const MOCK_DISPOSABLE_ADDRESSES: DisposableAddress[] = [
-  {
-    id: '1',
-    address: '8nXF...QgaS',
-    balances: { sol: 75.89, usdc: 75.89, zec: 75.89 }
-  },
-  {
-    id: '2',
-    address: '8nXF...QgaS',
-    balances: { sol: 75.89, usdc: 75.89, zec: 75.89 }
-  },
-  {
-    id: '3',
-    address: '8nXF...QgaS',
-    balances: { sol: 75.89, usdc: 75.89, zec: 75.89 }
-  },
+    {
+        id: '1',
+        address: '8nXF...QgaS',
+        balances: { sol: 75.89, usdc: 75.89, zec: 75.89 }
+    },
+    {
+        id: '2',
+        address: '8nXF...QgaS',
+        balances: { sol: 75.89, usdc: 75.89, zec: 75.89 }
+    },
+    {
+        id: '3',
+        address: '8nXF...QgaS',
+        balances: { sol: 75.89, usdc: 75.89, zec: 75.89 }
+    },
 ];
 
 export default function WalletSettingsScreen() {
-  const router = useRouter();
-  const [disposableAddresses, setDisposableAddresses] = useState<DisposableAddress[]>(MOCK_DISPOSABLE_ADDRESSES);
+    const router = useRouter();
+    
+    // Use wallet context for auto-detection
+    const { 
+        publicKey, 
+        isLoading, 
+        isConnected,
+        walletMode,
+        isSolanaMobile,
+        deviceInfo,
+        connect
+    } = useWallet();
+    
+    const [disposableAddresses, setDisposableAddresses] = useState<DisposableAddress[]>(MOCK_DISPOSABLE_ADDRESSES);
 
-  const handleBack = () => {
-    router.back();
-  };
+    // Format wallet address for display
+    const primaryWallet = publicKey 
+        ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+        : '';
 
-  const handleCopyPrimary = () => {
-    // TODO: Implement copy to clipboard
-    Alert.alert('Copied', 'Primary wallet address copied to clipboard');
-  };
-
-  const handleCopyDisposable = (address: string) => {
-    // TODO: Implement copy to clipboard
-    Alert.alert('Copied', `Address ${address} copied to clipboard`);
-  };
-
-  const handleAddFunds = (addressId: string) => {
-    // TODO: Implement add funds functionality
-    Alert.alert('Add Funds', `Add funds to address ${addressId}`);
-  };
-
-  const handleDeleteAddress = (addressId: string) => {
-    Alert.alert(
-      'Delete Address',
-      'Are you sure you want to delete this disposable address?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setDisposableAddresses(addresses => 
-              addresses.filter(addr => addr.id !== addressId)
-            );
-          }
+    // For MWA, we might need to connect first
+    const handleConnectWallet = async () => {
+        try {
+            await connect();
+        } catch (err) {
+            console.error('[WalletSettings] Connect error:', err);
         }
-      ]
-    );
-  };
+    };
 
-  const handleCreateNewAddress = () => {
-    // TODO: Implement create new disposable address
-    Alert.alert('Create Address', 'Creating new disposable address...');
-  };
+    const handleBack = () => {
+        router.back();
+    };
 
-  return (
-    <LinearGradient
-      colors={['#0D0D0D', '#06181B', '#072B31']}
-      locations={[0, 0.94, 1]}
-      start={{ x: 0.2125, y: 0 }}
-      end={{ x: 0.7875, y: 1 }}
-      style={styles.container}
-    >
-      <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Text style={styles.backIcon}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Settings</Text>
-          <View style={styles.placeholder} />
-        </View>
+    const handleCopyPrimary = () => {
+        // TODO: Implement copy to clipboard
+        Alert.alert('Copied', 'Primary wallet address copied to clipboard');
+    };
 
-        {/* Solana Network Badge */}
-        <View style={styles.networkBadge}>
-          <SolanaIcon size={20} />
-          <Text style={styles.networkText}>Solana Network</Text>
-        </View>
+    const handleCopyDisposable = (address: string) => {
+        // TODO: Implement copy to clipboard
+        Alert.alert('Copied', `Address ${address} copied to clipboard`);
+    };
 
-        <ScrollView 
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+    const handleAddFunds = (addressId: string) => {
+        // TODO: Implement add funds functionality
+        Alert.alert('Add Funds', `Add funds to address ${addressId}`);
+    };
+
+    const handleDeleteAddress = (addressId: string) => {
+        Alert.alert(
+        'Delete Address',
+        'Are you sure you want to delete this disposable address?',
+        [
+            { text: 'Cancel', style: 'cancel' },
+            {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+                setDisposableAddresses(addresses => 
+                addresses.filter(addr => addr.id !== addressId)
+                );
+            }
+            }
+        ]
+        );
+    };
+
+    const handleCreateNewAddress = () => {
+        // TODO: Implement create new disposable address
+        Alert.alert('Create Address', 'Creating new disposable address...');
+    };
+
+    return (
+        <LinearGradient
+        colors={['#0D0D0D', '#06181B', '#072B31']}
+        locations={[0, 0.94, 1]}
+        start={{ x: 0.2125, y: 0 }}
+        end={{ x: 0.7875, y: 1 }}
+        style={styles.container}
         >
-          {/* Primary Wallet Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Primary Wallet</Text>
-            <View style={styles.primaryWalletCard}>
-              <Text style={styles.primaryAddress}>{MOCK_PRIMARY_WALLET}</Text>
-              <TouchableOpacity onPress={handleCopyPrimary} style={styles.copyButton}>
-                <Text style={styles.copyIcon}>⎘</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Disposable Addresses Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Disposable Addresses</Text>
-            
-            {disposableAddresses.map((address) => (
-              <View key={address.id} style={styles.disposableCard}>
-                {/* Address Header */}
-                <View style={styles.addressHeader}>
-                  <Text style={styles.disposableAddress}>{address.address}</Text>
-                  <View style={styles.addressActions}>
-                    <TouchableOpacity 
-                      onPress={() => handleCopyDisposable(address.address)}
-                      style={styles.iconButton}
-                    >
-                      <Text style={styles.copyIconSmall}>⎘</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      onPress={() => handleDeleteAddress(address.id)}
-                      style={styles.iconButton}
-                    >
-                      <Text style={styles.deleteIcon}>🗑</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Balances */}
-                <View style={styles.balancesRow}>
-                  <Text style={styles.balanceText}>{address.balances.sol} SOL</Text>
-                  <Text style={styles.balanceSeparator}>|</Text>
-                  <Text style={styles.balanceText}>{address.balances.usdc} USDC</Text>
-                  <Text style={styles.balanceSeparator}>|</Text>
-                  <Text style={styles.balanceText}>{address.balances.zec} ZEC</Text>
-                </View>
-
-                {/* Add Funds Button */}
-                <TouchableOpacity 
-                  style={styles.addFundsButton}
-                  onPress={() => handleAddFunds(address.id)}
-                >
-                  <Text style={styles.addFundsText}>Add Funds</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-
-            {/* Create New Address Button */}
-            <TouchableOpacity 
-              style={styles.createNewButton}
-              onPress={handleCreateNewAddress}
-            >
-              <Text style={styles.createNewIcon}>+</Text>
-              <Text style={styles.createNewText}>Create new disposable address</Text>
+        <SafeAreaView style={styles.safeArea}>
+            {/* Header */}
+            <View style={styles.header}>
+            <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                <Text style={styles.backIcon}>‹</Text>
             </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </LinearGradient>
-  );
+            <Text style={styles.headerTitle}>Settings</Text>
+            <View style={styles.placeholder} />
+            </View>
+
+            {/* Solana Network Badge */}
+            <View style={styles.networkBadge}>
+            <SolanaIcon size={20} />
+            <Text style={styles.networkText}>Solana Network</Text>
+            </View>
+
+            <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            >
+            {/* Primary Wallet Section */}
+            <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Primary Wallet</Text>
+                    {walletMode && (
+                        <View style={styles.walletModeBadge}>
+                            <Text style={styles.walletModeText}>
+                                {walletMode === 'mwa' ? '🔐 MWA' : '📱 Local'}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+                <View style={styles.primaryWalletCard}>
+                {isLoading ? (
+                    <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#22D3EE" />
+                    <Text style={styles.loadingText}>
+                        {walletMode === 'mwa' ? 'Connecting to wallet...' : 'Loading...'}
+                    </Text>
+                    </View>
+                ) : !isConnected && walletMode === 'mwa' ? (
+                    <View style={styles.connectContainer}>
+                        <Text style={styles.connectText}>MWA Wallet Detected</Text>
+                        <TouchableOpacity onPress={handleConnectWallet} style={styles.connectButton}>
+                            <Text style={styles.connectButtonText}>Connect Wallet</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <>
+                    <Text style={styles.primaryAddress}>{primaryWallet}</Text>
+                    <TouchableOpacity onPress={handleCopyPrimary} style={styles.copyButton}>
+                        <Text style={styles.copyIcon}>⎘</Text>
+                    </TouchableOpacity>
+                    </>
+                )}
+                </View>
+                {isSolanaMobile && deviceInfo && (
+                    <View style={styles.deviceInfoCard}>
+                        <Text style={styles.deviceInfoText}>
+                            🎯 Solana Mobile Device: {deviceInfo.device} ({deviceInfo.model})
+                        </Text>
+                    </View>
+                )}
+            </View>
+
+            {/* Disposable Addresses Section */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Disposable Addresses</Text>
+                
+                {disposableAddresses.map((address) => (
+                <View key={address.id} style={styles.disposableCard}>
+                    {/* Address Header */}
+                    <View style={styles.addressHeader}>
+                    <Text style={styles.disposableAddress}>{address.address}</Text>
+                    <View style={styles.addressActions}>
+                        <TouchableOpacity 
+                        onPress={() => handleCopyDisposable(address.address)}
+                        style={styles.iconButton}
+                        >
+                        <Text style={styles.copyIconSmall}>⎘</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                        onPress={() => handleDeleteAddress(address.id)}
+                        style={styles.iconButton}
+                        >
+                        <Text style={styles.deleteIcon}>🗑</Text>
+                        </TouchableOpacity>
+                    </View>
+                    </View>
+
+                    {/* Balances */}
+                    <View style={styles.balancesRow}>
+                    <Text style={styles.balanceText}>{address.balances.sol} SOL</Text>
+                    <Text style={styles.balanceSeparator}>|</Text>
+                    <Text style={styles.balanceText}>{address.balances.usdc} USDC</Text>
+                    <Text style={styles.balanceSeparator}>|</Text>
+                    <Text style={styles.balanceText}>{address.balances.zec} ZEC</Text>
+                    </View>
+
+                    {/* Add Funds Button */}
+                    <TouchableOpacity 
+                    style={styles.addFundsButton}
+                    onPress={() => handleAddFunds(address.id)}
+                    >
+                    <Text style={styles.addFundsText}>Add Funds</Text>
+                    </TouchableOpacity>
+                </View>
+                ))}
+
+                {/* Create New Address Button */}
+                <TouchableOpacity 
+                style={styles.createNewButton}
+                onPress={handleCreateNewAddress}
+                >
+                <Text style={styles.createNewIcon}>+</Text>
+                <Text style={styles.createNewText}>Create new disposable address</Text>
+                </TouchableOpacity>
+            </View>
+            </ScrollView>
+        </SafeAreaView>
+        </LinearGradient>
+    );
 }
 
 const styles = StyleSheet.create({
@@ -365,5 +426,67 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#22D3EE',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#8a9999',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  walletModeBadge: {
+    backgroundColor: '#0a2828',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#22D3EE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  walletModeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#22D3EE',
+  },
+  connectContainer: {
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+  },
+  connectText: {
+    fontSize: 14,
+    color: '#8a9999',
+    fontWeight: '500',
+  },
+  connectButton: {
+    backgroundColor: '#22D3EE',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  connectButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0D0D0D',
+  },
+  deviceInfoCard: {
+    backgroundColor: '#0a2828',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#22D3EE',
+    padding: 12,
+    marginTop: 12,
+  },
+  deviceInfoText: {
+    fontSize: 12,
+    color: '#22D3EE',
+    fontWeight: '500',
   },
 });

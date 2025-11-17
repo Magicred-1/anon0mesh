@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import SettingsSvg from '../../../assets/images/settings_icon.svg';
+import SettingsSvg from '../../../assets/images/icons/settings_icon.svg';
 
 const SettingsIcon = ({ size = 32 }: { size?: number }) => {
   return (
