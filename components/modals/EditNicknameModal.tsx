@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useState } from 'react';
 import {
     Alert,
     Keyboard,
@@ -12,7 +12,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import SnsNicknameSelector from '../SnsNicknameSelector';
+import MainMenuModal from './MainMenuModal';
 
 interface EditNicknameModalProps {
     visible: boolean;
@@ -33,13 +33,8 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
     const [isValidating, setIsValidating] = useState(false);
     const [useSns, setUseSns] = useState(false);
     const [snsNickname, setSnsNickname] = useState<string | null>(null);
-    const [snsAvailable, setSnsAvailable] = useState(false);
     const [snsDomains, setSnsDomains] = useState<string[]>([]);
-    const router = useRouter();
-
-    // Tap handling for preview: single tap = save, triple tap (>=3) = go back to landing
-    const tapCountRef = useRef(0);
-    const tapTimerRef = useRef<any>(null);
+    const [showMenu, setShowMenu] = useState(false);
 
     const validateAndSave = async (nick?: string) => {
         const trimmedNickname = (nick ?? nickname).trim();
@@ -86,7 +81,6 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
         setSnsNickname(null);
         setUseSns(false);
         setSnsDomains([]);
-        setSnsAvailable(false);
         onClose();
     };
 
@@ -107,56 +101,7 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
         return () => { mounted = false; };
     }, [pubKey]);
 
-    // Handle switch logic and reset SNS nickname when toggling off
-    const handleSnsSwitch = (val: boolean) => {
-        setUseSns(val);
-        if (!val) {
-            setSnsNickname(null);
-        }
-    };
 
-    // Preview tap handler: waits a short window to detect single vs triple taps
-    const handlePreviewPress = () => {
-        // increment
-        tapCountRef.current += 1;
-
-        // reset existing timer
-        if (tapTimerRef.current) {
-            clearTimeout(tapTimerRef.current as unknown as number);
-        }
-
-        tapTimerRef.current = setTimeout(() => {
-            const taps = tapCountRef.current;
-            tapCountRef.current = 0;
-            tapTimerRef.current = null;
-
-            if (taps === 1) {
-                // single tap -> save the current nickname (SNS or custom)
-                if (useSns && snsNickname) {
-                    validateAndSave(snsNickname);
-                } else {
-                    validateAndSave();
-                }
-            } else if (taps >= 3) {
-                // triple (or more) taps -> close modal and go back to landing page
-                try {
-                    onClose();
-                } catch {
-                    // ignore
-                }
-                router.replace('/landing' as any);
-            }
-        }, 600);
-    };
-
-    useEffect(() => {
-        return () => {
-            if (tapTimerRef.current) {
-                clearTimeout(tapTimerRef.current as unknown as number);
-                tapTimerRef.current = null;
-            }
-        };
-    }, []);
 
     return (
         <Modal
@@ -165,117 +110,75 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
             presentationStyle="pageSheet"
             onRequestClose={handleClose}
         >
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#212122' }}>
-                {/* Header */}
-                <View
-                    style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        paddingHorizontal: 20,
-                        paddingVertical: 16,
-                        borderBottomWidth: 1,
-                        borderBottomColor: '#333',
-                    }}
-                >
-                    <TouchableOpacity onPress={handleClose}>
-                        <Text style={{ color: '#007AFF', fontSize: 16}}>Cancel</Text>
-                    </TouchableOpacity>
-                    <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '600' }}>
-                        Edit Nickname
-                    </Text>
-                    <TouchableOpacity
-                        onPress={() => useSns && snsNickname ? validateAndSave(snsNickname) : validateAndSave()}
-                        disabled={isValidating || ((useSns && !snsNickname) || (!useSns && nickname.trim() === currentNickname))}
-                        style={{ opacity: isValidating || ((useSns && !snsNickname) || (!useSns && nickname.trim() === currentNickname)) ? 0.5 : 1 }}
+            <LinearGradient
+                colors={['#0D0D0D', '#06181B', '#072B31']}
+                locations={[0, 0.94, 1]}
+                start={{ x: 0.21, y: 0 }}
+                end={{ x: 0.79, y: 1 }}
+                style={{ flex: 1 }}
+            >
+                <SafeAreaView style={{ flex: 1 }}>
+                    {/* Header */}
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingHorizontal: 20,
+                            paddingVertical: 16,
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#1a3333',
+                        }}
                     >
-                        <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '600' }}>
-                            {isValidating ? 'Saving...' : 'Save'}
+                        <Text style={{ color: '#FFFFFF', fontSize: 20, fontWeight: '600' }}>
+                            Profile
                         </Text>
-                    </TouchableOpacity>
-                </View>
-                {/* Content */}
-                <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 30 }}>
-                    {/* SNS Section */}
-                    <View style={{
-                        backgroundColor: '#23232A',
-                        borderRadius: 14,
-                        padding: 16,
-                        marginBottom: 24,
-                        borderWidth: 1,
-                        borderColor: '#333',
-                    }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                            <Switch
-                                value={useSns}
-                                onValueChange={handleSnsSwitch}
-                                trackColor={{ false: '#333', true: '#26C6DA' }}
-                                thumbColor={useSns ? '#fff' : '#888'}
-                                disabled={snsDomains.length === 0}
-                            />
-                            <Text style={{ color: snsAvailable ? '#26C6DA' : '#888', marginLeft: 8, fontWeight: 'bold', fontSize: 16 }}>
-                                Use SNS domain as nickname
+                        <TouchableOpacity
+                            onPress={() => useSns && snsNickname ? validateAndSave(snsNickname) : validateAndSave()}
+                            disabled={isValidating || ((useSns && !snsNickname) || (!useSns && nickname.trim() === currentNickname))}
+                            style={{
+                                paddingHorizontal: 24,
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                borderColor: '#22D3EE',
+                                backgroundColor: 'transparent',
+                                opacity: isValidating || ((useSns && !snsNickname) || (!useSns && nickname.trim() === currentNickname)) ? 0.5 : 1
+                            }}
+                        >
+                            <Text style={{ color: '#22D3EE', fontSize: 16, fontWeight: '500' }}>
+                                {isValidating ? 'Saving...' : 'Save'}
                             </Text>
-                        </View>
-                        <Text style={{ color: '#AAA', fontSize: 13, marginBottom: 8 }}>
-                            {snsAvailable
-                                ? 'Select a Solana Name Service domain linked to your wallet.'
-                                : 'No SNS domains found for this wallet. You can only use a custom nickname.'}
-                        </Text>
-                        {/* SNS selector or custom input */}
-                        {useSns && snsAvailable ? (
-                            <View style={{ marginTop: 8 }}>
-                                <SnsNicknameSelector
-                                    pubKey={pubKey}
-                                    onSelect={nick => {
-                                        setSnsNickname(nick);
-                                    }}
-                                    onDomainsLoaded={domains => {
-                                        setSnsDomains(domains);
-                                        setSnsAvailable(domains.length > 0);
-                                        // If no domains, force switch off
-                                        if (domains.length === 0 && useSns) {
-                                            setUseSns(false);
-                                            setSnsNickname(null);
-                                        }
-                                    }}
-                                />
-                                {snsDomains.length === 0 && (
-                                    <Text style={{ color: '#888', fontSize: 14, marginTop: 8 }}>
-                                        No SNS domains available. Switch to custom nickname.
-                                    </Text>
-                                )}
-                            </View>
-                        ) : null}
+                        </TouchableOpacity>
                     </View>
-                    {/* Custom Nickname Section */}
-                    {!useSns || !snsAvailable ? (
-                        <View style={{
-                            backgroundColor: '#23232A',
-                            borderRadius: 14,
-                            padding: 16,
-                            marginBottom: 24,
-                            borderWidth: 1,
-                            borderColor: '#333',
-                        }}>
-                            <Text style={{ color: '#FFFFFF', fontSize: 16,  marginBottom: 8 }}>
-                                Custom Nickname
-                            </Text>
+                    {/* Content */}
+                    <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: 24 }}>
+                        {/* Custom Nickname Section */}
+                        <View style={{ marginBottom: 24 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '500' }}>
+                                    Custom Nickname
+                                </Text>
+                                <Text style={{ color: '#6b7280', fontSize: 14 }}>
+                                    {nickname.length}/20
+                                </Text>
+                            </View>
                             <TextInput
                                 style={{
-                                    backgroundColor: '#333',
+                                    backgroundColor: 'transparent',
                                     borderRadius: 12,
                                     paddingHorizontal: 16,
                                     paddingVertical: 14,
-                                    color: '#FFFFFF',
+                                    color: '#22D3EE',
                                     fontSize: 16,
-                                    borderWidth: 1,
-                                    borderColor: '#444',
+                                    borderWidth: 2,
+                                    borderColor: '#22D3EE',
+                                    fontFamily: 'monospace',
                                 }}
                                 value={nickname}
                                 onChangeText={setNickname}
-                                placeholder="Enter your nickname"
-                                placeholderTextColor="#888"
+                                placeholder="Type_custom_nickname"
+                                placeholderTextColor="#22D3EE"
                                 maxLength={20}
                                 autoFocus={true}
                                 selectTextOnFocus={true}
@@ -283,64 +186,145 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                                 onSubmitEditing={() => Keyboard.dismiss()}
                                 blurOnSubmit={true}
                             />
-                            {/* Character count */}
-                            <Text style={{ color: '#888', fontSize: 14,  marginTop: 8, textAlign: 'right' }}>
-                                {nickname.length}/20
-                            </Text>
                         </View>
-                    ) : null}
-                    {/* Preview */}
-                    {(useSns && snsNickname) || (!useSns && nickname.trim() && nickname.trim() !== currentNickname) ? (
-                        <TouchableOpacity
-                            onPress={handlePreviewPress}
-                            activeOpacity={0.8}
-                            style={{
-                                marginBottom: 24,
-                                backgroundColor: '#2A2A2A',
-                                borderRadius: 12,
-                                padding: 16,
-                                borderWidth: 1,
-                                borderColor: '#444',
-                                marginTop: 0,
-                            }}
-                        >
-                            <Text style={{ color: '#AAAAAA', fontSize: 14,  marginBottom: 8 }}>
-                                Preview (tap once to save, tap 3x to go to landing):
+
+                        {/* Guidelines */}
+                        <View style={{ marginBottom: 32 }}>
+                            <Text style={{ color: '#6b7280', fontSize: 14, marginBottom: 6 }}>
+                                • Letters, numbers and basic punctuation only
                             </Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '600', fontFamily: 'Lexend_400Regular' }}>
-                                        {(useSns && snsNickname ? snsNickname : nickname).charAt(0).toUpperCase()}
-                                    </Text>
-                                </View>
-                                <Text style={{ color: '#FFFFFF', fontSize: 16, fontFamily: 'Lexend_400Regular' }}>
-                                    {useSns && snsNickname ? snsNickname : nickname.trim()}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
-                    ) : null}
-                    {/* Guidelines */}
-                    <View style={{ marginTop: 10 }}>
-                        <Text style={{ color: '#AAAAAA', fontSize: 16, fontWeight: '600',  marginBottom: 12 }}>
-                            Guidelines:
-                        </Text>
-                        <View style={{ marginLeft: 10 }}>
-                            <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
-                                • 2-20 characters long
-                            </Text>
-                            <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
-                                • Letters, numbers, and basic punctuation only
-                            </Text>
-                            <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
+                            <Text style={{ color: '#6b7280', fontSize: 14, marginBottom: 6 }}>
                                 • Will be visible to other mesh users
                             </Text>
-                            <Text style={{ color: '#888', fontSize: 14, marginBottom: 6, fontFamily: 'Lexend_400Regular' }}>
+                            <Text style={{ color: '#6b7280', fontSize: 14, marginBottom: 6 }}>
                                 • Choose something memorable and appropriate
                             </Text>
                         </View>
+
+                        {/* SNS Domain Section */}
+                        <View style={{ marginBottom: 24 }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '500', marginBottom: 16 }}>
+                                SNS Domain
+                            </Text>
+                            
+                            {/* SNS Domain Items */}
+                            <View style={{ gap: 12 }}>
+                                {snsDomains.length > 0 ? (
+                                    snsDomains.map((domain, index) => (
+                                        <View
+                                            key={index}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                paddingVertical: 8,
+                                            }}
+                                        >
+                                            <Text style={{ color: '#FFFFFF', fontSize: 16 }}>
+                                                {domain}
+                                            </Text>
+                                            <Switch
+                                                value={useSns && snsNickname === domain}
+                                                onValueChange={(val) => {
+                                                    setUseSns(val);
+                                                    if (val) {
+                                                        setSnsNickname(domain);
+                                                    } else {
+                                                        setSnsNickname(null);
+                                                    }
+                                                }}
+                                                trackColor={{ false: '#374151', true: '#22D3EE' }}
+                                                thumbColor={useSns && snsNickname === domain ? '#FFFFFF' : '#9ca3af'}
+                                            />
+                                        </View>
+                                    ))
+                                ) : (
+                                    <Text style={{ color: '#6b7280', fontSize: 14, fontStyle: 'italic' }}>
+                                        No SNS domains found for this wallet.
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
+
+                        {/* Seeker Domain Address Section */}
+                        <View style={{ marginBottom: 24 }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '500', marginBottom: 16 }}>
+                                Seeker Domain Address
+                            </Text>
+                            
+                            <View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    paddingVertical: 8,
+                                }}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontSize: 16 }}>
+                                    popo.skr
+                                </Text>
+                                <Switch
+                                    value={false}
+                                    onValueChange={() => {}}
+                                    trackColor={{ false: '#374151', true: '#22D3EE' }}
+                                    thumbColor='#9ca3af'
+                                />
+                            </View>
+                        </View>
                     </View>
-                </View>
-            </SafeAreaView>
+
+                    {/* Bottom Navigation Bar */}
+                    <View
+                        style={{
+                            borderTopWidth: 1,
+                            borderTopColor: '#1a3333',
+                            paddingVertical: 20,
+                            alignItems: 'center',
+                        }}
+                    >
+                        <TouchableOpacity onPress={() => setShowMenu(true)}>
+                            <View
+                                style={{
+                                    width: 80,
+                                    height: 4,
+                                    backgroundColor: '#22D3EE',
+                                    borderRadius: 2,
+                                }}
+                            />
+                        </TouchableOpacity>
+                    </View>
+                </SafeAreaView>
+
+                {/* Main Menu Modal - Outside SafeAreaView */}
+                <MainMenuModal
+                    visible={showMenu}
+                    onClose={() => setShowMenu(false)}
+                    onNavigateToMessages={() => {
+                        setShowMenu(false);
+                        handleClose();
+                    }}
+                    onNavigateToWallet={() => {
+                        setShowMenu(false);
+                        handleClose();
+                    }}
+                    onNavigateToHistory={() => {
+                        setShowMenu(false);
+                        handleClose();
+                    }}
+                    onNavigateToMeshZone={() => {
+                        setShowMenu(false);
+                        handleClose();
+                    }}
+                    onNavigateToProfile={() => {
+                        setShowMenu(false);
+                        // Already on profile, just close menu
+                    }}
+                    onDisconnect={() => {
+                        setShowMenu(false);
+                        handleClose();
+                    }}
+                />
+            </LinearGradient>
         </Modal>
     );
 };
