@@ -1,4 +1,4 @@
-import SendScreen from '@/components/screens/wallet/SendScreen';
+import SendScreen from '@/components/screens/nostr/wallet/SendScreen';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 

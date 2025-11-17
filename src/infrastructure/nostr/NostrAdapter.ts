@@ -19,6 +19,7 @@ import * as SecureStore from 'expo-secure-store';
 import type { EventTemplate, Event as NostrToolsEvent } from 'nostr-tools/core';
 import * as nip04 from 'nostr-tools/nip04';
 import * as nip19 from 'nostr-tools/nip19';
+import * as nip44 from 'nostr-tools/nip44';
 import { SimplePool } from 'nostr-tools/pool';
 import {
   finalizeEvent,
@@ -287,37 +288,90 @@ export class NostrAdapter implements INostrAdapter {
     return this.publishEvent(event);
   }
 
+  /**
+   * Publish mesh message with NIP-104 group encryption or NIP-04 private encryption
+   * @param recipientPubkey If null, uses NIP-104 group chat. If provided, uses NIP-04 DM
+   * @param content Message content
+   * @param groupId Optional group identifier for NIP-104
+   */
   async publishMeshMessage(
-    recipientPubkey: string,
+    recipientPubkey: string | null,
     content: string,
-    tags: string[][] = []
+    tags: string[][] = [],
+    groupId: string = 'anon0mesh-public'
   ): Promise<NostrPublishResult[]> {
     if (!this.initialized || !this.privateKey) {
       throw new Error('NostrAdapter not initialized');
     }
 
-    console.log(`[Nostr] Publishing mesh message for ${recipientPubkey.slice(0, 8)}...`);
-
-    // Encrypt content (NIP-04)
-    const encryptedContent = await nip04.encrypt(this.privateKey, recipientPubkey, content);
-
     // Import event kind constant
     const { NOSTR_EVENT_KINDS } = await import('./INostrAdapter');
 
-    // Create mesh message event (kind 30000)
-    const event: Omit<NostrEvent, 'id' | 'sig'> = {
-      kind: NOSTR_EVENT_KINDS.MESH_MESSAGE,
-      pubkey: this.publicKey!,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [
+    let eventContent: string;
+    let eventTags: string[][];
+    let eventKind: number;
+
+    // If no recipient, use NIP-104 group chat encryption (NIP-44 based)
+    if (!recipientPubkey) {
+      console.log(`[Nostr] Publishing NIP-104 GROUP message (encrypted with NIP-44)`);
+      
+      // Use a shared group public key that everyone can derive the conversation key from
+      // For anon0mesh public mesh, we use a well-known group pubkey
+      // Everyone derives: conversationKey = nip44.getConversationKey(myPrivateKey, groupPubkey)
+      const groupPubkey = '0000000000000000000000000000000000000000000000000000000000000001';
+      const conversationKey = nip44.getConversationKey(this.privateKey, groupPubkey);
+      eventContent = nip44.encrypt(content, conversationKey);
+      
+      eventKind = NOSTR_EVENT_KINDS.MESH_MESSAGE; // Kind 30000
+      eventTags = [
+        ['t', 'anon0mesh'], // App tag
+        ['t', 'group'], // Group chat tag
+        ['g', groupId], // Group identifier
+        ...tags,
+      ];
+    } else {
+      console.log(`[Nostr] Publishing NIP-04 PRIVATE message for ${recipientPubkey.slice(0, 8)}...`);
+      
+      // Encrypt content (NIP-04) for specific recipient (1-to-1 DM)
+      eventContent = await nip04.encrypt(this.privateKey, recipientPubkey, content);
+      
+      eventKind = NOSTR_EVENT_KINDS.ENCRYPTED_DM; // Kind 4
+      eventTags = [
         ['p', recipientPubkey], // Recipient
         ['t', 'anon0mesh'], // App tag
         ...tags,
-      ],
-      content: encryptedContent,
+      ];
+    }
+
+    // Create message event
+    const event: Omit<NostrEvent, 'id' | 'sig'> = {
+      kind: eventKind,
+      pubkey: this.publicKey!,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: eventTags,
+      content: eventContent,
     };
 
-    return this.publishEvent(event);
+    console.log(`[Nostr] 📤 Publishing event:`, {
+      kind: eventKind,
+      pubkey: this.publicKey!.slice(0, 8),
+      tags: eventTags,
+      contentLength: eventContent.length,
+    });
+
+    const results = await this.publishEvent(event);
+    
+    console.log(`[Nostr] 📤 Publish results:`, results.map(r => ({
+      relayUrl: r.relayUrl,
+      success: r.success,
+      eventId: r.eventId?.slice(0, 8),
+      error: r.error,
+    })));
+
+    const successCount = results.filter(r => r.success).length;
+    console.log(`[Nostr] ✅ Successfully published to ${successCount}/${results.length} relays`);
+
+    return results;
   }
 
   async publishSolanaTransaction(
@@ -394,27 +448,47 @@ export class NostrAdapter implements INostrAdapter {
 
     console.log(`[Nostr] Clean Filters:`, JSON.stringify(cleanFilters));
 
-    // v2.x API: Use pool.subscribe (previously subscribeMany in older versions)
-    // According to nostr-tools v2 docs, the method is now just 'subscribe'
-    const sub = this.pool.subscribe(
-    relayUrls,
-    cleanFilters[0],   // ✅ pass object, not array
-    {
-      onevent: (event: NostrToolsEvent) => {
-        console.log(`[Nostr] Event received: ${event.id.slice(0, 8)}... (kind ${event.kind})`);
-        onEvent(event as NostrEvent);
+    // v2.x API: Use pool.subscribe with multiple filters
+    // Subscribe to each filter separately and combine the subscriptions
+    const subscriptions: any[] = [];
+    
+    cleanFilters.forEach((filter, index) => {
+      console.log(`[Nostr] 🔌 Subscribing with filter ${index + 1}/${cleanFilters.length}:`, JSON.stringify(filter));
+      console.log(`[Nostr] 🔌 Relay URLs for this filter:`, relayUrls);
+      
+      const sub = this.pool.subscribe(
+        relayUrls,
+        filter,
+        {
+          onevent: (event: NostrToolsEvent) => {
+            console.log(`[Nostr] 🎯 Event received from filter ${index + 1}: ${event.id.slice(0, 8)}... (kind ${event.kind}) from pubkey ${event.pubkey.slice(0, 8)}`);
+            console.log(`[Nostr] Event tags:`, event.tags);
+            console.log(`[Nostr] Event content length:`, event.content.length);
+            onEvent(event as NostrEvent);
+          },
+          oneose: () => {
+            console.log(`[Nostr] 📭 EOSE (End Of Stored Events) for filter ${index + 1} in ${subscriptionId}`);
+            // Only call onEOSE after all filters complete
+            if (index === cleanFilters.length - 1 && onEOSE) {
+              onEOSE();
+            }
+          },
+        }
+      );
+      
+      console.log(`[Nostr] ✅ Filter ${index + 1} subscription object created:`, typeof sub, sub ? 'EXISTS' : 'NULL');
+      subscriptions.push(sub);
+    });
+
+    // Store all subscriptions under one ID
+    this.subscriptions.set(subscriptionId, {
+      close: () => {
+        subscriptions.forEach(sub => sub.close());
       },
-      oneose: () => {
-        console.log(`[Nostr] End of stored events for ${subscriptionId}`);
-        if (onEOSE) onEOSE();
-      },
-    }
-  );
+      subscriptions,
+    });
 
-
-    this.subscriptions.set(subscriptionId, sub);
-
-    console.log(`[Nostr] ✅ Subscribed: ${subscriptionId}`);
+    console.log(`[Nostr] ✅ Subscribed with ${cleanFilters.length} filters: ${subscriptionId}`);
 
     return {
       id: subscriptionId,
@@ -456,28 +530,46 @@ export class NostrAdapter implements INostrAdapter {
       ? undefined 
       : Math.floor(Date.now() / 1000) - (sinceHoursAgo * 3600);
 
-    // Subscribe to mesh-specific event kinds only
+    // Subscribe to mesh-specific event kinds
+    // For public mesh chat, we want to see ALL messages with the anon0mesh tag
+    // and also direct messages addressed to us
     const filters: NostrFilter[] = [
+      // Public mesh messages (tagged with anon0mesh)
+      {
+        kinds: [NOSTR_EVENT_KINDS.MESH_MESSAGE],
+        '#t': ['anon0mesh'], // All messages tagged with anon0mesh
+        ...(sinceTimestamp && { since: sinceTimestamp }),
+      },
+      // Direct messages and transactions addressed to me
       {
         kinds: [
           NOSTR_EVENT_KINDS.ENCRYPTED_DM,
-          NOSTR_EVENT_KINDS.MESH_MESSAGE,
           NOSTR_EVENT_KINDS.SOLANA_TRANSACTION,
         ],
         '#p': [myPubkey], // Only events addressed to me
-        ...(sinceTimestamp && { since: sinceTimestamp }), // Only add 'since' if defined
+        ...(sinceTimestamp && { since: sinceTimestamp }),
       },
     ];
 
-    console.log(`[Nostr] Subscribing to anon0mesh events (last ${sinceHoursAgo === 0 ? 'all history' : `${sinceHoursAgo}h`})`);
+    console.log(`[Nostr] 🔔 Subscribing to anon0mesh events (last ${sinceHoursAgo === 0 ? 'all history' : `${sinceHoursAgo}h`})`);
+    console.log(`[Nostr] 📡 Filter 1: All mesh messages with #t=anon0mesh (kind ${NOSTR_EVENT_KINDS.MESH_MESSAGE})`);
+    console.log(`[Nostr] 📡 Filter 2: Direct messages to ${myPubkey.slice(0, 8)}... (kinds ${NOSTR_EVENT_KINDS.ENCRYPTED_DM}, ${NOSTR_EVENT_KINDS.SOLANA_TRANSACTION})`);
+    console.log(`[Nostr] 📡 Configured relays:`, this.getConnectedRelays());
+    console.log(`[Nostr] 🔌 Note: SimplePool will connect to relays when subscription is activated`);
     
-    return this.subscribe(filters, onEvent, onEOSE);
+    const subscription = await this.subscribe(filters, onEvent, onEOSE);
+    console.log(`[Nostr] ✅ Subscription created: ${subscription.id}`);
+    console.log(`[Nostr] 🎧 Now listening for events on ${this.getConnectedRelays().length} relays...`);
+    return subscription;
   }
 
   // ============================================
-  // ENCRYPTION/DECRYPTION (NIP-04)
+  // ENCRYPTION/DECRYPTION (NIP-04 & NIP-44)
   // ============================================
 
+  /**
+   * Encrypt content for a specific recipient using NIP-04 (1-to-1 DM)
+   */
   async encryptContent(recipientPubkey: string, plaintext: string): Promise<string> {
     if (!this.privateKey) {
       throw new Error('No private key available');
@@ -486,12 +578,80 @@ export class NostrAdapter implements INostrAdapter {
     return nip04.encrypt(this.privateKey, recipientPubkey, plaintext);
   }
 
+  /**
+   * Decrypt NIP-04 content from a specific sender (1-to-1 DM)
+   */
   async decryptContent(senderPubkey: string, ciphertext: string): Promise<string> {
     if (!this.privateKey) {
       throw new Error('No private key available');
     }
 
     return nip04.decrypt(this.privateKey, senderPubkey, ciphertext);
+  }
+
+  /**
+   * Encrypt content for group chat using NIP-44 (NIP-104)
+   * 
+   * For public group chat, we need ALL devices to derive the SAME conversation key.
+   * ECDH with individual private keys won't work because each device gets a different key.
+   * 
+   * Solution: Use a shared secret key for the group that everyone derives the same way.
+   * We'll use the hash of a known constant as the shared conversation key.
+   */
+  encryptGroupContent(plaintext: string, groupPubkey?: string): string {
+    if (!this.privateKey) {
+      throw new Error('No private key available');
+    }
+
+    console.log('[Nostr] 🔐 Using NEW shared key encryption method for group chat');
+    
+    // For anon0mesh public group, use a deterministic shared key
+    // All clients will derive the same 32-byte key from this constant
+    const groupIdentifier = 'anon0mesh-public-group-v1';
+    
+    // Create a 32-byte shared key from the group identifier
+    // Using SHA-256 to get a deterministic 32-byte key
+    const encoder = new TextEncoder();
+    const data = encoder.encode(groupIdentifier);
+    
+    // Simple hash function to create 32 bytes (for now, just repeat and truncate)
+    // In production, use proper crypto hash
+    const conversationKey = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      conversationKey[i] = data[i % data.length] ^ (i * 7); // Simple mixing
+    }
+
+    console.log('[Nostr] Group encryption - key fingerprint:', 
+      Array.from(conversationKey.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(''));
+    
+    return nip44.encrypt(plaintext, conversationKey);
+  }
+
+  /**
+   * Decrypt NIP-44 group content (NIP-104)
+   */
+  decryptGroupContent(ciphertext: string, groupPubkey?: string): string {
+    if (!this.privateKey) {
+      throw new Error('No private key available');
+    }
+
+    console.log('[Nostr] 🔓 Using NEW shared key decryption method for group chat');
+    
+    // Use the same deterministic shared key for decryption
+    const groupIdentifier = 'anon0mesh-public-group-v1';
+    
+    const encoder = new TextEncoder();
+    const data = encoder.encode(groupIdentifier);
+    
+    const conversationKey = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      conversationKey[i] = data[i % data.length] ^ (i * 7);
+    }
+
+    console.log('[Nostr] Group decryption - key fingerprint:', 
+      Array.from(conversationKey.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(''));
+    
+    return nip44.decrypt(ciphertext, conversationKey);
   }
 
   // ============================================
@@ -527,6 +687,10 @@ export class NostrAdapter implements INostrAdapter {
   // ============================================
   // STATUS
   // ============================================
+
+  isInitialized(): boolean {
+    return this.initialized;
+  }
 
   isConnected(): boolean {
     return this.initialized && this.getConnectedRelays().length > 0;

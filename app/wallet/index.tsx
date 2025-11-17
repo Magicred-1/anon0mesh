@@ -1,4 +1,4 @@
-import WalletScreen from '@/components/screens/wallet/WalletScreen';
+import WalletScreen from '@/components/screens/nostr/wallet/WalletScreen';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 

@@ -4,8 +4,10 @@ import ChatInput from '@/components/chat/ChatInput';
 import ChatMessages, { Message } from '@/components/chat/ChatMessages';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import EditNicknameModal from '@/components/modals/EditNicknameModal';
+import { useNostrChat } from '@/src/hooks/useNostrChat';
 import { WalletFactory } from '@/src/infrastructure/wallet';
 import '@/src/polyfills';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useRef, useState } from 'react';
@@ -31,7 +33,6 @@ export default function ChatScreen() {
   const [nickname, setNickname] = useState<string>('');
   const [pubKey, setPubKey] = useState<string>('');
   const [editNickVisible, setEditNickVisible] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [peers, setPeers] = useState<Peer[]>([]);
   const [selectedPeer, setSelectedPeer] = useState<string | null>(null);
@@ -40,6 +41,38 @@ export default function ChatScreen() {
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
+
+  // Nostr integration
+  const {
+    messages: nostrMessages,
+    sendMessage: sendNostrMessage,
+    clearMessages: clearNostrMessages,
+    isConnected: nostrConnected,
+    relayCount,
+  } = useNostrChat(nickname, {
+    autoConnect: true,
+    lookbackHours: 24,
+  });
+
+  // Local BLE messages state (for BLE-only messages)
+  const [bleMessages, setBleMessages] = useState<Message[]>([]);
+
+  // Combine Nostr and BLE messages
+  const allMessages = React.useMemo(() => {
+    console.log('[ChatScreen] Computing allMessages - Nostr:', nostrMessages.length, 'BLE:', bleMessages.length);
+    
+    // Mark Nostr messages
+    const markedNostrMessages = nostrMessages.map(msg => ({
+      ...msg,
+      isNostr: true,
+      isEncrypted: true,
+    }));
+    
+    // Combine and sort by timestamp
+    const combined = [...markedNostrMessages, ...bleMessages].sort((a, b) => a.ts - b.ts);
+    console.log('[ChatScreen] Total messages:', combined.length);
+    return combined;
+  }, [nostrMessages, bleMessages]);
 
   // Initialize wallet and user data
   useEffect(() => {
@@ -65,24 +98,24 @@ export default function ChatScreen() {
           setShowPermissionRequest(true);
         }, 1000);
 
-        // Mock messages for demo
-        setMessages([
+        // Mock BLE messages for demo (will be replaced with real BLE integration)
+        setBleMessages([
           {
-            id: '1',
+            id: 'ble-1',
             from: 'Alice',
             msg: 'Hey there! Welcome to the mesh chat 👋',
             ts: Date.now() - 120000,
             isMine: false,
           },
           {
-            id: '2',
+            id: 'ble-2',
             from: 'Bob',
             msg: 'This is a mock conversation to showcase the UI.',
             ts: Date.now() - 90000,
             isMine: false,
           },
           {
-            id: '3',
+            id: 'ble-3',
             from: storedNickname || 'Anonymous',
             msg: "Hey, I'm testing offline mesh chat! 🚀",
             ts: Date.now() - 60000,
@@ -112,36 +145,49 @@ export default function ChatScreen() {
   }, [peers]);
 
   // Send message
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputText.trim()) return;
 
-    const newMessage: Message = {
-      id: `${Date.now()}_${Math.random()}`,
-      from: nickname,
-      to: selectedPeer || undefined,
-      msg: inputText.trim(),
-      ts: Date.now(),
-      isMine: true,
-    };
-
-    setMessages((prev) => [...prev, newMessage]);
-    console.log('[Chat] Sending message:', inputText.trim(), 'to:', selectedPeer || 'public');
-    
+    const messageContent = inputText.trim();
     setInputText('');
     Keyboard.dismiss();
 
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    try {
+      // Send via Nostr if connected
+      if (nostrConnected) {
+        console.log('[Chat] Sending via Nostr:', messageContent);
+        await sendNostrMessage(messageContent, selectedPeer || undefined);
+      } else {
+        // Fallback to BLE-only message
+        console.log('[Chat] Sending via BLE only:', messageContent);
+        const newMessage: Message = {
+          id: `ble-${Date.now()}_${Math.random()}`,
+          from: nickname,
+          to: selectedPeer || undefined,
+          msg: messageContent,
+          ts: Date.now(),
+          isMine: true,
+        };
+        setBleMessages((prev: Message[]) => [...prev, newMessage]);
+      }
+
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (error) {
+      console.error('[Chat] Send error:', error);
+      Alert.alert('Error', 'Failed to send message');
+    }
   };
 
   // Clear received messages (placeholder for cache clear)
   const handleClearReceivedMessages = () => {
-    // Immediately clear received messages (keep only messages sent by the user)
-    setMessages((prev) => prev.filter((m) => m.isMine));
-    console.log('[Chat] Cleared received messages (placeholder, no confirmation)');
-    // TODO: also clear persisted cache/storage when implemented
-    // After clearing, return to landing page
+    // Clear both Nostr and BLE messages
+    clearNostrMessages();
+    setBleMessages((prev: Message[]) => prev.filter((m: Message) => m.isMine));
+    console.log('[Chat] Cleared all received messages');
+    
+    // Navigate to landing page
     try {
       router.replace('/landing' as any);
     } catch (e) {
@@ -152,9 +198,9 @@ export default function ChatScreen() {
   // Handle triple tap on username - clear all messages and go to landing
   const handleTripleTap = () => {
     console.log('[Chat] Triple tap detected - clearing all messages and navigating to landing');
-    // Clear ALL messages (both sent and received)
-    setMessages([]);
-    // TODO: Clear persisted cache/storage when implemented
+    // Clear ALL messages (both Nostr and BLE)
+    clearNostrMessages();
+    setBleMessages([]);
     // Navigate to landing
     try {
       router.replace('/landing' as any);
@@ -165,51 +211,62 @@ export default function ChatScreen() {
 
   // Filter messages based on selected peer
   const filteredMessages = selectedPeer
-    ? messages.filter(
-        (m) =>
+    ? allMessages.filter(
+        (m: Message) =>
           (m.from === selectedPeer && m.to === nickname) ||
           (m.from === nickname && m.to === selectedPeer)
       )
-    : messages.filter((m) => !m.to);
+    : allMessages.filter((m: Message) => !m.to);
 
   const onlinePeers = peers.filter((p) => p.online);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
-        keyboardVerticalOffset={0}
-      >
-        <ChatHeader
-          nickname={selectedPeer || nickname}
-          selectedPeer={selectedPeer}
-          onlinePeersCount={onlinePeers.length}
-          bleConnected={bleConnected}
-          onMenuPress={() => setShowSidebar(!showSidebar)}
-          onWalletPress={() => router.push('/wallet/' as any)}
-          onProfilePress={() => Alert.alert('Profile', 'Profile feature coming soon')}
-          onEditNickname={() => setEditNickVisible(true)}
-          onClearCache={handleClearReceivedMessages}
-          onBackPress={() => router.back()}
-          onNavigateToSelection={() => router.push('/chat/selection' as any)}
-          onTripleTap={handleTripleTap}
-        />
+  <LinearGradient
+      colors={['#0D0D0D', '#06181B', '#072B31']}
+      locations={[0, 0.94, 1]}
+      start={{ x: 0.2125, y: 0 }}
+      end={{ x: 0.7875, y: 1 }}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <View style={styles.container}>
+            <ChatHeader
+              nickname={selectedPeer || nickname}
+              selectedPeer={selectedPeer}
+              onlinePeersCount={onlinePeers.length}
+              bleConnected={bleConnected}
+              onMenuPress={() => setShowSidebar(!showSidebar)}
+              onWalletPress={() => router.push('/wallet/' as any)}
+              onProfilePress={() => Alert.alert('Profile', 'Profile feature coming soon')}
+              onEditNickname={() => setEditNickVisible(true)}
+              onClearCache={handleClearReceivedMessages}
+              onBackPress={() => router.back()}
+              onNavigateToSelection={() => router.push('/chat/selection' as any)}
+              onTripleTap={handleTripleTap}
+            />
 
-        <View style={styles.messagesContainer}>
-          <ChatMessages
-            messages={filteredMessages}
-            currentUser={nickname}
-            scrollViewRef={scrollViewRef}
-          />
-        </View>
+            <View style={styles.messagesContainer}>
+              <ChatMessages
+                messages={filteredMessages}
+                currentUser={nickname}
+                scrollViewRef={scrollViewRef}
+                nostrConnected={nostrConnected}
+                relayCount={relayCount}
+              />
+            </View>
 
-        <ChatInput
-          value={inputText}
-          onChangeText={setInputText}
-          onSend={handleSend}
-          placeholder={selectedPeer ? `Message ${selectedPeer}` : 'Type message...'}
-        />
+            <ChatInput
+              value={inputText}
+              onChangeText={setInputText}
+              onSend={handleSend}
+              placeholder={selectedPeer ? `Message ${selectedPeer}` : 'Type message...'}
+            />
+          </View>
 
         <ChatSidebar
           visible={showSidebar}
@@ -234,34 +291,45 @@ export default function ChatScreen() {
           pubKey={pubKey}
         />
 
-        {/* Bluetooth Permission Request */}
-        {showPermissionRequest && !permissionsGranted && (
-          <View style={StyleSheet.absoluteFill}>
-            <BluetoothPermissionRequest
-              onPermissionsGranted={() => {
-                setPermissionsGranted(true);
-                setShowPermissionRequest(false);
-                console.log('[Chat] Bluetooth permissions granted');
-              }}
-              onPermissionsDenied={() => {
-                setShowPermissionRequest(false);
-                console.log('[Chat] Bluetooth permissions denied');
-              }}
-              autoRequest={true}
-            />
-          </View>
-        )}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          {/* Bluetooth Permission Request */}
+          {showPermissionRequest && !permissionsGranted && (
+            <View style={StyleSheet.absoluteFill}>
+              <BluetoothPermissionRequest
+                onPermissionsGranted={() => {
+                  setPermissionsGranted(true);
+                  setShowPermissionRequest(false);
+                  console.log('[Chat] Bluetooth permissions granted');
+                }}
+                onPermissionsDenied={() => {
+                  setShowPermissionRequest(false);
+                  console.log('[Chat] Bluetooth permissions denied');
+                }}
+                autoRequest={true}
+              />
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
   },
   messagesContainer: {
     flex: 1,
+    paddingBottom: 80, // Space for input
   },
 });

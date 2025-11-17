@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AnonmeshIcon from '../icons/anon0meshIcon';
 import HashtagIcon from '../icons/HashtagIcon';
 import WalletIcon from '../icons/WalletIcon';
 import ZoneSelectorModal from '../modals/ZoneSelectorModal';
@@ -90,6 +91,7 @@ export default function ChatHeader({
         <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity> */}
+        <AnonmeshIcon size={24} />
         <View style={styles.titleTouch}>
           <Text style={styles.headerTitle}>{selectedPeer || nickname}</Text>
         </View>
@@ -97,6 +99,11 @@ export default function ChatHeader({
       
       {/* Right side icons */}
       <View style={styles.headerRight}>
+        {/* Connection Status Dot */}
+        {bleConnected && (
+          <View style={styles.statusDot} />
+        )}
+
         {/* Wallet Icon */}
         <TouchableOpacity style={styles.iconButton} onPress={onWalletPress}>
           <View style={styles.walletIcon}>
@@ -133,9 +140,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: '#00CED1',
+    borderBottomColor: '#22D3EE',
   },
   headerLeft: {
     flex: 1,
@@ -160,6 +167,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00CED1',
+    shadowColor: '#00CED1',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 4,
   },
   titleTouch: {
     paddingVertical: 4,

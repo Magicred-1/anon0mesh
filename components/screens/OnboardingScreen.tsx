@@ -10,10 +10,11 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
+    Image,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 
 interface Props {
@@ -362,7 +363,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
                 {/* Logo Section */}
                 <View style={styles.logoContainer}>
                     <Text style={styles.logoText}>
-                        ANON<Text style={styles.logoAccent}>⬡</Text>MESH
+                        <Image
+                            src={require('../../assets/images/anon0mesh_logo.png')}
+                            style={{ width: 422, height: 100, resizeMode: 'contain' }}
+                        />
                     </Text>
                     
                     <Text style={styles.tagline}>

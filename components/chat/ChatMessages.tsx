@@ -8,18 +8,24 @@ export interface Message {
   msg: string;
   ts: number;
   isMine: boolean;
+  isNostr?: boolean; // Flag for Nostr messages
+  isEncrypted?: boolean; // Flag for encrypted messages
 }
 
 interface ChatMessagesProps {
   messages: Message[];
   currentUser: string;
   scrollViewRef: React.RefObject<ScrollView | null>;
+  nostrConnected?: boolean; // Show Nostr connection status
+  relayCount?: number; // Number of connected relays
 }
 
 export default function ChatMessages({
   messages,
   currentUser,
   scrollViewRef,
+  nostrConnected = false,
+  relayCount = 0,
 }: ChatMessagesProps) {
   return (
     <ScrollView
@@ -33,53 +39,48 @@ export default function ChatMessages({
           <Text style={styles.emptyIcon}>💬</Text>
           <Text style={styles.emptyText}>No messages yet</Text>
           <Text style={styles.emptySubtext}>
-            Messages are sent via BLE mesh network
+            {nostrConnected 
+              ? 'Messages via Nostr + BLE mesh network'
+              : 'Messages via BLE mesh network'
+            }
           </Text>
         </View>
       )}
 
-      {messages.map((message) => (
-        <View
-          key={message.id}
-          style={[
-            styles.messageWrapper,
-            message.isMine ? styles.myMessageWrapper : styles.theirMessageWrapper,
-          ]}
-        >
-          {/* Sender name and timestamp for others' messages */}
-          {!message.isMine && (
-            <View style={styles.senderRow}>
-              <Text style={styles.senderName}>{message.from}:</Text>
-              <Text style={styles.senderTimestamp}>
-                {new Date(message.ts).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
-            </View>
-          )}
-          
-          {/* Message bubble */}
+      {messages.map((message) => {
+        const timestamp = new Date(message.ts).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        return (
           <View
+            key={message.id}
             style={[
-              styles.messageBubble,
-              message.isMine ? styles.myMessage : styles.theirMessage,
+              styles.messageRow,
+              message.isMine ? styles.myMessageRow : styles.theirMessageRow,
             ]}
           >
-            <Text style={[styles.messageText, message.isMine && styles.myMessageText]}>
-              {message.msg}
-            </Text>
+            {/* Left-aligned messages (others) */}
+            {!message.isMine && (
+              <>
+                <Text style={styles.senderName}>{message.from}:</Text>
+                <Text style={styles.messageText}>{message.msg}</Text>
+                <Text style={styles.timestamp}>{timestamp}</Text>
+              </>
+            )}
+
+            {/* Right-aligned messages (mine) */}
             {message.isMine && (
-              <Text style={[styles.timestamp, styles.myMessageTimestamp]}>
-                {new Date(message.ts).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
+              <>
+                <Text style={styles.currentUserName}>{message.from}:</Text>
+                <Text style={[styles.messageText, styles.myMessageText]}>{message.msg}</Text>
+                <Text style={styles.timestamp}>{timestamp}</Text>
+              </>
             )}
           </View>
-        </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }
@@ -87,7 +88,7 @@ export default function ChatMessages({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: 'transparent',
   },
   content: {
     padding: 16,
@@ -114,60 +115,43 @@ const styles = StyleSheet.create({
     color: '#444',
     textAlign: 'center',
   },
-  messageWrapper: {
-    marginBottom: 12,
-    maxWidth: '80%',
-  },
-  myMessageWrapper: {
-    alignSelf: 'flex-end',
-  },
-  theirMessageWrapper: {
-    alignSelf: 'flex-start',
-  },
-  senderRow: {
+  messageRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    gap: 8,
+    alignItems: 'baseline',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  myMessageRow: {
+    // Right-aligned messages (mine)
+  },
+  theirMessageRow: {
+    // Left-aligned messages (others)
   },
   senderName: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#fff',
+    color: '#888',
+    marginRight: 8,
   },
-  senderTimestamp: {
-    fontSize: 12,
-    color: '#666',
-  },
-  messageBubble: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  myMessage: {
-    backgroundColor: '#00CED1',
-    borderBottomRightRadius: 4,
-  },
-  theirMessage: {
-    backgroundColor: '#111',
-    borderBottomLeftRadius: 4,
+  currentUserName: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#00CED1',
+    marginRight: 8,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#fff',
-    lineHeight: 22,
+    lineHeight: 20,
+    flex: 1,
+    marginRight: 8,
   },
   myMessageText: {
-    color: '#000',
+    color: '#fff',
   },
   timestamp: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  myMessageTimestamp: {
-    color: '#000',
-    opacity: 0.6,
+    fontSize: 12,
+    color: '#555',
+    marginLeft: 'auto',
   },
 });

@@ -75,6 +75,7 @@ export interface NostrFilter {
   limit?: number; // Max results
   '#e'?: string[]; // Event references
   '#p'?: string[]; // Pubkey references (mentions)
+  '#t'?: string[]; // Hashtag/topic references
 }
 
 /**
@@ -235,6 +236,11 @@ export interface INostrAdapter {
   // ============================================
   // STATUS
   // ============================================
+
+  /**
+   * Check if adapter is initialized
+   */
+  isInitialized(): boolean;
 
   /**
    * Check if adapter has active relay connections

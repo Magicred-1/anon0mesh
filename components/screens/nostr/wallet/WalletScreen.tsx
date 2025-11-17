@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Clipboard,
   ScrollView,
@@ -20,23 +21,19 @@ import USDCIcon from '@/components/icons/USDCIcon';
 import ZECIcon from '@/components/icons/ZECIcon';
 import SettingsIcon from '@/components/icons/wallet/Settings';
 import SwapIcon from '@/components/icons/wallet/SwapIcon';
+import { useWalletBalances } from '@/hooks/useWalletBalances';
 import QRCode from 'react-native-qrcode-svg';
-import BottomNavWithMenu from '../../ui/BottomNavWithMenu';
-
-// Mock balance data
-const MOCK_BALANCES = [
-  { symbol: 'SOL', name: 'Solana', balance: 3.46532 },
-  { symbol: 'USDC', name: 'USD Coin', balance: 3.46532 },
-  { symbol: 'ZEC', name: 'Zcash', balance: 3.46532 },
-];
+import BottomNavWithMenu from '../../../ui/BottomNavWithMenu';
 
 export default function WalletScreen() {
   const router = useRouter();
   const [publicKey, setPublicKey] = useState<string>('');
-  const [balances] = useState(MOCK_BALANCES);
+  const { balances, isRefreshing, fetchBalances } = useWalletBalances();
 
-  // Initialize wallet
+  // Initialize wallet and fetch balances
   useEffect(() => {
+    let mounted = true;
+    
     (async () => {
       try {
         const hasWallet = await WalletFactory.hasLocalWallet();
@@ -49,18 +46,24 @@ export default function WalletScreen() {
         const walletAdapter = await WalletFactory.createAuto();
         const pubKey = await walletAdapter.getPublicKey();
         
-        if (pubKey) {
+        if (pubKey && mounted) {
           const pubKeyString = pubKey.toBase58();
           setPublicKey(pubKeyString);
           console.log('[Wallet] Initialized:', pubKeyString.slice(0, 8) + '...');
-        }
 
-        // TODO: Fetch actual balance from blockchain
+          // Fetch real balances from Devnet
+          await fetchBalances(pubKey);
+        }
       } catch (error) {
         console.error('[Wallet] Error initializing:', error);
         Alert.alert('Error', 'Failed to initialize wallet');
       }
     })();
+
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const handleCopyAddress = () => {
@@ -157,7 +160,10 @@ export default function WalletScreen() {
 
           {/* Balances Section */}
           <View style={styles.balancesSection}>
-            <Text style={styles.balancesTitle}>Balances</Text>
+            <View style={styles.balancesTitleRow}>
+              <Text style={styles.balancesTitle}>Balances</Text>
+              {isRefreshing && <ActivityIndicator size="small" color="#22D3EE" />}
+            </View>
             {balances.map((item, index) => (
               <View key={index} style={styles.balanceItem}>
                 <View style={styles.balanceLeft}>
@@ -166,9 +172,18 @@ export default function WalletScreen() {
                     {item.symbol === 'USDC' && <USDCIcon size={40} />}
                     {item.symbol === 'ZEC' && <ZECIcon size={40} />}
                   </View>
-                  <Text style={styles.balanceSymbol}>{item.symbol}</Text>
+                  <View>
+                    <Text style={styles.balanceSymbol}>{item.symbol}</Text>
+                    <Text style={styles.balanceName}>{item.name}</Text>
+                  </View>
                 </View>
-                <Text style={styles.balanceAmount}>{item.balance}</Text>
+                {item.isLoading ? (
+                  <ActivityIndicator size="small" color="#22D3EE" />
+                ) : (
+                  <Text style={styles.balanceAmount}>
+                    {item.balance.toFixed(item.symbol === 'SOL' ? 4 : 2)}
+                  </Text>
+                )}
               </View>
             ))}
           </View>
@@ -347,11 +362,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 20,
   },
+  balancesTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   balancesTitle: {
     fontSize: 18,
     color: '#FFFFFF',
     fontWeight: '600',
-    marginBottom: 16,
   },
   balanceItem: {
     flexDirection: 'row',
@@ -379,6 +399,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  balanceName: {
+    fontSize: 14,
+    color: '#8a9999',
+    marginTop: 2,
   },
   balanceAmount: {
     fontSize: 18,

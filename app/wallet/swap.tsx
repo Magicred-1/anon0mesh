@@ -1,4 +1,4 @@
-import SwapScreen from '@/components/screens/wallet/SwapScreen';
+import SwapScreen from '@/components/screens/nostr/wallet/SwapScreen';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 

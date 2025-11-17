@@ -34,10 +34,11 @@ export class NostrChatRepository implements INostrChatRepository {
     console.log('[NostrChatRepository] Initialized');
   }
 
-  async sendMessage(recipientPubkey: string, content: string): Promise<NostrChatMessage> {
+  async sendMessage(recipientPubkey: string | null, content: string): Promise<NostrChatMessage> {
     this.ensureInitialized();
 
     // Publish via Nostr adapter
+    // If recipientPubkey is null, it will broadcast unencrypted
     await this.nostrAdapter!.publishMeshMessage(recipientPubkey, content);
 
     // Create message entity for local display
@@ -59,23 +60,69 @@ export class NostrChatRepository implements INostrChatRepository {
     const subscription = await this.nostrAdapter!.subscribeMeshEvents(
       async (event) => {
         try {
-          // Decrypt content
-          const decrypted = await this.nostrAdapter!.decryptContent(
-            event.pubkey,
-            event.content
-          );
+          let content: string;
+
+          // Check message type by tags
+          const isGroupMessage = event.tags.some(tag => tag[0] === 't' && tag[1] === 'group');
+          const isPrivateMessage = event.tags.some(tag => tag[0] === 'p');
+
+          if (isGroupMessage) {
+            // NIP-104 Group message - decrypt with NIP-44
+            console.log('[NostrChatRepository] Received NIP-104 GROUP message:', event.id.slice(0, 8));
+            try {
+              content = this.nostrAdapter!.decryptGroupContent(event.content);
+              console.log('[NostrChatRepository] ✅ Decrypted group message successfully');
+            } catch {
+              console.log('[NostrChatRepository] ⚠️ Failed to decrypt group message:', event.id.slice(0, 8));
+              console.log('[NostrChatRepository] This is likely an old message encrypted with a different method');
+              console.log('[NostrChatRepository] Skipping message...');
+              return; // Skip messages we can't decrypt (old encryption format)
+            }
+          } else if (isPrivateMessage) {
+            // NIP-04 Private message - decrypt with NIP-04
+            console.log('[NostrChatRepository] Received NIP-04 PRIVATE message:', event.id.slice(0, 8));
+            try {
+              content = await this.nostrAdapter!.decryptContent(
+                event.pubkey,
+                event.content
+              );
+              console.log('[NostrChatRepository] Decrypted private message successfully');
+            } catch (decryptError) {
+              // Check if it's a decryption error (message not intended for us)
+              if (decryptError instanceof Error && 
+                  (decryptError.message.includes('wrong padding') || 
+                   decryptError.message.includes('decrypt'))) {
+                console.log('[NostrChatRepository] Skipping private message not for us:', event.id.slice(0, 8));
+                return; // Silently skip messages we can't decrypt
+              }
+              throw decryptError; // Re-throw other errors
+            }
+          } else {
+            // Fallback: treat as plain text
+            console.log('[NostrChatRepository] Received PLAIN message:', event.id.slice(0, 8));
+            content = event.content;
+          }
 
           // Convert to domain entity
           const message = NostrChatMessage.fromNostrEvent(
             event.id,
             event.pubkey,
-            decrypted,
+            content,
             event.created_at,
             this.getMyPubkey()
           );
 
+          console.log('[NostrChatRepository] Created message entity:', {
+            id: message.id,
+            content: message.content.slice(0, 30),
+            isOwn: message.isOwn,
+            timestamp: message.timestamp,
+          });
+
           // Forward to callback
+          console.log('[NostrChatRepository] Calling onMessage callback...');
           onMessage(message);
+          console.log('[NostrChatRepository] onMessage callback completed');
         } catch (error) {
           console.error('[NostrChatRepository] Failed to handle message:', error);
         }
@@ -105,7 +152,7 @@ export class NostrChatRepository implements INostrChatRepository {
   }
 
   isInitialized(): boolean {
-    return this.initialized && this.nostrAdapter !== null;
+    return this.initialized && this.nostrAdapter !== null && this.nostrAdapter.isInitialized();
   }
 
   getConnectedRelayCount(): number {
@@ -127,7 +174,7 @@ export class NostrChatRepository implements INostrChatRepository {
   }
 
   private ensureInitialized(): void {
-    if (!this.initialized || !this.nostrAdapter) {
+    if (!this.isInitialized()) {
       throw new Error('NostrChatRepository not initialized. Call initialize() first.');
     }
   }

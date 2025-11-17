@@ -4,14 +4,17 @@ import SettingsIcon from '@/components/icons/wallet/Settings';
 import ZECIcon from '@/components/icons/ZECIcon';
 import QRScannerModal from '@/components/modals/QRScannerModal';
 import SendConfirmationModal from '@/components/modals/SendConfirmationModal';
+import { useWalletBalances } from '@/hooks/useWalletBalances';
 import { WalletFactory } from '@/src/infrastructure/wallet';
 import type { ConnectivityStatus } from '@/src/infrastructure/wallet/utils/connectivity';
 import * as ConnectivityUtils from '@/src/infrastructure/wallet/utils/connectivity';
 import '@/src/polyfills';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -26,26 +29,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type TokenType = 'SOL' | 'USDC' | 'ZEC';
 
-const TOKEN_BALANCES: Record<TokenType, number> = {
-  SOL: 2.8998,
-  USDC: 3.46532,
-  ZEC: 3.46532,
-};
+const DEVNET_RPC = 'https://api.devnet.solana.com';
+const USDC_DEVNET_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 
 export default function SendScreen() {
   const router = useRouter();
-  const [publicKey, setPublicKey] = useState<string>('');
+  const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
   const [amount, setAmount] = useState('0.00');
   const [token, setToken] = useState<TokenType>('SOL');
   const [recipient, setRecipient] = useState('');
   const [showTokenDropdown, setShowTokenDropdown] = useState(false);
-  const [selectedFrom, setSelectedFrom] = useState<'primary' | 'disposable1' | 'disposable2'>('primary');
+  const [_selectedFrom, setSelectedFrom] = useState<'primary' | 'disposable1' | 'disposable2'>('primary');
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [connectivity, setConnectivity] = useState<ConnectivityStatus | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  const balance = TOKEN_BALANCES[token];
+  // Use wallet balances hook
+  const { balances, isRefreshing, fetchBalances } = useWalletBalances();
+  
+  // Get balance for selected token
+  const balance = balances.find(b => b.symbol === token)?.balance ?? 0;
 
   // Check connectivity
   useEffect(() => {
@@ -62,7 +67,7 @@ export default function SendScreen() {
     };
   }, []);
 
-  // Initialize wallet
+  // Initialize wallet and fetch balances
   useEffect(() => {
     (async () => {
       try {
@@ -77,18 +82,18 @@ export default function SendScreen() {
         const pubKey = walletAdapter.getPublicKey();
         
         if (pubKey) {
-          const pubKeyString = pubKey.toBase58();
-          setPublicKey(pubKeyString);
-          console.log('[Send] Wallet loaded:', pubKeyString.slice(0, 8) + '...');
+          setPublicKey(pubKey);
+          console.log('[Send] Wallet loaded:', pubKey.toBase58().slice(0, 8) + '...');
+          
+          // Fetch real balances from blockchain
+          await fetchBalances(pubKey);
         }
-
-        // TODO: Fetch actual balance from blockchain
       } catch (error) {
         console.error('[Send] Error initializing:', error);
         Alert.alert('Error', 'Failed to initialize wallet');
       }
     })();
-  }, [router]);
+  }, [router, fetchBalances]);
 
   const handleCreateNewAddress = () => {
     router.push('/wallet/settings');
@@ -114,7 +119,9 @@ export default function SendScreen() {
   };
 
   const handleMaxAmount = () => {
-    setAmount(balance.toString());
+    // Leave a small amount for transaction fees
+    const maxAmount = Math.max(0, balance - 0.001);
+    setAmount(maxAmount.toFixed(token === 'SOL' ? 4 : 2));
   };
 
   const handleBack = () => {
@@ -136,6 +143,27 @@ export default function SendScreen() {
       return;
     }
 
+    if (!publicKey) {
+      Alert.alert('Error', 'Wallet not initialized');
+      return;
+    }
+
+    // Validate recipient address
+    let recipientPubKey: PublicKey;
+    try {
+      recipientPubKey = new PublicKey(recipient);
+    } catch (error) {
+      Alert.alert('Error', 'Invalid recipient address');
+      return;
+    }
+
+    // Check if sufficient balance
+    const amountNum = parseFloat(amount);
+    if (amountNum > balance) {
+      Alert.alert('Insufficient Balance', `You only have ${balance} ${token} available`);
+      return;
+    }
+
     // Check connectivity before sending
     const sendCheck = await ConnectivityUtils.canSendTransaction();
     
@@ -148,19 +176,228 @@ export default function SendScreen() {
       return;
     }
 
-    // Process transaction and show confirmation modal
-    // TODO: Implement actual transaction logic
     const useOfflineMode = sendCheck.useOfflineMode || !connectivity?.isInternetConnected;
     
-    console.log('[Send] Transaction:', {
-      amount,
-      token,
-      recipient,
-      useOfflineMode
-    });
-    
-    // Show confirmation modal for both internet and Bluetooth transactions
-    setShowConfirmation(true);
+    // Only SOL and USDC transfers supported (ZEC coming soon)
+    if (token === 'ZEC') {
+      Alert.alert('Coming Soon', `${token} transfers will be available soon. Currently only SOL and USDC transfers are supported.`);
+      return;
+    }
+
+    setIsSending(true);
+
+    try {
+      if (useOfflineMode) {
+        // TODO: Implement offline/mesh transaction
+        Alert.alert(
+          'Offline Transaction',
+          'Transaction will be sent via Bluetooth mesh network when connection is restored.',
+          [
+            {
+              text: 'OK',
+              onPress: () => setShowConfirmation(true),
+            },
+          ]
+        );
+      } else {
+        // Online transaction
+        console.log('[Send] Sending online transaction...');
+        console.log('[Send] Token:', token);
+        console.log('[Send] From:', publicKey.toBase58());
+        console.log('[Send] To:', recipientPubKey.toBase58());
+        console.log('[Send] Amount:', amountNum, token);
+
+        // Get wallet adapter
+        const walletAdapter = await WalletFactory.createAuto();
+        
+        if (!walletAdapter.isConnected()) {
+          throw new Error('Wallet not connected');
+        }
+
+        // Create connection
+        const connection = new Connection(DEVNET_RPC, 'confirmed');
+
+        // Build transaction using wallet adapter
+        const { Transaction, SystemProgram, LAMPORTS_PER_SOL, TransactionInstruction } = await import('@solana/web3.js');
+        
+        const transaction = new Transaction();
+        
+        if (token === 'SOL') {
+          // SOL transfer
+          console.log('[Send] Building SOL transfer...');
+          transaction.add(
+            SystemProgram.transfer({
+              fromPubkey: publicKey,
+              toPubkey: recipientPubKey,
+              lamports: amountNum * LAMPORTS_PER_SOL,
+            })
+          );
+        } else if (token === 'USDC') {
+          // USDC (SPL Token) transfer - Manual implementation for React Native compatibility
+          console.log('[Send] Building USDC transfer...');
+
+          const mintPubKey = new PublicKey(USDC_DEVNET_MINT);
+          
+          // Token Program IDs
+          const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+          const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+          
+          // Manually derive associated token addresses
+          const getAssociatedTokenAddressSync = (mint: PublicKey, owner: PublicKey): PublicKey => {
+            const [address] = PublicKey.findProgramAddressSync(
+              [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+              ASSOCIATED_TOKEN_PROGRAM_ID
+            );
+            return address;
+          };
+          
+          const senderTokenAccount = getAssociatedTokenAddressSync(mintPubKey, publicKey);
+          const recipientTokenAccount = getAssociatedTokenAddressSync(mintPubKey, recipientPubKey);
+          
+          console.log('[Send] Sender token account:', senderTokenAccount.toBase58());
+          console.log('[Send] Recipient token account:', recipientTokenAccount.toBase58());
+          
+          // Check if recipient token account exists
+          const recipientAccountInfo = await connection.getAccountInfo(recipientTokenAccount);
+          
+          if (!recipientAccountInfo) {
+            console.log('[Send] Recipient token account does not exist, creating...');
+            
+            // Manually create associated token account instruction
+            const keys = [
+              { pubkey: publicKey, isSigner: true, isWritable: true }, // payer
+              { pubkey: recipientTokenAccount, isSigner: false, isWritable: true }, // associated token account
+              { pubkey: recipientPubKey, isSigner: false, isWritable: false }, // wallet address
+              { pubkey: mintPubKey, isSigner: false, isWritable: false }, // token mint
+              { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // system program
+              { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token program
+            ];
+            
+            transaction.add(
+              new TransactionInstruction({
+                keys,
+                programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+                data: Buffer.from([]), // Create instruction has no data
+              })
+            );
+          }
+          
+          // Add token transfer instruction
+          // USDC has 6 decimals on devnet
+          const usdcDecimals = 6;
+          const transferAmount = Math.floor(amountNum * Math.pow(10, usdcDecimals));
+          
+          console.log('[Send] Transfer amount (base units):', transferAmount);
+          
+          // Manually create transfer instruction
+          // Instruction: 3 (Transfer) + amount (u64, 8 bytes)
+          const dataLayout = Buffer.alloc(9);
+          dataLayout.writeUInt8(3, 0); // Transfer instruction
+          dataLayout.writeBigUInt64LE(BigInt(transferAmount), 1);
+          
+          const transferKeys = [
+            { pubkey: senderTokenAccount, isSigner: false, isWritable: true }, // source
+            { pubkey: recipientTokenAccount, isSigner: false, isWritable: true }, // destination
+            { pubkey: publicKey, isSigner: true, isWritable: false }, // owner
+          ];
+          
+          transaction.add(
+            new TransactionInstruction({
+              keys: transferKeys,
+              programId: TOKEN_PROGRAM_ID,
+              data: dataLayout,
+            })
+          );
+        }
+
+        // Add memo
+        transaction.add(
+          new TransactionInstruction({
+            keys: [],
+            programId: new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'),
+            data: Buffer.from(`Sent ${token} from anon0mesh`, 'utf-8'),
+          })
+        );
+
+        // Get recent blockhash
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = publicKey;
+
+        console.log('[Send] Transaction built, signing...');
+
+        // Sign transaction using wallet adapter
+        const signedTransaction = await walletAdapter.signTransaction(transaction);
+
+        console.log('[Send] Transaction signed, submitting...');
+
+        // Submit transaction
+        const signature = await connection.sendRawTransaction(
+          signedTransaction.serialize(),
+          {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+            maxRetries: 3,
+          }
+        );
+
+        console.log('[Send] Transaction submitted:', signature);
+        console.log('[Send] Waiting for confirmation...');
+
+        // Wait for confirmation
+        const confirmation = await connection.confirmTransaction(
+          {
+            signature,
+            blockhash,
+            lastValidBlockHeight,
+          },
+          'confirmed'
+        );
+
+        if (confirmation.value.err) {
+          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+        }
+
+        console.log('[Send] ✅ Transaction confirmed!');
+
+        // Refresh balances
+        await fetchBalances(publicKey);
+
+        // Show success
+        Alert.alert(
+          'Transaction Sent!',
+          `Successfully sent ${amountNum} ${token} to ${recipientPubKey.toBase58().slice(0, 8)}...\n\nSignature: ${signature.slice(0, 8)}...`,
+          [
+            {
+              text: 'View Details',
+              onPress: () => {
+                // TODO: Open transaction details or explorer
+                console.log('View tx:', signature);
+                console.log('Explorer:', `https://explorer.solana.com/tx/${signature}?cluster=devnet`);
+              },
+            },
+            {
+              text: 'Done',
+              onPress: () => {
+                setShowConfirmation(true);
+                // Reset form
+                setAmount('0.00');
+                setRecipient('');
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('[Send] Transaction failed:', error);
+      Alert.alert(
+        'Transaction Failed',
+        error instanceof Error ? error.message : 'An unknown error occurred',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -227,11 +464,19 @@ export default function SendScreen() {
 
               <View style={styles.balanceRow}>
                 <Text style={styles.balanceLabel}>Balance:</Text>
-                <Text style={styles.balanceAmount}>{balance} {token}</Text>
-                <Text style={styles.maxLabel}>(Max)</Text>
+                {isRefreshing ? (
+                  <ActivityIndicator size="small" color="#22D3EE" />
+                ) : (
+                  <>
+                    <Text style={styles.balanceAmount}>
+                      {balance.toFixed(token === 'SOL' ? 4 : 2)} {token}
+                    </Text>
+                    <TouchableOpacity onPress={handleMaxAmount}>
+                      <Text style={styles.maxLabel}>(Max)</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
-
-              <Text style={styles.usdValue}>+$ 6726.2307</Text>
             </View>
 
             {/* Token Dropdown */}
@@ -283,8 +528,9 @@ export default function SendScreen() {
                 style={styles.fromSelector}
                 onPress={() => setShowFromDropdown(!showFromDropdown)}
               >
+                {/* Primary Wallet Address */}
                 <Text style={styles.fromPrimaryText}>
-                  Primary Wallet (JDij...qU6U)
+                  Primary Wallet ({publicKey ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}` : 'Loading...'})
                 </Text>
                 <Text style={styles.fromExpandIcon}>
                   {showFromDropdown ? '∧' : '∨'}
@@ -294,7 +540,7 @@ export default function SendScreen() {
               {/* From Dropdown */}
               {showFromDropdown && (
                 <View style={styles.fromDropdown}>
-                  <TouchableOpacity 
+                  {/* <TouchableOpacity 
                     style={styles.fromOption}
                     onPress={() => {
                       setSelectedFrom('disposable1');
@@ -317,7 +563,7 @@ export default function SendScreen() {
                       Disposable Adress (8nXF...QyaS)
                     </Text>
                     <Text style={styles.fromOptionBalance}>75.99 SOL</Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                   <TouchableOpacity 
                     style={styles.createNewButton}
                   >
@@ -332,12 +578,16 @@ export default function SendScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!recipient || !amount || parseFloat(amount) <= 0) && styles.sendButtonDisabled
+                (isSending || !recipient || !amount || parseFloat(amount) <= 0) && styles.sendButtonDisabled
               ]}
               onPress={handleSendTransaction}
-              disabled={!recipient || !amount || parseFloat(amount) <= 0}
+              disabled={isSending || !recipient || !amount || parseFloat(amount) <= 0}
             >
-              <Text style={styles.sendButtonText}>Send</Text>
+              {isSending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.sendButtonText}>Send</Text>
+              )}
             </TouchableOpacity>
 
             {/* Connectivity Status */}
@@ -350,7 +600,7 @@ export default function SendScreen() {
                 ]} />
                 <Text style={styles.connectivityText}>
                   {connectivity.isInternetConnected 
-                    ? 'Connected to Bluetooth Mesh'
+                    ? 'Connected to Internet'
                     : connectivity.isBluetoothAvailable
                     ? 'Offline mode - Using Bluetooth Mesh'
                     : 'No connection available'

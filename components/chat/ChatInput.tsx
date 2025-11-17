@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
-import SendIcon from '../icons/SendIcon';
+import SendMessageIcon from '../icons/sendMessagesIcon';
 
 interface ChatInputProps {
   value: string;
@@ -36,7 +36,7 @@ export default function ChatInput({
           disabled={!value.trim() || disabled}
         >
           {/* <View style={styles.sendIcon}> */}
-            <SendIcon width={16} height={16} color={!value.trim() || disabled ? '#333' : '#00CED1'} />
+            <SendMessageIcon size={16} />
           {/* </View> */}
         </TouchableOpacity>
       </View>
@@ -46,49 +46,45 @@ export default function ChatInput({
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#000',
+    paddingVertical: 16,
+    backgroundColor: 'transparent',
     borderTopWidth: 1,
-    borderTopColor: '#00CED1',
+    borderTopColor: '#22D3EE',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
-    backgroundColor: '#000',
-    borderRadius: 8,
+    height: 52,
+    backgroundColor: 'transparent',
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#00CED1',
-    paddingRight: 8,
+    paddingLeft: 20,
+    paddingRight: 6,
   },
   input: {
     flex: 1,
     height: '100%',
     backgroundColor: 'transparent',
-    paddingHorizontal: 15,
-    color: '#00CED1',
-    fontSize: 16,
+    color: '#00F0FF',
+    fontSize: 15,
     borderWidth: 0,
-    fontFamily: 'monospace',
+    paddingRight: 12,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#00CED1',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
     borderColor: '#333',
-    opacity: 0.5,
+    opacity: 0.4,
   },
   sendIcon: {
     width: 0,

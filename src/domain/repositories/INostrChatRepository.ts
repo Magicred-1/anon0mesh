@@ -16,7 +16,7 @@ export interface INostrChatRepository {
    * @param content Message content to encrypt and send
    * @returns Sent message entity
    */
-  sendMessage(recipientPubkey: string, content: string): Promise<NostrChatMessage>;
+  sendMessage(recipientPubkey: string | null, content: string): Promise<NostrChatMessage>;
 
   /**
    * Subscribe to incoming messages

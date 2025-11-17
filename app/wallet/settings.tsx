@@ -1,3 +1,3 @@
-import WalletSettingsScreen from '@/components/screens/wallet/WalletSettingsScreen';
+import WalletSettingsScreen from '@/components/screens/nostr/wallet/WalletSettingsScreen';
 
 export default WalletSettingsScreen;
