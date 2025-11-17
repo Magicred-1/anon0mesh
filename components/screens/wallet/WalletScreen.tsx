@@ -1,25 +1,39 @@
 import { WalletFactory } from '@/src/infrastructure/wallet';
 import '@/src/polyfills';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Clipboard,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 // QR code
+import SendIcon from '@/components/icons/SendIcon';
+import SolanaIcon from '@/components/icons/SolanaIcon';
+import USDCIcon from '@/components/icons/USDCIcon';
+import ZECIcon from '@/components/icons/ZECIcon';
+import SettingsIcon from '@/components/icons/wallet/Settings';
+import SwapIcon from '@/components/icons/wallet/SwapIcon';
 import QRCode from 'react-native-qrcode-svg';
-import SendSettingsModal from '../../modals/SettingsModal';
-import WalletHeader from '../../wallet/WalletHeader';
-import { useWalletTabs } from '../../wallet/WalletTabsContext';
+import BottomNavWithMenu from '../../ui/BottomNavWithMenu';
 
-export default function WalletScreen({ hideHeader = false }: { hideHeader?: boolean } = {}) {
+// Mock balance data
+const MOCK_BALANCES = [
+  { symbol: 'SOL', name: 'Solana', balance: 3.46532 },
+  { symbol: 'USDC', name: 'USD Coin', balance: 3.46532 },
+  { symbol: 'ZEC', name: 'Zcash', balance: 3.46532 },
+];
+
+export default function WalletScreen() {
   const router = useRouter();
-  const tabs = useWalletTabs();
   const [publicKey, setPublicKey] = useState<string>('');
+  const [balances] = useState(MOCK_BALANCES);
 
   // Initialize wallet
   useEffect(() => {
@@ -42,8 +56,6 @@ export default function WalletScreen({ hideHeader = false }: { hideHeader?: bool
         }
 
         // TODO: Fetch actual balance from blockchain
-
-  // TODO: Fetch actual balance from blockchain
       } catch (error) {
         console.error('[Wallet] Error initializing:', error);
         Alert.alert('Error', 'Failed to initialize wallet');
@@ -58,12 +70,12 @@ export default function WalletScreen({ hideHeader = false }: { hideHeader?: bool
     }
   };
 
-  const handleBack = () => {
-    router.back();
+  const handleSend = () => {
+    router.push('/wallet/send' as any);
   };
 
-  const handleSettings = () => {
-    tabs.setShowSettings(true);
+  const handleSwap = () => {
+    router.push('/wallet/swap' as any);
   };
 
   // Format address for display (XXXX...XXXX)
@@ -73,189 +85,204 @@ export default function WalletScreen({ hideHeader = false }: { hideHeader?: bool
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      {!hideHeader && <WalletHeader onBack={handleBack} onRightPress={handleSettings} />}
+    <LinearGradient
+      colors={['#0D0D0D', '#06181B', '#072B31']}
+      locations={[0, 0.94, 1]}
+      start={{ x: 0.21, y: 0 }}
+      end={{ x: 0.79, y: 1 }}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Wallet</Text>
+          <TouchableOpacity style={styles.settingsButton}>
+            <View style={styles.settingsIcon}>
+              <SettingsIcon />
+            </View>
+          </TouchableOpacity>
+        </View>
 
-      {/* QR Code */}
-      <View style={styles.qrContainer}>
-        <View style={styles.qrBox}>
-          {/* QR Code corners */}
-          <View style={[styles.qrCorner, styles.qrCornerTL]} />
-          <View style={[styles.qrCorner, styles.qrCornerTR]} />
-          <View style={[styles.qrCorner, styles.qrCornerBL]} />
-          <View style={[styles.qrCorner, styles.qrCornerBR]} />
-          
-          {/* QR code: render actual QR when publicKey available */}
-          <View style={styles.qrContent}>
-            {publicKey ? (
-              // size chosen to fit inside qrBox (320 - padding)
-              <QRCode value={publicKey} size={260} backgroundColor="transparent" color="#D4F9FF" />
-            ) : (
-              <View style={styles.qrPattern}>
-                {[...Array(10)].map((_, row) => (
-                  <View key={row} style={styles.qrRow}>
-                    {[...Array(10)].map((_, col) => (
-                      <View
-                        key={col}
-                        style={[
-                          styles.qrDot,
-                          (row + col) % 2 === 0 && styles.qrDotFilled,
-                        ]}
-                      />
-                    ))}
-                  </View>
-                ))}
-              </View>
-            )}
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Network Badge */}
+          <View style={styles.networkBadge}>
+            <View style={styles.networkIcon}>
+              <SolanaIcon size={16} color='#22D3EE' />
+            </View>
+            <Text style={styles.networkText}>Solana Network</Text>
           </View>
-        </View>
-      </View>
 
-      {/* Address Display */}
-      <TouchableOpacity style={styles.addressContainer} onPress={handleCopyAddress}>
-        <Text style={styles.addressText}>{formatAddress(publicKey)}</Text>
-        <View style={styles.copyIcon}>
-          <View style={styles.copyIconBack} />
-          <View style={styles.copyIconFront} />
-        </View>
-      </TouchableOpacity>
+          {/* QR Code */}
+          <View style={styles.qrContainer}>
+            <View style={styles.qrWrapper}>
+              {publicKey ? (
+                <QRCode 
+                  value={publicKey} 
+                  size={280} 
+                  backgroundColor="transparent" 
+                  color="#D4F9FF"
+                  quietZone={20}
+                />
+              ) : (
+                <View style={styles.qrPlaceholder}>
+                  <Text style={styles.qrPlaceholderText}>Loading...</Text>
+                </View>
+              )}
+            </View>
+          </View>
 
-      {/* Settings Modal */}
-      <SendSettingsModal
-        visible={tabs.showSettings}
-        onClose={() => tabs.setShowSettings(false)}
-        walletAddress={publicKey}
-      />
-    </View>
+          {/* Address Display */}
+          <TouchableOpacity style={styles.addressContainer} onPress={handleCopyAddress}>
+            <Text style={styles.addressText}>{formatAddress(publicKey)}</Text>
+            <View style={styles.copyIcon}>
+              <View style={styles.copyIconBack} />
+              <View style={styles.copyIconFront} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Action Buttons */}
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleSend}>
+              <SendIcon width={20} height={20} color="#ffffffff" />
+              <Text style={styles.actionText}>Send</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton} onPress={handleSwap}>
+              <SwapIcon size={20} color="#ffffffff" />
+              <Text style={styles.actionText}>Swap</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Balances Section */}
+          <View style={styles.balancesSection}>
+            <Text style={styles.balancesTitle}>Balances</Text>
+            {balances.map((item, index) => (
+              <View key={index} style={styles.balanceItem}>
+                <View style={styles.balanceLeft}>
+                  <View style={styles.balanceIcon}>
+                    {item.symbol === 'SOL' && <SolanaIcon size={40} color="#14F195" />}
+                    {item.symbol === 'USDC' && <USDCIcon size={40} />}
+                    {item.symbol === 'ZEC' && <ZECIcon size={40} />}
+                  </View>
+                  <Text style={styles.balanceSymbol}>{item.symbol}</Text>
+                </View>
+                <Text style={styles.balanceAmount}>{item.balance}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Bottom Navigation */}
+        <BottomNavWithMenu
+          onNavigateToMessages={() => router.push('/chat' as any)}
+          onNavigateToWallet={() => {}}
+          onNavigateToHistory={() => router.push('/history' as any)}
+          onNavigateToMeshZone={() => Alert.alert('Mesh Zone', 'Coming soon')}
+          onNavigateToProfile={() => Alert.alert('Profile', 'Coming soon')}
+          onDisconnect={() => Alert.alert('Disconnect', 'Coming soon')}
+        />
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a1a1a',
+  },
+  safeArea: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 16,
-  },
-  backButton: {
-    padding: 4,
-    width: 40,
-  },
-  backArrow: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
+    borderBottomWidth: 1,
+    borderBottomColor: '#0d2626',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '600',
-    color: '#fff',
+    color: '#FFFFFF',
   },
   settingsButton: {
     padding: 4,
-    width: 40,
-    alignItems: 'flex-end',
   },
   settingsIcon: {
     width: 24,
-    height: 24,
+    height: 18,
     justifyContent: 'space-between',
-    paddingVertical: 4,
   },
   settingsLine: {
     width: 24,
-    height: 2,
-    backgroundColor: '#00d9ff',
-    borderRadius: 1,
+    height: 3,
+    backgroundColor: '#22D3EE',
+    borderRadius: 2,
+  },
+  content: {
+    flex: 1,
+  },
+  networkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+    gap: 8,
+  },
+  networkIcon: {
+    flexDirection: 'row',
+    gap: 2,
+    alignItems: 'flex-end',
+  },
+  networkIconBar: {
+    width: 3,
+    height: 12,
+    backgroundColor: '#22D3EE',
+    borderRadius: 2,
+  },
+  networkText: {
+    fontSize: 14,
+    color: '#8a9999',
+    fontWeight: '500',
   },
   qrContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 32,
+    paddingVertical: 20,
   },
-  qrBox: {
-    width: 320,
-    height: 320,
+  qrWrapper: {
     backgroundColor: 'transparent',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#00d9ff',
-    position: 'relative',
-    padding: 20,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#22D3EE',
   },
-  qrCorner: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderColor: '#000',
-  },
-  qrCornerTL: {
-    top: 10,
-    left: 10,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-  },
-  qrCornerTR: {
-    top: 10,
-    right: 10,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-  },
-  qrCornerBL: {
-    bottom: 10,
-    left: 10,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-  },
-  qrCornerBR: {
-    bottom: 10,
-    right: 10,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-  },
-  qrContent: {
-    flex: 1,
-    justifyContent: 'center',
+  qrPlaceholder: {
+    width: 280,
+    height: 280,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  qrPattern: {
-    flexDirection: 'column',
-    gap: 8,
-  },
-  qrRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  qrDot: {
-    width: 16,
-    height: 16,
-    backgroundColor: 'transparent',
-  },
-  qrDotFilled: {
-    backgroundColor: '#000',
+  qrPlaceholderText: {
+    color: '#666',
+    fontSize: 16,
   },
   addressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 32,
+    marginHorizontal: 20,
+    marginTop: 20,
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#00d9ff',
-    backgroundColor: 'rgba(0, 217, 255, 0.05)',
+    borderColor: '#22D3EE',
+    backgroundColor: 'rgba(34, 211, 238, 0.05)',
   },
   addressText: {
-    fontSize: 18,
-    color: '#00d9ff',
+    fontSize: 16,
+    color: '#22D3EE',
     fontFamily: 'monospace',
     letterSpacing: 2,
   },
@@ -271,8 +298,8 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderWidth: 2,
-    borderColor: '#00d9ff',
-    borderRadius: 4,
+    borderColor: '#22D3EE',
+    borderRadius: 3,
   },
   copyIconFront: {
     position: 'absolute',
@@ -281,9 +308,78 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderWidth: 2,
-    borderColor: '#00d9ff',
-    backgroundColor: '#0a1a1a',
-    borderRadius: 4,
+    borderColor: '#22D3EE',
+    backgroundColor: '#06181B',
+    borderRadius: 3,
   },
-  
+  actionsContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginTop: 20,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#22D3EE',
+    backgroundColor: 'rgba(34, 211, 238, 0.05)',
+    gap: 8,
+  },
+  actionIcon: {
+    fontSize: 20,
+    color: '#ffffffff',
+  },
+  actionText: {
+    fontSize: 16,
+    color: '#ffffffff',
+    fontWeight: '500',
+  },
+  balancesSection: {
+    marginTop: 32,
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  balancesTitle: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  balanceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0d3333',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1a4444',
+  },
+  balanceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  balanceIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  balanceSymbol: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  balanceAmount: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
 });

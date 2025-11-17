@@ -1,7 +1,12 @@
+import SolanaIcon from '@/components/icons/SolanaIcon';
+import USDCIcon from '@/components/icons/USDCIcon';
+import ZECIcon from '@/components/icons/ZECIcon';
+import SendConfirmationModal from '@/components/modals/SendConfirmationModal';
 import { WalletFactory } from '@/src/infrastructure/wallet';
 import type { ConnectivityStatus } from '@/src/infrastructure/wallet/utils/connectivity';
 import * as ConnectivityUtils from '@/src/infrastructure/wallet/utils/connectivity';
 import '@/src/polyfills';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -15,20 +20,29 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import SendSettingsModal from '../../modals/SettingsModal';
-import { useWalletTabs } from '../../wallet/WalletTabsContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function SendScreen({ hideHeader = false }: { hideHeader?: boolean } = {}) {
+type TokenType = 'SOL' | 'USDC' | 'ZEC';
+
+const TOKEN_BALANCES: Record<TokenType, number> = {
+  SOL: 2.8998,
+  USDC: 3.46532,
+  ZEC: 3.46532,
+};
+
+export default function SendScreen() {
   const router = useRouter();
-  const tabs = useWalletTabs();
   const [publicKey, setPublicKey] = useState<string>('');
   const [amount, setAmount] = useState('0.00');
-  // TODO: Token Selector
-  const [token, setToken] = useState('SOL');
+  const [token, setToken] = useState<TokenType>('SOL');
   const [recipient, setRecipient] = useState('');
-  //TODO: Fetch actual balance from blockchain (native token balance and selected token balance)
-  const [balance, setBalance] = useState('0.0000');
+  const [showTokenDropdown, setShowTokenDropdown] = useState(false);
+  const [selectedFrom, setSelectedFrom] = useState<'primary' | 'disposable1' | 'disposable2'>('primary');
+  const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [connectivity, setConnectivity] = useState<ConnectivityStatus | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+
+  const balance = TOKEN_BALANCES[token];
 
   // Check connectivity
   useEffect(() => {
@@ -78,12 +92,24 @@ export default function SendScreen({ hideHeader = false }: { hideHeader?: boolea
   };
 
   const handleTokenDropdown = () => {
-    Alert.alert('Select Token', 'Token selector coming soon');
+    setShowTokenDropdown(!showTokenDropdown);
+  };
+
+  const handleSelectToken = (selectedToken: TokenType) => {
+    setToken(selectedToken);
+    setShowTokenDropdown(false);
   };
 
   const handleMaxAmount = () => {
-    // Set amount to full available balance
-    setAmount(balance);
+    setAmount(balance.toString());
+  };
+
+  const handleBack = () => {
+    router.back();
+  };
+
+  const handleSettings = () => {
+    Alert.alert('Settings', 'Settings coming soon');
   };
 
   const handleSendTransaction = async () => {
@@ -109,158 +135,231 @@ export default function SendScreen({ hideHeader = false }: { hideHeader?: boolea
       return;
     }
 
-    // Determine send method based on connectivity
-    const mode = sendCheck.useOfflineMode ? 'Bluetooth Mesh' : 'Internet';
-    Alert.alert(
-      'Send Transaction',
-      `Sending ${amount} ${token} to ${recipient.slice(0, 8)}... via ${mode}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: () => {
-            // TODO: Implement actual transaction logic
-            console.log(`[Send] Transaction via ${mode}:`, {
-              amount,
-              token,
-              recipient,
-              useOfflineMode: sendCheck.useOfflineMode
-            });
-          }
-        }
-      ]
-    );
+    // Process transaction and show confirmation modal
+    // TODO: Implement actual transaction logic
+    const useOfflineMode = sendCheck.useOfflineMode || !connectivity?.isInternetConnected;
+    
+    console.log('[Send] Transaction:', {
+      amount,
+      token,
+      recipient,
+      useOfflineMode
+    });
+    
+    // Show confirmation modal for both internet and Bluetooth transactions
+    setShowConfirmation(true);
   };
 
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#0D0D0D', '#06181B', '#072B31']}
+      locations={[0, 0.94, 1]}
+      start={{ x: 0.21, y: 0 }}
+      end={{ x: 0.79, y: 1 }}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Amount Section */}
-        <View style={styles.amountSection}>
-        <Text style={styles.amountLabel}>Amount</Text>
-        <View style={styles.amountInputContainer}>
-          <TextInput
-            style={styles.amountInput}
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            placeholder="0.00"
-            placeholderTextColor="#4a6c6c"
-          />
-        </View>
-        <View style={styles.balanceRow}>
-          <Text style={styles.availableBalance}>available balance = {balance} {token}</Text>
-          <TouchableOpacity style={styles.maxButton} onPress={handleMaxAmount}>
-            <Text style={styles.maxButtonText}>Max</Text>
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+            <Text style={styles.backIcon}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Send</Text>
+          <TouchableOpacity style={styles.settingsButton} onPress={handleSettings}>
+            <View style={styles.settingsIcon}>
+              <View style={styles.settingsLine} />
+              <View style={styles.settingsLine} />
+              <View style={styles.settingsLine} />
+            </View>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Token Selector */}
-      <View style={styles.tokenSelectorContainer}>
-        <TouchableOpacity style={styles.tokenSelector} onPress={handleTokenDropdown}>
-          <Text style={styles.tokenText}>{token}</Text>
-          <Text style={styles.dropdownIcon}>▼</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Recipient Address Input */}
-      <View style={styles.recipientContainer}>
-        <TextInput
-          style={styles.recipientInput}
-          placeholder="Enter recipient address.."
-          placeholderTextColor="#4a6c6c"
-          value={recipient}
-          onChangeText={setRecipient}
-        />
-        <TouchableOpacity onPress={handleQRScan} style={styles.qrButton}>
-          <View style={styles.qrIcon}>
-            <View style={styles.qrCornerTL} />
-            <View style={styles.qrCornerTR} />
-            <View style={styles.qrCornerBL} />
-            <View style={styles.qrCornerBR} />
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Connectivity Status */}
-      {connectivity && (
-        <TouchableOpacity 
-          style={styles.connectivityBanner}
-          onPress={async () => {
-            if (!connectivity.isBluetoothAvailable) {
-              const btStatus = await ConnectivityUtils.getBluetoothStateString();
-              Alert.alert(
-                'Bluetooth Status',
-                btStatus,
-                [
-                  { text: 'OK' },
-                  {
-                    text: 'Check Again',
-                    onPress: async () => {
-                      const status = await ConnectivityUtils.getConnectivityStatus();
-                      setConnectivity(status);
-                    }
-                  }
-                ]
-              );
-            } else {
-              Alert.alert(
-                'Connection Status',
-                connectivity.isInternetConnected 
-                  ? `You're connected to the internet via ${connectivity.connectionType}. Transactions will be sent directly to the Solana network.`
-                  : 'You\'re in offline mode. Transactions will be sent via Bluetooth mesh network to nearby devices.',
-                [{ text: 'Got it' }]
-              );
-            }
-          }}
+        <KeyboardAvoidingView
+          style={styles.content}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
-          <View style={[
-            styles.statusDot,
-            { backgroundColor: connectivity.isInternetConnected ? '#00d9ff' : 
-                              connectivity.isBluetoothAvailable ? '#ffa500' : '#ff4444' }
-          ]} />
-          <Text style={styles.connectivityText}>
-            {connectivity.isInternetConnected 
-              ? `Connected via ${connectivity.connectionType || 'Internet'}`
-              : connectivity.isBluetoothAvailable
-              ? 'Offline mode - Using Bluetooth Mesh'
-              : 'No connection available - Tap for details'
-            }
-          </Text>
-        </TouchableOpacity>
-      )}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Network Badge */}
+            <View style={styles.networkBadge}>
+              <View style={styles.networkIcon}>
+                <SolanaIcon size={16} color='#22D3EE' />
+              </View>
+              <Text style={styles.networkText}>Solana Network</Text>
+            </View>
 
-      {/* Send Button */}
-      <TouchableOpacity
-        style={[
-          styles.sendButton,
-          (!recipient || !amount || parseFloat(amount) <= 0) && styles.sendButtonDisabled
-        ]}
-        onPress={handleSendTransaction}
-        disabled={!recipient || !amount || parseFloat(amount) <= 0}
-      >
-        <Text style={styles.sendButtonText}>Send {token}</Text>
-      </TouchableOpacity>
+            {/* Token Selector & Amount */}
+            <View style={styles.amountCard}>
+              <TouchableOpacity style={styles.tokenSelector} onPress={handleTokenDropdown}>
+                <View style={styles.tokenIconWrapper}>
+                  {token === 'SOL' && <SolanaIcon size={24} color="#14F195" />}
+                  {token === 'USDC' && <USDCIcon size={24} />}
+                  {token === 'ZEC' && <ZECIcon size={24} />}
+                </View>
+                <Text style={styles.tokenText}>{token}</Text>
+                <Text style={styles.dropdownIcon}>▼</Text>
+              </TouchableOpacity>
 
-      </ScrollView>
+              <TextInput
+                style={styles.amountInput}
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor="#4a6c6c"
+              />
 
-      {/* Settings Modal */}
-      <SendSettingsModal
-        visible={tabs.showSettings}
-        onClose={() => tabs.setShowSettings(false)}
-        walletAddress={publicKey}
+              <View style={styles.balanceRow}>
+                <Text style={styles.balanceLabel}>Balance:</Text>
+                <Text style={styles.balanceAmount}>{balance} {token}</Text>
+                <Text style={styles.maxLabel}>(Max)</Text>
+              </View>
+
+              <Text style={styles.usdValue}>+$ 6726.2307</Text>
+            </View>
+
+            {/* Token Dropdown */}
+            {showTokenDropdown && (
+              <View style={styles.tokenDropdown}>
+                {(['SOL', 'USDC', 'ZEC'] as TokenType[]).map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={styles.tokenOption}
+                    onPress={() => handleSelectToken(t)}
+                  >
+                    <View style={styles.tokenIconWrapper}>
+                      {t === 'SOL' && <SolanaIcon size={24} color="#14F195" />}
+                      {t === 'USDC' && <USDCIcon size={24} />}
+                      {t === 'ZEC' && <ZECIcon size={24} />}
+                    </View>
+                    <Text style={styles.tokenOptionText}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* To Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>To</Text>
+              <View style={styles.recipientContainer}>
+                <TextInput
+                  style={styles.recipientInput}
+                  placeholder="Enter recipient address..."
+                  placeholderTextColor="#4a6c6c"
+                  value={recipient}
+                  onChangeText={setRecipient}
+                />
+                <TouchableOpacity onPress={handleQRScan} style={styles.qrButton}>
+                  <View style={styles.qrIcon}>
+                    <View style={styles.qrCornerTL} />
+                    <View style={styles.qrCornerTR} />
+                    <View style={styles.qrCornerBL} />
+                    <View style={styles.qrCornerBR} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* From Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>From</Text>
+              <TouchableOpacity 
+                style={styles.fromSelector}
+                onPress={() => setShowFromDropdown(!showFromDropdown)}
+              >
+                <Text style={styles.fromPrimaryText}>
+                  Primary Wallet (JDij...qU6U)
+                </Text>
+                <Text style={styles.fromExpandIcon}>
+                  {showFromDropdown ? '∧' : '∨'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* From Dropdown */}
+              {showFromDropdown && (
+                <View style={styles.fromDropdown}>
+                  <TouchableOpacity 
+                    style={styles.fromOption}
+                    onPress={() => {
+                      setSelectedFrom('disposable1');
+                      setShowFromDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.fromOptionText}>
+                      Disposable Adress (8nXF...QyaS)
+                    </Text>
+                    <Text style={styles.fromOptionBalance}>75.99 SOL</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.fromOption}
+                    onPress={() => {
+                      setSelectedFrom('disposable2');
+                      setShowFromDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.fromOptionText}>
+                      Disposable Adress (8nXF...QyaS)
+                    </Text>
+                    <Text style={styles.fromOptionBalance}>75.99 SOL</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.createNewButton}
+                  >
+                    <Text style={styles.createNewIcon}>+</Text>
+                    <Text style={styles.createNewText}>Create new disposable address</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Send Button */}
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!recipient || !amount || parseFloat(amount) <= 0) && styles.sendButtonDisabled
+              ]}
+              onPress={handleSendTransaction}
+              disabled={!recipient || !amount || parseFloat(amount) <= 0}
+            >
+              <Text style={styles.sendButtonText}>Send</Text>
+            </TouchableOpacity>
+
+            {/* Connectivity Status */}
+            {connectivity && (
+              <View style={styles.connectivityBanner}>
+                <View style={[
+                  styles.statusDot,
+                  { backgroundColor: connectivity.isInternetConnected ? '#22D3EE' : 
+                                    connectivity.isBluetoothAvailable ? '#ffa500' : '#ff4444' }
+                ]} />
+                <Text style={styles.connectivityText}>
+                  {connectivity.isInternetConnected 
+                    ? 'Connected to Bluetooth Mesh'
+                    : connectivity.isBluetoothAvailable
+                    ? 'Offline mode - Using Bluetooth Mesh'
+                    : 'No connection available'
+                  }
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+      
+      <SendConfirmationModal 
+        visible={showConfirmation}
+        onClose={() => {
+          setShowConfirmation(false);
+          router.back();
+        }}
+        isBluetooth={connectivity?.isBluetoothAvailable}
       />
-    </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
@@ -268,123 +367,181 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0d2626',
+  },
+  backButton: {
+    padding: 4,
+    width: 40,
+  },
+  backIcon: {
+    fontSize: 32,
+    color: '#22D3EE',
+    fontWeight: 'bold',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  settingsButton: {
+    padding: 4,
+    width: 40,
+    alignItems: 'flex-end',
+  },
+  settingsIcon: {
+    width: 24,
+    height: 18,
+    justifyContent: 'space-between',
+  },
+  settingsLine: {
+    width: 24,
+    height: 3,
+    backgroundColor: '#22D3EE',
+    borderRadius: 2,
+  },
+  content: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 32,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     paddingBottom: 24,
   },
-  // Amount Section
-  amountSection: {
-    marginBottom: 24,
+  networkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    gap: 8,
   },
-  amountLabel: {
-    color: '#7a9999',
+  networkIcon: {
+    flexDirection: 'row',
+    gap: 2,
+    alignItems: 'flex-end',
+  },
+  networkText: {
     fontSize: 14,
-    marginBottom: 8,
+    color: '#8a9999',
+    fontWeight: '500',
   },
-  amountInputContainer: {
-    backgroundColor: '#0d4d4d',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#00d9ff',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
+  // Amount Card
+  amountCard: {
+    backgroundColor: '#0d3333',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#22D3EE',
+    padding: 16,
+    marginBottom: 20,
+  },
+  tokenSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  tokenIconWrapper: {
+    width: 24,
+    height: 24,
+  },
+  tokenText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  dropdownIcon: {
+    color: '#22D3EE',
+    fontSize: 14,
   },
   amountInput: {
     color: '#fff',
     fontSize: 48,
     fontWeight: '600',
-    textAlign: 'center',
+    textAlign: 'right',
+    marginBottom: 8,
   },
   balanceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
   },
-  availableBalance: {
-    color: '#7a9999',
+  balanceLabel: {
+    color: '#8a9999',
+    fontSize: 12,
+  },
+  balanceAmount: {
+    color: '#8a9999',
+    fontSize: 12,
+  },
+  maxLabel: {
+    color: '#8a9999',
+    fontSize: 12,
+  },
+  usdValue: {
+    color: '#22D3EE',
     fontSize: 14,
+    textAlign: 'right',
   },
-  maxButton: {
-    backgroundColor: '#1a3333',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+  // Token Dropdown
+  tokenDropdown: {
+    backgroundColor: '#0d3333',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#00d9ff',
+    borderColor: '#22D3EE',
+    marginBottom: 20,
+    overflow: 'hidden',
   },
-  maxButtonText: {
-    color: '#00d9ff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  // Token Selector
-  tokenSelectorContainer: {
+  tokenOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 24,
-  },
-  menuButtonTouchable: {
-    backgroundColor: '#0d4d4d',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#00d9ff',
     padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a4444',
   },
-  menuButton: {
-    width: 20,
-    height: 16,
-    justifyContent: 'space-between',
-  },
-  menuLine: {
-    height: 2,
-    backgroundColor: '#00d9ff',
-    borderRadius: 1,
-  },
-  tokenSelector: {
-    flex: 1,
-    backgroundColor: '#0d4d4d',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#00d9ff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  tokenText: {
-    flex: 1,
+  tokenOptionText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '500',
   },
-  dropdownIcon: {
-    color: '#00d9ff',
-    fontSize: 16,
+  // Section
+  section: {
+    marginBottom: 20,
+  },
+  sectionLabel: {
+    color: '#8a9999',
+    fontSize: 14,
+    marginBottom: 8,
   },
   // Recipient Input
   recipientContainer: {
-    backgroundColor: '#0d4d4d',
+    backgroundColor: 'transparent',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#00d9ff',
+    borderWidth: 2,
+    borderColor: '#22D3EE',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginBottom: 16,
+    paddingVertical: 14,
   },
   recipientInput: {
     flex: 1,
-    color: '#fff',
-    fontSize: 16,
+    color: '#22D3EE',
+    fontSize: 14,
   },
   qrButton: {
     width: 32,
@@ -405,7 +562,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderTopWidth: 2,
     borderLeftWidth: 2,
-    borderColor: '#00d9ff',
+    borderColor: '#22D3EE',
   },
   qrCornerTR: {
     position: 'absolute',
@@ -415,7 +572,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderTopWidth: 2,
     borderRightWidth: 2,
-    borderColor: '#00d9ff',
+    borderColor: '#22D3EE',
   },
   qrCornerBL: {
     position: 'absolute',
@@ -425,7 +582,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderBottomWidth: 2,
     borderLeftWidth: 2,
-    borderColor: '#00d9ff',
+    borderColor: '#22D3EE',
   },
   qrCornerBR: {
     position: 'absolute',
@@ -435,45 +592,103 @@ const styles = StyleSheet.create({
     height: 8,
     borderBottomWidth: 2,
     borderRightWidth: 2,
-    borderColor: '#00d9ff',
+    borderColor: '#22D3EE',
   },
-  // Connectivity Status
-  connectivityBanner: {
+  // From Selector
+  fromSelector: {
+    backgroundColor: '#0d3333',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#22D3EE',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0d4d4d',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 8,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
+  fromPrimaryText: {
+    color: '#22D3EE',
+    fontSize: 14,
   },
-  connectivityText: {
-    color: '#7a9999',
-    fontSize: 13,
-    flex: 1,
+  fromExpandIcon: {
+    color: '#22D3EE',
+    fontSize: 16,
+  },
+  fromDropdown: {
+    backgroundColor: '#0d3333',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#22D3EE',
+    overflow: 'hidden',
+  },
+  fromOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a4444',
+  },
+  fromOptionText: {
+    color: '#22D3EE',
+    fontSize: 14,
+  },
+  fromOptionBalance: {
+    color: '#8a9999',
+    fontSize: 12,
+  },
+  createNewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  createNewIcon: {
+    color: '#22D3EE',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  createNewText: {
+    color: '#8a9999',
+    fontSize: 14,
   },
   // Send Button
   sendButton: {
-    backgroundColor: '#00d9ff',
+    backgroundColor: 'transparent',
     borderRadius: 12,
-    paddingVertical: 18,
+    borderWidth: 2,
+    borderColor: '#22D3EE',
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
   sendButtonDisabled: {
-    backgroundColor: '#0d4d4d',
-    opacity: 0.5,
+    opacity: 0.3,
   },
   sendButtonText: {
-    color: '#000',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+  },
+  // Connectivity Status
+  connectivityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  connectivityText: {
+    color: '#22D3EE',
+    fontSize: 12,
   },
 });

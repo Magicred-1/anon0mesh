@@ -32,11 +32,11 @@ export default function ExampleScreen() {
         onClose={() => setShowMenu(false)}
         onNavigateToMessages={() => {
           console.log('Navigate to Messages');
-          // router.push('/messages');
+          router.push('/chat');
         }}
         onNavigateToWallet={() => {
           console.log('Navigate to Wallet');
-          // router.push('/wallet');
+          router.push('/wallet');
         }}
         onNavigateToHistory={() => {
           console.log('Navigate to History');

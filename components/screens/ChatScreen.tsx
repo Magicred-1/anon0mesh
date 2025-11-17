@@ -165,7 +165,7 @@ export default function ChatScreen() {
           onlinePeersCount={onlinePeers.length}
           bleConnected={bleConnected}
           onMenuPress={() => setShowSidebar(!showSidebar)}
-          onWalletPress={() => router.push('/wallet' as any)}
+          onWalletPress={() => router.push('/wallet/' as any)}
           onProfilePress={() => Alert.alert('Profile', 'Profile feature coming soon')}
           onEditNickname={() => setEditNickVisible(true)}
           onClearCache={handleClearReceivedMessages}

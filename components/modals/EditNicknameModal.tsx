@@ -9,10 +9,10 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MainMenuModal from './MainMenuModal';
+import BottomNavWithMenu from '../ui/BottomNavWithMenu';
 
 interface EditNicknameModalProps {
     visible: boolean;
@@ -34,7 +34,6 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
     const [useSns, setUseSns] = useState(false);
     const [snsNickname, setSnsNickname] = useState<string | null>(null);
     const [snsDomains, setSnsDomains] = useState<string[]>([]);
-    const [showMenu, setShowMenu] = useState(false);
 
     const validateAndSave = async (nick?: string) => {
         const trimmedNickname = (nick ?? nickname).trim();
@@ -273,57 +272,18 @@ const EditNicknameModal: React.FC<EditNicknameModalProps> = ({
                         </View>
                     </View>
 
-                    {/* Bottom Navigation Bar */}
-                    <View
-                        style={{
-                            borderTopWidth: 1,
-                            borderTopColor: '#1a3333',
-                            paddingVertical: 20,
-                            alignItems: 'center',
+                    {/* Bottom Navigation Bar with Menu */}
+                    <BottomNavWithMenu
+                        onNavigateToMessages={handleClose}
+                        onNavigateToWallet={handleClose}
+                        onNavigateToHistory={handleClose}
+                        onNavigateToMeshZone={handleClose}
+                        onNavigateToProfile={() => {
+                            // Already on profile, just close modal
                         }}
-                    >
-                        <TouchableOpacity onPress={() => setShowMenu(true)}>
-                            <View
-                                style={{
-                                    width: 80,
-                                    height: 4,
-                                    backgroundColor: '#22D3EE',
-                                    borderRadius: 2,
-                                }}
-                            />
-                        </TouchableOpacity>
-                    </View>
+                        onDisconnect={handleClose}
+                    />
                 </SafeAreaView>
-
-                {/* Main Menu Modal - Outside SafeAreaView */}
-                <MainMenuModal
-                    visible={showMenu}
-                    onClose={() => setShowMenu(false)}
-                    onNavigateToMessages={() => {
-                        setShowMenu(false);
-                        handleClose();
-                    }}
-                    onNavigateToWallet={() => {
-                        setShowMenu(false);
-                        handleClose();
-                    }}
-                    onNavigateToHistory={() => {
-                        setShowMenu(false);
-                        handleClose();
-                    }}
-                    onNavigateToMeshZone={() => {
-                        setShowMenu(false);
-                        handleClose();
-                    }}
-                    onNavigateToProfile={() => {
-                        setShowMenu(false);
-                        // Already on profile, just close menu
-                    }}
-                    onDisconnect={() => {
-                        setShowMenu(false);
-                        handleClose();
-                    }}
-                />
             </LinearGradient>
         </Modal>
     );

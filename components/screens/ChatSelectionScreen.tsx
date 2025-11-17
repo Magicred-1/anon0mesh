@@ -8,7 +8,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MainMenuModal from '../modals/MainMenuModal';
+import BottomNavWithMenu from '../ui/BottomNavWithMenu';
 
 interface Peer {
   id: string;
@@ -48,7 +48,6 @@ export default function ChatSelectionScreen({
   onDisconnect,
 }: ChatSelectionScreenProps) {
   const [connectedPeers] = useState(3);
-  const [showMainMenu, setShowMainMenu] = useState(false);
 
   const renderPeerItem = ({ item }: { item: Peer }) => (
     <TouchableOpacity
@@ -83,15 +82,6 @@ export default function ChatSelectionScreen({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Messages</Text>
-          <TouchableOpacity 
-            style={styles.menuButton}
-            onPress={() => setShowMainMenu(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-            <View style={styles.menuLine} />
-          </TouchableOpacity>
         </View>
 
         {/* Connected Peers Count */}
@@ -113,43 +103,16 @@ export default function ChatSelectionScreen({
           />
         </View>
 
-        {/* Bottom Navigation Bar */}
-        <View style={styles.bottomNav}>
-          <TouchableOpacity onPress={() => setShowMainMenu(true)}>
-            <View style={styles.navIndicator} />
-          </TouchableOpacity>
-        </View>
+        {/* Bottom Navigation Bar with Menu */}
+        <BottomNavWithMenu
+          onNavigateToMessages={onNavigateToMessages}
+          onNavigateToWallet={onNavigateToWallet}
+          onNavigateToHistory={onNavigateToHistory}
+          onNavigateToMeshZone={onNavigateToMeshZone}
+          onNavigateToProfile={onNavigateToProfile}
+          onDisconnect={onDisconnect}
+        />
       </SafeAreaView>
-
-      {/* Main Menu Modal - Outside SafeAreaView so it overlays everything */}
-      <MainMenuModal
-        visible={showMainMenu}
-        onClose={() => setShowMainMenu(false)}
-        onNavigateToMessages={() => {
-          setShowMainMenu(false);
-          onNavigateToMessages?.();
-        }}
-        onNavigateToWallet={() => {
-          setShowMainMenu(false);
-          onNavigateToWallet?.();
-        }}
-        onNavigateToHistory={() => {
-          setShowMainMenu(false);
-          onNavigateToHistory?.();
-        }}
-        onNavigateToMeshZone={() => {
-          setShowMainMenu(false);
-          onNavigateToMeshZone?.();
-        }}
-        onNavigateToProfile={() => {
-          setShowMainMenu(false);
-          onNavigateToProfile?.();
-        }}
-        onDisconnect={() => {
-          setShowMainMenu(false);
-          onDisconnect?.();
-        }}
-      />
     </LinearGradient>
   );
 }
@@ -174,16 +137,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 22,
     fontWeight: '600',
-  },
-  menuButton: {
-    padding: 8,
-    gap: 4,
-  },
-  menuLine: {
-    width: 24,
-    height: 3,
-    backgroundColor: '#22D3EE',
-    borderRadius: 2,
   },
   peersCountContainer: {
     paddingHorizontal: 20,
@@ -257,18 +210,5 @@ const styles = StyleSheet.create({
     color: '#22D3EE',
     fontSize: 28,
     fontWeight: '300',
-  },
-  bottomNav: {
-    borderTopWidth: 1,
-    borderTopColor: '#0d2626',
-    paddingVertical: 20,
-    alignItems: 'center',
-    backgroundColor: 'rgba(13, 19, 19, 0.5)',
-  },
-  navIndicator: {
-    width: 80,
-    height: 4,
-    backgroundColor: '#22D3EE',
-    borderRadius: 2,
   },
 });
