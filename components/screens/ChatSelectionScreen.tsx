@@ -74,22 +74,20 @@ export default function ChatSelectionScreen({
     <LinearGradient
       colors={['#0D0D0D', '#06181B', '#072B31']}
       locations={[0, 0.94, 1]}
-      start={{ x: 0.21, y: 0 }}
-      end={{ x: 0.79, y: 1 }}
+      start={{ x: 0.2125, y: 0 }}
+      end={{ x: 0.7875, y: 1 }}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Messages</Text>
-        </View>
-
-        {/* Connected Peers Count */}
-        <View style={styles.peersCountContainer}>
-          <View style={styles.peersCountDot} />
-          <Text style={styles.peersCountText}>
-            Peers connected ({connectedPeers})
-          </Text>
+          <View style={styles.peersCountContainer}>
+            <View style={styles.peersCountDot} />
+            <Text style={styles.peersCountText}>
+              Peers connected ({connectedPeers})
+            </Text>
+          </View>
         </View>
 
         {/* Peer List */}
@@ -131,52 +129,49 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#0d2626',
+    borderBottomColor: '#1a4444',
   },
   headerTitle: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
   },
   peersCountContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
   peersCountDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#22D3EE',
   },
   peersCountText: {
-    color: '#8a9999',
-    fontSize: 14,
+    color: '#22D3EE',
+    fontSize: 13,
     fontWeight: '400',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   peerListContainer: {
     flex: 1,
-    paddingTop: 8,
+    paddingTop: 16,
   },
   peerListContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingBottom: 20,
   },
   peerItem: {
-    backgroundColor: '#0d3333',
-    borderRadius: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1a4444',
+    backgroundColor: '#0a2828',
+    borderRadius: 12,
+    marginBottom: 8,
+    marginHorizontal: 8,
   },
   peerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   peerLeft: {
     flexDirection: 'row',
@@ -184,31 +179,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   onlineIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#22D3EE',
-    marginRight: 12,
+    marginRight: 16,
   },
   peerInfo: {
     flex: 1,
   },
   peerName: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   lastActive: {
-    color: '#6b7780',
-    fontSize: 13,
+    color: '#6b8080',
+    fontSize: 12,
+    fontWeight: '400',
   },
   chevronIcon: {
-    marginLeft: 12,
+    marginLeft: 16,
   },
   chevronText: {
     color: '#22D3EE',
-    fontSize: 28,
-    fontWeight: '300',
+    fontSize: 24,
+    fontWeight: '400',
   },
 });

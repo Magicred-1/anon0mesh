@@ -1,6 +1,6 @@
+import SendScreen from '@/components/screens/wallet/SendScreen';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import SendScreen from '../send';
 
 export default function WalletPage() {
 	return (

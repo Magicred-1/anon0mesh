@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
-import HistorySvg from '../../assets/images/history_icon.svg';
+import HistorySvg from '../../assets/images/icons/history_icon.svg';
 
 interface HistoryIconProps {
   size?: number;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
-import DisconnectSvg from '../../assets/images/disconnect_icon.svg';
+import DisconnectSvg from '../../assets/images/icons/disconnect_icon.svg';
 
 interface DisconnectIconProps {
   size?: number;

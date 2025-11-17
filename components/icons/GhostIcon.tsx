@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import GhostSvg from '../../assets/images/Pacman.svg';
+import GhostSvg from '../../assets/images/icons/pacman.svg';
 
 const GhostIcon = ({ size = 32 }: { size?: number }) => {
   return (

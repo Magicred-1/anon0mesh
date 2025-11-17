@@ -1,6 +1,8 @@
 import SolanaIcon from '@/components/icons/SolanaIcon';
 import USDCIcon from '@/components/icons/USDCIcon';
+import SettingsIcon from '@/components/icons/wallet/Settings';
 import ZECIcon from '@/components/icons/ZECIcon';
+import QRScannerModal from '@/components/modals/QRScannerModal';
 import SendConfirmationModal from '@/components/modals/SendConfirmationModal';
 import { WalletFactory } from '@/src/infrastructure/wallet';
 import type { ConnectivityStatus } from '@/src/infrastructure/wallet/utils/connectivity';
@@ -41,6 +43,7 @@ export default function SendScreen() {
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [connectivity, setConnectivity] = useState<ConnectivityStatus | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   const balance = TOKEN_BALANCES[token];
 
@@ -87,8 +90,18 @@ export default function SendScreen() {
     })();
   }, [router]);
 
+  const handleCreateNewAddress = () => {
+    router.push('/wallet/settings');
+  };
+
   const handleQRScan = () => {
-    Alert.alert('QR Scanner', 'QR scanner coming soon');
+    setShowQRScanner(true);
+  };
+
+  const handleQRScanned = (data: string) => {
+    console.log('[Send] QR scanned:', data);
+    setRecipient(data);
+    setShowQRScanner(false);
   };
 
   const handleTokenDropdown = () => {
@@ -109,7 +122,7 @@ export default function SendScreen() {
   };
 
   const handleSettings = () => {
-    Alert.alert('Settings', 'Settings coming soon');
+    router.push('/wallet/settings');
   };
 
   const handleSendTransaction = async () => {
@@ -167,9 +180,7 @@ export default function SendScreen() {
           <Text style={styles.headerTitle}>Send</Text>
           <TouchableOpacity style={styles.settingsButton} onPress={handleSettings}>
             <View style={styles.settingsIcon}>
-              <View style={styles.settingsLine} />
-              <View style={styles.settingsLine} />
-              <View style={styles.settingsLine} />
+              <SettingsIcon />
             </View>
           </TouchableOpacity>
         </View>
@@ -311,7 +322,7 @@ export default function SendScreen() {
                     style={styles.createNewButton}
                   >
                     <Text style={styles.createNewIcon}>+</Text>
-                    <Text style={styles.createNewText}>Create new disposable address</Text>
+                    <Text style={styles.createNewText} onPressIn={handleCreateNewAddress}>Create new disposable address</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -358,6 +369,12 @@ export default function SendScreen() {
           router.back();
         }}
         isBluetooth={connectivity?.isBluetoothAvailable}
+      />
+
+      <QRScannerModal
+        visible={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScan={handleQRScanned}
       />
     </LinearGradient>
   );

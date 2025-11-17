@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
-import MessagesSvg from '../../assets/images/messages_icon.svg';
+import MessagesSvg from '../../assets/images/icons/messages_icon.svg';
 interface MessagesIconProps {
   size?: number;
   color?: string;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import WalletSvg from '../../assets/images/wallet_icon.svg';
+import WalletSvg from '../../assets/images/icons/wallet_icon.svg';
 
 const WalletIcon = ({ size = 32 }: { size?: number }) => {
   return (

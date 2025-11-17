@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import HashtagIcon from '../icons/HashtagIcon';
 import WalletIcon from '../icons/WalletIcon';
-import NostrZoneSelectorModal from '../modals/NostrZoneSelectorModal';
+import ZoneSelectorModal from '../modals/ZoneSelectorModal';
 
 interface ChatHeaderProps {
   nickname: string;
@@ -15,6 +15,8 @@ interface ChatHeaderProps {
   onClearCache?: () => void;
   onEditNickname?: () => void;
   onBackPress?: () => void;
+  onNavigateToSelection?: () => void;
+  onTripleTap?: () => void;
 }
 
 export default function ChatHeader({
@@ -28,52 +30,70 @@ export default function ChatHeader({
   onClearCache,
   onEditNickname,
   onBackPress,
+  onNavigateToSelection,
+  onTripleTap,
 }: ChatHeaderProps) {
   // Zone selector state
   const [showZoneSelector, setShowZoneSelector] = useState(false);
   const [selectedZone, setSelectedZone] = useState<'local' | 'neighborhood' | 'city' | 'internet'>('local');
-
-  // Tap-count refs for title: single tap = edit, triple tap = clear cache
+  
+  // Triple tap detection
   const tapCountRef = useRef(0);
-  const tapTimerRef = useRef<any>(null);
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (tapTimerRef.current) {
         clearTimeout(tapTimerRef.current);
-        tapTimerRef.current = null;
       }
     };
   }, []);
 
-  const handleTitlePress = () => {
+  const handleUsernameTap = () => {
+    // If we're already navigating to selection, just use that
+    if (onNavigateToSelection && !selectedPeer) {
+      onNavigateToSelection();
+      return;
+    }
+
+    // Triple tap detection for username
     tapCountRef.current += 1;
+
     if (tapTimerRef.current) {
       clearTimeout(tapTimerRef.current);
     }
-    tapTimerRef.current = setTimeout(() => {
-      const taps = tapCountRef.current;
+
+    if (tapCountRef.current >= 3) {
+      // Triple tap detected!
+      console.log('[ChatHeader] Triple tap detected on username');
       tapCountRef.current = 0;
-      tapTimerRef.current = null;
-      if (taps === 1) {
-        onEditNickname && onEditNickname();
-      } else if (taps >= 3) {
-        onClearCache && onClearCache();
+      if (onTripleTap) {
+        onTripleTap();
       }
-    }, 600);
+      return;
+    }
+
+    // Reset tap count after 500ms
+    tapTimerRef.current = setTimeout(() => {
+      tapCountRef.current = 0;
+    }, 500);
   };
 
   return (
     <View style={styles.header}>
-      <View style={styles.headerLeft}>
+      <TouchableOpacity 
+        style={styles.headerLeft} 
+        onPress={handleUsernameTap}
+        activeOpacity={0.7}
+      >
         {/* Back arrow
         <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity> */}
-        <TouchableOpacity onPress={handleTitlePress} activeOpacity={0.7} style={styles.titleTouch}>
+        <View style={styles.titleTouch}>
           <Text style={styles.headerTitle}>{selectedPeer || nickname}</Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      </TouchableOpacity>
       
       {/* Right side icons */}
       <View style={styles.headerRight}>
@@ -92,13 +112,13 @@ export default function ChatHeader({
         </TouchableOpacity>
       </View>
 
-      {/* Nostr Zone Selector Modal */}
-      <NostrZoneSelectorModal
+      {/* Zone Selector Modal */}
+      <ZoneSelectorModal
         visible={showZoneSelector}
         onClose={() => setShowZoneSelector(false)}
         onSelectZone={(zone) => {
           setSelectedZone(zone);
-          console.log('Selected Nostr zone:', zone);
+          console.log('Selected zone:', zone);
         }}
         selectedZone={selectedZone}
       />

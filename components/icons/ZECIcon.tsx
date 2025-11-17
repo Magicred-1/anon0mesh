@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import ZECSvg from '../../assets/images/zcash_icon.svg';
+import ZECSvg from '../../assets/images/icons/zcash_icon.svg';
 
 type Props = {
     size?: number;

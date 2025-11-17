@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import GlobeSvg from '../../assets/images/Vector.svg';
+import GlobeSvg from '../../assets/images/icons/Vector.svg';
 
 const GlobeIcon = ({ size = 32 }: { size?: number }) => {
   return (

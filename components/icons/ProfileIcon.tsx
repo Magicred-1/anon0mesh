@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
-import ProfileSvg from '../../assets/images/profile_icon.svg';
+import ProfileSvg from '../../assets/images/icons/profile_icon.svg';
 
 interface ProfileIconProps {
   size?: number;

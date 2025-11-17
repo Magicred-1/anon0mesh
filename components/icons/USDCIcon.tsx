@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import USDCSvg from '../../assets/images/usdc_icon.svg';
+import USDCSvg from '../../assets/images/icons/usdc_icon.svg';
 
 type Props = {
   size?: number;

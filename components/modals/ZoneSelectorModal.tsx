@@ -37,10 +37,12 @@ const ZONES: NostrZone[] = [
     { id: 'local', label: 'Local', range: '100m', icon: '📍' },
     { id: 'neighborhood', label: 'Neighborhood', range: '10km', icon: '🏠' },
     { id: 'city', label: 'City', range: '100km', icon: '🏙️' },
-    { id: 'internet', label: 'Internet', range: 'Global', icon: '🌐' },
+    { id: 'internet', label: 'Regional', range: '1 000km', icon: '👥' },
+    { id: 'internet', label: 'National', range: '5 000km', icon: '📖' },
+    { id: 'internet', label: 'Global', range: '', icon: '🌐' },
 ];
 
-export default class NostrZoneSelectorModal extends Component<Props, NostrZoneSelectorModalState> {
+export default class ZoneSelectorModal extends Component<Props, NostrZoneSelectorModalState> {
     private _panResponders: PanResponderInstance;
     private _resetPositionAnim: Animated.CompositeAnimation;
     private _closeAnim: Animated.CompositeAnimation;
@@ -117,22 +119,18 @@ export default class NostrZoneSelectorModal extends Component<Props, NostrZoneSe
                 <View style={styles.background} />
             </TouchableWithoutFeedback>
             <Animated.View style={[styles.modalContent, { top }]}>
-                <View style={styles.handleContainer}>
-                <View style={styles.handle} />
-                </View>
+                <Text style={styles.title}>Mesh Zone</Text>
                 
-                <Text style={styles.title}>Select_Mesh_Zone</Text>
-                
-                <View style={styles.divider} />
+                <Text style={styles.sectionTitle}>Select your Mesh Zone</Text>
                 
                 <View style={styles.zonesContainer}>
                 {ZONES.map((zone, index) => {
-                    const isSelected = selectedZone === zone.id;
+                    const isSelected = selectedZone === zone.id && index === 0;
                     const isDisabled = zone.disabled;
                     
                     return (
                     <TouchableOpacity
-                        key={zone.id}
+                        key={`${zone.id}-${index}`}
                         style={[
                         styles.zoneButton,
                         isSelected && styles.zoneButtonSelected,
@@ -149,16 +147,50 @@ export default class NostrZoneSelectorModal extends Component<Props, NostrZoneSe
                         ]}>
                             {zone.icon}
                         </Text>
-                        <Text style={[
-                            styles.zoneText,
+                        <View style={styles.zoneTextContainer}>
+                          <Text style={[
+                            styles.zoneLabel,
                             isDisabled && styles.zoneTextDisabled,
-                        ]}>
-                            {zone.label} ({zone.range})
-                        </Text>
+                          ]}>
+                            {zone.label}
+                          </Text>
+                        </View>
+                        {zone.range && (
+                          <Text style={styles.zoneRange}>{zone.range}</Text>
+                        )}
                         </View>
                     </TouchableOpacity>
                     );
                 })}
+                </View>
+
+                <Text style={styles.customSectionTitle}>Custom Mesh Zone</Text>
+
+                <View style={styles.zonesContainer}>
+                  <TouchableOpacity style={[styles.zoneButton, styles.customZoneButton]}>
+                    <View style={styles.zoneContent}>
+                      <Text style={styles.zoneIcon}>#</Text>
+                      <View style={styles.zoneTextContainer}>
+                        <Text style={styles.zoneLabel}>MyCustomZone #123456</Text>
+                      </View>
+                      <Text style={styles.zoneRange}>100m</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={[styles.zoneButton, styles.customZoneButtonDim]}>
+                    <View style={styles.zoneContent}>
+                      <Text style={[styles.zoneIcon, styles.dimIcon]}>#</Text>
+                      <View style={styles.zoneTextContainer}>
+                        <Text style={[styles.zoneLabel, styles.dimText]}>MyCustomZone #123456</Text>
+                      </View>
+                      <Text style={[styles.zoneRange, styles.dimText]}>100m</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.createButton}>
+                    <Text style={styles.createButtonIcon}>+</Text>
+                    <Text style={styles.createButtonText}>Create new mesh zone</Text>
+                  </TouchableOpacity>
                 </View>
             </Animated.View>
             </View>
@@ -177,16 +209,17 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     modalContent: {
-        backgroundColor: '#0a1f1f',
+        backgroundColor: '#0a2828',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        borderWidth: 2,
-        borderColor: '#00d9ff',
-        borderBottomWidth: 0,
-        paddingTop: 12,
+        borderTopWidth: 2,
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderColor: '#22D3EE',
+        paddingTop: 32,
         paddingBottom: 32,
-        paddingHorizontal: 20,
-        maxHeight: Dimensions.get('screen').height * 0.7,
+        paddingHorizontal: 24,
+        maxHeight: Dimensions.get('screen').height * 0.85,
     },
     handleContainer: {
         alignItems: 'center',
@@ -196,36 +229,43 @@ const styles = StyleSheet.create({
     handle: {
         width: 40,
         height: 4,
-        backgroundColor: '#00d9ff',
+        backgroundColor: '#22D3EE',
         borderRadius: 2,
     },
     title: {
         color: '#fff',
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: '600',
-        textAlign: 'center',
         marginBottom: 24,
     },
-    divider: {
-        height: 1,
-        backgroundColor: '#00d9ff',
-        marginBottom: 24,
+    sectionTitle: {
+        color: '#8a9999',
+        fontSize: 16,
+        fontWeight: '400',
+        marginBottom: 16,
+    },
+    customSectionTitle: {
+        color: '#8a9999',
+        fontSize: 16,
+        fontWeight: '400',
+        marginTop: 32,
+        marginBottom: 16,
     },
     zonesContainer: {
-        gap: 16,
+        gap: 12,
     },
     zoneButton: {
         backgroundColor: '#0d3333',
-        borderRadius: 12,
+        borderRadius: 16,
         borderWidth: 2,
-        borderColor: '#004d4d',
-        paddingVertical: 20,
+        borderColor: '#1a4444',
+        paddingVertical: 18,
         paddingHorizontal: 20,
     },
     zoneButtonSelected: {
         backgroundColor: '#0d4d4d',
-        borderColor: '#00d9ff',
-        shadowColor: '#00d9ff',
+        borderColor: '#22D3EE',
+        shadowColor: '#22D3EE',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -236,23 +276,68 @@ const styles = StyleSheet.create({
         borderColor: '#1a2626',
         opacity: 0.4,
     },
+    customZoneButton: {
+        borderColor: '#22D3EE',
+    },
+    customZoneButtonDim: {
+        backgroundColor: '#0a2020',
+        borderColor: '#1a3333',
+    },
     zoneContent: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     zoneIcon: {
-        fontSize: 28,
+        fontSize: 24,
         marginRight: 16,
+        color: '#fff',
+    },
+    dimIcon: {
+        color: '#4a5555',
     },
     zoneIconDisabled: {
         opacity: 0.5,
     },
-    zoneText: {
+    zoneTextContainer: {
+        flex: 1,
+    },
+    zoneLabel: {
         color: '#fff',
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '500',
+    },
+    zoneRange: {
+        color: '#8a9999',
+        fontSize: 16,
+        fontWeight: '400',
+        marginLeft: 12,
+    },
+    dimText: {
+        color: '#4a5555',
     },
     zoneTextDisabled: {
         color: '#4a5555',
+    },
+    createButton: {
+        backgroundColor: 'transparent',
+        borderRadius: 16,
+        borderWidth: 2,
+        borderColor: '#22D3EE',
+        paddingVertical: 18,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    createButtonIcon: {
+        fontSize: 20,
+        color: '#22D3EE',
+        marginRight: 8,
+        fontWeight: '600',
+    },
+    createButtonText: {
+        color: '#22D3EE',
+        fontSize: 16,
+        fontWeight: '500',
     },
 });

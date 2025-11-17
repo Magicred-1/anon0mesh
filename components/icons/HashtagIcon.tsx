@@ -1,6 +1,6 @@
 import React from 'react';
 // @ts-ignore
-import HashtagSvg from '../../assets/images/hashtag_region.svg';
+import HashtagSvg from '../../assets/images/icons/hashtag_region.svg';
 
 interface HashtagIconProps {
   width?: number;

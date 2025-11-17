@@ -141,6 +141,20 @@ export default function ChatScreen() {
     }
   };
 
+  // Handle triple tap on username - clear all messages and go to landing
+  const handleTripleTap = () => {
+    console.log('[Chat] Triple tap detected - clearing all messages and navigating to landing');
+    // Clear ALL messages (both sent and received)
+    setMessages([]);
+    // TODO: Clear persisted cache/storage when implemented
+    // Navigate to landing
+    try {
+      router.replace('/landing' as any);
+    } catch (e) {
+      console.warn('[Chat] Failed to navigate to landing after triple tap', e);
+    }
+  };
+
   // Filter messages based on selected peer
   const filteredMessages = selectedPeer
     ? messages.filter(
@@ -170,6 +184,8 @@ export default function ChatScreen() {
           onEditNickname={() => setEditNickVisible(true)}
           onClearCache={handleClearReceivedMessages}
           onBackPress={() => router.back()}
+          onNavigateToSelection={() => router.push('/chat/selection' as any)}
+          onTripleTap={handleTripleTap}
         />
 
         <View style={styles.messagesContainer}>

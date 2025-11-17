@@ -96,7 +96,10 @@ export default function WalletScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Wallet</Text>
-          <TouchableOpacity style={styles.settingsButton}>
+          <TouchableOpacity 
+            style={styles.settingsButton}
+            onPress={() => router.push('/wallet/settings')}
+          >
             <View style={styles.settingsIcon}>
               <SettingsIcon />
             </View>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 // @ts-ignore
-import MeshZoneSvg from '../../assets/images/mesh_icon.svg';
+import MeshZoneSvg from '../../assets/images/icons/mesh_icon.svg';
 
 interface MeshZoneIconProps {
   size?: number;

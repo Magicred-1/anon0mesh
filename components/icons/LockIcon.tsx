@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 // @ts-ignore
-import LockSvg from '../../assets/images/locked_icon.svg';
+import LockSvg from '../../assets/images/icons/locked_icon.svg';
 
 const LockIcon = ({ size = 32 }: { size?: number }) => {
   return (

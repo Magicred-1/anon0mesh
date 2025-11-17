@@ -1,11 +1,11 @@
-import WalletScreen from '@/components/screens/wallet/WalletScreen';
+import SwapScreen from '@/components/screens/wallet/SwapScreen';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 export default function WalletPage() {
 	return (
 		<View style={styles.container}>
-			<WalletScreen />
+			<SwapScreen />
 		</View>
 	);
 }
