@@ -48,7 +48,7 @@ mod circuits {
         let mut escrow_stats = escrow_stats_ctxt.to_arcis();
 
         if payment.is_valid {
-            // Calculate fees (2% total: 1.4% treasury + 0.6% referral)
+            // Calculate fees (2% total: 1.4% treasury + 0.6% refferral)
             let total_fee = (payment.amount * 20) / 1000; // 2%
 
             escrow_stats.total_payments += 1;
