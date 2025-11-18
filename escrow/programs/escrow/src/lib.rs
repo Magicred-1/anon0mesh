@@ -1,9 +1,21 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use anchor_lang::solana_program::program_pack::Pack;
+use anchor_lang::solana_program::token_2022::spl_token::state::{Mint as SplMint, Account as SplAccount};
 use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::CallbackAccount;
 
-// Computation definition offsets for encrypted instructions
+// Re-export token types for convenience
+pub use anchor_lang::solana_program::token_2022::spl_token::{
+    self,
+    instruction as token_instruction,
+    state as token_state,
+    ID as TOKEN_PROGRAM_ID,
+};
+
+// Type aliases for better readability
+pub type TokenAccount = Account<'info, token_state::Account>;
+pub type Mint = Account<'info, token_state::Mint>;
+
 const COMP_DEF_OFFSET_INIT_ESCROW_STATS: u32 = comp_def_offset("init_escrow_stats");
 const COMP_DEF_OFFSET_INIT_REFERRAL_STATS: u32 = comp_def_offset("init_referral_stats");
 const COMP_DEF_OFFSET_PROCESS_PAYMENT: u32 = comp_def_offset("process_payment");
@@ -14,12 +26,13 @@ const COMP_DEF_OFFSET_REVEAL_COUNT: u32 = comp_def_offset("reveal_payment_count"
 pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 pub const ZENZEC_MINT: Pubkey = pubkey!("JDt9rRGaieF6aN1cJkXFeUmsy7ZE4yY3CZb8tVMXVroS");
 
-declare_id!("FcBc76pbW1cgE3r4MF7ryMp8VF1DxceCJPmym982PFoK");
+declare_id!("EujENt3gyDVwqN2h3GXrpi2T6DdkGV5pafPAdXMRo3CM");
 
 #[arcium_program]
 pub mod escrow_anonmesh {
     use super::*;
 
+    // Initialize computation definitions for encrypted instructions
     pub fn init_escrow_stats_comp_def(ctx: Context<InitEscrowStatsCompDef>) -> Result<()> {
         init_comp_def(ctx.accounts, 0, None, None)?;
         Ok(())
@@ -35,12 +48,16 @@ pub mod escrow_anonmesh {
         Ok(())
     }
 
+    /// Initialize escrow with encrypted statistics tracking
     pub fn initialize_escrow(
         ctx: Context<InitializeEscrow>,
         computation_offset: u64,
         treasury_address: Pubkey,
         nonce: u128,
     ) -> Result<()> {
+        // Get the escrow key before borrowing
+        let escrow_key = ctx.accounts.escrow.key();
+
         let escrow = &mut ctx.accounts.escrow;
         escrow.owner = ctx.accounts.owner.key();
         escrow.total_fund_regulated = 0;
@@ -49,7 +66,7 @@ pub mod escrow_anonmesh {
         escrow.treasury = treasury_address;
         escrow.bump = ctx.bumps.escrow;
         escrow.nonce = nonce;
-        escrow.encrypted_stats = [[0; 32]; 3];
+        escrow.encrypted_stats = [[0; 32]; 3]; // Store encrypted statistics
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
@@ -62,7 +79,7 @@ pub mod escrow_anonmesh {
             args,
             None,
             vec![InitEscrowStatsCallback::callback_ix(&[CallbackAccount {
-                pubkey: ctx.accounts.escrow.key(),
+                pubkey: escrow_key,
                 is_writable: true,
             }])],
             1,
@@ -110,6 +127,7 @@ pub mod escrow_anonmesh {
         Ok(())
     }
 
+    /// SOL payment with encrypted statistics tracking
     pub fn send_payment_encrypted(
         ctx: Context<SendPaymentSolEncrypted>,
         computation_offset: u64,
@@ -120,8 +138,11 @@ pub mod escrow_anonmesh {
         payment_nonce: u128,
         encrypted_amount: [u8; 32],
     ) -> Result<()> {
-        let escrow = &mut ctx.accounts.escrow;
-        require!(escrow.active, EscrowError::EscrowPaused);
+        // Get escrow key and nonce before mutable borrow
+        let escrow_key = ctx.accounts.escrow.key();
+        let escrow_nonce = ctx.accounts.escrow.nonce;
+
+        require!(ctx.accounts.escrow.active, EscrowError::EscrowPaused);
 
         let payment = &mut ctx.accounts.payment;
         payment.sender = ctx.accounts.sender.key();
@@ -131,6 +152,7 @@ pub mod escrow_anonmesh {
         payment.timestamp = Clock::get()?.unix_timestamp;
         payment.asset_mint = Pubkey::default();
 
+        // Calculate fees
         let referral_fee = amount.checked_mul(6).ok_or(ProgramError::InvalidArgument)? / 1000;
         let treasury_fee = amount
             .checked_mul(14)
@@ -146,12 +168,14 @@ pub mod escrow_anonmesh {
         payment.referal_reward = referral_fee;
         payment.treasury_reward = treasury_fee;
 
+        // Perform actual transfers
         let from = ctx.accounts.sender.to_account_info();
         let to_recipient = ctx.accounts.recipient.to_account_info();
         let to_treasury = ctx.accounts.treasury.to_account_info();
         let to_referral = ctx.accounts.referral.to_account_info();
         let system_program = ctx.accounts.system_program.to_account_info();
 
+        // Transfer to recipient
         let cpi_ctx_recipient = CpiContext::new(
             system_program.clone(),
             anchor_lang::system_program::Transfer {
@@ -161,6 +185,7 @@ pub mod escrow_anonmesh {
         );
         anchor_lang::system_program::transfer(cpi_ctx_recipient, net_amount)?;
 
+        // Transfer to treasury
         let cpi_ctx_treasury = CpiContext::new(
             system_program.clone(),
             anchor_lang::system_program::Transfer {
@@ -185,9 +210,9 @@ pub mod escrow_anonmesh {
             Argument::ArcisPubkey(payment_encryption_pubkey),
             Argument::PlaintextU128(payment_nonce),
             Argument::EncryptedU64(encrypted_amount),
-            Argument::PlaintextBool(true), // is_valid flag
-            Argument::PlaintextU128(escrow.nonce),
-            Argument::Account(escrow.key(), 8 + 1, 32 * 3),
+            Argument::PlaintextBool(true),
+            Argument::PlaintextU128(escrow_nonce),
+            Argument::Account(escrow_key, 8 + 1, 32 * 3),
         ];
 
         queue_computation(
@@ -196,13 +221,15 @@ pub mod escrow_anonmesh {
             args,
             None,
             vec![ProcessPaymentCallback::callback_ix(&[CallbackAccount {
-                pubkey: escrow.key(),
+                pubkey: escrow_key,
                 is_writable: true,
             }])],
             1,
         )?;
 
-        escrow.total_fund_regulated = escrow
+        ctx.accounts.escrow.total_fund_regulated = ctx
+            .accounts
+            .escrow
             .total_fund_regulated
             .checked_add(amount)
             .ok_or(ProgramError::InvalidArgument)?;
@@ -226,13 +253,12 @@ pub mod escrow_anonmesh {
         let clock = Clock::get()?;
         emit!(ConfidentialPaymentEvent {
             timestamp: clock.unix_timestamp,
-            sender: ctx.accounts.escrow.owner,
+            sender: ctx.accounts.escrow.owner, // Don't reveal actual sender
         });
 
         Ok(())
     }
 
-    /// Check if escrow volume exceeds a threshold (result is public)
     pub fn check_volume_threshold(
         ctx: Context<CheckVolumeThreshold>,
         computation_offset: u64,
@@ -256,7 +282,7 @@ pub mod escrow_anonmesh {
             computation_offset,
             args,
             None,
-            vec![CheckThresholdCallback::callback_ix(&[])],
+            vec![CheckVolumeThresholdCallback::callback_ix(&[])],
             1,
         )?;
 
@@ -264,12 +290,12 @@ pub mod escrow_anonmesh {
     }
 
     #[arcium_callback(encrypted_ix = "check_volume_threshold")]
-    pub fn check_threshold_callback(
-        ctx: Context<CheckThresholdCallback>,
-        output: ComputationOutputs<CheckThresholdOutput>,
+    pub fn check_volume_threshold_callback(
+        ctx: Context<CheckVolumeThresholdCallback>,
+        output: ComputationOutputs<CheckVolumeThresholdOutput>,
     ) -> Result<()> {
         let result = match output {
-            ComputationOutputs::Success(CheckThresholdOutput { field_0 }) => field_0,
+            ComputationOutputs::Success(CheckVolumeThresholdOutput { field_0 }) => field_0,
             _ => return Err(EscrowError::AbortedComputation.into()),
         };
 
@@ -302,7 +328,7 @@ pub mod escrow_anonmesh {
             computation_offset,
             args,
             None,
-            vec![RevealCountCallback::callback_ix(&[])],
+            vec![RevealPaymentCountCallback::callback_ix(&[])],
             1,
         )?;
 
@@ -310,12 +336,12 @@ pub mod escrow_anonmesh {
     }
 
     #[arcium_callback(encrypted_ix = "reveal_payment_count")]
-    pub fn reveal_count_callback(
-        ctx: Context<RevealCountCallback>,
-        output: ComputationOutputs<RevealCountOutput>,
+    pub fn reveal_payment_count_callback(
+        ctx: Context<RevealPaymentCountCallback>,
+        output: ComputationOutputs<RevealPaymentCountOutput>,
     ) -> Result<()> {
         let count = match output {
-            ComputationOutputs::Success(RevealCountOutput { field_0 }) => field_0,
+            ComputationOutputs::Success(RevealPaymentCountOutput { field_0 }) => field_0,
             _ => return Err(EscrowError::AbortedComputation.into()),
         };
 
@@ -408,6 +434,7 @@ pub mod escrow_anonmesh {
         let escrow = &mut ctx.accounts.escrow;
         require!(escrow.active, EscrowError::EscrowPaused);
 
+        // Update payment details
         payment.sender = ctx.accounts.sender.key();
         payment.recipient = recipient;
         payment.referal = referal;
@@ -418,7 +445,9 @@ pub mod escrow_anonmesh {
             .checked_mul(14)
             .ok_or(ProgramError::InvalidArgument)?
             / 1000;
+        payment.asset_mint = ctx.accounts.mint.key();
 
+        // Calculate transfer amounts
         let fees = payment
             .referal_reward
             .checked_add(payment.treasury_reward)
@@ -426,45 +455,58 @@ pub mod escrow_anonmesh {
         let transferable_amount = amount
             .checked_sub(fees)
             .ok_or(ProgramError::InvalidArgument)?;
-        payment.asset_mint = ctx.accounts.usdc_mint.key();
 
+        // Get token program and authority
         let token_program = ctx.accounts.token_program.to_account_info();
         let authority = ctx.accounts.sender.to_account_info();
 
-        let cpi_ctx_recipient = CpiContext::new(
+        // Transfer to recipient
+        let cpi_recipient = CpiContext::new(
             token_program.clone(),
-            Transfer {
-                from: ctx.accounts.sender_ata.to_account_info(),
-                to: ctx.accounts.recipient_ata.to_account_info(),
+            token_instruction::Transfer {
+                from: ctx.accounts.sender_token_account.to_account_info(),
+                to: ctx.accounts.recipient_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token::transfer(cpi_ctx_recipient, transferable_amount)?;
+        token_instruction::transfer(cpi_recipient, transferable_amount)?;
 
-        let cpi_ctx_treasury = CpiContext::new(
+        // Transfer to treasury
+        let cpi_treasury = CpiContext::new(
             token_program.clone(),
-            Transfer {
-                from: ctx.accounts.sender_ata.to_account_info(),
-                to: ctx.accounts.treasury_ata.to_account_info(),
+            token_instruction::Transfer {
+                from: ctx.accounts.sender_token_account.to_account_info(),
+                to: ctx.accounts.treasury_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token::transfer(cpi_ctx_treasury, payment.treasury_reward)?;
+        token_instruction::transfer(cpi_treasury, payment.treasury_reward)?;
 
-        let cpi_ctx_referral = CpiContext::new(
-            token_program,
-            Transfer {
-                from: ctx.accounts.sender_ata.to_account_info(),
-                to: ctx.accounts.referral_ata.to_account_info(),
+        // Transfer to referral
+        let cpi_referral = CpiContext::new(
+            token_program.clone(),
+            token_instruction::Transfer {
+                from: ctx.accounts.sender_token_account.to_account_info(),
+                to: ctx.accounts.referral_token_account.to_account_info(),
                 authority,
             },
         );
-        token::transfer(cpi_ctx_referral, payment.referal_reward)?;
+        token_instruction::transfer(cpi_referral, payment.referal_reward)?;
 
+        // Update escrow stats
         escrow.total_fund_regulated = escrow
             .total_fund_regulated
             .checked_add(amount)
             .ok_or(ProgramError::InvalidArgument)?;
+
+        // Emit event
+        emit!(ConfidentialPaymentEvent {
+            sender: payment.sender,
+            recipient: payment.recipient,
+            amount,
+            timestamp: payment.timestamp,
+            asset_mint: payment.asset_mint,
+        });
 
         Ok(())
     }
@@ -479,6 +521,7 @@ pub mod escrow_anonmesh {
         let escrow = &mut ctx.accounts.escrow;
         require!(escrow.active, EscrowError::EscrowPaused);
 
+        // Update payment details
         payment.sender = ctx.accounts.sender.key();
         payment.recipient = recipient;
         payment.referal = referal;
@@ -489,7 +532,9 @@ pub mod escrow_anonmesh {
             .checked_mul(14)
             .ok_or(ProgramError::InvalidArgument)?
             / 1000;
+        payment.asset_mint = ctx.accounts.mint.key();
 
+        // Calculate transfer amounts
         let fees = payment
             .referal_reward
             .checked_add(payment.treasury_reward)
@@ -497,45 +542,58 @@ pub mod escrow_anonmesh {
         let transferable_amount = amount
             .checked_sub(fees)
             .ok_or(ProgramError::InvalidArgument)?;
-        payment.asset_mint = ctx.accounts.zenzec_mint.key();
 
+        // Get token program and authority
         let token_program = ctx.accounts.token_program.to_account_info();
         let authority = ctx.accounts.sender.to_account_info();
 
-        let cpi_ctx_recipient = CpiContext::new(
+        // Transfer to recipient
+        let cpi_recipient = CpiContext::new(
             token_program.clone(),
-            Transfer {
-                from: ctx.accounts.sender_ata.to_account_info(),
-                to: ctx.accounts.recipient_ata.to_account_info(),
+            token_instruction::Transfer {
+                from: ctx.accounts.sender_token_account.to_account_info(),
+                to: ctx.accounts.recipient_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token::transfer(cpi_ctx_recipient, transferable_amount)?;
+        token_instruction::transfer(cpi_recipient, transferable_amount)?;
 
-        let cpi_ctx_treasury = CpiContext::new(
+        // Transfer to treasury
+        let cpi_treasury = CpiContext::new(
             token_program.clone(),
-            Transfer {
-                from: ctx.accounts.sender_ata.to_account_info(),
-                to: ctx.accounts.treasury_ata.to_account_info(),
+            token_instruction::Transfer {
+                from: ctx.accounts.sender_token_account.to_account_info(),
+                to: ctx.accounts.treasury_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token::transfer(cpi_ctx_treasury, payment.treasury_reward)?;
+        token_instruction::transfer(cpi_treasury, payment.treasury_reward)?;
 
-        let cpi_ctx_referral = CpiContext::new(
-            token_program,
-            Transfer {
-                from: ctx.accounts.sender_ata.to_account_info(),
-                to: ctx.accounts.referral_ata.to_account_info(),
+        // Transfer to referral
+        let cpi_referral = CpiContext::new(
+            token_program.clone(),
+            token_instruction::Transfer {
+                from: ctx.accounts.sender_token_account.to_account_info(),
+                to: ctx.accounts.referral_token_account.to_account_info(),
                 authority,
             },
         );
-        token::transfer(cpi_ctx_referral, payment.referal_reward)?;
+        token_instruction::transfer(cpi_referral, payment.referal_reward)?;
 
+        // Update escrow stats
         escrow.total_fund_regulated = escrow
             .total_fund_regulated
             .checked_add(amount)
             .ok_or(ProgramError::InvalidArgument)?;
+
+        // Emit event
+        emit!(ConfidentialPaymentEvent {
+            sender: payment.sender,
+            recipient: payment.recipient,
+            amount,
+            timestamp: payment.timestamp,
+            asset_mint: payment.asset_mint,
+        });
 
         Ok(())
     }
@@ -697,33 +755,18 @@ pub struct InitProcessPaymentCompDef<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[queue_computation_accounts("process_payment", sender)]
-#[derive(Accounts)]
-#[instruction(computation_offset: u64)]
-pub struct SendPaymentSolEncrypted<'info> {
+// Split the large struct into smaller components
+#[account]
+pub struct PaymentAccounts<'info> {
     #[account(mut)]
     pub sender: Signer<'info>,
-
-    #[account(mut)]
-    pub recipient: SystemAccount<'info>,
-
-    #[account(mut)]
-    pub referral: SystemAccount<'info>,
-
-    #[account(mut)]
-    pub treasury: SystemAccount<'info>,
-
     #[account(
-        init,
-        payer = sender,
-        space = 8 + PaymentAccount::INIT_SPACE,
-        seeds = [b"payments", sender.key().as_ref(), b"sol_encrypted"],
+        mut,
+        seeds = [b"payments", sender.key().as_ref(), &computation_offset.to_le_bytes()],
         bump
     )]
     pub payment: Account<'info, PaymentAccount>,
-
     pub owner: SystemAccount<'info>,
-
     #[account(
         mut,
         seeds = [b"escrow", owner.key().as_ref()],
@@ -731,22 +774,35 @@ pub struct SendPaymentSolEncrypted<'info> {
         constraint = escrow.owner == owner.key(),
     )]
     pub escrow: Account<'info, EscrowAccount>,
+}
 
-    #[account(
-        init_if_needed,
-        space = 9,
-        payer = sender,
-        seeds = [&SIGN_PDA_SEED],
-        bump,
-        address = derive_sign_pda!(),
-    )]
-    pub sign_pda_account: Account<'info, SignerAccount>,
+#[derive(Accounts)]
+pub struct PaymentTransferAccounts<'info> {
+    #[account(mut)]
+    pub recipient: SystemAccount<'info>,
+    /// CHECK: Referral account
+    #[account(mut)]
+    pub referrer: AccountInfo<'info>,
+    /// CHECK: Treasury account
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
+}
 
-    #[account(
-        address = derive_mxe_pda!()
-    )]
-    pub mxe_account: Account<'info, MXEAccount>,
+#[derive(Accounts)]
+pub struct ComputationAccounts<'info> {
+    /// CHECK: Computation account
+    #[account(mut)]
+    pub computation: AccountInfo<'info>,
+    /// CHECK: Callback account
+    #[account(mut)]
+    pub callback: AccountInfo<'info>,
+    /// CHECK: Callback accounts
+    pub remaining_accounts: Vec<AccountInfo<'info>>,
+}
 
+// Grouped computation accounts for better organization
+#[derive(Accounts)]
+pub struct ComputationPdaAccounts<'info> {
     #[account(
         mut,
         address = derive_mempool_pda!()
@@ -772,6 +828,27 @@ pub struct SendPaymentSolEncrypted<'info> {
         address = derive_comp_def_pda!(COMP_DEF_OFFSET_PROCESS_PAYMENT)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
+}
+
+#[queue_computation_accounts("process_payment", sender)]
+#[derive(Accounts)]
+#[instruction(computation_offset: u64)]
+pub struct SendPaymentSolEncrypted<'info> {
+    // Payment related accounts
+    #[account(mut)]
+    pub payment_accounts: PaymentAccounts<'info>,
+    
+    // Transfer related accounts
+    pub transfer_accounts: PaymentTransferAccounts<'info>,
+    
+    // Computation related accounts
+    pub computation_accounts: ComputationAccounts<'info>,
+    
+    // Computation PDA accounts
+    pub pda_accounts: ComputationPdaAccounts<'info>,
+    
+    // System program
+    pub system_program: Program<'info, System>,
 
     #[account(
         mut,
@@ -858,6 +935,7 @@ pub struct CheckVolumeThreshold<'info> {
         mut,
         address = derive_comp_pda!(computation_offset)
     )]
+    /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
 
     #[account(
@@ -888,7 +966,7 @@ pub struct CheckVolumeThreshold<'info> {
 
 #[callback_accounts("check_volume_threshold")]
 #[derive(Accounts)]
-pub struct CheckThresholdCallback<'info> {
+pub struct CheckVolumeThresholdCallback<'info> {
     pub arcium_program: Program<'info, Arcium>,
 
     #[account(
@@ -897,6 +975,7 @@ pub struct CheckThresholdCallback<'info> {
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
 
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
+    /// CHECK: instructions_sysvar
     pub instructions_sysvar: AccountInfo<'info>,
 }
 
@@ -977,7 +1056,7 @@ pub struct RevealPaymentCount<'info> {
 
 #[callback_accounts("reveal_payment_count")]
 #[derive(Accounts)]
-pub struct RevealCountCallback<'info> {
+pub struct RevealPaymentCountCallback<'info> {
     pub arcium_program: Program<'info, Arcium>,
 
     #[account(
@@ -1018,6 +1097,7 @@ pub struct UpdateTreasury<'info> {
     pub escrow: Account<'info, EscrowAccount>,
 }
 
+// Keep existing SendPaymentSol, SendPaymentUsdc, SendPaymentZenZec structures unchanged
 #[derive(Accounts)]
 pub struct SendPaymentSol<'info> {
     #[account(mut)]
@@ -1051,27 +1131,18 @@ pub struct SendPaymentSol<'info> {
 pub struct SendPaymentZenZec<'info> {
     #[account(mut)]
     pub sender: Signer<'info>,
-    #[account(
-        mut,
-        constraint = sender_ata.owner == sender.key(),
-        constraint = sender_ata.mint == zenzec_mint.key(),
-    )]
-    pub sender_ata: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        constraint = recipient_ata.mint == zenzec_mint.key(),
-    )]
-    pub recipient_ata: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        constraint = referral_ata.mint == zenzec_mint.key(),
-    )]
-    pub referral_ata: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        constraint = treasury_ata.mint == zenzec_mint.key(),
-    )]
-    pub treasury_ata: Account<'info, TokenAccount>,
+    
+    // Token accounts
+    #[account(mut)]
+    pub sender_token_account: Account<'info, token_state::Account>,
+    #[account(mut)]
+    pub recipient_token_account: Account<'info, token_state::Account>,
+    #[account(mut)]
+    pub referral_token_account: Account<'info, token_state::Account>,
+    #[account(mut)]
+    pub treasury_token_account: Account<'info, token_state::Account>,
+    
+    // Payment account
     #[account(
         init,
         payer = sender,
@@ -1080,7 +1151,8 @@ pub struct SendPaymentZenZec<'info> {
         bump
     )]
     pub payment: Account<'info, PaymentAccount>,
-    pub owner: SystemAccount<'info>,
+    
+    // Escrow account
     #[account(
         mut,
         seeds = [b"escrow", owner.key().as_ref()],
@@ -1088,37 +1160,49 @@ pub struct SendPaymentZenZec<'info> {
         constraint = escrow.owner == owner.key(),
     )]
     pub escrow: Account<'info, EscrowAccount>,
+    
+    // Program accounts
+    pub owner: SystemAccount<'info>,
     #[account(address = ZENZEC_MINT)]
-    pub zenzec_mint: Account<'info, Mint>,
-    pub token_program: Program<'info, Token>,
+    pub mint: Account<'info, token_state::Mint>,
+    pub token_program: Program<'info, token_2022::spl_token::ID>,
     pub system_program: Program<'info, System>,
+    
+    // System accounts
+    pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
+    
+    // Additional token accounts (kept for backward compatibility)
+    /// CHECK: This is the sender's token account (ATA)
+    #[account(mut)]
+    pub sender_ata: AccountInfo<'info>,
+    /// CHECK: This is the recipient's token account (ATA)
+    #[account(mut)]
+    pub recipient_ata: AccountInfo<'info>,
+    /// CHECK: This is the referral's token account (ATA)
+    #[account(mut)]
+    pub referral_ata: AccountInfo<'info>,
+    /// CHECK: This is the treasury's token account (ATA)
+    #[account(mut)]
+    pub treasury_ata: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]
 pub struct SendPaymentUsdc<'info> {
     #[account(mut)]
     pub sender: Signer<'info>,
-    #[account(
-        mut,
-        constraint = sender_ata.owner == sender.key(),
-        constraint = sender_ata.mint == usdc_mint.key(),
-    )]
-    pub sender_ata: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        constraint = recipient_ata.mint == usdc_mint.key(),
-    )]
-    pub recipient_ata: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        constraint = referral_ata.mint == usdc_mint.key(),
-    )]
-    pub referral_ata: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        constraint = treasury_ata.mint == usdc_mint.key(),
-    )]
-    pub treasury_ata: Account<'info, TokenAccount>,
+    
+    // Token accounts
+    #[account(mut)]
+    pub sender_token_account: Account<'info, token_state::Account>,
+    #[account(mut)]
+    pub recipient_token_account: Account<'info, token_state::Account>,
+    #[account(mut)]
+    pub referral_token_account: Account<'info, token_state::Account>,
+    #[account(mut)]
+    pub treasury_token_account: Account<'info, token_state::Account>,
+    
+    // Payment account
     #[account(
         init,
         payer = sender,
@@ -1127,7 +1211,8 @@ pub struct SendPaymentUsdc<'info> {
         bump
     )]
     pub payment: Account<'info, PaymentAccount>,
-    pub owner: SystemAccount<'info>,
+    
+    // Escrow account
     #[account(
         mut,
         seeds = [b"escrow", owner.key().as_ref()],
@@ -1135,25 +1220,53 @@ pub struct SendPaymentUsdc<'info> {
         constraint = escrow.owner == owner.key(),
     )]
     pub escrow: Account<'info, EscrowAccount>,
+    
+    // Mint account
     #[account(address = USDC_MINT)]
-    pub usdc_mint: Account<'info, Mint>,
-    pub token_program: Program<'info, Token>,
+    pub mint: Account<'info, token_state::Mint>,
+    
+    // Program accounts
+    pub owner: SystemAccount<'info>,
+    pub token_program: Program<'info, token_2022::spl_token::ID>,
+    pub system_program: Program<'info, System>,
+    
+    // Additional token accounts (kept for backward compatibility)
+    /// CHECK: This is the sender's token account (ATA)
+    #[account(mut)]
+    pub sender_ata: AccountInfo<'info>,
+    /// CHECK: This is the recipient's token account (ATA)
+    #[account(mut)]
+    pub recipient_ata: AccountInfo<'info>,
+    /// CHECK: This is the referral's token account (ATA)
+    #[account(mut)]
+    pub referral_ata: AccountInfo<'info>,
+    /// CHECK: This is the treasury's token account (ATA)
+    #[account(mut)]
+    pub treasury_ata: AccountInfo<'info>,
+    
+    // System accounts
+    pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
 }
 
+// Updated EscrowAccount with encrypted statistics
 #[account]
 #[derive(InitSpace, Debug)]
 pub struct EscrowAccount {
     pub owner: Pubkey,
-    pub total_fund_regulated: u64,
+    pub total_fund_regulated: u64, // Keep for backwards compatibility
     pub last_updated: i64,
     pub active: bool,
     pub treasury: Pubkey,
     pub bump: u8,
+    // New fields for Arcium encryption
     pub nonce: u128,
+    /// Encrypted statistics: [total_payments, total_volume, total_fees_collected]
     pub encrypted_stats: [[u8; 32]; 3],
 }
 
+// Keep existing PaymentAccount structure
 #[account]
 #[derive(InitSpace, Debug)]
 pub struct PaymentAccount {
@@ -1184,6 +1297,7 @@ pub enum EscrowError {
     ClusterNotSet,
 }
 
+// Events for encrypted operations
 #[event]
 pub struct ConfidentialPaymentEvent {
     pub timestamp: i64,

@@ -1,12 +1,15 @@
 [toolchain]
 package_manager = "yarn"
+channel = "1.89.0"
+components = ["rustfmt", "clippy"]
+
 
 [features]
 resolution = true
 skip-lint = false
 
 [programs.localnet]
-escrow = "FcBc76pbW1cgE3r4MF7ryMp8VF1DxceCJPmym982PFoK"
+escrow = "EujENt3gyDVwqN2h3GXrpi2T6DdkGV5pafPAdXMRo3CM"
 
 [registry]
 url = "https://api.apr.dev"

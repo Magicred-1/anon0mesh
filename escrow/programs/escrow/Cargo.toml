@@ -21,12 +21,28 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
-anchor-spl = "0.32.1"
+anchor-spl = { version = "0.32.1", features = ["token"] }
 arcium-client = { default-features = false, version = "0.4.0" }
 arcium-macros = "0.4.0"
-arcium-anchor = "0.4.0"
+arcium-anchor = { version = "0.4.0", features = ["idl-build"] }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+incremental = false
+debug = false
+
+[profile.release.build-override]
+opt-level = 3
+incremental = false
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(target_os, values("solana"))',
 ] }
+
