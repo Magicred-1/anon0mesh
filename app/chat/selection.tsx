@@ -15,7 +15,7 @@ const ChatSelectionPage = () => {
         onNavigateToProfile={() => router.push("/profile" as any)}
         onDisconnect={() => {
             console.log("Disconnect");
-            router.push("/landing" as any);
+            router.push("../" as any);
         }} />;
     
 };

@@ -4,9 +4,11 @@ import ChatInput from '@/components/chat/ChatInput';
 import ChatMessages, { Message } from '@/components/chat/ChatMessages';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import EditNicknameModal from '@/components/modals/EditNicknameModal';
+import PaymentRequestModal from '@/components/modals/PaymentRequestModal';
 import { useNostrChat } from '@/src/hooks/useNostrChat';
 import { WalletFactory } from '@/src/infrastructure/wallet';
 import '@/src/polyfills';
+import { parseCommand, SendCommandResult } from '@/src/utils/chatCommands';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -41,6 +43,10 @@ export default function ChatScreen() {
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
+
+  // Payment Request Modal
+  const [paymentCommand, setPaymentCommand] = useState<SendCommandResult | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Nostr integration
   const {
@@ -149,6 +155,26 @@ export default function ChatScreen() {
     if (!inputText.trim()) return;
 
     const messageContent = inputText.trim();
+
+    // Check if it's a command
+    const commandResult = parseCommand(messageContent);
+
+    if (commandResult) {
+      // Handle command
+      if (commandResult.type === 'send') {
+        // Show payment modal
+        setPaymentCommand(commandResult);
+        setShowPaymentModal(true);
+        setInputText(''); // Clear input
+        return;
+      } else if (commandResult.type === 'invalid') {
+        // Show error
+        Alert.alert('Invalid Command', commandResult.error);
+        return;
+      }
+    }
+
+    // Regular message (not a command)
     setInputText('');
     Keyboard.dismiss();
 
@@ -177,6 +203,64 @@ export default function ChatScreen() {
     } catch (error) {
       console.error('[Chat] Send error:', error);
       Alert.alert('Error', 'Failed to send message');
+    }
+  };
+
+  // Handle payment confirmation
+  const handlePaymentConfirm = async (token: 'SOL' | 'USDC' | 'ZEC') => {
+    if (!paymentCommand) return;
+
+    console.log('[Chat] Sending payment:', {
+      amount: paymentCommand.amount,
+      token,
+      recipient: paymentCommand.recipient,
+    });
+
+    try {
+      // Get wallet adapter
+      const walletAdapter = await WalletFactory.createAuto();
+      
+      if (!walletAdapter.isConnected()) {
+        throw new Error('Wallet not connected');
+      }
+
+      const publicKey = walletAdapter.getPublicKey();
+      if (!publicKey) {
+        throw new Error('No public key available');
+      }
+
+      // For now, we'll send a message about the payment request
+      // In production, you'd integrate with SendScreen logic or create a transaction
+      const paymentMessage = `💸 Payment Request: ${paymentCommand.amount} ${token} to @${paymentCommand.recipient}`;
+      
+      if (nostrConnected) {
+        await sendNostrMessage(paymentMessage, selectedPeer || undefined);
+      } else {
+        const newMessage: Message = {
+          id: `payment-${Date.now()}_${Math.random()}`,
+          from: nickname,
+          to: selectedPeer || undefined,
+          msg: paymentMessage,
+          ts: Date.now(),
+          isMine: true,
+        };
+        setBleMessages((prev: Message[]) => [...prev, newMessage]);
+      }
+
+      // TODO: Integrate actual transaction sending
+      // For now, show success alert
+      Alert.alert(
+        'Payment Request Sent',
+        `Your request to send ${paymentCommand.amount} ${token} to @${paymentCommand.recipient} has been broadcasted to the mesh network.`,
+        [{ text: 'OK' }]
+      );
+
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (error) {
+      console.error('[Chat] Payment error:', error);
+      throw error; // Let modal handle the error
     }
   };
 
@@ -307,6 +391,19 @@ export default function ChatScreen() {
                 autoRequest={true}
               />
             </View>
+          )}
+
+          {/* Payment Request Modal */}
+          {paymentCommand && (
+            <PaymentRequestModal
+              visible={showPaymentModal}
+              command={paymentCommand}
+              onConfirm={handlePaymentConfirm}
+              onCancel={() => {
+                setShowPaymentModal(false);
+                setPaymentCommand(null);
+              }}
+            />
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>

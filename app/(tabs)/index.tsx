@@ -40,16 +40,16 @@ export default function Index() {
             if (isSolanaMobile) {
                 console.log('[Index] 📱 Solana Mobile device detected - can use MWA');
                 
-                // Check if they've completed onboarding
-                if (hasSeenIndex !== 'true') {
-                    console.log('[Index] First time Solana Mobile user - redirect to landing page');
-                    router.replace('/landing' as any);
-                    return;
+                // Check if they've completed onboarding (hasSeenIndex is set by OnboardingScreen)
+                if (hasSeenIndex === 'true') {
+                    // Already onboarded - go to chat
+                    console.log('[Index] Returning Solana Mobile user - redirect to chat');
+                    router.replace('/chat' as any);
+                } else {
+                    // First time - go to onboarding
+                    console.log('[Index] First time Solana Mobile user - redirect to onboarding');
+                    router.replace('/onboarding' as any);
                 }
-                
-                // Already onboarded - go to chat
-                console.log('[Index] Returning Solana Mobile user - redirect to chat');
-                router.replace('/chat' as any);
                 return;
             }
 
@@ -63,11 +63,11 @@ export default function Index() {
                     console.log('[Index] No wallet found - redirecting to onboarding');
                     router.replace('/onboarding' as any);
                 } else if (hasSeenIndex === 'true') {
-                    // Has wallet and has seen index - go directly to chat
+                    // Has wallet and has completed onboarding - go directly to chat
                     console.log('[Index] Returning user - redirecting to chat');
                     router.replace('/chat' as any);
                 } else {
-                    // Has wallet but first time - show landing page
+                    // Has wallet but hasn't seen landing - show landing page
                     console.log('[Index] First time with wallet - showing landing page');
                     router.replace('/landing' as any);
                 }

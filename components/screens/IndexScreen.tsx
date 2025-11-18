@@ -12,9 +12,10 @@ import BottomSheet from '../ui/BottomSheet';
 interface IndexScreenProps {
     onEnter?: () => void;
     isReturningUser?: boolean;
+    showBackButton?: boolean;
 }
 // TODO: Delete all messages and data after triggering this action
-export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenProps) {
+export default function IndexScreen({ onEnter, isReturningUser, showBackButton = false }: IndexScreenProps) {
     const navigation = useRouter();
     const [showBottomSheet, setShowBottomSheet] = useState(false);
 
@@ -24,6 +25,10 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
         } else {
             navigation.back();
         }
+    };
+
+    const handleBackPress = () => {
+        navigation.push('/onboarding' as any);
     };
 
     const features = [
@@ -82,6 +87,21 @@ export default function IndexScreen({ onEnter, isReturningUser }: IndexScreenPro
             end={{ x: 1, y: 0 }}
             style={styles.scrollView}
         >
+            {/* Back Button */}
+            {showBackButton && (
+                <TouchableOpacity 
+                    style={styles.backButton}
+                    onPress={handleBackPress}
+                    activeOpacity={0.7}
+                >
+                    <View style={styles.backArrow}>
+                        <View style={styles.backArrowLeft} />
+                        <View style={styles.backArrowRight} />
+                    </View>
+                    <Text style={styles.backButtonText}>BACK</Text>
+                </TouchableOpacity>
+            )}
+            
             <ScrollView contentContainerStyle={styles.container}>
                 <View style={styles.content}>
                     {/* Header */}
@@ -330,6 +350,47 @@ const styles = StyleSheet.create({
         fontFamily: 'monospace',
         width: '100%',
         marginTop: 20,
+    },
+    backButton: {
+        position: 'absolute',
+        top: 50,
+        left: 20,
+        zIndex: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(0, 212, 212, 0.1)',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 212, 212, 0.3)',
+    },
+    backButtonText: {
+        color: '#00d4d4',
+        fontSize: 12,
+        fontWeight: '700',
+        letterSpacing: 2,
+        fontFamily: 'monospace',
+    },
+    backArrow: {
+        width: 16,
+        height: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexDirection: 'row',
+    },
+    backArrowLeft: {
+        width: 8,
+        height: 2,
+        backgroundColor: '#00d4d4',
+        transform: [{ rotate: '-45deg' }, { translateX: 2 }],
+    },
+    backArrowRight: {
+        width: 8,
+        height: 2,
+        backgroundColor: '#00d4d4',
+        transform: [{ rotate: '45deg' }, { translateX: -2 }],
     },
 });
 

@@ -142,22 +142,22 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
             console.log('[Onboarding] ✅ MWA wallet connected:', publicKey.toBase58());
 
-            // Save nickname (optional)
+            // Save nickname
             if (nickname) {
                 await SecureStore.setItemAsync('nickname', nickname);
             }
 
-            // Mark as seen
-            await SecureStore.setItemAsync('hasSeenIndex', 'true');
+            // DON'T mark hasSeenIndex yet - let landing page do that
+            // This ensures users see the landing page after onboarding
 
-            console.log('[Onboarding] ✅ Success! Redirecting...');
+            console.log('[Onboarding] ✅ Success! Redirecting to landing...');
 
-            // Navigate after short delay
+            // Navigate to landing page after short delay
             setTimeout(() => {
                 if (onComplete) {
                     onComplete();
                 } else {
-                    router.replace('/(tabs)');
+                    router.replace('/landing' as any);
                 }
             }, 2000);
 
@@ -188,22 +188,22 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
             console.log('[Onboarding] ✅ Local wallet created:', publicKey.toBase58());
 
-            // Save nickname (optional)
+            // Save nickname
             if (nickname) {
                 await SecureStore.setItemAsync('nickname', nickname);
             }
 
-            // Mark as seen
-            await SecureStore.setItemAsync('hasSeenIndex', 'true');
+            // DON'T mark hasSeenIndex yet - let landing page do that
+            // This ensures users see the landing page after onboarding
 
-            console.log('[Onboarding] ✅ Success! Redirecting...');
+            console.log('[Onboarding] ✅ Success! Redirecting to landing...');
 
-            // Navigate after short delay
+            // Navigate to landing page after short delay
             setTimeout(() => {
                 if (onComplete) {
                     onComplete();
                 } else {
-                    router.replace('/(tabs)');
+                    router.replace('/landing' as any);
                 }
             }, 2000);
 

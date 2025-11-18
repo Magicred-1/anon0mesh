@@ -1,5 +1,6 @@
-import React from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { getCommandSuggestions } from '@/src/utils/chatCommands';
+import React, { useMemo } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import SendMessageIcon from '../icons/sendMessagesIcon';
 
 interface ChatInputProps {
@@ -17,8 +18,37 @@ export default function ChatInput({
   placeholder = 'Type message...',
   disabled = false,
 }: ChatInputProps) {
+  // Get command suggestions
+  const suggestions = useMemo(() => {
+    return getCommandSuggestions(value);
+  }, [value]);
+
+  const showSuggestions = suggestions.length > 0 && value.startsWith('/');
+
   return (
     <View style={styles.container}>
+      {/* Command Suggestions */}
+      {showSuggestions && (
+        <ScrollView
+          horizontal
+          style={styles.suggestionsContainer}
+          contentContainerStyle={styles.suggestionsContent}
+          showsHorizontalScrollIndicator={false}
+        >
+          {suggestions.map((suggestion, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.suggestionChip}
+              onPress={() => onChangeText(suggestion)}
+            >
+              <Text style={styles.suggestionText} numberOfLines={1}>
+                {suggestion}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -51,6 +81,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderTopWidth: 1,
     borderTopColor: '#22D3EE',
+  },
+  suggestionsContainer: {
+    marginBottom: 12,
+    maxHeight: 40,
+  },
+  suggestionsContent: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  suggestionChip: {
+    backgroundColor: 'rgba(34, 211, 238, 0.1)',
+    borderWidth: 1,
+    borderColor: '#22D3EE',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    maxWidth: 300,
+  },
+  suggestionText: {
+    color: '#22D3EE',
+    fontSize: 13,
+    fontWeight: '500',
   },
   inputContainer: {
     flexDirection: 'row',

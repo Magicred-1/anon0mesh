@@ -21,7 +21,10 @@ export const LandingPage: React.FC = () => {
     };
     
     return (
-        <IndexScreen onEnter={handleEnter} />
+        <IndexScreen 
+            onEnter={handleEnter} 
+            showBackButton={true}
+        />
     );
 };
 
