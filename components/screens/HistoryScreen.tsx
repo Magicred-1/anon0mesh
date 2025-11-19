@@ -14,12 +14,102 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNavWithMenu from '../ui/BottomNavWithMenu';
 
+// Mock data pour le design
+const MOCK_TRANSACTIONS: Transaction[] = [
+  {
+    id: 'mock-1',
+    type: 'Send',
+    address: '8nXF...QyaS',
+    amount: '99.08',
+    currency: 'USDC',
+    status: 'Pending',
+    timestamp: '18 Oct. 2025 - 11.30 AM',
+    signature: 'mock-signature-1',
+  },
+  {
+    id: 'mock-2',
+    type: 'Send',
+    address: '8nXF...QyaS',
+    amount: '99.08',
+    currency: 'USDC',
+    status: 'Success',
+    timestamp: '18 Oct. 2025 - 11.30 AM',
+    signature: 'mock-signature-2',
+  },
+  {
+    id: 'mock-3',
+    type: 'Send',
+    address: '8nXF...QyaS',
+    amount: '99.08',
+    currency: 'USDC',
+    status: 'Pending',
+    timestamp: '18 Oct. 2025 - 11.30 AM',
+    signature: 'mock-signature-3',
+  },
+  {
+    id: 'mock-4',
+    type: 'Send',
+    address: '7xKX...9mP3',
+    amount: '250.50',
+    currency: 'USDC',
+    status: 'Pending',
+    timestamp: '17 Oct. 2025 - 03.45 PM',
+    signature: 'mock-signature-4',
+  },
+  {
+    id: 'mock-5',
+    type: 'Receive',
+    address: '9mP3...7xKX',
+    amount: '1250.00',
+    currency: 'USDC',
+    status: 'Success',
+    timestamp: '16 Oct. 2025 - 09.15 AM',
+    signature: 'mock-signature-5',
+  },
+  {
+    id: 'mock-6',
+    type: 'Send',
+    address: '3aBc...2xYz',
+    amount: '50.25',
+    currency: 'USDC',
+    status: 'Pending',
+    timestamp: '15 Oct. 2025 - 02.20 PM',
+    signature: 'mock-signature-6',
+  },
+  {
+    id: 'mock-7',
+    type: 'Receive',
+    address: '8yZw...4vBx',
+    amount: '500.75',
+    currency: 'USDC',
+    status: 'Pending',
+    timestamp: '14 Oct. 2025 - 10.10 AM',
+    signature: 'mock-signature-7',
+  },
+  {
+    id: 'mock-8',
+    type: 'Send',
+    address: '2xYz...9mP3',
+    amount: '75.00',
+    currency: 'USDC',
+    status: 'Success',
+    timestamp: '13 Oct. 2025 - 04.50 PM',
+    signature: 'mock-signature-8',
+  },
+];
+
+// Variable pour activer/désactiver les données mock (mettre à true pour utiliser les mock data)
+const USE_MOCK_DATA = true;
+
 export default function HistoryScreen() {
   const router = useRouter();
   
   // Use the custom hook for fetching transactions
   // refetch is available for future pull-to-refresh functionality
-  const { transactions, loading, error, walletAddress } = useTransactionHistory();
+  const { transactions: realTransactions, loading, error, walletAddress } = useTransactionHistory();
+  
+  // Utiliser les mock data ou les vraies données selon USE_MOCK_DATA
+  const transactions = USE_MOCK_DATA ? MOCK_TRANSACTIONS : realTransactions;
 
   // Show error alert if there's an error
   useEffect(() => {
@@ -64,7 +154,7 @@ export default function HistoryScreen() {
 
         {/* Transaction List */}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {loading ? (
+          {!USE_MOCK_DATA && loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#22D3EE" />
               <Text style={styles.loadingText}>Loading transactions...</Text>
@@ -85,13 +175,7 @@ export default function HistoryScreen() {
                 onPress={() => handleTransactionPress(transaction)}
               >
                 <View style={styles.transactionLeft}>
-                  <Text style={styles.transactionType}>
-                    {transaction.type} to {transaction.address}
-                  </Text>
-                  <Text style={styles.transactionTime}>{transaction.timestamp}</Text>
-                </View>
-                <View style={styles.transactionRight}>
-                  <View
+                <View
                     style={[
                       styles.statusBadge,
                       transaction.status === 'Success'
@@ -118,9 +202,17 @@ export default function HistoryScreen() {
                       {transaction.status}
                     </Text>
                   </View>
+                  <Text style={styles.transactionType}>
+                    {transaction.type} to {transaction.address}
+                  </Text>
+                  <Text style={styles.transactionTime}>{transaction.timestamp}</Text>
+                  
+                </View>
+                <View style={styles.transactionRight}>
                   <Text style={styles.transactionAmount}>
                     {transaction.amount} {transaction.currency}
                   </Text>
+                  
                 </View>
               </TouchableOpacity>
             ))}
@@ -134,7 +226,7 @@ export default function HistoryScreen() {
           onNavigateToWallet={() => router.push('/wallet')}
           onNavigateToHistory={() => router.push('/wallet/history')}
           onNavigateToMeshZone={() => router.push('/zone')}
-          onNavigateToProfile={() => router.push('/selection')}
+          onNavigateToProfile={() => router.push('/profile')}
           onDisconnect={() => router.push('/landing')}
         />
       </SafeAreaView>
@@ -153,15 +245,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#0d2626',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: '#22D3EE',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#fff',
   },
   content: {
     flex: 1,
@@ -175,16 +268,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0d3333',
+    backgroundColor: '#072B31',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1a4444',
   },
   transactionLeft: {
     flex: 1,
     gap: 6,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   transactionType: {
     fontSize: 16,
@@ -193,7 +287,7 @@ const styles = StyleSheet.create({
   },
   transactionTime: {
     fontSize: 12,
-    color: '#8a9999',
+    color: '#9CA3AF',
   },
   transactionRight: {
     alignItems: 'flex-end',
@@ -204,16 +298,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
     gap: 6,
-    borderWidth: 1,
   },
   statusSuccess: {
-    backgroundColor: 'rgba(34, 211, 238, 0.1)',
-    borderColor: '#22D3EE',
+    backgroundColor: '#22D3EE',
+    borderWidth: 0,
   },
   statusPending: {
-    backgroundColor: 'rgba(34, 211, 238, 0.1)',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
     borderColor: '#22D3EE',
   },
   statusDot: {
@@ -222,7 +316,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusDotSuccess: {
-    backgroundColor: '#22D3EE',
+    backgroundColor: '#0D0D0D',
   },
   statusDotPending: {
     backgroundColor: '#22D3EE',
@@ -232,15 +326,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statusTextSuccess: {
-    color: '#22D3EE',
+    color: '#0D0D0D',
   },
   statusTextPending: {
-    color: '#22D3EE',
+    color: '#FFFFFF',
   },
   transactionAmount: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#FFFFFF',
     fontWeight: '600',
+    marginBottom: 4,
   },
   loadingContainer: {
     flex: 1,

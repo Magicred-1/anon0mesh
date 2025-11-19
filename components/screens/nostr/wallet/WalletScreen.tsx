@@ -193,7 +193,7 @@ export default function WalletScreen() {
           onNavigateToWallet={() => router.push('/wallet')}
           onNavigateToHistory={() => router.push('/wallet/history')}
           onNavigateToMeshZone={() => router.push('/zone')}
-          onNavigateToProfile={() => router.push('/selection')}
+          onNavigateToProfile={() => router.push('/profile')}
           onDisconnect={() => router.push('/landing')}
         />
       </SafeAreaView>

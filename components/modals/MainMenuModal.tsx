@@ -118,7 +118,7 @@ export default function MainMenuModal(props: Props) {
     if (route === 'wallet' && currentRoute.startsWith('wallet')) return true;
     if (route === 'wallet/history' && currentRoute === 'wallet/history') return true;
     if (route === 'zone' && currentRoute.startsWith('zone')) return true;
-    if (route === 'selection' && currentRoute === 'selection') return true;
+    if (route === 'profile' && currentRoute === 'profile') return true;
     return false;
   };
 
@@ -154,7 +154,7 @@ export default function MainMenuModal(props: Props) {
     {
       id: 'profile',
       label: 'Profile',
-      route: 'selection',
+      route: 'profile',
       icon: User,
       onPress: props.onNavigateToProfile,
     },

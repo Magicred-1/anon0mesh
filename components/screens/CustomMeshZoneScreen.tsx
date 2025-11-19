@@ -1,14 +1,24 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Book,
+  Buildings,
+  CaretLeft,
+  Globe,
+  House,
+  MapPin,
+  Users,
+  type Icon,
+} from 'phosphor-react-native';
 import React, { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,16 +28,16 @@ interface Zone {
     id: string;
     label: string;
     range: string;
-    icon: string;
+    IconComponent: Icon;
 }
 
 const ZONES: Zone[] = [
-    { id: 'local', label: 'Local', range: '100m', icon: '📍' },
-    { id: 'neighborhood', label: 'Neighborhood', range: '10km', icon: '🏠' },
-    { id: 'city', label: 'City', range: '100km', icon: '🏙️' },
-    { id: 'regional', label: 'Regional', range: '1 000km', icon: '👥' },
-    { id: 'national', label: 'National', range: '5 000km', icon: '📖' },
-    { id: 'global', label: 'Global', range: '', icon: '🌐' },
+    { id: 'local', label: 'Local', range: '100m', IconComponent: MapPin },
+    { id: 'neighborhood', label: 'Neighborhood', range: '10km', IconComponent: House },
+    { id: 'city', label: 'City', range: '100km', IconComponent: Buildings },
+    { id: 'regional', label: 'Regional', range: '1 000km', IconComponent: Users },
+    { id: 'national', label: 'National', range: '5 000km', IconComponent: Book },
+    { id: 'global', label: 'Global', range: '', IconComponent: Globe },
 ];
 
 interface CustomMeshZoneScreenProps {
@@ -70,9 +80,9 @@ export default function CustomMeshZoneScreen({
                 onPress={onBack}
                 activeOpacity={0.7}
                 >
-                <Text style={styles.backIcon}>‹</Text>
-                </TouchableOpacity>
+                <CaretLeft size={24} color="#22D3EE" weight="regular" />
                 <Text style={styles.headerTitle}>Custom Mesh Zone</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                 style={[
                     styles.createButton,
@@ -129,7 +139,9 @@ export default function CustomMeshZoneScreen({
                         activeOpacity={0.7}
                         >
                         <View style={styles.zoneContent}>
-                            <Text style={styles.zoneIcon}>{zone.icon}</Text>
+                            <View style={styles.zoneIconContainer}>
+                                <zone.IconComponent size={24} color="#fff" weight="regular" />
+                            </View>
                             <View style={styles.zoneTextContainer}>
                             <Text style={styles.zoneLabel}>{zone.label}</Text>
                             </View>
@@ -164,39 +176,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a4444',
+    paddingVertical: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#22D3EE',
   },
   backButton: {
-    width: 60,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
-  backIcon: {
-    color: '#22D3EE',
-    fontSize: 32,
-    fontWeight: '300',
-    marginLeft: -4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    flex: 1,
-    textAlign: 'center',
+    color: '#FFFFFF',
   },
   createButton: {
     width: 80,
     height: 36,
     backgroundColor: '#22D3EE',
-    borderRadius: 18,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   createButtonDisabled: {
-    backgroundColor: '#0a4444',
+    backgroundColor: '#072B31',
   },
   createButtonText: {
     color: '#0D0D0D',
@@ -238,30 +241,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   zoneButton: {
-    backgroundColor: '#0d3333',
+    backgroundColor: '#072B31',
     borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#1a4444',
     paddingVertical: 18,
     paddingHorizontal: 20,
   },
   zoneButtonSelected: {
-    backgroundColor: '#0d4d4d',
+    backgroundColor: '#106471',
+    borderWidth: 1,
     borderColor: '#22D3EE',
-    shadowColor: '#22D3EE',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   zoneContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  zoneIcon: {
-    fontSize: 24,
+  zoneIconContainer: {
     marginRight: 16,
-    color: '#fff',
   },
   zoneTextContainer: {
     flex: 1,
@@ -272,7 +267,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   zoneRange: {
-    color: '#8a9999',
+    color: '#fff',
     fontSize: 16,
     fontWeight: '400',
     marginLeft: 12,

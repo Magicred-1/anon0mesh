@@ -15,7 +15,7 @@ export default function Selection() {
         onNavigateToWallet={() => router.push('/wallet')}
         onNavigateToHistory={() => router.push('/wallet/history')}
         onNavigateToMeshZone={() => router.push('/zone')}
-        onNavigateToProfile={() => router.push('/selection')}
+        onNavigateToProfile={() => router.push('/profile')}
         onDisconnect={() => {
             console.log('Disconnect');
             router.push('/landing');
