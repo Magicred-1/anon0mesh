@@ -1,6 +1,6 @@
+import { SlidersHorizontal } from 'phosphor-react-native';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import SettingsIcon from '../icons/wallet/Settings';
 
 type Props = {
   title?: string;
@@ -17,7 +17,7 @@ export default function WalletHeader({ title = 'Wallet', onBack, onRightPress }:
       <Text style={styles.headerTitle}>{title}</Text>
       <TouchableOpacity onPress={onRightPress} style={styles.settingsButton}>
         <View style={styles.settingsIcon}>
-          <SettingsIcon size={24} />
+          <SlidersHorizontal size={24} color="#fff" weight="regular" />
         </View>
       </TouchableOpacity>
     </View>

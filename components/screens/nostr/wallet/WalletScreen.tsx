@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Clipboard,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,9 +20,9 @@ import SendIcon from '@/components/icons/SendIcon';
 import SolanaIcon from '@/components/icons/SolanaIcon';
 import USDCIcon from '@/components/icons/USDCIcon';
 import ZECIcon from '@/components/icons/ZECIcon';
-import SettingsIcon from '@/components/icons/wallet/Settings';
 import SwapIcon from '@/components/icons/wallet/SwapIcon';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
+import { Copy, SlidersHorizontal } from 'phosphor-react-native';
 import QRCode from 'react-native-qrcode-svg';
 import BottomNavWithMenu from '../../../ui/BottomNavWithMenu';
 
@@ -104,7 +105,7 @@ export default function WalletScreen() {
             onPress={() => router.push('/wallet/settings')}
           >
             <View style={styles.settingsIcon}>
-              <SettingsIcon />
+              <SlidersHorizontal size={24} color="#fff" weight="regular" />
             </View>
           </TouchableOpacity>
         </View>
@@ -124,7 +125,7 @@ export default function WalletScreen() {
               {publicKey ? (
                 <QRCode 
                   value={publicKey} 
-                  size={280} 
+                  size={320} 
                   backgroundColor="transparent" 
                   color="#D4F9FF"
                   quietZone={20}
@@ -140,10 +141,7 @@ export default function WalletScreen() {
           {/* Address Display */}
           <TouchableOpacity style={styles.addressContainer} onPress={handleCopyAddress}>
             <Text style={styles.addressText}>{formatAddress(publicKey)}</Text>
-            <View style={styles.copyIcon}>
-              <View style={styles.copyIconBack} />
-              <View style={styles.copyIconFront} />
-            </View>
+            <Copy size={24} color="#9CA3AF" weight="regular" />
           </TouchableOpacity>
 
           {/* Action Buttons */}
@@ -168,7 +166,7 @@ export default function WalletScreen() {
               <View key={index} style={styles.balanceItem}>
                 <View style={styles.balanceLeft}>
                   <View style={styles.balanceIcon}>
-                    {item.symbol === 'SOL' && <SolanaIcon size={40} color="#14F195" />}
+                    {item.symbol === 'SOL' && <Image source={require('../../../../assets/images/sol-logo.png')} style={{ width: 40, height: 40 }} />}
                     {item.symbol === 'USDC' && <USDCIcon size={40} />}
                     {item.symbol === 'ZEC' && <ZECIcon size={40} />}
                   </View>
@@ -216,11 +214,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#0d2626',
+    borderBottomWidth: 2,
+    borderBottomColor: '#22D3EE',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
     color: '#FFFFFF',
   },
@@ -246,7 +244,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
-    marginBottom: 20,
     gap: 8,
   },
   networkIcon: {
@@ -261,8 +258,8 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   networkText: {
-    fontSize: 14,
-    color: '#8a9999',
+    fontSize: 16,
+    color: '#9CA3AF',
     fontWeight: '500',
   },
   qrContainer: {
@@ -271,18 +268,18 @@ const styles = StyleSheet.create({
   },
   qrWrapper: {
     backgroundColor: 'transparent',
-    borderRadius: 20,
-    borderWidth: 3,
+    borderRadius: 10,
+    borderWidth: 2,
     borderColor: '#22D3EE',
   },
   qrPlaceholder: {
-    width: 280,
-    height: 280,
+    width: 320,
+    height: 320,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qrPlaceholderText: {
-    color: '#666',
+    color: '#9CA3AF',
     fontSize: 16,
   },
   addressContainer: {
@@ -290,45 +287,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: 20,
-    marginTop: 20,
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#22D3EE',
-    backgroundColor: 'rgba(34, 211, 238, 0.05)',
+    backgroundColor: '#06181B',
   },
   addressText: {
     fontSize: 16,
     color: '#22D3EE',
     fontFamily: 'monospace',
     letterSpacing: 2,
-  },
-  copyIcon: {
-    width: 24,
-    height: 24,
-    position: 'relative',
-  },
-  copyIconBack: {
-    position: 'absolute',
-    top: 4,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderWidth: 2,
-    borderColor: '#22D3EE',
-    borderRadius: 3,
-  },
-  copyIconFront: {
-    position: 'absolute',
-    top: 0,
-    right: 4,
-    width: 16,
-    height: 16,
-    borderWidth: 2,
-    borderColor: '#22D3EE',
-    backgroundColor: '#06181B',
-    borderRadius: 3,
+    fontWeight: '600',
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -345,7 +316,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#22D3EE',
-    backgroundColor: 'rgba(34, 211, 238, 0.05)',
+    backgroundColor: '#0C2425',
     gap: 8,
   },
   actionIcon: {
@@ -369,20 +340,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   balancesTitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   balanceItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#0d3333',
+    backgroundColor: '#072B31',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1a4444',
   },
   balanceLeft: {
     flexDirection: 'row',

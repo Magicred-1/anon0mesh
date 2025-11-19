@@ -1,4 +1,5 @@
 import { Camera, CameraView } from 'expo-camera';
+import { CaretLeft } from 'phosphor-react-native';
 import React, { useEffect, useState } from 'react';
 import {
     Dimensions,
@@ -83,12 +84,14 @@ export default function QRScannerModal({
                 {/* Overlay */}
                 <View style={styles.overlay}>
                 {/* Header */}
-                <SafeAreaView style={styles.header} edges={['top']}>
-                    <TouchableOpacity style={styles.closeButtonTop} onPress={onClose}>
-                    <Text style={styles.closeIcon}>✕</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Scan QR Code</Text>
-                    <View style={styles.placeholder} />
+                <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={onClose} style={styles.backButton}>
+                            <CaretLeft size={24} color="#22D3EE" weight="regular" />
+                            <Text style={styles.headerTitle}>Scan</Text>
+                        </TouchableOpacity>
+                        <View style={styles.placeholder} />
+                    </View>
                 </SafeAreaView>
 
                 {/* Scanning Area */}
@@ -133,29 +136,27 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'transparent',
     },
+    headerSafeArea: {
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderBottomWidth: 2,
+        borderBottomColor: '#22D3EE',
     },
-    closeButtonTop: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
+    backButton: {
+        flexDirection: 'row',
         alignItems: 'center',
-    },
-    closeIcon: {
-        color: '#22D3EE',
-        fontSize: 28,
-        fontWeight: '300',
+        gap: 12,
     },
     headerTitle: {
-        color: '#FFFFFF',
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: '600',
+        color: '#FFFFFF',
     },
     placeholder: {
         width: 40,
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
     },
     instructions: {
         paddingHorizontal: 40,
-        paddingVertical: 24,
+        paddingBottom: 40,
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
     },
     instructionsText: {

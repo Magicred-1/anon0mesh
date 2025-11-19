@@ -1,16 +1,18 @@
 import SolanaIcon from '@/components/icons/SolanaIcon';
+import CreateDisposableAddressModal from '@/components/modals/CreateDisposableAddressModal';
 import { useWallet } from '@/src/contexts/WalletContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { CaretLeft, Copy, Trash } from 'phosphor-react-native';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -58,6 +60,7 @@ export default function WalletSettingsScreen() {
     } = useWallet();
     
     const [disposableAddresses, setDisposableAddresses] = useState<DisposableAddress[]>(MOCK_DISPOSABLE_ADDRESSES);
+    const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
 
     // Format wallet address for display
     const primaryWallet = publicKey 
@@ -112,8 +115,23 @@ export default function WalletSettingsScreen() {
     };
 
     const handleCreateNewAddress = () => {
-        // TODO: Implement create new disposable address
-        Alert.alert('Create Address', 'Creating new disposable address...');
+        setIsCreateModalVisible(true);
+    };
+
+    const handleCreateAddress = async (label?: string, amount?: number, token?: 'SOL' | 'USDC' | 'ZEC') => {
+        // TODO: Implement actual address creation logic
+        // For now, just add a mock address
+        const newAddress: DisposableAddress = {
+            id: Date.now().toString(),
+            address: `${Math.random().toString(36).substring(2, 6)}...${Math.random().toString(36).substring(2, 6)}`,
+            balances: { 
+                sol: token === 'SOL' ? (amount || 0) : 0, 
+                usdc: token === 'USDC' ? (amount || 0) : 0, 
+                zec: token === 'ZEC' ? (amount || 0) : 0 
+            }
+        };
+        setDisposableAddresses(prev => [...prev, newAddress]);
+        Alert.alert('Success', `New disposable address created${amount ? ` with ${amount} ${token}` : ''}!`);
     };
 
     return (
@@ -128,10 +146,9 @@ export default function WalletSettingsScreen() {
             {/* Header */}
             <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-                <Text style={styles.backIcon}>‹</Text>
+                <CaretLeft size={24} color="#22D3EE" weight="regular" />
+                <Text style={styles.headerTitle}>Settings</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Settings</Text>
-            <View style={styles.placeholder} />
             </View>
 
             {/* Solana Network Badge */}
@@ -175,8 +192,8 @@ export default function WalletSettingsScreen() {
                 ) : (
                     <>
                     <Text style={styles.primaryAddress}>{primaryWallet}</Text>
-                    <TouchableOpacity onPress={handleCopyPrimary} style={styles.copyButton}>
-                        <Text style={styles.copyIcon}>⎘</Text>
+                    <TouchableOpacity onPress={handleCopyPrimary} style={styles.iconButton}>
+                        <Copy size={24} color="#9CA3AF" weight="regular" />
                     </TouchableOpacity>
                     </>
                 )}
@@ -192,25 +209,29 @@ export default function WalletSettingsScreen() {
 
             {/* Disposable Addresses Section */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Disposable Addresses</Text>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Disposable Addresses</Text>
+                </View>
                 
                 {disposableAddresses.map((address) => (
                 <View key={address.id} style={styles.disposableCard}>
                     {/* Address Header */}
                     <View style={styles.addressHeader}>
-                    <Text style={styles.disposableAddress}>{address.address}</Text>
-                    <View style={styles.addressActions}>
-                        <TouchableOpacity 
+                    <TouchableOpacity 
                         onPress={() => handleCopyDisposable(address.address)}
-                        style={styles.iconButton}
+                        style={styles.addressAddressContainer}
                         >
-                        <Text style={styles.copyIconSmall}>⎘</Text>
+                      <Text style={styles.disposableAddress}>{address.address}</Text>
+                      
+                        <Copy size={20} color="#9CA3AF" weight="regular" />
                         </TouchableOpacity>
+                    <View style={styles.addressActions}>
+                        
                         <TouchableOpacity 
                         onPress={() => handleDeleteAddress(address.id)}
                         style={styles.iconButton}
                         >
-                        <Text style={styles.deleteIcon}>🗑</Text>
+                        <Trash size={20} color="#ff6b6b" weight="regular" />
                         </TouchableOpacity>
                     </View>
                     </View>
@@ -245,6 +266,13 @@ export default function WalletSettingsScreen() {
             </View>
             </ScrollView>
         </SafeAreaView>
+        
+        {/* Create Disposable Address Modal */}
+        <CreateDisposableAddressModal
+            visible={isCreateModalVisible}
+            onClose={() => setIsCreateModalVisible(false)}
+            onCreate={handleCreateAddress}
+        />
         </LinearGradient>
     );
 }
@@ -262,45 +290,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a4444',
+    borderBottomWidth: 2,
+    borderBottomColor: '#22D3EE',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  backIcon: {
-    fontSize: 32,
-    color: '#22D3EE',
-    fontWeight: '300',
+    gap: 12,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  placeholder: {
-    width: 40,
-  },
   networkBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(34, 211, 238, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 8,
+    justifyContent: 'center',
+    marginTop: 20,
+    gap: 8,
   },
   networkText: {
-    color: '#22D3EE',
-    fontSize: 14,
+    fontSize: 16,
+    color: '#9CA3AF',
     fontWeight: '500',
-    marginLeft: 8,
   },
   scrollView: {
     flex: 1,
@@ -313,18 +326,25 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 32,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+
+  },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#FFFFFF',
-    marginBottom: 12,
   },
   primaryWalletCard: {
-    backgroundColor: '#0d3333',
+    backgroundColor: '#06181B',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#22D3EE',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -334,15 +354,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#22D3EE',
   },
-  copyButton: {
-    padding: 8,
-  },
-  copyIcon: {
-    fontSize: 24,
-    color: '#22D3EE',
-  },
+
   disposableCard: {
-    backgroundColor: '#0d3333',
+    backgroundColor: '#06181B',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#22D3EE',
@@ -355,11 +369,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  addressAddressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
   disposableAddress: {
     fontSize: 16,
     fontWeight: '500',
     color: '#22D3EE',
-    flex: 1,
   },
   addressActions: {
     flexDirection: 'row',
@@ -393,11 +412,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   addFundsButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 8,
+    backgroundColor: '#0C2425',
+    borderRadius: 100,
     borderWidth: 2,
     borderColor: '#22D3EE',
-    paddingVertical: 10,
+    paddingVertical: 5,
     paddingHorizontal: 20,
     alignSelf: 'flex-start',
   },
@@ -407,11 +426,11 @@ const styles = StyleSheet.create({
     color: '#22D3EE',
   },
   createNewButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#0C2425',
     borderRadius: 12,
     borderWidth: 2,
     borderColor: '#22D3EE',
-    paddingVertical: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -419,13 +438,13 @@ const styles = StyleSheet.create({
   },
   createNewIcon: {
     fontSize: 20,
-    color: '#22D3EE',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   createNewText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#22D3EE',
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -436,12 +455,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8a9999',
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
+
   walletModeBadge: {
     backgroundColor: '#0a2828',
     borderRadius: 8,
