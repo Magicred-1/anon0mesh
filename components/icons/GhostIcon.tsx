@@ -1,14 +1,8 @@
+import { Ghost } from 'phosphor-react-native';
 import React from 'react';
-import { View } from 'react-native';
-// @ts-ignore
-import GhostSvg from '../../assets/images/icons/pacman.svg';
 
-const GhostIcon = ({ size = 32 }: { size?: number }) => {
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <GhostSvg width={size} height={size} />
-    </View>
-  );
+const GhostIcon = ({ size = 32, color }: { size?: number; color?: string }) => {
+  return <Ghost size={size} color={color} weight="regular" />;
 };
 
 export default GhostIcon;

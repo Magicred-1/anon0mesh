@@ -1,14 +1,8 @@
+import { Gear } from 'phosphor-react-native';
 import React from 'react';
-import { View } from 'react-native';
-// @ts-ignore
-import SettingsSvg from '../../../assets/images/icons/settings_icon.svg';
 
-const SettingsIcon = ({ size = 32 }: { size?: number }) => {
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <SettingsSvg width={size} height={size} />
-    </View>
-  );
+const SettingsIcon = ({ size = 32, color }: { size?: number; color?: string }) => {
+  return <Gear size={size} color={color} weight="regular" />;
 };
 
 export default SettingsIcon;

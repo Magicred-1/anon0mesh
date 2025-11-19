@@ -1,13 +1,8 @@
+import { PaperPlaneTilt } from 'phosphor-react-native';
 import React from 'react';
-import { View } from 'react-native';
-// @ts-ignore
-import SendMessageSvg from '../../assets/images/icons/send_messages_icon.svg';
-const SendMessageIcon = ({ size = 32 }: { size?: number }) => {
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <SendMessageSvg width={size} height={size} />
-    </View>
-  );
+
+const SendMessageIcon = ({ size = 32, color }: { size?: number; color?: string }) => {
+  return <PaperPlaneTilt size={size} color={color} weight="regular" />;
 };
 
 export default SendMessageIcon;

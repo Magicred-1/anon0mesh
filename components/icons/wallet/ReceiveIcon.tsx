@@ -1,14 +1,8 @@
+import { ArrowDown } from 'phosphor-react-native';
 import React from 'react';
-import { View } from 'react-native';
-// @ts-ignore
-import ReceiveSvg from '../../../assets/images/icons/receive_icon.svg';
 
-const ReceiveIcon = ({ size = 32 }: { size?: number }) => {
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <ReceiveSvg width={size} height={size} />
-    </View>
-  );
+const ReceiveIcon = ({ size = 32, color }: { size?: number; color?: string }) => {
+  return <ArrowDown size={size} color={color} weight="regular" />;
 };
 
 export default ReceiveIcon;

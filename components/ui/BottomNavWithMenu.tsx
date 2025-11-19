@@ -91,9 +91,10 @@ export default function BottomNavWithMenu({
 
 const styles = StyleSheet.create({
     container: {
-        borderTopWidth: 1,
-        borderTopColor: '#1a3333',
-        paddingVertical: 20,
+        borderTopWidth: 2,
+        borderTopColor: '#22D3EE',
+        paddingTop: 15,
+        paddingBottom: 10,
         alignItems: 'center',
         backgroundColor: 'transparent',
     },
@@ -102,8 +103,8 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     handle: {
-        width: 80,
-        height: 4,
+        width: 50,
+        height: 3,
         backgroundColor: '#22D3EE',
         borderRadius: 2,
     },

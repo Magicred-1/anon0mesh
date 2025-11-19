@@ -1,14 +1,8 @@
+import { Wallet } from 'phosphor-react-native';
 import React from 'react';
-import { View } from 'react-native';
-// @ts-ignore
-import WalletSvg from '../../assets/images/icons/wallet_icon.svg';
 
-const WalletIcon = ({ size = 32 }: { size?: number }) => {
-  return (
-    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <WalletSvg width={size} height={size} />
-    </View>
-  );
+const WalletIcon = ({ size = 32, color }: { size?: number; color?: string }) => {
+  return <Wallet size={size} color={color} weight="regular" />;
 };
 
 export default WalletIcon;
