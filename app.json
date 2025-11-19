@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth for mesh networking with nearby devices",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to advertise as a mesh network node"
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to advertise as a mesh network node",
+        "NSCameraUsageDescription": "This app uses the camera to scan wallet QR codes."
       },
       "bundleIdentifier": "com.magicred1.anon0mesh"
     },
@@ -24,6 +25,7 @@
         "BLUETOOTH_ADVERTISE",
         "BLUETOOTH_SCAN",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT",

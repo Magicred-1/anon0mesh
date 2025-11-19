@@ -312,11 +312,11 @@ export default function ChatScreen() {
       end={{ x: 0.7875, y: 1 }}
       style={styles.gradient}
     >
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          keyboardVerticalOffset={0}
         >
           <View style={styles.container}>
             <ChatHeader
@@ -325,12 +325,12 @@ export default function ChatScreen() {
               onlinePeersCount={onlinePeers.length}
               bleConnected={bleConnected}
               onMenuPress={() => setShowSidebar(!showSidebar)}
-              onWalletPress={() => router.push('/wallet/' as any)}
-              onProfilePress={() => Alert.alert('Profile', 'Profile feature coming soon')}
+              onWalletPress={() => router.push('/wallet')}
+              onProfilePress={() => setEditNickVisible(true)}
               onEditNickname={() => setEditNickVisible(true)}
               onClearCache={handleClearReceivedMessages}
               onBackPress={() => router.back()}
-              onNavigateToSelection={() => router.push('/chat/selection' as any)}
+              onNavigateToSelection={() => router.push('/chat/selection')}
               onTripleTap={handleTripleTap}
             />
 

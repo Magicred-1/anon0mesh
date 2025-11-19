@@ -1,25 +1,6 @@
-/**
- * BLEAdapter - Dual Mode Bluetooth Low Energy Implementation
- * 
- * Implements BOTH Central and Peripheral modes simultaneously for true mesh networking.
- * 
- * Architecture:
- * - Central Mode: Uses react-native-ble-plx to scan and connect to peripherals
- * - Peripheral Mode: Uses react-native-multi-ble-peripheral to advertise and accept connections
- * - Runs both modes in parallel for full mesh capability
- * 
- * Dependencies:
- * - react-native-ble-plx: ^3.2.1 (Central mode)
- * - react-native-multi-ble-peripheral: ^0.1.5 (Peripheral mode)
- * - buffer: For data encoding
- * 
- * Platform Support:
- * - iOS: Full support (requires Info.plist permissions)
- * - Android: Full support (requires AndroidManifest.xml permissions)
- */
-
 import { Buffer } from 'buffer';
 import * as SecureStore from 'expo-secure-store';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { BleManager, Device, State } from 'react-native-ble-plx';
 import Peripheral, { Permission, Property } from 'react-native-multi-ble-peripheral';
 
@@ -44,26 +25,26 @@ import {
 export class BLEAdapter implements IBLEAdapter {
   // Central mode manager (react-native-ble-plx)
   private bleManager: BleManager;
-  
+
   // Peripheral mode manager (react-native-multi-ble-peripheral)
   private peripheralManager: Peripheral | null = null;
-  
+
   // State tracking
   private scanning = false;
   private advertising = false;
   private initialized = false;
-  
+
   // Connection tracking
   private outgoingConnections = new Map<string, Device>(); // Devices we connected to (Central)
   private incomingConnections = new Set<string>(); // Devices connected to us (Peripheral)
   private packetSubscriptions = new Map<string, string>(); // deviceId -> subscriptionId
-  
+
   // Local peer info (for advertising)
   private localPeer: Peer | null = null;
-  
+
   // Packet handlers
   private peripheralPacketHandler: ((packet: Packet, senderDeviceId: string) => void) | null = null;
-  
+
   // Statistics
   private stats = {
     totalPacketsSent: 0,
@@ -74,6 +55,9 @@ export class BLEAdapter implements IBLEAdapter {
 
   constructor() {
     this.bleManager = new BleManager();
+  }
+  requestPermissions(): Promise<boolean> {
+    throw new Error('Method not implemented.');
   }
 
   // ============================================
@@ -86,7 +70,8 @@ export class BLEAdapter implements IBLEAdapter {
       return;
     }
 
-    console.log('[BLE] Initializing dual-mode adapter...');
+    console.log('[BLE] Initializing dual-mode adapter for Expo...');
+    console.log('[BLE] Platform:', Platform.OS, 'Version:', Platform.Version);
 
     // Initialize Central mode (react-native-ble-plx)
     const state = await this.bleManager.state();
@@ -94,12 +79,22 @@ export class BLEAdapter implements IBLEAdapter {
 
     if (state !== State.PoweredOn) {
       console.warn('[BLE Central] Not powered on, waiting...');
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          subscription.remove();
+          reject(new Error('Bluetooth not powered on within timeout'));
+        }, 10000);
+
         const subscription = this.bleManager.onStateChange((newState: State) => {
           console.log('[BLE Central] State changed:', newState);
           if (newState === State.PoweredOn) {
+            clearTimeout(timeout);
             subscription.remove();
             resolve();
+          } else if (newState === State.Unauthorized || newState === State.Unsupported) {
+            clearTimeout(timeout);
+            subscription.remove();
+            reject(new Error(`Bluetooth state: ${newState}`));
           }
         }, true);
       });
@@ -107,30 +102,144 @@ export class BLEAdapter implements IBLEAdapter {
 
     // Initialize Peripheral mode (react-native-multi-ble-peripheral)
     console.log('[BLE Peripheral] Initializing...');
-    
-    // Set deviceName from secure store username
-    const username = await SecureStore.getItemAsync('username');
-    const deviceName = username ? `${username}'s Device` : 'anon0mesh-device';
-    await Peripheral.setDeviceName(deviceName);
 
-    // Create peripheral instance
-    this.peripheralManager = new Peripheral();
-    
-    // Wait for peripheral to be ready
-    await new Promise<void>((resolve, reject) => {
-      this.peripheralManager!.on('ready', () => {
-        console.log('[BLE Peripheral] Ready');
-        resolve();
+    try {
+      // Set deviceName from secure store username
+      const username = await SecureStore.getItemAsync('username');
+      const deviceName = username ? `${username}'s Device` : 'anon0mesh-device';
+
+      console.log('[BLE Peripheral] Setting device name:', deviceName);
+      await Peripheral.setDeviceName(deviceName);
+
+      // Create peripheral instance
+      this.peripheralManager = new Peripheral();
+
+      // Wait for peripheral to be ready with timeout
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Peripheral initialization timeout'));
+        }, 5000);
+
+        this.peripheralManager!.on('ready', () => {
+          clearTimeout(timeout);
+          console.log('[BLE Peripheral] Ready');
+          resolve();
+        });
+
+        this.peripheralManager!.on('error', (error: Error) => {
+          clearTimeout(timeout);
+          console.error('[BLE Peripheral] Error:', error);
+          reject(error);
+        });
       });
-      
-      this.peripheralManager!.on('error', (error: Error) => {
-        console.error('[BLE Peripheral] Error:', error);
-        reject(error);
-      });
+
+      this.initialized = true;
+      console.log('[BLE] ✅ Dual-mode adapter initialized (Central + Peripheral)');
+    } catch (error) {
+      console.error('[BLE Peripheral] Initialization failed:', error);
+      console.warn('[BLE] Continuing with Central mode only');
+      // Allow central to function even if peripheral fails
+      this.peripheralManager = null;
+      this.initialized = true;
+    }
+  }
+
+  private serializePacket(packet: Packet): Uint8Array {
+    // TODO: Implement proper packet serialization
+    // For now, use JSON (replace with efficient binary format later)
+    const json = JSON.stringify({
+      type: packet.type,
+      senderId: packet.senderId.toString(),
+      timestamp: packet.timestamp.toString(),
+      payload: Array.from(packet.payload),
+      signature: packet.signature ? Array.from(packet.signature) : null,
+      ttl: packet.ttl,
     });
+    return new TextEncoder().encode(json);
+  }
 
-    this.initialized = true;
-    console.log('[BLE] ✅ Dual-mode adapter initialized (Central + Peripheral)');
+  private deserializePacket(data: Uint8Array): Packet {
+    // TODO: Implement proper packet deserialization
+    // For now, use JSON (replace with efficient binary format later)
+    const json = new TextDecoder().decode(data);
+    const obj = JSON.parse(json);
+
+    return new Packet({
+      type: obj.type,
+      senderId: PeerId.fromString(obj.senderId),
+      timestamp: BigInt(obj.timestamp),
+      payload: new Uint8Array(obj.payload),
+      signature: obj.signature ? new Uint8Array(obj.signature) : undefined,
+      ttl: obj.ttl,
+    });
+  }
+
+  private serializePeer(peer: Peer): Uint8Array {
+    // TODO: Implement proper peer serialization
+    const json = JSON.stringify({
+      id: peer.id.toString(),
+      nickname: peer.nickname.toString(),
+      publicKey: peer.publicKey, // Already a string
+      lastSeen: peer.lastSeen?.toISOString(),
+      status: peer.status,
+      discoveredAt: peer.discoveredAt?.toISOString(),
+    });
+    return new TextEncoder().encode(json);
+  }
+
+  private deserializePeer(data: Uint8Array): Peer {
+    // TODO: Implement proper peer deserialization
+    const json = new TextDecoder().decode(data);
+    const obj = JSON.parse(json);
+
+    return new Peer({
+      id: PeerId.fromString(obj.id),
+      nickname: Nickname.create(obj.nickname),
+      publicKey: obj.publicKey, // String format
+      lastSeen: obj.lastSeen ? new Date(obj.lastSeen) : new Date(),
+      status: obj.status,
+      discoveredAt: obj.discoveredAt ? new Date(obj.discoveredAt) : new Date(),
+    });
+  }
+
+  private uint8ArrayToBase64(data: Uint8Array): string {
+    // Convert Uint8Array to base64 string
+    return Buffer.from(data).toString('base64');
+  }
+
+  private base64ToUint8Array(base64: string): Uint8Array {
+    // Convert base64 string to Uint8Array
+    return new Uint8Array(Buffer.from(base64, 'base64'));
+  }
+
+  private mapScanMode(mode?: 'lowPower' | 'balanced' | 'lowLatency'): number {
+    // Map to react-native-ble-plx scan mode constants
+    switch (mode) {
+      case 'lowPower':
+        return 0; // SCAN_MODE_LOW_POWER
+      case 'balanced':
+        return 1; // SCAN_MODE_BALANCED
+      case 'lowLatency':
+        return 2; // SCAN_MODE_LOW_LATENCY
+      default:
+        return 1; // SCAN_MODE_BALANCED
+    }
+  }
+
+  private mapTxPowerLevel(level?: 'ultraLow' | 'low' | 'medium' | 'high'): number {
+    // Map to advertising TX power level
+    switch (level) {
+      case 'ultraLow':
+        return -21;
+      case 'low':
+        return -15;
+      case 'medium':
+        return -7;
+      case 'high':
+        return 1;
+      default:
+        return -7; // Medium
+    }
   }
 
   async shutdown(): Promise<void> {
@@ -159,7 +268,11 @@ export class BLEAdapter implements IBLEAdapter {
 
     // Destroy peripheral
     if (this.peripheralManager) {
-      await this.peripheralManager.destroy();
+      try {
+        await this.peripheralManager.destroy();
+      } catch (error) {
+        console.error('[BLE Peripheral] Error destroying peripheral:', error);
+      }
       this.peripheralManager = null;
     }
 
@@ -178,12 +291,57 @@ export class BLEAdapter implements IBLEAdapter {
     return state === State.PoweredOn;
   }
 
-  async requestPermissions(): Promise<boolean> {
-    // Permissions are handled at app level via expo-permissions
-    // This is a placeholder - actual implementation depends on Expo setup
-    console.log('[BLE] Permissions should be requested via Expo permissions API');
-    return true;
-  }
+  // async requestPermissions(): Promise<boolean> {
+  //   try {
+  //     if (Platform.OS === 'android') {
+  //       console.log('[BLE] Requesting Android permissions...');
+
+  //       // Android 12+ (API 31+) requires specific Bluetooth permissions
+  //       const androidVersion = Platform.Version as number;
+  //       const permissions: Permission[] = [];
+
+  //       if (androidVersion >= 31) {
+  //         // Android 12+
+  //         permissions.push(
+  //           Permission.BLUETOOTH_ADVERTISE,
+  //           Permission
+  //           Permission.READABLE
+  //         );
+  //       } else {
+  //         // Android 11 and below
+  //         permissions.push(
+  //           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!
+  //         );
+  //       }
+
+  //       console.log('[BLE] Requesting permissions:', permissions);
+  //       const results = await PermissionsAndroid.requestMultiple(permissions);
+
+  //       const allGranted = Object.values(results).every(
+  //         result => result === PermissionsAndroid.RESULTS.GRANTED
+  //       );
+
+  //       console.log('[BLE] Android permissions result:', results);
+
+  //       if (!allGranted) {
+  //         console.error('[BLE] Not all permissions granted:', results);
+  //         const denied = Object.entries(results)
+  //           .filter(([_, result]) => result !== PermissionsAndroid.RESULTS.GRANTED)
+  //           .map(([perm]) => perm);
+  //         console.error('[BLE] Denied permissions:', denied);
+  //       }
+
+  //       return allGranted;
+  //     }
+
+  //     // iOS permissions are handled via Info.plist in app.json
+  //     console.log('[BLE] iOS - permissions handled via app.json');
+  //     return true;
+  //   } catch (error) {
+  //     console.error('[BLE] Permission request failed:', error);
+  //     return false;
+  //   }
+  // }
 
   async getState(): Promise<'PoweredOn' | 'PoweredOff' | 'Unauthorized' | 'Unsupported'> {
     const state = await this.bleManager.state();
@@ -504,13 +662,49 @@ export class BLEAdapter implements IBLEAdapter {
     localPeer: Peer,
     options?: BLEAdvertisingOptions
   ): Promise<void> {
-    if (!this.initialized || !this.peripheralManager) {
+    if (!this.initialized) {
       throw new Error('BLE adapter not initialized');
     }
 
+    if (!this.peripheralManager) {
+      throw new Error('Peripheral mode not available. This may be due to platform limitations or initialization failure.');
+    }
+
+    // Check Android permissions before advertising
+    if (Platform.OS === 'android' && PermissionsAndroid) {
+      console.log('[BLE Peripheral] Checking Android permissions...');
+      
+      const permissions = [
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
+      ];
+
+      const results = await PermissionsAndroid.requestMultiple(permissions);
+      
+      const allGranted = Object.values(results).every(
+        (result: any) => result === PermissionsAndroid.RESULTS.GRANTED
+      );
+
+      if (!allGranted) {
+        const deniedPermissions = Object.entries(results)
+          .filter(([_, result]) => result !== PermissionsAndroid.RESULTS.GRANTED)
+          .map(([perm]) => perm);
+        
+        throw new Error(
+          `Required permissions not granted for advertising: ${deniedPermissions.join(', ')}. ` +
+          'Please grant Bluetooth Advertise, Bluetooth Connect, and Location permissions in Settings.'
+        );
+      }
+      
+      console.log('[BLE Peripheral] ✅ All permissions granted');
+    }
+
     if (this.advertising) {
-      console.warn('[BLE Peripheral] Already advertising');
-      return;
+      console.warn('[BLE Peripheral] Already advertising, stopping first...');
+      await this.stopAdvertising();
+      // Wait a bit before restarting
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     this.localPeer = localPeer;
@@ -521,26 +715,43 @@ export class BLEAdapter implements IBLEAdapter {
     });
 
     try {
+      // Clean up any existing service
+      try {
+        console.log('[BLE Peripheral] Removing existing service if any...');
+        await this.peripheralManager.removeAllListeners(BLE_UUIDS.SERVICE_UUID);
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch {
+        // Service doesn't exist, that's fine
+        console.log('[BLE Peripheral] No existing service to remove');
+      }
+
       // Add service
+      console.log('[BLE Peripheral] Adding service:', BLE_UUIDS.SERVICE_UUID);
       await this.peripheralManager.addService(BLE_UUIDS.SERVICE_UUID, true);
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Add TX Characteristic (Central writes to us)
+      console.log('[BLE Peripheral] Adding TX characteristic...');
       await this.peripheralManager.addCharacteristic(
         BLE_UUIDS.SERVICE_UUID,
         BLE_UUIDS.TX_CHARACTERISTIC_UUID,
         Property.WRITE | Property.WRITE_NO_RESPONSE,
         Permission.WRITEABLE
       );
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Add RX Characteristic (We notify Central)
+      console.log('[BLE Peripheral] Adding RX characteristic...');
       await this.peripheralManager.addCharacteristic(
         BLE_UUIDS.SERVICE_UUID,
         BLE_UUIDS.RX_CHARACTERISTIC_UUID,
         Property.NOTIFY | Property.READ,
         Permission.READABLE
       );
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Add Peer Info Characteristic (Read-only)
+      console.log('[BLE Peripheral] Adding Peer Info characteristic...');
       const peerData = this.serializePeer(localPeer);
       await this.peripheralManager.addCharacteristic(
         BLE_UUIDS.SERVICE_UUID,
@@ -548,25 +759,30 @@ export class BLEAdapter implements IBLEAdapter {
         Property.READ,
         Permission.READABLE
       );
-      
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Set peer info value
+      console.log('[BLE Peripheral] Setting peer info value...');
       await this.peripheralManager.updateValue(
         BLE_UUIDS.SERVICE_UUID,
         BLE_UUIDS.PEER_INFO_UUID,
         Buffer.from(peerData)
       );
 
-      // Set up write handler for TX characteristic
+      // Set up write handler for TX characteristic (remove old listeners first)
+      console.log('[BLE Peripheral] Setting up write handler...');
+      this.peripheralManager.removeAllListeners('write');
       this.peripheralManager.on('write', (event: any) => {
         if (event.characteristicUuid.toLowerCase() === BLE_UUIDS.TX_CHARACTERISTIC_UUID.toLowerCase()) {
           this.handleIncomingPacket(event.value, event.device || 'unknown');
         }
       });
 
-      // Start advertising
+      // Start advertising with service data
+      console.log('[BLE Peripheral] Starting advertising...');
       await this.peripheralManager.startAdvertising(
         {
-          [BLE_UUIDS.SERVICE_UUID]: Buffer.from(''),
+          [BLE_UUIDS.SERVICE_UUID]: Buffer.from('anon0mesh'),
         },
         {
           connectable: options?.connectable ?? true,
@@ -575,9 +791,26 @@ export class BLEAdapter implements IBLEAdapter {
       );
 
       this.advertising = true;
-      console.log('[BLE Peripheral] ✅ Advertising started');
+      console.log('[BLE Peripheral] ✅ Advertising started successfully');
     } catch (error) {
       console.error('[BLE Peripheral] Failed to start advertising:', error);
+
+      // Detailed error logging
+      if (error instanceof Error) {
+        console.error('[BLE Peripheral] Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        });
+      }
+
+      // Clean up on failure
+      try {
+        await this.peripheralManager.stopAdvertising();
+      } catch {
+        // Ignore cleanup errors
+      }
+
       throw error;
     }
   }
@@ -595,6 +828,7 @@ export class BLEAdapter implements IBLEAdapter {
       console.log('[BLE Peripheral] ✅ Advertising stopped');
     } catch (error) {
       console.error('[BLE Peripheral] Error stopping advertising:', error);
+      this.advertising = false; // Set to false anyway
     }
   }
 
@@ -641,7 +875,7 @@ export class BLEAdapter implements IBLEAdapter {
 
     try {
       const packetData = this.serializePacket(packet);
-      
+
       await this.peripheralManager.sendNotification(
         BLE_UUIDS.SERVICE_UUID,
         BLE_UUIDS.RX_CHARACTERISTIC_UUID,
@@ -753,16 +987,21 @@ export class BLEAdapter implements IBLEAdapter {
   // PRIVATE HELPERS
   // ============================================
 
-  private handleIncomingPacket(base64Data: string, deviceId: string): void {
+  private handleIncomingPacket(base64Data: string | Uint8Array, deviceId: string): void {
     try {
-      const packetData = this.base64ToUint8Array(base64Data);
+      const packetData = typeof base64Data === 'string'
+        ? this.base64ToUint8Array(base64Data)
+        : (base64Data as Uint8Array);
+
       const packet = this.deserializePacket(packetData);
 
       this.stats.totalPacketsReceived++;
       this.stats.totalBytesReceived += packetData.length;
 
       // Track incoming connection
-      this.incomingConnections.add(deviceId);
+      if (deviceId) {
+        this.incomingConnections.add(deviceId);
+      }
 
       console.log(`[BLE Peripheral] ✅ Packet received from ${deviceId} (${packetData.length} bytes)`);
 
@@ -772,111 +1011,7 @@ export class BLEAdapter implements IBLEAdapter {
         console.warn('[BLE Peripheral] No packet handler registered');
       }
     } catch (error) {
-      console.error(`[BLE Peripheral] Failed to handle packet from ${deviceId}:`, error);
-    }
-  }
-
-  private serializePacket(packet: Packet): Uint8Array {
-    // TODO: Implement proper packet serialization
-    // For now, use JSON (replace with efficient binary format later)
-    const json = JSON.stringify({
-      type: packet.type,
-      senderId: packet.senderId.toString(),
-      timestamp: packet.timestamp.toString(),
-      payload: Array.from(packet.payload),
-      signature: packet.signature ? Array.from(packet.signature) : null,
-      ttl: packet.ttl,
-    });
-    return new TextEncoder().encode(json);
-  }
-
-  private deserializePacket(data: Uint8Array): Packet {
-    // TODO: Implement proper packet deserialization
-    // For now, use JSON (replace with efficient binary format later)
-    const json = new TextDecoder().decode(data);
-    const obj = JSON.parse(json);
-    
-    return new Packet({
-      type: obj.type,
-      senderId: PeerId.fromString(obj.senderId),
-      timestamp: BigInt(obj.timestamp),
-      payload: new Uint8Array(obj.payload),
-      signature: obj.signature ? new Uint8Array(obj.signature) : undefined,
-      ttl: obj.ttl,
-    });
-  }
-
-  private serializePeer(peer: Peer): Uint8Array {
-    // TODO: Implement proper peer serialization
-    const json = JSON.stringify({
-      id: peer.id.toString(),
-      nickname: peer.nickname.toString(),
-      publicKey: peer.publicKey, // Already a string
-      lastSeen: peer.lastSeen.toISOString(),
-      status: peer.status,
-      discoveredAt: peer.discoveredAt.toISOString(),
-    });
-    return new TextEncoder().encode(json);
-  }
-
-  private deserializePeer(data: Uint8Array): Peer {
-    // TODO: Implement proper peer deserialization
-    const json = new TextDecoder().decode(data);
-    const obj = JSON.parse(json);
-    
-    return new Peer({
-      id: PeerId.fromString(obj.id),
-      nickname: Nickname.create(obj.nickname),
-      publicKey: obj.publicKey, // String format
-      lastSeen: new Date(obj.lastSeen),
-      status: obj.status,
-      discoveredAt: new Date(obj.discoveredAt),
-    });
-  }
-
-  private uint8ArrayToBase64(data: Uint8Array): string {
-    // Convert Uint8Array to base64 string
-    const binary = String.fromCharCode(...data);
-    return btoa(binary);
-  }
-
-  private base64ToUint8Array(base64: string): Uint8Array {
-    // Convert base64 string to Uint8Array
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes;
-  }
-
-  private mapScanMode(mode?: 'lowPower' | 'balanced' | 'lowLatency'): number {
-    // Map to react-native-ble-plx scan mode constants
-    switch (mode) {
-      case 'lowPower':
-        return 0; // SCAN_MODE_LOW_POWER
-      case 'balanced':
-        return 1; // SCAN_MODE_BALANCED
-      case 'lowLatency':
-        return 2; // SCAN_MODE_LOW_LATENCY
-      default:
-        return 1; // SCAN_MODE_BALANCED
-    }
-  }
-
-  private mapTxPowerLevel(level?: 'ultraLow' | 'low' | 'medium' | 'high'): number {
-    // Map to advertising TX power level
-    switch (level) {
-      case 'ultraLow':
-        return -21;
-      case 'low':
-        return -15;
-      case 'medium':
-        return -7;
-      case 'high':
-        return 1;
-      default:
-        return -7; // Medium
+      console.error('[BLE Peripheral] Error handling incoming packet:', error);
     }
   }
 }

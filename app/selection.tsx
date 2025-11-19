@@ -11,14 +11,14 @@ export default function Selection() {
             // Navigate back to chat with selected peer
             router.back();
         }}
-        onNavigateToMessages={() => router.push('/chat' as any)}
-        onNavigateToWallet={() => router.push('/wallet/' as any)}
-        onNavigateToHistory={() => router.push('/history' as any)}
-        onNavigateToMeshZone={() => router.push('/zone' as any)}
-        onNavigateToProfile={() => router.push('/profile' as any)}
+        onNavigateToMessages={() => router.push('/chat')}
+        onNavigateToWallet={() => router.push('/wallet')}
+        onNavigateToHistory={() => router.push('/wallet/history')}
+        onNavigateToMeshZone={() => router.push('/zone')}
+        onNavigateToProfile={() => router.push('/selection')}
         onDisconnect={() => {
             console.log('Disconnect');
-            router.push('/landing' as any);
+            router.push('/landing');
         }}
         />
     );

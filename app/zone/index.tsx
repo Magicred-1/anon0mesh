@@ -6,15 +6,15 @@ export default function MeshZonePage() {
 
   return (
     <MeshZoneScreen
-      onNavigateToMessages={() => router.push('/chat/selection')}
-      onNavigateToWallet={() => router.push('/wallet')}
-      onNavigateToHistory={() => router.push('../history')}
-      onNavigateToMeshZone={() => router.push('/zone')}
-      onNavigateToProfile={() => router.push('../profile')}
-      onDisconnect={() => {
-        console.log('Disconnect requested');
-        router.push('/landing');
-      }}
+            onNavigateToMessages={() => router.push('/chat')}
+            onNavigateToWallet={() => router.push('/wallet')}
+            onNavigateToHistory={() => router.push('/wallet/history')}
+            onNavigateToMeshZone={() => router.push('/zone')}
+            onNavigateToProfile={() => router.push('/selection')}
+            onDisconnect={() => {
+            console.log('Disconnect requested');
+            router.push('/landing');
+            }}
       onCreateZone={() => router.push('/zone/create')}
     />
   );

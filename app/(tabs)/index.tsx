@@ -12,21 +12,12 @@ export default function Index() {
         (async () => {
             // Get device information
             const deviceInfo = DeviceDetector.getDeviceInfo();
-            const isSolanaMobile = deviceInfo.isSolanaMobile;
-            const isSeeker = DeviceDetector.isSeekerDevice();
-            const isSaga = DeviceDetector.isSagaDevice();
-            const isIOS = Platform.OS === 'ios';
-            const isAndroid = Platform.OS === 'android';
-
-            // await runNostrTests();
 
             console.log('[Index] Device Detection:', {
                 platform: Platform.OS,
                 device: deviceInfo.device,
                 model: deviceInfo.model,
-                isSolanaMobile,
-                isSeeker,
-                isSaga,
+                isSolanaMobile: deviceInfo.isSolanaMobile,
             });
 
             // 🔧 UNCOMMENT THIS LINE TO RESET AND TEST FIRST-TIME USER EXPERIENCE
@@ -36,41 +27,25 @@ export default function Index() {
             const hasSeenIndex = await SecureStore.getItemAsync('hasSeenIndex');
             console.log('[Index] hasSeenIndex flag:', hasSeenIndex);
 
-            // Solana Mobile devices (Seeker/Saga) can use MWA - don't need local wallet
-            if (isSolanaMobile) {
-                console.log('[Index] 📱 Solana Mobile device detected - can use MWA');
-                
-                // Check if they've completed onboarding (hasSeenIndex is set by OnboardingScreen)
-                if (hasSeenIndex === 'true') {
-                    // Already onboarded - go to chat
-                    console.log('[Index] Returning Solana Mobile user - redirect to chat');
-                    router.replace('/chat' as any);
-                } else {
-                    // First time - go to onboarding
-                    console.log('[Index] First time Solana Mobile user - redirect to onboarding');
-                    router.replace('/onboarding' as any);
-                }
+            // Check if local wallet exists first (for all devices)
+            const hasLocalWallet = await LocalWalletAdapter.hasStoredWallet();
+
+            if (!hasLocalWallet) {
+                // No wallet found - ALWAYS go to onboarding first
+                console.log('[Index] No wallet found - redirecting to onboarding');
+                router.replace('/onboarding' as any);
                 return;
             }
 
-            // iOS and regular Android devices need local wallet
-            if (isIOS || isAndroid) {
-                // Check if local wallet exists using the new LocalWalletAdapter
-                const hasLocalWallet = await LocalWalletAdapter.hasStoredWallet();
-
-                if (!hasLocalWallet) {
-                    // No wallet - go to onboarding to create one
-                    console.log('[Index] No wallet found - redirecting to onboarding');
-                    router.replace('/onboarding' as any);
-                } else if (hasSeenIndex === 'true') {
-                    // Has wallet and has completed onboarding - go directly to chat
-                    console.log('[Index] Returning user - redirecting to chat');
-                    router.replace('/chat' as any);
-                } else {
-                    // Has wallet but hasn't seen landing - show landing page
-                    console.log('[Index] First time with wallet - showing landing page');
-                    router.replace('/landing' as any);
-                }
+            // Has wallet - check if they've completed the flow
+            if (hasSeenIndex === 'true') {
+                // Already completed onboarding and landing - go to chat
+                console.log('[Index] Returning user with wallet - redirecting to chat');
+                router.replace('/chat' as any);
+            } else {
+                // Has wallet but hasn't seen landing page yet - show landing
+                console.log('[Index] User has wallet but needs to see landing - showing landing page');
+                router.replace('/landing' as any);
             }
         })();
     }, [router]);

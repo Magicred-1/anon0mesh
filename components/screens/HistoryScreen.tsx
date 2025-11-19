@@ -1,101 +1,50 @@
+import { Transaction, useTransactionHistory } from '@/hooks/useTransactionHistory';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNavWithMenu from '../ui/BottomNavWithMenu';
 
-// Mock transaction data
-const MOCK_TRANSACTIONS = [
-  {
-    id: '1',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Pending',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-  {
-    id: '2',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Success',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-  {
-    id: '3',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Pending',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-  {
-    id: '4',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Success',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-  {
-    id: '5',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Pending',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-  {
-    id: '6',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Success',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-  {
-    id: '7',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Pending',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-  {
-    id: '8',
-    type: 'Send',
-    address: '8nXF...QyaS',
-    amount: '99.08',
-    currency: 'USDC',
-    status: 'Success',
-    timestamp: '18 Oct. 2025 - 11:30 AM',
-  },
-];
-
 export default function HistoryScreen() {
   const router = useRouter();
-  const [transactions] = useState(MOCK_TRANSACTIONS);
+  
+  // Use the custom hook for fetching transactions
+  // refetch is available for future pull-to-refresh functionality
+  const { transactions, loading, error, walletAddress } = useTransactionHistory();
 
-  const handleTransactionPress = (transaction: typeof MOCK_TRANSACTIONS[0]) => {
+  // Show error alert if there's an error
+  useEffect(() => {
+    if (error) {
+      Alert.alert(
+        error.includes('Rate limit') ? 'Rate Limit' : 'Error',
+        error,
+        [{ text: 'OK' }]
+      );
+    }
+  }, [error]);
+  const handleTransactionPress = (transaction: Transaction) => {
     Alert.alert(
       'Transaction Details',
-      `${transaction.type} to ${transaction.address}\nAmount: ${transaction.amount} ${transaction.currency}\nStatus: ${transaction.status}\nTime: ${transaction.timestamp}`
+      `Signature: ${transaction.signature}\n\n${transaction.type} ${transaction.type === 'Send' ? 'to' : 'from'} ${transaction.address}\n\nAmount: ${transaction.amount} ${transaction.currency}\nStatus: ${transaction.status}\nTime: ${transaction.timestamp}`,
+      [
+        { text: 'Close', style: 'cancel' },
+        {
+          text: 'View on Explorer',
+          onPress: () => {
+            console.log('[History] View on explorer:', transaction.signature);
+            Alert.alert('Explorer', `https://explorer.solana.com/tx/${transaction.signature}?cluster=devnet`);
+          },
+        },
+      ]
     );
   };
 
@@ -115,8 +64,21 @@ export default function HistoryScreen() {
 
         {/* Transaction List */}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.transactionsList}>
-            {transactions.map((transaction) => (
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#22D3EE" />
+              <Text style={styles.loadingText}>Loading transactions...</Text>
+            </View>
+          ) : transactions.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No transactions found</Text>
+              <Text style={styles.emptySubtext}>
+                {walletAddress ? 'Your transaction history will appear here' : 'Connect your wallet to view transactions'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.transactionsList}>
+              {transactions.map((transaction) => (
               <TouchableOpacity
                 key={transaction.id}
                 style={styles.transactionItem}
@@ -162,17 +124,18 @@ export default function HistoryScreen() {
                 </View>
               </TouchableOpacity>
             ))}
-          </View>
+            </View>
+          )}
         </ScrollView>
 
         {/* Bottom Navigation */}
         <BottomNavWithMenu
-          onNavigateToMessages={() => router.push('/chat' as any)}
-          onNavigateToWallet={() => router.push('/wallet' as any)}
-          onNavigateToHistory={() => {}}
-          onNavigateToMeshZone={() => Alert.alert('Mesh Zone', 'Coming soon')}
-          onNavigateToProfile={() => Alert.alert('Profile', 'Coming soon')}
-          onDisconnect={() => Alert.alert('Disconnect', 'Coming soon')}
+          onNavigateToMessages={() => router.push('/chat')}
+          onNavigateToWallet={() => router.push('/wallet')}
+          onNavigateToHistory={() => router.push('/wallet/history')}
+          onNavigateToMeshZone={() => router.push('/zone')}
+          onNavigateToProfile={() => router.push('/selection')}
+          onDisconnect={() => router.push('/landing')}
         />
       </SafeAreaView>
     </LinearGradient>
@@ -278,5 +241,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#8a9999',
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#8a9999',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

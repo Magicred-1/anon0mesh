@@ -1,9 +1,8 @@
+import { subscribeToConnectivityChanges } from '@/src/infrastructure/wallet/utils/connectivity';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AnonmeshIcon from '../icons/anon0meshIcon';
-import HashtagIcon from '../icons/HashtagIcon';
 import WalletIcon from '../icons/WalletIcon';
-import ZoneSelectorModal from '../modals/ZoneSelectorModal';
 
 interface ChatHeaderProps {
   nickname: string;
@@ -23,27 +22,28 @@ interface ChatHeaderProps {
 export default function ChatHeader({
   nickname,
   selectedPeer,
-  onlinePeersCount,
-  bleConnected,
-  onMenuPress,
   onWalletPress,
-  onProfilePress,
-  onClearCache,
-  onEditNickname,
-  onBackPress,
   onNavigateToSelection,
   onTripleTap,
 }: ChatHeaderProps) {
-  // Zone selector state
-  const [showZoneSelector, setShowZoneSelector] = useState(false);
-  const [selectedZone, setSelectedZone] = useState<'local' | 'neighborhood' | 'city' | 'internet'>('local');
+  // Connectivity state
+  const [isInternetConnected, setIsInternetConnected] = useState(false);
+  const [isBluetoothAvailable, setIsBluetoothAvailable] = useState(false);
   
   // Triple tap detection
   const tapCountRef = useRef(0);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Monitor connectivity (internet + BLE)
   useEffect(() => {
+    const unsubscribe = subscribeToConnectivityChanges((status) => {
+      console.log('[ChatHeader] Connectivity changed:', status);
+      setIsInternetConnected(status.isInternetConnected);
+      setIsBluetoothAvailable(status.isBluetoothAvailable);
+    });
+
     return () => {
+      unsubscribe();
       if (tapTimerRef.current) {
         clearTimeout(tapTimerRef.current);
       }
@@ -56,28 +56,6 @@ export default function ChatHeader({
       onNavigateToSelection();
       return;
     }
-
-    // Triple tap detection for username
-    tapCountRef.current += 1;
-
-    if (tapTimerRef.current) {
-      clearTimeout(tapTimerRef.current);
-    }
-
-    if (tapCountRef.current >= 3) {
-      // Triple tap detected!
-      console.log('[ChatHeader] Triple tap detected on username');
-      tapCountRef.current = 0;
-      if (onTripleTap) {
-        onTripleTap();
-      }
-      return;
-    }
-
-    // Reset tap count after 500ms
-    tapTimerRef.current = setTimeout(() => {
-      tapCountRef.current = 0;
-    }, 500);
   };
 
   return (
@@ -99,10 +77,6 @@ export default function ChatHeader({
       
       {/* Right side icons */}
       <View style={styles.headerRight}>
-        {/* Connection Status Dot */}
-        {bleConnected && (
-          <View style={styles.statusDot} />
-        )}
 
         {/* Wallet Icon */}
         <TouchableOpacity style={styles.iconButton} onPress={onWalletPress}>
@@ -111,15 +85,29 @@ export default function ChatHeader({
           </View>
         </TouchableOpacity>
 
-        {/* Bluetooth Icon - Opens Zone Selector */}
-        <TouchableOpacity style={styles.iconButton} onPress={() => setShowZoneSelector(true)}>
-          <View style={[styles.bluetoothIcon, bleConnected && styles.bluetoothActive]}>
-            <HashtagIcon width={16} height={16} color={bleConnected ? '#00CED1' : '#333'} />
+        {/* Connection Status Indicators */}
+        <View style={styles.statusContainer}>
+          {/* Internet Status */}
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>NET</Text>
+            <View style={[
+              styles.statusDot, 
+              isInternetConnected ? styles.statusDotActive : styles.statusDotInactive
+            ]} />
           </View>
-        </TouchableOpacity>
+          
+          {/* BLE Status */}
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>BLE</Text>
+            <View style={[
+              styles.statusDot, 
+              isBluetoothAvailable ? styles.statusDotActive : styles.statusDotInactive
+            ]} />
+          </View>
+        </View>
       </View>
 
-      {/* Zone Selector Modal */}
+      {/* Zone Selector Modal
       <ZoneSelectorModal
         visible={showZoneSelector}
         onClose={() => setShowZoneSelector(false)}
@@ -128,7 +116,7 @@ export default function ChatHeader({
           console.log('Selected zone:', zone);
         }}
         selectedZone={selectedZone}
-      />
+      /> */}
     </View>
   );
 }
@@ -168,16 +156,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  statusContainer: {
+    flexDirection: 'column',
+    gap: 6,
+    marginRight: 4,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#8fa9a9',
+    letterSpacing: 0.5,
+    fontFamily: 'monospace',
+  },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusDotActive: {
     backgroundColor: '#00CED1',
     shadowColor: '#00CED1',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 4,
     elevation: 4,
+  },
+  statusDotInactive: {
+    backgroundColor: '#2a3a3a',
+    borderWidth: 1,
+    borderColor: '#3a4a4a',
   },
   titleTouch: {
     paddingVertical: 4,

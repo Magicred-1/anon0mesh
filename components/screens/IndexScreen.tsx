@@ -27,10 +27,6 @@ export default function IndexScreen({ onEnter, isReturningUser, showBackButton =
         }
     };
 
-    const handleBackPress = () => {
-        navigation.push('/onboarding' as any);
-    };
-
     const features = [
         {
             icon: <LockIcon />,
@@ -86,22 +82,7 @@ export default function IndexScreen({ onEnter, isReturningUser, showBackButton =
             start={{ x: 0, y: 1 }}
             end={{ x: 1, y: 0 }}
             style={styles.scrollView}
-        >
-            {/* Back Button */}
-            {showBackButton && (
-                <TouchableOpacity 
-                    style={styles.backButton}
-                    onPress={handleBackPress}
-                    activeOpacity={0.7}
-                >
-                    <View style={styles.backArrow}>
-                        <View style={styles.backArrowLeft} />
-                        <View style={styles.backArrowRight} />
-                    </View>
-                    <Text style={styles.backButtonText}>BACK</Text>
-                </TouchableOpacity>
-            )}
-            
+        >   
             <ScrollView contentContainerStyle={styles.container}>
                 <View style={styles.content}>
                     {/* Header */}

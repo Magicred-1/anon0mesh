@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    Alert,
-    Linking,
-    PermissionsAndroid,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Linking,
+  PermissionsAndroid,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface BluetoothPermissionRequestProps {
@@ -45,6 +45,7 @@ export default function BluetoothPermissionRequest({
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE, // For Android 12+
         ]);
 
         const bluetoothScan = results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED;

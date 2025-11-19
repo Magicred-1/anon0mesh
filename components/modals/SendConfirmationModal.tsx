@@ -1,11 +1,13 @@
 import React from 'react';
 import {
-    Modal,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import BluetoothIcon from '../icons/BluetoothIcon';
+import InternetIcon from '../icons/InternetIcon';
 
 type Props = {
   visible: boolean;
@@ -32,9 +34,11 @@ const SendConfirmationModal = ({ visible, onClose, isBluetooth = true }: Props) 
           <View style={styles.iconContainer}>
             <View style={styles.icon}>
               {isBluetooth ? (
-                <Text style={styles.iconSymbol}>⌘</Text>
+                <BluetoothIcon size={48} />
               ) : (
-                <Text style={styles.iconSymbol}>≈</Text>
+                <Text style={styles.iconSymbol}>
+                  <InternetIcon size={48} color="#FFFFFF" />
+                </Text>
               )}
             </View>
           </View>

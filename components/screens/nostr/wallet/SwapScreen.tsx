@@ -28,8 +28,8 @@ export default function SwapScreen() {
   const router = useRouter();
   const [fromToken, setFromToken] = useState<TokenType>('SOL');
   const [toToken, setToToken] = useState<TokenType>('USDC');
-  const [fromAmount, setFromAmount] = useState('0.00');
-  const [toAmount, setToAmount] = useState('0.00');
+  const [fromAmount, setFromAmount] = useState('');
+  const [toAmount, setToAmount] = useState('');
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
 
@@ -56,9 +56,11 @@ export default function SwapScreen() {
     // Calculate the to amount based on exchange rate
     const numAmount = parseFloat(text) || 0;
     if (fromToken === 'SOL' && toToken === 'USDC') {
-      setToAmount((numAmount * EXCHANGE_RATE).toFixed(2));
+      setToAmount((numAmount * EXCHANGE_RATE).toFixed(4));
     } else if (fromToken === 'USDC' && toToken === 'SOL') {
-      setToAmount((numAmount / EXCHANGE_RATE).toFixed(2));
+      setToAmount((numAmount / EXCHANGE_RATE).toFixed(4));
+    } else {
+      setToAmount('0.00');
     }
   };
 
@@ -79,7 +81,7 @@ export default function SwapScreen() {
   const getTokenIcon = (token: TokenType, size: number = 24) => {
     switch (token) {
       case 'SOL':
-        return <SolanaIcon size={size} />;
+        return <SolanaIcon size={size} color="#14F195" />;
       case 'USDC':
         return <USDCIcon size={size} />;
       default:
@@ -109,14 +111,15 @@ export default function SwapScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Solana Network Badge */}
-          {/* Network Badge */}
+        {/* Network Badge */}
+        <View style={styles.networkContainer}>
           <View style={styles.networkBadge}>
-            <View style={styles.networkIcon}>
-              <SolanaIcon size={16} color='#22D3EE' />
+            <View style={styles.networkIconWrapper}>
+              <SolanaIcon size={18} color='#22D3EE' />
             </View>
             <Text style={styles.networkText}>Solana Network</Text>
           </View>
+        </View>
 
         <ScrollView 
           style={styles.scrollView}
@@ -125,81 +128,89 @@ export default function SwapScreen() {
         >
           {/* From Token Card */}
           <View style={styles.tokenCard}>
-            <TouchableOpacity 
-              style={styles.tokenSelector}
-              onPress={() => setShowFromDropdown(!showFromDropdown)}
-            >
-              {getTokenIcon(fromToken, 24)}
-              <Text style={styles.tokenText}>{fromToken}</Text>
-              <Text style={styles.dropdownArrow}>▼</Text>
-            </TouchableOpacity>
+            <View style={styles.cardHeader}>
+              <TouchableOpacity 
+                style={styles.tokenSelector}
+                onPress={() => setShowFromDropdown(!showFromDropdown)}
+              >
+                {getTokenIcon(fromToken, 20)}
+                <Text style={styles.tokenText}>{fromToken}</Text>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </TouchableOpacity>
+            </View>
 
             <TextInput
               style={styles.amountInput}
               value={fromAmount}
               onChangeText={handleFromAmountChange}
               placeholder="0.00"
-              placeholderTextColor="#4a5555"
+              placeholderTextColor="#3a5555"
               keyboardType="decimal-pad"
             />
 
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceLabel}>Balance:</Text>
-              <Text style={styles.balanceAmount}>
-                {TOKEN_BALANCES[fromToken]} {fromToken}
+            <View style={styles.bottomRow}>
+              <View style={styles.balanceRow}>
+                <Text style={styles.balanceLabel}>Balance: </Text>
+                <Text style={styles.balanceAmount}>
+                  {TOKEN_BALANCES[fromToken]} {fromToken}
+                </Text>
+                <TouchableOpacity onPress={handleMaxAmount}>
+                  <Text style={styles.maxButton}> (Max)</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.usdValue}>
+                +$ {(TOKEN_BALANCES[fromToken] * (fromToken === 'SOL' ? EXCHANGE_RATE : 1)).toFixed(4)}
               </Text>
-              <TouchableOpacity onPress={handleMaxAmount}>
-                <Text style={styles.maxButton}>(Max)</Text>
-              </TouchableOpacity>
             </View>
-
-            <Text style={styles.usdValue}>+$ {(parseFloat(fromAmount) * (fromToken === 'SOL' ? EXCHANGE_RATE : 1)).toFixed(4)}</Text>
           </View>
 
-          {/* Swap Button */}
+          {/* Swap Icon Button */}
           <TouchableOpacity 
             style={styles.swapIconButton}
             onPress={handleSwapTokens}
           >
-            <Text style={styles.swapIconText}>⇅</Text>
+            <View style={styles.swapArrowUp} />
+            <View style={styles.swapArrowDown} />
           </TouchableOpacity>
 
           {/* To Token Card */}
           <View style={styles.tokenCard}>
-            <TouchableOpacity 
-              style={styles.tokenSelector}
-              onPress={() => setShowToDropdown(!showToDropdown)}
-            >
-              {getTokenIcon(toToken, 24)}
-              <Text style={styles.tokenText}>{toToken}</Text>
-              <Text style={styles.dropdownArrow}>▼</Text>
-            </TouchableOpacity>
+            <View style={styles.cardHeader}>
+              <TouchableOpacity 
+                style={styles.tokenSelector}
+                onPress={() => setShowToDropdown(!showToDropdown)}
+              >
+                {getTokenIcon(toToken, 20)}
+                <Text style={styles.tokenText}>{toToken}</Text>
+                <Text style={styles.dropdownArrow}>▼</Text>
+              </TouchableOpacity>
+            </View>
 
             <TextInput
               style={styles.amountInput}
               value={toAmount}
               placeholder="0.00"
-              placeholderTextColor="#4a5555"
+              placeholderTextColor="#3a5555"
               keyboardType="decimal-pad"
               editable={false}
             />
 
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceLabel}>Balance:</Text>
-              <Text style={styles.balanceAmount}>
-                {TOKEN_BALANCES[toToken]} {toToken}
+            <View style={styles.bottomRow}>
+              <View style={styles.balanceRow}>
+                <Text style={styles.balanceLabel}>Balance: </Text>
+                <Text style={styles.balanceAmount}>
+                  {TOKEN_BALANCES[toToken]} {toToken}
+                </Text>
+              </View>
+              <Text style={styles.usdValue}>
+                +$ {(TOKEN_BALANCES[toToken] * (toToken === 'SOL' ? EXCHANGE_RATE : 1)).toFixed(4)}
               </Text>
-              <TouchableOpacity>
-                <Text style={styles.maxButton}>(Max)</Text>
-              </TouchableOpacity>
             </View>
-
-            <Text style={styles.usdValue}>+$ {(parseFloat(toAmount) * (toToken === 'SOL' ? EXCHANGE_RATE : 1)).toFixed(4)}</Text>
           </View>
 
           {/* Exchange Rate */}
           <Text style={styles.exchangeRate}>
-            1 SOL = {EXCHANGE_RATE} USDC
+            1 SOL = {EXCHANGE_RATE.toFixed(3)} USDC
           </Text>
 
           {/* Swap Button */}
@@ -229,32 +240,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a4444',
+    borderBottomColor: 'rgba(34, 211, 238, 0.2)',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   backIcon: {
-    fontSize: 32,
+    fontSize: 36,
     color: '#22D3EE',
-    fontWeight: '300',
+    fontWeight: '200',
+    marginLeft: -4,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '500',
     color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   settingsButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   settingsIcon: {
     gap: 4,
@@ -265,152 +278,189 @@ const styles = StyleSheet.create({
     backgroundColor: '#22D3EE',
     borderRadius: 1,
   },
+  networkContainer: {
+    alignItems: 'center',
+    paddingVertical: 18,
+  },
   networkBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(34, 211, 238, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginHorizontal: 20,
-    marginTop: 16,
-    marginBottom: 8,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
-  networkIcon: {
-    width: 20,
-    height: 20,
+  networkIconWrapper: {
+    width: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 8,
   },
   networkText: {
-    color: '#22D3EE',
+    color: '#8a9999',
     fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 8,
+    fontWeight: '400',
+    letterSpacing: 0.3,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 32,
   },
   tokenCard: {
-    backgroundColor: '#0d3333',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#22D3EE',
-    padding: 16,
+    backgroundColor: 'rgba(6, 45, 45, 0.8)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(34, 211, 238, 0.25)',
+    padding: 18,
+  },
+  cardHeader: {
+    marginBottom: 4,
   },
   tokenSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0d4d4d',
+    backgroundColor: 'rgba(8, 60, 60, 0.9)',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 20,
     alignSelf: 'flex-start',
     gap: 6,
   },
   tokenText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   dropdownArrow: {
-    fontSize: 10,
+    fontSize: 8,
     color: '#22D3EE',
-    marginLeft: 4,
+    marginLeft: 2,
+    marginTop: 1,
   },
   amountInput: {
-    fontSize: 48,
-    fontWeight: '300',
+    fontSize: 56,
+    fontWeight: '200',
     color: '#FFFFFF',
     textAlign: 'right',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 18,
+    marginBottom: 10,
+    letterSpacing: -2,
+    minHeight: 70,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
   balanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
   },
   balanceLabel: {
-    fontSize: 14,
-    color: '#8a9999',
+    fontSize: 12,
+    color: '#6a8989',
     fontWeight: '400',
   },
   balanceAmount: {
-    fontSize: 14,
-    color: '#8a9999',
-    fontWeight: '600',
-    marginLeft: 4,
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   maxButton: {
-    fontSize: 14,
-    color: '#22D3EE',
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  usdValue: {
-    fontSize: 16,
+    fontSize: 12,
     color: '#22D3EE',
     fontWeight: '500',
   },
+  usdValue: {
+    fontSize: 14,
+    color: '#22D3EE',
+    fontWeight: '400',
+  },
   swapIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#22D3EE',
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
-    marginVertical: 16,
+    marginVertical: 18,
+    shadowColor: '#22D3EE',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  swapIconText: {
-    fontSize: 24,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+  swapArrowUp: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 9,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#0A2020',
+    marginBottom: 1.5,
+  },
+  swapArrowDown: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 9,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#0A2020',
+    marginTop: 1.5,
   },
   exchangeRate: {
-    fontSize: 14,
-    color: '#8a9999',
+    fontSize: 12,
+    color: '#6a8989',
     textAlign: 'right',
-    marginTop: 16,
+    marginTop: 18,
     marginBottom: 24,
+    fontWeight: '400',
   },
   swapButton: {
     backgroundColor: 'transparent',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: '#22D3EE',
-    paddingVertical: 16,
+    paddingVertical: 17,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   swapButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 19,
+    fontWeight: '500',
     color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   connectivityBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#22D3EE',
     marginRight: 8,
   },
   connectivityText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#22D3EE',
-    fontWeight: '500',
+    fontWeight: '400',
   },
 });

@@ -157,7 +157,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
                 if (onComplete) {
                     onComplete();
                 } else {
-                    router.replace('/landing' as any);
+                    router.replace('/landing');
                 }
             }, 2000);
 
@@ -203,7 +203,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
                 if (onComplete) {
                     onComplete();
                 } else {
-                    router.replace('/landing' as any);
+                    router.replace('/landing');
                 }
             }, 2000);
 
@@ -362,12 +362,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
             >
                 {/* Logo Section */}
                 <View style={styles.logoContainer}>
-                    <Text style={styles.logoText}>
-                        <Image
-                            src={require('../../assets/images/anon0mesh_logo.png')}
-                            style={{ width: 422, height: 100, resizeMode: 'contain' }}
-                        />
-                    </Text>
+                    <Image
+                        source={require('../../assets/images/anon0mesh_logo.png')}
+                        style={{ width: 422, height: 100, resizeMode: 'contain' }}
+                    />
                     
                     <Text style={styles.tagline}>
                         [ DECENTRALIZED P2P MESSAGING ]

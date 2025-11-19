@@ -12,11 +12,11 @@ export const LandingPage: React.FC = () => {
             console.log('[Landing] User entered mesh - marked as seen');
             
             // Navigate to chat
-            router.push('/chat' as any);
+            router.push('/chat');
         } catch (error) {
             console.error('[Landing] Error marking index as seen:', error);
             // Still navigate even if saving fails
-            router.push('/chat' as any);
+            router.push('/chat');
         }
     };
     

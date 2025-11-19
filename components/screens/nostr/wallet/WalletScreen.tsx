@@ -191,12 +191,12 @@ export default function WalletScreen() {
 
         {/* Bottom Navigation */}
         <BottomNavWithMenu
-          onNavigateToMessages={() => router.push('/chat' as any)}
-          onNavigateToWallet={() => {}}
-          onNavigateToHistory={() => router.push('/history' as any)}
-          onNavigateToMeshZone={() => Alert.alert('Mesh Zone', 'Coming soon')}
-          onNavigateToProfile={() => Alert.alert('Profile', 'Coming soon')}
-          onDisconnect={() => Alert.alert('Disconnect', 'Coming soon')}
+          onNavigateToMessages={() => router.push('/chat')}
+          onNavigateToWallet={() => router.push('/wallet')}
+          onNavigateToHistory={() => router.push('/wallet/history')}
+          onNavigateToMeshZone={() => router.push('/zone')}
+          onNavigateToProfile={() => router.push('/selection')}
+          onDisconnect={() => router.push('/landing')}
         />
       </SafeAreaView>
     </LinearGradient>
