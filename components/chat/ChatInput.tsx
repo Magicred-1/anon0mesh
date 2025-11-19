@@ -65,9 +65,7 @@ export default function ChatInput({
           style={[styles.sendButton, (!value.trim() || disabled) && styles.sendButtonDisabled]}
           disabled={!value.trim() || disabled}
         >
-          {/* <View style={styles.sendIcon}> */}
-            <SendMessageIcon size={16} />
-          {/* </View> */}
+          <SendMessageIcon size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -111,7 +109,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#00CED1',
+    borderColor: '#22D3EE',
     paddingLeft: 20,
     paddingRight: 6,
   },
@@ -119,8 +117,8 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
     backgroundColor: 'transparent',
-    color: '#00F0FF',
-    fontSize: 15,
+    color: '#22D3EE',
+    fontSize: 16,
     borderWidth: 0,
     paddingRight: 12,
   },
@@ -128,9 +126,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'transparent',
+    backgroundColor: '#0C2425',
     borderWidth: 2,
-    borderColor: '#00CED1',
+    borderColor: '#22D3EE',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -145,7 +143,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     borderTopWidth: 7,
     borderBottomWidth: 7,
-    borderLeftColor: '#00CED1',
+    borderLeftColor: '#22D3EE',
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
     marginLeft: 2,

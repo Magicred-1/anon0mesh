@@ -639,11 +639,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#00d4d4',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 15,
-        elevation: 8,
+        backgroundColor: '#041A1D',
     },
     buttonDisabled: {
         opacity: 0.6,
@@ -655,9 +651,6 @@ const styles = StyleSheet.create({
         letterSpacing: 2,
         fontFamily: 'monospace',
         marginRight: 15,
-        textShadowColor: 'rgba(0, 212, 212, 0.5)',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 8,
     },
     buttonIcon: {
         flexDirection: 'row',

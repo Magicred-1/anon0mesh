@@ -1,27 +1,31 @@
-import React, { Component } from 'react';
+import { useSegments } from 'expo-router';
 import {
-    Animated,
-    Dimensions,
-    Modal,
-    PanResponder,
-    PanResponderInstance,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  ChatCircle,
+  ClockClockwise,
+  Network,
+  Plugs,
+  User,
+  Wallet,
+  type Icon
+} from 'phosphor-react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Dimensions,
+  Modal,
+  PanResponder,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
-import DisconnectIcon from '../icons/DisconnectIcon';
-import HistoryIcon from '../icons/HistoryIcon';
-import MeshZoneIcon from '../icons/MeshZoneIcon';
-import MessagesIcon from '../icons/MessagesIcon';
-import ProfileIcon from '../icons/ProfileIcon';
-import WalletIcon from '../icons/WalletIcon';
 
 type MenuOption = {
   id: string;
   label: string;
-  icon: React.ReactNode;
+  route: string;
+  icon: Icon;
   onPress: () => void;
 };
 
@@ -36,199 +40,209 @@ type Props = {
   onDisconnect: () => void;
 };
 
-interface MainMenuModalState {
-  panY: Animated.Value;
-}
-
-export default class MainMenuModal extends Component<Props, MainMenuModalState> {
-  private _panResponders: PanResponderInstance;
-  private _resetPositionAnim: Animated.CompositeAnimation;
-  private _closeAnim: Animated.CompositeAnimation;
-  private _currentPanY: number;
-  private _closedPosition: number;
-
-  constructor(props: Props) {
-    super(props);
-    
-    const screenHeight = Dimensions.get('screen').height;
-    const closedPosition = screenHeight - 80; // Show 80px peek at bottom
-    
-    this._closedPosition = closedPosition;
-    this._currentPanY = closedPosition;
-    
-    this.state = {
-      panY: new Animated.Value(closedPosition),
-    };
-
-    // Add listener to track current position
-    this.state.panY.addListener(({ value }) => {
-      this._currentPanY = value;
-    });
-
-    this._resetPositionAnim = Animated.timing(this.state.panY, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: false,
-    });
-
-    this._closeAnim = Animated.timing(this.state.panY, {
-      toValue: closedPosition,
-      duration: 300,
-      useNativeDriver: false,
-    });
-
-    this._panResponders = PanResponder.create({
+export default function MainMenuModal(props: Props) {
+  const segments = useSegments();
+  const screenHeight = Dimensions.get('screen').height;
+  const closedPosition = screenHeight - 80; // Show 80px peek at bottom
+  
+  const [panY] = useState(new Animated.Value(closedPosition));
+  const currentPanY = useRef(closedPosition);
+  const resetPositionAnim = useRef<Animated.CompositeAnimation | null>(null);
+  const closeAnim = useRef<Animated.CompositeAnimation | null>(null);
+  const panResponder = useRef(
+    PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
       onPanResponderMove: (_, gs) => {
         // Constrain the pan gesture to only move between 0 (fully open) and closedPosition (closed)
         const newValue = Math.max(0, Math.min(closedPosition, gs.dy));
-        this.state.panY.setValue(newValue);
+        panY.setValue(newValue);
       },
       onPanResponderRelease: (_, gs) => {
-        const threshold = this._closedPosition / 2;
+        const threshold = closedPosition / 2;
         
-        if (this._currentPanY > threshold || gs.vy > 0.5) {
+        if (currentPanY.current > threshold || gs.vy > 0.5) {
           // Swipe down or fast downward velocity - close
-          return this._closeAnim.start(() => this.props.onClose());
+          return closeAnim.current?.start(() => props.onClose());
         } else {
           // Swipe up or not enough to close - open
-          return this._resetPositionAnim.start();
+          return resetPositionAnim.current?.start();
         }
       },
+    })
+  ).current;
+
+  useEffect(() => {
+    resetPositionAnim.current = Animated.timing(panY, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: false,
     });
-  }
-  
-  componentWillUnmount() {
-    this.state.panY.removeAllListeners();
-  }
 
-  componentDidUpdate(prevProps: Props) {
-    if (prevProps.visible !== this.props.visible) {
-      if (this.props.visible) {
-        this._resetPositionAnim.start();
-      } else {
-        this._closeAnim.start();
-      }
+    closeAnim.current = Animated.timing(panY, {
+      toValue: closedPosition,
+      duration: 300,
+      useNativeDriver: false,
+    });
+
+    const listener = panY.addListener(({ value }) => {
+      currentPanY.current = value;
+    });
+
+    return () => {
+      panY.removeListener(listener);
+    };
+  }, [panY, closedPosition]);
+
+  useEffect(() => {
+    if (props.visible) {
+      resetPositionAnim.current?.start();
+    } else {
+      closeAnim.current?.start();
     }
-  }
+  }, [props.visible]);
 
-  _handleDismiss = () => {
-    this._closeAnim.start(() => this.props.onClose());
-  }
+  const handleDismiss = () => {
+    closeAnim.current?.start(() => props.onClose());
+  };
 
-  _handleOptionPress = (onPress: () => void) => {
+  const handleOptionPress = (onPress: () => void) => {
     onPress();
-    this._handleDismiss();
+    handleDismiss();
+  };
+
+  // Determine active route
+  const currentRoute = segments.join('/') || '';
+  const isActive = (route: string) => {
+    if (route === 'chat' && (currentRoute === 'chat' || currentRoute === '')) return true;
+    if (route === 'wallet' && currentRoute.startsWith('wallet')) return true;
+    if (route === 'wallet/history' && currentRoute === 'wallet/history') return true;
+    if (route === 'zone' && currentRoute.startsWith('zone')) return true;
+    if (route === 'selection' && currentRoute === 'selection') return true;
+    return false;
+  };
+
+  const menuOptions: MenuOption[] = [
+    {
+      id: 'messages',
+      label: 'Messages',
+      route: 'chat',
+      icon: ChatCircle,
+      onPress: props.onNavigateToMessages,
+    },
+    {
+      id: 'wallet',
+      label: 'Wallet',
+      route: 'wallet',
+      icon: Wallet,
+      onPress: props.onNavigateToWallet,
+    },
+    {
+      id: 'history',
+      label: 'History',
+      route: 'wallet/history',
+      icon: ClockClockwise,
+      onPress: props.onNavigateToHistory,
+    },
+    {
+      id: 'mesh_zone',
+      label: 'Mesh_Zone',
+      route: 'zone',
+      icon: Network,
+      onPress: props.onNavigateToMeshZone,
+    },
+    {
+      id: 'profile',
+      label: 'Profile',
+      route: 'selection',
+      icon: User,
+      onPress: props.onNavigateToProfile,
+    },
+    {
+      id: 'disconnect',
+      label: 'Disconnect',
+      route: '',
+      icon: Plugs,
+      onPress: props.onDisconnect,
+    },
+  ];
+
+  const translateY = panY;
+  
+  const backdropOpacity = panY.interpolate({
+    inputRange: [0, screenHeight - 80],
+    outputRange: [0.9, 0],
+    extrapolate: 'clamp',
+  });
+
+  // Don't render anything if not visible
+  if (!props.visible) {
+    return null;
   }
 
-  render() {
-    const { visible } = this.props;
-    
-    const menuOptions: MenuOption[] = [
-      {
-        id: 'messages',
-        label: 'Messages',
-        icon: <MessagesIcon size={36} color="#FFFFFF" />,
-        onPress: this.props.onNavigateToMessages,
-      },
-      {
-        id: 'wallet',
-        label: 'Wallet',
-        icon: <WalletIcon size={36} />,
-        onPress: this.props.onNavigateToWallet,
-      },
-      {
-        id: 'history',
-        label: 'History',
-        icon: <HistoryIcon size={36} color="#FFFFFF" />,
-        onPress: this.props.onNavigateToHistory,
-      },
-      {
-        id: 'mesh_zone',
-        label: 'Mesh_Zone',
-        icon: <MeshZoneIcon size={36} color="#FFFFFF" />,
-        onPress: this.props.onNavigateToMeshZone,
-      },
-      {
-        id: 'profile',
-        label: 'Profile',
-        icon: <ProfileIcon size={36} color="#FFFFFF" />,
-        onPress: this.props.onNavigateToProfile,
-      },
-      {
-        id: 'disconnect',
-        label: 'Disconnect',
-        icon: <DisconnectIcon size={36} color="#FFFFFF" />,
-        onPress: this.props.onDisconnect,
-      },
-    ];
-
-    const translateY = this.state.panY;
-    
-    const backdropOpacity = this.state.panY.interpolate({
-      inputRange: [0, Dimensions.get('screen').height - 80],
-      outputRange: [0.9, 0],
-      extrapolate: 'clamp',
-    });
-
-    // Don't render anything if not visible
-    if (!visible) {
-      return null;
-    }
-
-    return (
-      <Modal
-        animated
-        animationType="fade"
-        visible={visible}
-        transparent
-        onRequestClose={this._handleDismiss}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableWithoutFeedback onPress={this._handleDismiss}>
-            <Animated.View 
-              style={[
-                styles.background, 
-                { opacity: backdropOpacity }
-              ]}
-            />
-          </TouchableWithoutFeedback>
-          
+  return (
+    <Modal
+      animated
+      animationType="fade"
+      visible={props.visible}
+      transparent
+      onRequestClose={handleDismiss}
+    >
+      <View style={styles.modalOverlay}>
+        <TouchableWithoutFeedback onPress={handleDismiss}>
           <Animated.View 
             style={[
-              styles.modalContent, 
-              { transform: [{ translateY }] }
+              styles.background, 
+              { opacity: backdropOpacity }
             ]}
+          />
+        </TouchableWithoutFeedback>
+        
+        <Animated.View 
+          style={[
+            styles.modalContent, 
+            { transform: [{ translateY }] }
+          ]}
+        >
+          <View 
+            style={styles.handleContainer}
+            {...panResponder.panHandlers}
           >
-            <View 
-              style={styles.handleContainer}
-              {...this._panResponders.panHandlers}
-            >
-              <View style={styles.handle} />
-              <View style={styles.handle} />
-            </View>
-            
-            <View style={styles.menuGrid}>
-              {menuOptions.map((option) => (
+            <View style={styles.handle} />
+            <View style={styles.handle} />
+          </View>
+          
+          <View style={styles.menuGrid}>
+            {menuOptions.map((option) => {
+              const IconComponent = option.icon;
+              const active = isActive(option.route);
+              
+              return (
                 <TouchableOpacity
                   key={option.id}
                   style={styles.menuItem}
-                  onPress={() => this._handleOptionPress(option.onPress)}
+                  onPress={() => handleOptionPress(option.onPress)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.iconContainer}>
-                    {option.icon}
+                  <View style={[
+                    styles.iconContainer,
+                    active && styles.iconContainerActive
+                  ]}>
+                    <IconComponent 
+                      size={36} 
+                      color="#FFFFFF" 
+                      weight="regular"
+                    />
                   </View>
                   <Text style={styles.menuLabel}>{option.label}</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-          </Animated.View>
-        </View>
-      </Modal>
-    );
-  }
+              );
+            })}
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -264,9 +278,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   handle: {
-    width: 80,
-    height: 4,
-    backgroundColor: '#00d9ff',
+    width: 50,
+    height: 3,
+    backgroundColor: '#22D3EE',
     borderRadius: 2,
   },
   menuGrid: {
@@ -291,6 +305,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  iconContainerActive: {
+    backgroundColor: '#106471', // Bleu plus clair pour la page active
   },
   menuLabel: {
     color: '#22D3EE',

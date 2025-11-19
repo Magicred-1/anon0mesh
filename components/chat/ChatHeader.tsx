@@ -1,8 +1,7 @@
 import { subscribeToConnectivityChanges } from '@/src/infrastructure/wallet/utils/connectivity';
+import { CaretLeft } from 'phosphor-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AnonmeshIcon from '../icons/anon0meshIcon';
-import WalletIcon from '../icons/WalletIcon';
 
 interface ChatHeaderProps {
   nickname: string;
@@ -22,9 +21,7 @@ interface ChatHeaderProps {
 export default function ChatHeader({
   nickname,
   selectedPeer,
-  onWalletPress,
   onNavigateToSelection,
-  onTripleTap,
 }: ChatHeaderProps) {
   // Connectivity state
   const [isInternetConnected, setIsInternetConnected] = useState(false);
@@ -50,41 +47,29 @@ export default function ChatHeader({
     };
   }, []);
 
-  const handleUsernameTap = () => {
-    // If we're already navigating to selection, just use that
-    if (onNavigateToSelection && !selectedPeer) {
+  const handleBackPress = () => {
+    if (onNavigateToSelection) {
       onNavigateToSelection();
-      return;
     }
   };
 
   return (
     <View style={styles.header}>
-      <TouchableOpacity 
-        style={styles.headerLeft} 
-        onPress={handleUsernameTap}
-        activeOpacity={0.7}
-      >
-        {/* Back arrow
-        <TouchableOpacity style={styles.backButton} onPress={onBackPress}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity> */}
-        <AnonmeshIcon size={24} />
+      <View style={styles.headerLeft}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={handleBackPress}
+          activeOpacity={0.7}
+        >
+          <CaretLeft size={24} color="#00CED1" weight="regular" />
+        </TouchableOpacity>
         <View style={styles.titleTouch}>
           <Text style={styles.headerTitle}>{selectedPeer || nickname}</Text>
         </View>
-      </TouchableOpacity>
+      </View>
       
       {/* Right side icons */}
       <View style={styles.headerRight}>
-
-        {/* Wallet Icon */}
-        <TouchableOpacity style={styles.iconButton} onPress={onWalletPress}>
-          <View style={styles.walletIcon}>
-            <WalletIcon size={20} />
-          </View>
-        </TouchableOpacity>
-
         {/* Connection Status Indicators */}
         <View style={styles.statusContainer}>
           {/* Internet Status */}
@@ -129,7 +114,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: 'transparent',
-    borderBottomWidth: 1,
+    borderBottomWidth: 2,
     borderBottomColor: '#22D3EE',
   },
   headerLeft: {
@@ -140,11 +125,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
-  },
-  backArrow: {
-    fontSize: 24,
-    color: '#00CED1',
-    fontWeight: 'bold',
+    marginRight: 8,
   },
   headerTitle: {
     fontSize: 18,
@@ -194,36 +175,6 @@ const styles = StyleSheet.create({
   titleTouch: {
     paddingVertical: 4,
     paddingHorizontal: 6,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#00CED1',
-    backgroundColor: 'rgba(0, 217, 255, 0.1)',
-  },
-  // Wallet Icon
-  walletIcon: {
-    width: 20,
-    height: 16,
-  },
-  walletTop: {
-    width: 20,
-    height: 4,
-    backgroundColor: '#00CED1',
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
-  },
-  walletBottom: {
-    width: 20,
-    height: 12,
-    backgroundColor: '#00CED1',
-    borderBottomLeftRadius: 2,
-    borderBottomRightRadius: 2,
-    marginTop: 0,
   },
   // Profile Icon
   profileIcon: {

@@ -1,11 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { CaretRight } from 'phosphor-react-native';
 import React, { useState } from 'react';
 import {
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNavWithMenu from '../ui/BottomNavWithMenu';
@@ -18,14 +19,14 @@ interface Peer {
 }
 
 interface ChatSelectionScreenProps {
-    onSelectPeer: (peerId: string) => void;
-    onBack?: () => void;
-    onNavigateToMessages?: () => void;
-    onNavigateToWallet?: () => void;
-    onNavigateToHistory?: () => void;
-    onNavigateToMeshZone?: () => void;
-    onNavigateToProfile?: () => void;
-    onDisconnect?: () => void;
+  onSelectPeer: (peerId: string) => void;
+  onBack?: () => void;
+  onNavigateToMessages?: () => void;
+  onNavigateToWallet?: () => void;
+  onNavigateToHistory?: () => void;
+  onNavigateToMeshZone?: () => void;
+  onNavigateToProfile?: () => void;
+  onDisconnect?: () => void;
 }
 
 const MOCK_PEERS: Peer[] = [
@@ -37,8 +38,8 @@ const MOCK_PEERS: Peer[] = [
   { id: '6', name: 'anonUser#3323', lastActive: '3h' },
 ];
 
-export default function ChatSelectionScreen({ 
-  onSelectPeer, 
+export default function ChatSelectionScreen({
+  onSelectPeer,
   onBack,
   onNavigateToMessages,
   onNavigateToWallet,
@@ -48,27 +49,43 @@ export default function ChatSelectionScreen({
   onDisconnect,
 }: ChatSelectionScreenProps) {
   const [connectedPeers] = useState(3);
+  const [pressedItemId, setPressedItemId] = useState<string | null>(null);
 
-  const renderPeerItem = ({ item }: { item: Peer }) => (
-    <TouchableOpacity
-      style={styles.peerItem}
-      onPress={() => onSelectPeer(item.id)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.peerContent}>
-        <View style={styles.peerLeft}>
-          <View style={styles.onlineIndicator} />
-          <View style={styles.peerInfo}>
-            <Text style={styles.peerName}>{item.name}</Text>
+  const renderPeerItem = ({ item }: { item: Peer }) => {
+    const hasMessages = item.unreadCount !== undefined && item.unreadCount > 0;
+    const isPressed = pressedItemId === item.id;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.peerItem,
+          isPressed && styles.peerItemPressed,
+        ]}
+        onPress={() => onSelectPeer(item.id)}
+        onPressIn={() => setPressedItemId(item.id)}
+        onPressOut={() => setPressedItemId(null)}
+        activeOpacity={1}
+      >
+        <View style={styles.peerContent}>
+          <View style={styles.peerLeft}>
+            <View style={styles.peerInfo}>
+              <View
+                style={[
+                  styles.onlineIndicator,
+                  !hasMessages && styles.onlineIndicatorNoMessages,
+                ]}
+              />
+              <Text style={styles.peerName}>{item.name}</Text>
+            </View>
             <Text style={styles.lastActive}>{item.lastActive}</Text>
           </View>
+          <View style={styles.chevronIcon}>
+            <CaretRight size={24} color="#22D3EE" weight="regular" />
+          </View>
         </View>
-        <View style={styles.chevronIcon}>
-          <Text style={styles.chevronText}>›</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <LinearGradient
@@ -123,18 +140,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a4444',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: '#22D3EE',
   },
   headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
+    color: '#fff',
   },
   peersCountContainer: {
     flexDirection: 'row',
@@ -161,10 +179,13 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   peerItem: {
-    backgroundColor: '#0a2828',
+    backgroundColor: 'transparent',
     borderRadius: 12,
     marginBottom: 8,
     marginHorizontal: 8,
+  },
+  peerItemPressed: {
+    backgroundColor: '#0a2828',
   },
   peerContent: {
     flexDirection: 'row',
@@ -174,8 +195,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   peerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     flex: 1,
   },
   onlineIndicator: {
@@ -183,28 +204,27 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#22D3EE',
-    marginRight: 16,
+    marginRight: 8,
+  },
+  onlineIndicatorNoMessages: {
+    backgroundColor: '#1e3a5f',
   },
   peerInfo: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   peerName: {
     color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '500',
-    marginBottom: 6,
+    fontSize: 18,
+    fontWeight: '600',
   },
   lastActive: {
-    color: '#6b8080',
-    fontSize: 12,
-    fontWeight: '400',
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontWeight: '500',
   },
   chevronIcon: {
     marginLeft: 16,
-  },
-  chevronText: {
-    color: '#22D3EE',
-    fontSize: 24,
-    fontWeight: '400',
   },
 });
