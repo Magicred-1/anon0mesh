@@ -20,20 +20,20 @@ export default function Index() {
                 isSolanaMobile: deviceInfo.isSolanaMobile,
             });
 
-            // 🔧 UNCOMMENT THIS LINE TO RESET AND TEST FIRST-TIME USER EXPERIENCE
+            // // 🔧 UNCOMMENT THIS LINE TO RESET AND TEST FIRST-TIME USER EXPERIENCE
             // await SecureStore.deleteItemAsync('hasSeenIndex');
 
             // Check if user has seen index (UI state)
             const hasSeenIndex = await SecureStore.getItemAsync('hasSeenIndex');
             console.log('[Index] hasSeenIndex flag:', hasSeenIndex);
 
-            // Check if local wallet exists first (for all devices)
+            // Check if local wallet exists or MWA is available
             const hasLocalWallet = await LocalWalletAdapter.hasStoredWallet();
 
             if (!hasLocalWallet) {
                 // No wallet found - ALWAYS go to onboarding first
                 console.log('[Index] No wallet found - redirecting to onboarding');
-                router.replace('/onboarding' as any);
+                router.replace('/onboarding');
                 return;
             }
 
@@ -41,11 +41,11 @@ export default function Index() {
             if (hasSeenIndex === 'true') {
                 // Already completed onboarding and landing - go to chat
                 console.log('[Index] Returning user with wallet - redirecting to chat');
-                router.replace('/chat' as any);
+                router.replace('/ble-test');
             } else {
                 // Has wallet but hasn't seen landing page yet - show landing
                 console.log('[Index] User has wallet but needs to see landing - showing landing page');
-                router.replace('/landing' as any);
+                router.replace('/ble-test');
             }
         })();
     }, [router]);

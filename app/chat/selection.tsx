@@ -11,10 +11,10 @@ const ChatSelectionPage = () => {
                 // Navigate back to chat with selected peer
                 router.back();
             }}
-            onNavigateToMessages={() => router.push('/chat/index' as any)}
-            onNavigateToWallet={() => router.push('/wallet/index' as any)}
-            onNavigateToHistory={() => router.push('/wallet/history' as any)}
-            onNavigateToMeshZone={() => router.push('/zone/index' as any)}
+            onNavigateToMessages={() => router.push('/chat')}
+            onNavigateToWallet={() => router.push('/wallet')}
+            onNavigateToHistory={() => router.push('/wallet/history')}
+            onNavigateToMeshZone={() => router.push('/zone')}
             onNavigateToProfile={() => router.push('/profile')}
             onDisconnect={() => {
                 console.log('Disconnect requested');

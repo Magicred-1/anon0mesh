@@ -715,16 +715,6 @@ export class BLEAdapter implements IBLEAdapter {
     });
 
     try {
-      // Clean up any existing service
-      try {
-        console.log('[BLE Peripheral] Removing existing service if any...');
-        await this.peripheralManager.removeAllListeners(BLE_UUIDS.SERVICE_UUID);
-        await new Promise(resolve => setTimeout(resolve, 200));
-      } catch {
-        // Service doesn't exist, that's fine
-        console.log('[BLE Peripheral] No existing service to remove');
-      }
-
       // Add service
       console.log('[BLE Peripheral] Adding service:', BLE_UUIDS.SERVICE_UUID);
       await this.peripheralManager.addService(BLE_UUIDS.SERVICE_UUID, true);
@@ -769,21 +759,17 @@ export class BLEAdapter implements IBLEAdapter {
         Buffer.from(peerData)
       );
 
-      // Set up write handler for TX characteristic (remove old listeners first)
+      // Set up write handler for TX characteristic
       console.log('[BLE Peripheral] Setting up write handler...');
-      this.peripheralManager.removeAllListeners('write');
       this.peripheralManager.on('write', (event: any) => {
         if (event.characteristicUuid.toLowerCase() === BLE_UUIDS.TX_CHARACTERISTIC_UUID.toLowerCase()) {
           this.handleIncomingPacket(event.value, event.device || 'unknown');
         }
       });
 
-      // Start advertising with service data
+      // Start advertising (no service data to avoid ADVERTISE_FAILED_DATA_TOO_LARGE)
       console.log('[BLE Peripheral] Starting advertising...');
       await this.peripheralManager.startAdvertising(
-        {
-          [BLE_UUIDS.SERVICE_UUID]: Buffer.from('anon0mesh'),
-        },
         {
           connectable: options?.connectable ?? true,
           includeDeviceName: true,
