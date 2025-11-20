@@ -700,11 +700,17 @@ export class BLEAdapter implements IBLEAdapter {
       console.log('[BLE Peripheral] ✅ All permissions granted');
     }
 
+    // If already advertising, stop first and wait for cleanup
     if (this.advertising) {
       console.warn('[BLE Peripheral] Already advertising, stopping first...');
-      await this.stopAdvertising();
-      // Wait a bit before restarting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      try {
+        await this.peripheralManager.stopAdvertising();
+        this.advertising = false;
+      } catch (stopError) {
+        console.error('[BLE Peripheral] Error stopping existing advertising:', stopError);
+      }
+      // Wait for the advertising to fully stop
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     this.localPeer = localPeer;

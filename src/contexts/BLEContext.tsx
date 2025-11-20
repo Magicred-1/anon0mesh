@@ -153,8 +153,12 @@ const startAdvertising = useCallback(async () => {
   }
 
   try {
-    console.log('[BLEContext] Ensuring advertising is stopped before starting...');
-    await bleAdapter.stopAdvertising().catch(() => {});
+    // Check if already advertising
+    if (bleAdapter.isAdvertising()) {
+      console.log('[BLEContext] Already advertising');
+      setIsAdvertising(true);
+      return;
+    }
 
     console.log('[BLEContext] Starting advertising...');
 

@@ -41,11 +41,11 @@ export default function Index() {
             if (hasSeenIndex === 'true') {
                 // Already completed onboarding and landing - go to chat
                 console.log('[Index] Returning user with wallet - redirecting to chat');
-                router.replace('/ble-test');
+                router.replace('/chat');
             } else {
                 // Has wallet but hasn't seen landing page yet - show landing
                 console.log('[Index] User has wallet but needs to see landing - showing landing page');
-                router.replace('/ble-test');
+                router.replace('/landing');
             }
         })();
     }, [router]);
