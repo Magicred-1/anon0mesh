@@ -1,50 +1,91 @@
-# Welcome to your Expo app 👋
+<!--
+  anon0mesh README
+  Generated/updated: 2025-11-24
+-->
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+<!-- Banner -->
+<img src="./assets/images/banner.jpeg" alt="anon0mesh Banner" />
+<center><h1>anon0mesh - P2P mesh offline messaging over Bluetooth Low Energy & confidential transactions using <img src="https://pbs.twimg.com/profile_images/1868708694336163841/aYqMoBKH_400x400.jpg" alt="Arcium" height="20"/> Arcium</h1></center>
 
-## Get started
+Lightweight peer-to-peer mesh networking for mobile devices. anon0mesh combines BLE (Central + Peripheral), a compact packet format, and Nostr <img src="https://user-images.githubusercontent.com/99301796/219741736-3ce00069-9c6a-47f2-9c8b-108f3f40295b.png" height="20"> cryptographic messaging to enable local mesh messaging and simple Solana transaction relay for constrained environments.
+
+This repository contains an Expo + React Native app (TypeScript) that demonstrates the mesh stack and provides utilities, examples, and tools to develop and test the stack on Android and iOS devices.
+
+---
+
+## Quick start
 
 1. Install dependencies
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
+# or using pnpm (preferred in this repo): pnpm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Start the Metro/Expo server
 
-## Learn more
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+3. Run on device/emulator
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- Use a development build, Android emulator, or iOS simulator as shown in the Expo output.
+- For BLE testing use a real device (recommended). Android often requires granting runtime Bluetooth permissions.
 
-## Join the community
+## Project structure (high level)
 
-Join our community of developers creating universal apps.
+- `app/` — File-based routes and screens (Expo Router). Primary app UI lives here.
+- `src/` — Application logic, polyfills, background workers, networking, and domain code.
+- `src/infrastructure/ble/` — BLEAdapter, central+peripheral glue, packet serialization.
+- `src/domain/` — Entities and value objects (Packet, Peer, PeerId).
+- `src/hooks/` — Custom React hooks (e.g. `useBLESend` added in this branch).
+- `components/` — Reusable UI, examples and test screens.
+- `patches/` — `patch-package` patches applied on install (used for Android SDK compatibility)
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Features
+
+- Dual-mode BLE (Central + Peripheral) using `react-native-ble-plx` + `react-native-multi-ble-peripheral`.
+- Compact Packet entity + wire format with TTL support.
+- Packet send/receive abstractions: `writePacket`, `notifyPacket`, `broadcastPacket`.
+- Example hook: `useBLESend` to send arbitrary `Uint8Array` payloads.
+- Basic integration points for Nostr-style message wrapping (NIP-04 / NIP-44) and planned NIP-17/XChaCha20 gift-wrap support.
+
+## BLE specifics and gotchas
+
+- Android requires runtime permissions: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_ADVERTISE` and `ACCESS_FINE_LOCATION` when scanning/advertising.
+- Advertising payloads are limited to ~31 bytes — service UUID + device name only (we avoid adding large service data by default).
+- We apply an SDK 33+ compatibility patch to `react-native-multi-ble-peripheral` via `patch-package` (see `/patches`).
+- For robust testing use two physical devices (one advertising, one scanning/connecting). Dual-mode (scan + advertise) is supported.
+
+## Development workflow
+
+Common scripts (check `package.json`):
+
+```bash
+# install deps
+pnpm install
+
+# start expo
+pnpm run start        # runs `expo start`
+
+# run TypeScript check
+pnpm run typecheck    # runs tsc --noEmit
+
+# reset project helper
+pnpm run reset-project
+```
+
+## How to run BLE tests
+
+1. Open the `BLETestScreen` in the app (look under `components/` or `app/` routes).
+2. Ensure permissions are granted on Android (the app requests them, but confirm in Settings if needed).
+3. Use `nRF Connect` or `LightBlue` on a second device to validate advertising/characteristics.
+
+Please follow the repository coding conventions and run `pnpm run typecheck` before submitting.
+
+## Notes / Next steps
+
+- Implement NIP-17/44 XChaCha20 gift-wrap encryption integration for secure message passing (planned).
+- Add message ack/retry and persistent queue to improve reliability over flaky BLE links.
+- Expand to have the escrow transaction relay functionality using Arcium circuits.

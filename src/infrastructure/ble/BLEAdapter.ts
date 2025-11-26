@@ -658,154 +658,293 @@ export class BLEAdapter implements IBLEAdapter {
   // PERIPHERAL MODE (Advertising & Serving)
   // ============================================
 
-  async startAdvertising(
-    localPeer: Peer,
-    options?: BLEAdvertisingOptions
-  ): Promise<void> {
-    if (!this.initialized) {
-      throw new Error('BLE adapter not initialized');
-    }
+async startAdvertising(
+  localPeer: Peer,
+  options?: BLEAdvertisingOptions
+): Promise<void> {
+  if (!this.initialized) {
+    throw new Error('BLE adapter not initialized');
+  }
 
-    if (!this.peripheralManager) {
-      throw new Error('Peripheral mode not available. This may be due to platform limitations or initialization failure.');
-    }
+  if (!this.peripheralManager) {
+    throw new Error('Peripheral mode not available');
+  }
 
-    // Check Android permissions before advertising
-    if (Platform.OS === 'android' && PermissionsAndroid) {
-      console.log('[BLE Peripheral] Checking Android permissions...');
+  // Check and request permissions FIRST (Android)
+  if (Platform.OS === 'android') {
+    console.log('[BLE Peripheral] Verifying Android permissions...');
+    
+    const androidVersion = Platform.Version as number;
+    const permissions = androidVersion >= 31 ? [
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
+    ] : [
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
+    ];
+
+    const results = await PermissionsAndroid.requestMultiple(permissions);
+    
+    const allGranted = Object.values(results).every(
+      (result: any) => result === PermissionsAndroid.RESULTS.GRANTED
+    );
+
+    if (!allGranted) {
+      const deniedPermissions = Object.entries(results)
+        .filter(([_, result]) => result !== PermissionsAndroid.RESULTS.GRANTED)
+        .map(([perm]) => perm);
       
-      const permissions = [
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
-      ];
-
-      const results = await PermissionsAndroid.requestMultiple(permissions);
-      
-      const allGranted = Object.values(results).every(
-        (result: any) => result === PermissionsAndroid.RESULTS.GRANTED
+      throw new Error(
+        `Required permissions not granted: ${deniedPermissions.join(', ')}`
       );
+    }
+    
+    console.log('[BLE Peripheral] ✅ All permissions verified');
+  }
 
-      if (!allGranted) {
-        const deniedPermissions = Object.entries(results)
-          .filter(([_, result]) => result !== PermissionsAndroid.RESULTS.GRANTED)
-          .map(([perm]) => perm);
-        
-        throw new Error(
-          `Required permissions not granted for advertising: ${deniedPermissions.join(', ')}. ` +
-          'Please grant Bluetooth Advertise, Bluetooth Connect, and Location permissions in Settings.'
-        );
-      }
+  // Stop existing advertising completely
+  if (this.advertising) {
+    console.log('[BLE Peripheral] Stopping existing advertising...');
+    try {
+      await this.peripheralManager.stopAdvertising();
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (stopError) {
+      console.error('[BLE Peripheral] Error during cleanup:', stopError);
+    }
+    this.advertising = false;
+  }
+
+  this.localPeer = localPeer;
+
+  console.log('[BLE Peripheral] Starting advertisement for:', {
+    peerId: localPeer.id.toShortString(),
+    nickname: localPeer.nickname.toString(),
+    serviceUUID: BLE_UUIDS.SERVICE_UUID,
+  });
+
+  try {
+    // Step 1: Add the primary service
+    console.log('[BLE Peripheral] Step 1: Adding service...');
+    await this.peripheralManager.addService(BLE_UUIDS.SERVICE_UUID, true);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay
+    console.log('[BLE Peripheral] ✅ Service added');
+
+    // Step 2: Serialize peer data once
+    const peerData = this.serializePeer(localPeer);
+    console.log('[BLE Peripheral] Peer data size:', peerData.length, 'bytes');
+
+    // Step 3: Add Peer Info Characteristic (READ)
+    console.log('[BLE Peripheral] Step 2: Adding Peer Info characteristic...');
+    await this.peripheralManager.addCharacteristic(
+      BLE_UUIDS.SERVICE_UUID,
+      BLE_UUIDS.PEER_INFO_UUID,
+      Property.READ,
+      Permission.READABLE
+    );
+    await new Promise(resolve => setTimeout(resolve, 300));
+    console.log('[BLE Peripheral] ✅ Peer Info characteristic added');
+
+    // Step 4: Set peer info value
+    console.log('[BLE Peripheral] Step 3: Setting peer info value...');
+    await this.peripheralManager.updateValue(
+      BLE_UUIDS.SERVICE_UUID,
+      BLE_UUIDS.PEER_INFO_UUID,
+      Buffer.from(peerData)
+    );
+    await new Promise(resolve => setTimeout(resolve, 200));
+    console.log('[BLE Peripheral] ✅ Peer info value set');
+
+    // Step 5: Add TX Characteristic (WRITE) - for receiving packets
+    console.log('[BLE Peripheral] Step 4: Adding TX characteristic (WRITE)...');
+    await this.peripheralManager.addCharacteristic(
+      BLE_UUIDS.SERVICE_UUID,
+      BLE_UUIDS.TX_CHARACTERISTIC_UUID,
+      Property.WRITE | Property.WRITE_NO_RESPONSE,
+      Permission.WRITEABLE
+    );
+    await new Promise(resolve => setTimeout(resolve, 300));
+    console.log('[BLE Peripheral] ✅ TX characteristic added');
+
+    // Step 6: Add RX Characteristic (NOTIFY + READ) - for sending packets
+    console.log('[BLE Peripheral] Step 5: Adding RX characteristic (NOTIFY)...');
+    await this.peripheralManager.addCharacteristic(
+      BLE_UUIDS.SERVICE_UUID,
+      BLE_UUIDS.RX_CHARACTERISTIC_UUID,
+      Property.NOTIFY | Property.READ,
+      Permission.READABLE
+    );
+    await new Promise(resolve => setTimeout(resolve, 300));
+    console.log('[BLE Peripheral] ✅ RX characteristic added');
+
+    // Step 7: Set up event handlers BEFORE advertising
+    console.log('[BLE Peripheral] Step 6: Setting up event handlers...');
+    
+    // Remove any existing listeners
+    this.peripheralManager.removeAllListeners('write');
+    this.peripheralManager.removeAllListeners('subscribe');
+    this.peripheralManager.removeAllListeners('unsubscribe');
+    
+    // Add write handler
+    this.peripheralManager.on('write', (event: any) => {
+      console.log('[BLE Peripheral] Write event:', {
+        characteristic: event.characteristicUuid,
+        deviceId: event.device,
+        dataLength: event.value?.length,
+      });
       
-      console.log('[BLE Peripheral] ✅ All permissions granted');
-    }
-
-    // If already advertising, stop first and wait for cleanup
-    if (this.advertising) {
-      console.warn('[BLE Peripheral] Already advertising, stopping first...');
-      try {
-        await this.peripheralManager.stopAdvertising();
-        this.advertising = false;
-      } catch (stopError) {
-        console.error('[BLE Peripheral] Error stopping existing advertising:', stopError);
+      if (event.characteristicUuid.toLowerCase() === BLE_UUIDS.TX_CHARACTERISTIC_UUID.toLowerCase()) {
+        this.handleIncomingPacket(event.value, event.device || 'unknown');
       }
-      // Wait for the advertising to fully stop
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    this.localPeer = localPeer;
-
-    console.log('[BLE Peripheral] Starting advertisement...', {
-      peerId: localPeer.id.toShortString(),
-      name: options?.name,
     });
 
-    try {
-      // Add service
-      console.log('[BLE Peripheral] Adding service:', BLE_UUIDS.SERVICE_UUID);
-      await this.peripheralManager.addService(BLE_UUIDS.SERVICE_UUID, true);
-      await new Promise(resolve => setTimeout(resolve, 100));
+    // Add subscription handler
+    this.peripheralManager.on('subscribe', (event: any) => {
+      console.log('[BLE Peripheral] Device subscribed:', event.device);
+      if (event.device) {
+        this.incomingConnections.add(event.device);
+      }
+    });
 
-      // Add TX Characteristic (Central writes to us)
-      console.log('[BLE Peripheral] Adding TX characteristic...');
-      await this.peripheralManager.addCharacteristic(
-        BLE_UUIDS.SERVICE_UUID,
-        BLE_UUIDS.TX_CHARACTERISTIC_UUID,
-        Property.WRITE | Property.WRITE_NO_RESPONSE,
-        Permission.WRITEABLE
-      );
-      await new Promise(resolve => setTimeout(resolve, 100));
+    // Add unsubscribe handler
+    this.peripheralManager.on('unsubscribe', (event: any) => {
+      console.log('[BLE Peripheral] Device unsubscribed:', event.device);
+      if (event.device) {
+        this.incomingConnections.delete(event.device);
+      }
+    });
 
-      // Add RX Characteristic (We notify Central)
-      console.log('[BLE Peripheral] Adding RX characteristic...');
-      await this.peripheralManager.addCharacteristic(
-        BLE_UUIDS.SERVICE_UUID,
-        BLE_UUIDS.RX_CHARACTERISTIC_UUID,
-        Property.NOTIFY | Property.READ,
-        Permission.READABLE
-      );
-      await new Promise(resolve => setTimeout(resolve, 100));
+    console.log('[BLE Peripheral] ✅ Event handlers configured');
 
-      // Add Peer Info Characteristic (Read-only)
-      console.log('[BLE Peripheral] Adding Peer Info characteristic...');
-      const peerData = this.serializePeer(localPeer);
-      await this.peripheralManager.addCharacteristic(
-        BLE_UUIDS.SERVICE_UUID,
+    // Step 8: Start advertising
+    // CRITICAL: react-native-multi-ble-peripheral automatically advertises
+    // the added services. The startAdvertising() call just makes the device
+    // discoverable and connectable.
+    console.log('[BLE Peripheral] Step 7: Starting advertising...');
+    
+    await this.peripheralManager.startAdvertising({
+      connectable: options?.connectable ?? true,
+      includeDeviceName: true,
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    this.advertising = true;
+    console.log('[BLE Peripheral] ✅ Advertisement started successfully');
+    console.log('[BLE Peripheral] Advertisement details:', {
+      serviceUUID: BLE_UUIDS.SERVICE_UUID,
+      characteristics: [
         BLE_UUIDS.PEER_INFO_UUID,
-        Property.READ,
-        Permission.READABLE
-      );
-      await new Promise(resolve => setTimeout(resolve, 100));
+        BLE_UUIDS.TX_CHARACTERISTIC_UUID,
+        BLE_UUIDS.RX_CHARACTERISTIC_UUID,
+      ],
+      connectable: options?.connectable ?? true,
+      note: 'Service UUID is automatically advertised when service is added',
+    });
 
-      // Set peer info value
-      console.log('[BLE Peripheral] Setting peer info value...');
+  } catch (error) {
+    console.error('[BLE Peripheral] ❌ Failed to start advertising:', error);
+
+    if (error instanceof Error) {
+      console.error('[BLE Peripheral] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      });
+
+      // Provide specific guidance based on error
+      if (error.message.includes('DATA_TOO_LARGE')) {
+        console.error('[BLE Peripheral] Advertisement data too large. Try:');
+        console.error('  - Shorter device name');
+        console.error('  - Smaller initial characteristic values');
+      } else if (error.message.includes('permission')) {
+        console.error('[BLE Peripheral] Permission issue detected');
+        console.error('  - Check Android manifest for Bluetooth permissions');
+        console.error('  - Verify location permission is granted');
+        console.error('  - On Android 12+, ensure BLUETOOTH_ADVERTISE is granted');
+      } else if (error.message.includes('already') || error.message.includes('ALREADY')) {
+        console.error('[BLE Peripheral] Service already exists');
+        console.error('  - Try calling stopAdvertising() first');
+        console.error('  - Or restart the app');
+      }
+    }
+
+    // Clean up on failure
+    this.advertising = false;
+    try {
+      await this.peripheralManager.stopAdvertising();
+    } catch (cleanupError) {
+      console.error('[BLE Peripheral] Cleanup error:', cleanupError);
+    }
+
+    throw error;
+  }
+}
+
+async verifyAdvertising(): Promise<boolean> {
+  if (!this.peripheralManager || !this.advertising) {
+    console.log('[BLE Peripheral] Not advertising');
+    return false;
+  }
+
+  try {
+    // The peripheral manager should be in advertising state
+    console.log('[BLE Peripheral] Advertising state:', this.advertising);
+    
+    // Test if we can still interact with characteristics
+    if (this.localPeer) {
+      const peerData = this.serializePeer(this.localPeer);
       await this.peripheralManager.updateValue(
         BLE_UUIDS.SERVICE_UUID,
         BLE_UUIDS.PEER_INFO_UUID,
         Buffer.from(peerData)
       );
-
-      // Set up write handler for TX characteristic
-      console.log('[BLE Peripheral] Setting up write handler...');
-      this.peripheralManager.on('write', (event: any) => {
-        if (event.characteristicUuid.toLowerCase() === BLE_UUIDS.TX_CHARACTERISTIC_UUID.toLowerCase()) {
-          this.handleIncomingPacket(event.value, event.device || 'unknown');
-        }
-      });
-
-      // Start advertising (no service data to avoid ADVERTISE_FAILED_DATA_TOO_LARGE)
-      console.log('[BLE Peripheral] Starting advertising...');
-      await this.peripheralManager.startAdvertising(
-        {
-          connectable: options?.connectable ?? true,
-          includeDeviceName: true,
-        }
-      );
-
-      this.advertising = true;
-      console.log('[BLE Peripheral] ✅ Advertising started successfully');
-    } catch (error) {
-      console.error('[BLE Peripheral] Failed to start advertising:', error);
-
-      // Detailed error logging
-      if (error instanceof Error) {
-        console.error('[BLE Peripheral] Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-        });
-      }
-
-      // Clean up on failure
-      try {
-        await this.peripheralManager.stopAdvertising();
-      } catch {
-        // Ignore cleanup errors
-      }
-
-      throw error;
+      console.log('[BLE Peripheral] ✅ Can still update characteristic values');
     }
+    
+    return true;
+  } catch (error) {
+    console.error('[BLE Peripheral] Error verifying advertising:', error);
+    return false;
   }
+}
+
+// Debug method to list current peripheral state
+async debugPeripheralState(): Promise<void> {
+  if (!this.peripheralManager) {
+    console.log('[BLE Peripheral] No peripheral manager');
+    return;
+  }
+
+  console.log('[BLE Peripheral] ═══════════════════════════════════');
+  console.log('[BLE Peripheral] Debug State:');
+  console.log('[BLE Peripheral] ───────────────────────────────────');
+  console.log('[BLE Peripheral] Initialized:', this.initialized);
+  console.log('[BLE Peripheral] Advertising:', this.advertising);
+  console.log('[BLE Peripheral] Local Peer ID:', this.localPeer?.id.toShortString());
+  console.log('[BLE Peripheral] Local Peer Name:', this.localPeer?.nickname.toString());
+  console.log('[BLE Peripheral] Incoming Connections:', Array.from(this.incomingConnections));
+  console.log('[BLE Peripheral] ───────────────────────────────────');
+  console.log('[BLE Peripheral] Service UUID:', BLE_UUIDS.SERVICE_UUID);
+  console.log('[BLE Peripheral] Characteristics:');
+  console.log('[BLE Peripheral]   - Peer Info:', BLE_UUIDS.PEER_INFO_UUID);
+  console.log('[BLE Peripheral]   - TX (Write):', BLE_UUIDS.TX_CHARACTERISTIC_UUID);
+  console.log('[BLE Peripheral]   - RX (Notify):', BLE_UUIDS.RX_CHARACTERISTIC_UUID);
+  console.log('[BLE Peripheral] ═══════════════════════════════════');
+}
+
+// Test method to verify the peripheral can be discovered
+async testDiscoverability(): Promise<void> {
+  console.log('[BLE Peripheral] Testing discoverability...');
+  console.log('[BLE Peripheral] Expected service UUID:', BLE_UUIDS.SERVICE_UUID);
+  console.log('[BLE Peripheral] Expected device name:', await SecureStore.getItemAsync('username') || 'anon0mesh-device');
+  console.log('[BLE Peripheral] ');
+  console.log('[BLE Peripheral] To test:');
+  console.log('[BLE Peripheral] 1. Open nRF Connect or LightBlue app on another device');
+  console.log('[BLE Peripheral] 2. Start scanning for BLE devices');
+  console.log('[BLE Peripheral] 3. Look for the device name above');
+  console.log('[BLE Peripheral] 4. Check if service UUID', BLE_UUIDS.SERVICE_UUID, 'is advertised');
+  console.log('[BLE Peripheral] 5. Connect and verify characteristics are visible');
+}
 
   async stopAdvertising(): Promise<void> {
     if (!this.advertising || !this.peripheralManager) {
