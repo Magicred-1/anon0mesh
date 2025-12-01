@@ -294,15 +294,13 @@ export default function ChatScreen() {
   };
 
   // Filter messages based on selected peer
-  // Show all messages when no peer is selected
-  // When a peer is selected, show all messages between user and that peer
   const filteredMessages = selectedPeer
     ? allMessages.filter(
         (m: Message) =>
-          (m.from === selectedPeer && (!m.to || m.to === nickname)) ||
-          (m.from === nickname && (!m.to || m.to === selectedPeer))
+          (m.from === selectedPeer && m.to === nickname) ||
+          (m.from === nickname && m.to === selectedPeer)
       )
-    : allMessages;
+    : allMessages.filter((m: Message) => !m.to);
 
   const onlinePeers = peers.filter((p) => p.online);
 

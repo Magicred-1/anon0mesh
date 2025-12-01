@@ -3,61 +3,68 @@
  * 
  * Provides Nostr messaging functionality with automatic connection management,
  * message subscription, and sending capabilities.
+ * 
+ * Features:
+ * - Au      console.log('[useNostrChat] ❌ Subscription failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to subscribe to messages');
+    }
+  }, [lookbackHours, convertToUIMessage]);onnects to Nostr relays
+ * - Real-time message subscription
+ * - Message encryption/decryption (NIP-04)
+ * - Integrated with wallet context
+ * - Converts between Nostr and UI message formats
+ * 
+ * Usage:
+ * ```tsx
+ * const { 
+ *   messages, 
+ *   sendMessage, 
+ *   isConnected, 
+ *   relayCount 
+ * } = useNostrChat(nickname);
+ * ```
  */
 
 import type { Message } from '@/components/chat/ChatMessages';
 import { useWallet } from '@/src/contexts/WalletContext';
 import { NostrChatMessage } from '@/src/domain/entities/NostrChatMessage';
 import { NostrChatRepository } from '@/src/infrastructure/nostr/NostrChatRepository';
-import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import NostrRelayList from '../../relays/nostr_relays.json';
-import { NostrRelayManager } from '../infrastructure/nostr';
 
-async function initializeNostr(userLocation?: { latitude: number; longitude: number }) {
-  console.log('[Nostr Setup] Step 1: Loading relay JSON...');
-  
-  try {
-    const relayManager = new NostrRelayManager();
-    
-    // Load relays with optional user location
-    if (userLocation) {
-      console.log(`[Nostr Setup] Using user location: ${userLocation.latitude}, ${userLocation.longitude}`);
-      await relayManager.loadRelaysFromJSON(NostrRelayList);
-    } else {
-      console.log('[Nostr Setup] No user location provided, using default');
-      await relayManager.loadRelaysFromJSON(NostrRelayList);
-    }
-    
-    console.log(`[Nostr Setup] ✅ Loaded ${relayManager.getRelayCount()} relays`);
-    
-    return relayManager;
-  } catch (error) {
-    console.error('[Nostr Setup] Failed to load relay JSON:', error);
-    throw error;
-  }
-}
+// Default Nostr relays (you can customize these)
+const DEFAULT_RELAYS = [
+    'wss://relay.damus.io',
+    'wss://relay.nostr.band',
+    'wss://nos.lol',
+    'wss://relay.snort.social',
+];
 
 export interface UseNostrChatOptions {
-  relayUrls?: string[];
-  autoConnect?: boolean;
-  lookbackHours?: number;
-  useRelayManager?: boolean;
+    relayUrls?: string[];
+    autoConnect?: boolean;
+    lookbackHours?: number; // How far back to fetch messages
 }
 
 export interface UseNostrChatResult {
-  messages: Message[];
-  sendMessage: (content: string, recipientPubkey?: string) => Promise<void>;
-  clearMessages: () => void;
-  isConnected: boolean;
-  isInitializing: boolean;
-  relayCount: number;
-  myNostrPubkey: string | null;
-  mySolanaPubkey: string | null;
-  error: string | null;
-  userLocation: { latitude: number; longitude: number } | null;
-  locationError: string | null;
+    // Messages
+    messages: Message[];
+    
+    // Actions
+    sendMessage: (content: string, recipientPubkey?: string) => Promise<void>;
+    clearMessages: () => void;
+    
+    // Connection state
+    isConnected: boolean;
+    isInitializing: boolean;
+    relayCount: number;
+    
+    // User info
+    myNostrPubkey: string | null;
+    mySolanaPubkey: string | null;
+    
+    // Error state
+    error: string | null;
 }
 
 export function useNostrChat(
@@ -65,10 +72,9 @@ export function useNostrChat(
   options: UseNostrChatOptions = {}
 ): UseNostrChatResult {
   const {
-    relayUrls,
+    relayUrls = DEFAULT_RELAYS,
     autoConnect = true,
     lookbackHours = 24,
-    useRelayManager = true,
   } = options;
 
   const wallet = useWallet();
@@ -79,18 +85,19 @@ export function useNostrChat(
   const [myNostrPubkey, setMyNostrPubkey] = useState<string | null>(null);
   const [mySolanaPubkey, setMySolanaPubkey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
 
   const repositoryRef = useRef<NostrChatRepository | null>(null);
-  const relayManagerRef = useRef<NostrRelayManager | null>(null);
   const subscriptionIdRef = useRef<string | null>(null);
   const nicknameRef = useRef<string>(nickname);
 
+  // Keep nickname ref in sync
   useEffect(() => {
     nicknameRef.current = nickname;
   }, [nickname]);
 
+  /**
+   * Convert NostrChatMessage to UI Message format
+   */
   const convertToUIMessage = useCallback((nostrMsg: NostrChatMessage): Message => {
     const currentNickname = nicknameRef.current || 'Anonymous';
     return {
@@ -101,68 +108,6 @@ export function useNostrChat(
       isMine: nostrMsg.isOwn,
     };
   }, []);
-
-  /**
-   * Get user's device location
-   */
-const getUserLocation = useCallback(async () => {
-  try {
-    console.log('[useNostrChat] Requesting location permissions...');
-    
-    // Check if location services are enabled first
-    const isEnabled = await Location.hasServicesEnabledAsync();
-    if (!isEnabled) {
-      const errorMsg = 'Location services are disabled on this device. Please enable them in Settings.';
-      console.warn('[useNostrChat]', errorMsg);
-      setLocationError(errorMsg);
-      return null;
-    }
-    
-    // Request location permissions
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    
-    if (status !== 'granted') {
-      const errorMsg = 'Location permission denied. Using default relay selection.';
-      console.warn('[useNostrChat]', errorMsg);
-      setLocationError(errorMsg);
-      return null;
-    }
-
-    console.log('[useNostrChat] Getting current location...');
-    
-    // Get current position with timeout
-    const location = await Promise.race([
-      Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      }),
-      new Promise<null>((_, reject) => 
-        setTimeout(() => reject(new Error('Location timeout')), 10000)
-      )
-    ]);
-
-    if (!location) {
-      throw new Error('Location request timed out');
-    }
-
-    const coords = {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    };
-
-    console.log('[useNostrChat] ✅ Location obtained:', coords);
-    setUserLocation(coords);
-    setLocationError(null);
-    
-    return coords;
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'Failed to get location';
-    console.error('[useNostrChat] Location error:', errorMsg);
-    setLocationError(errorMsg);
-    
-    // Continue without location - relay manager will use default/random selection
-    return null;
-  }
-}, []);
 
   /**
    * Initialize Nostr chat repository
@@ -179,47 +124,9 @@ const getUserLocation = useCallback(async () => {
 
       console.log('[useNostrChat] Initializing Nostr chat...');
 
-      // Determine which relays to use
-      let finalRelayUrls: string[];
-
-      if (useRelayManager) {
-        console.log('[useNostrChat] Using NostrRelayManager for relay selection');
-        
-        // Get user location first
-        const location = await getUserLocation();
-        
-        // Initialize relay manager if not already done
-        if (!relayManagerRef.current) {
-          const relayManager = await initializeNostr(location || undefined);
-          relayManagerRef.current = relayManager;
-        }
-
-        // Get optimal relays from manager
-        const optimalRelays = relayManagerRef.current.getClosestRelays(
-          location?.latitude ?? 0, 
-          location?.longitude ?? 0, 
-          5
-        );
-        finalRelayUrls = optimalRelays.map(relay => relay.url);
-        
-        console.log('[useNostrChat] Selected relays from manager:', finalRelayUrls);
-      } else if (relayUrls) {
-        finalRelayUrls = relayUrls;
-        console.log('[useNostrChat] Using provided relay URLs:', finalRelayUrls);
-      } else {
-        // Fallback to default relays
-        finalRelayUrls = [
-          'wss://relay.damus.io',
-          'wss://relay.nostr.band',
-          'wss://nos.lol',
-          'wss://relay.snort.social',
-        ];
-        console.log('[useNostrChat] Using default relay URLs');
-      }
-
       // Create and initialize repository
       const repository = new NostrChatRepository();
-      await repository.initialize(finalRelayUrls);
+      await repository.initialize(relayUrls);
 
       repositoryRef.current = repository;
       
@@ -235,19 +142,19 @@ const getUserLocation = useCallback(async () => {
       setRelayCount(connectedRelays);
       setIsConnected(connectedRelays > 0);
 
-      console.log('[useNostrChat] ✅ Initialized successfully');
+      console.log('[useNostrChat] Initialized successfully');
       console.log('[useNostrChat] Nostr pubkey:', nostrPub);
       console.log('[useNostrChat] Solana pubkey:', solanaPub);
       console.log('[useNostrChat] Connected relays:', connectedRelays);
 
       setIsInitializing(false);
     } catch (err) {
-      console.error('[useNostrChat] ❌ Initialization failed:', err);
+      console.error('[useNostrChat] Initialization failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to initialize Nostr');
       setIsInitializing(false);
       Alert.alert('Nostr Error', 'Failed to connect to Nostr relays. Using offline mode.');
     }
-  }, [relayUrls, useRelayManager, getUserLocation]);
+  }, [relayUrls]);
 
   /**
    * Subscribe to incoming messages
@@ -259,6 +166,7 @@ const getUserLocation = useCallback(async () => {
       return;
     }
 
+    // Don't resubscribe if already subscribed
     if (subscriptionIdRef.current) {
       console.log('[useNostrChat] Already subscribed with ID:', subscriptionIdRef.current);
       return;
@@ -270,16 +178,28 @@ const getUserLocation = useCallback(async () => {
       const subId = await repository.subscribeToMessages(
         (nostrMsg: NostrChatMessage) => {
           console.log('[useNostrChat] 📨 Received message:', nostrMsg.content.slice(0, 50));
+          console.log('[useNostrChat] Message ID:', nostrMsg.id);
+          console.log('[useNostrChat] Message from:', nostrMsg.senderPubkey?.slice(0, 8));
+          console.log('[useNostrChat] Message isOwn:', nostrMsg.isOwn);
           
+          // Convert to UI message format
           const uiMessage = convertToUIMessage(nostrMsg);
+          console.log('[useNostrChat] Converted UI message:', {
+            id: uiMessage.id,
+            from: uiMessage.from,
+            isMine: uiMessage.isMine,
+          });
           
+          // Add to messages (avoiding duplicates)
           setMessages((prev) => {
+            console.log('[useNostrChat] Current message count:', prev.length);
             const exists = prev.some((m) => m.id === uiMessage.id);
             if (exists) {
               console.log('[useNostrChat] ⚠️ Duplicate message, skipping');
               return prev;
             }
             
+            // Keep messages sorted by timestamp
             const updated = [...prev, uiMessage].sort((a, b) => a.ts - b.ts);
             console.log('[useNostrChat] ✅ Added message, new count:', updated.length);
             return updated;
@@ -293,7 +213,19 @@ const getUserLocation = useCallback(async () => {
 
       subscriptionIdRef.current = subId;
       console.log('[useNostrChat] ✅ Subscribed successfully with ID:', subId);
+      console.log('[useNostrChat] 🔊 SUBSCRIPTION IS NOW ACTIVE - waiting for events...');
       
+      // Add a heartbeat to confirm subscription is alive
+      const heartbeat = setInterval(() => {
+        const repo = repositoryRef.current;
+        if (repo && repo.isInitialized()) {
+          const relays = repo.getConnectedRelayCount();
+          console.log(`[useNostrChat] 💓 Subscription heartbeat - ID: ${subId}, Relays: ${relays}`);
+        }
+      }, 10000); // Every 10 seconds
+      
+      // Store heartbeat interval for cleanup
+      (subscriptionIdRef as any).heartbeatInterval = heartbeat;
     } catch (err) {
       console.error('[useNostrChat] ❌ Subscription failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to subscribe to messages');
@@ -311,14 +243,21 @@ const getUserLocation = useCallback(async () => {
       return;
     }
 
-    if (!content.trim()) return;
+    if (!content.trim()) {
+      return;
+    }
 
     try {
       console.log('[useNostrChat] Sending message:', content.slice(0, 50));
 
+      // If no recipient specified, send as broadcast (null = unencrypted public message)
+      // If recipient specified, send encrypted to that specific peer
       const targetPubkey = recipientPubkey || null;
+
+      // Send via Nostr
       const nostrMsg = await repository.sendMessage(targetPubkey, content);
 
+      // Add to local messages immediately (optimistic update)
       const uiMessage = convertToUIMessage(nostrMsg);
       setMessages((prev) => {
         const exists = prev.some((m) => m.id === uiMessage.id);
@@ -326,25 +265,32 @@ const getUserLocation = useCallback(async () => {
         return [...prev, uiMessage].sort((a, b) => a.ts - b.ts);
       });
 
-      console.log('[useNostrChat] ✅ Message sent successfully');
+      console.log('[useNostrChat] Message sent successfully');
     } catch (err) {
-      console.error('[useNostrChat] ❌ Send failed:', err);
+      console.error('[useNostrChat] Send failed:', err);
       Alert.alert('Send Error', 'Failed to send message via Nostr');
       throw err;
     }
   }, [convertToUIMessage]);
 
+  /**
+   * Clear all messages
+   */
   const clearMessages = useCallback(() => {
     setMessages([]);
     console.log('[useNostrChat] Messages cleared');
   }, []);
 
+  /**
+   * Cleanup on unmount
+   */
   const cleanup = useCallback(async () => {
     const repository = repositoryRef.current;
     if (!repository) return;
 
     console.log('[useNostrChat] Cleaning up...');
 
+    // Unsubscribe
     if (subscriptionIdRef.current) {
       try {
         await repository.unsubscribe(subscriptionIdRef.current);
@@ -353,6 +299,7 @@ const getUserLocation = useCallback(async () => {
       }
     }
 
+    // Shutdown
     try {
       await repository.shutdown();
     } catch (err) {
@@ -361,7 +308,6 @@ const getUserLocation = useCallback(async () => {
 
     repositoryRef.current = null;
     subscriptionIdRef.current = null;
-    relayManagerRef.current = null;
   }, []);
 
   // Auto-initialize on mount
@@ -374,8 +320,12 @@ const getUserLocation = useCallback(async () => {
   // Auto-subscribe after initialization
   useEffect(() => {
     if (isConnected && !subscriptionIdRef.current) {
-      console.log('[useNostrChat] Triggering subscription');
+      console.log('[useNostrChat] Triggering subscription (isConnected && no active subscription)');
       subscribe();
+    } else if (isConnected && subscriptionIdRef.current) {
+      console.log('[useNostrChat] Already connected and subscribed:', subscriptionIdRef.current);
+    } else {
+      console.log('[useNostrChat] Not subscribing: isConnected=', isConnected, 'subId=', subscriptionIdRef.current);
     }
   }, [isConnected, subscribe]);
 
@@ -385,6 +335,18 @@ const getUserLocation = useCallback(async () => {
       cleanup();
     };
   }, [cleanup]);
+
+  // Debug: Log when messages change
+  useEffect(() => {
+    console.log('[useNostrChat] Messages state updated, count:', messages.length);
+    if (messages.length > 0) {
+      console.log('[useNostrChat] Latest message:', {
+        id: messages[messages.length - 1].id,
+        from: messages[messages.length - 1].from,
+        msg: messages[messages.length - 1].msg.slice(0, 30),
+      });
+    }
+  }, [messages]);
 
   return {
     messages,
@@ -396,7 +358,5 @@ const getUserLocation = useCallback(async () => {
     myNostrPubkey,
     mySolanaPubkey,
     error,
-    userLocation,
-    locationError,
   };
 }

@@ -13,8 +13,7 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth for mesh networking with nearby devices",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to advertise as a mesh network node",
-        "NSCameraUsageDescription": "This app uses the camera to scan wallet QR codes.",
-        "NSLocationWhenInUseUsageDescription": "This app needs your location to find nearby Nostr relays and BLE Devices for better connection quality."
+        "NSCameraUsageDescription": "This app uses the camera to scan wallet QR codes."
       },
       "bundleIdentifier": "com.magicred1.anon0mesh"
     },
@@ -56,16 +55,6 @@
             "./components/fonts/Primal/Primal.ttf",
             "./components/fonts/Space_Grotesk/SpaceGrotesk-VariableFont_wght.ttf"
           ]
-        }
-      ],
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to find nearby Nostr relays.",
-          "locationAlwaysPermission": "Allow $(PRODUCT_NAME) to use your location to find nearby Nostr relays.",
-          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to find nearby Nostr relays.",
-          "isAndroidBackgroundLocationEnabled": false,
-          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [

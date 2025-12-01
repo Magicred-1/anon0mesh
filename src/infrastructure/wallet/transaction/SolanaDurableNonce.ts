@@ -27,7 +27,6 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import { setItemAsync } from 'expo-secure-store';
 import nacl from 'tweetnacl';
 
 // ============================================
@@ -145,17 +144,6 @@ export class DurableNonceManager {
     });
 
     console.log('[Nonce] ✅ Nonce account created:', signature);
-
-    // Store the nonce account info in SecureStore
-    await setItemAsync(
-      `nonceAccount_${nonceKeypair.publicKey.toBase58()}`,
-      JSON.stringify({
-        authority: this.authority.publicKey.toBase58(),
-        createdAt: Date.now(),
-      })
-    );
-
-
 
     return {
       nonceAccount: nonceKeypair.publicKey,
@@ -371,24 +359,13 @@ export class DurableNonceManager {
   }
 
   /**
-   * Close a nonce account and reclaim rent and
+   * Close a nonce account and reclaim rent
    */
   async closeNonceAccount(nonceAccountPubkey: PublicKey, to: PublicKey): Promise<string> {
     const accountInfo = await this.connection.getAccountInfo(nonceAccountPubkey);
     if (!accountInfo) {
       throw new Error('Nonce account not found');
     }
-
-    await setItemAsync(
-      `nonceAccount_${nonceAccountPubkey.toBase58()}`,
-      JSON.stringify({
-        lamports: accountInfo.lamports,
-        owner: accountInfo.owner.toBase58(),
-        executable: accountInfo.executable,
-        rentEpoch: accountInfo.rentEpoch,
-        updatedAt: Date.now(),
-      })
-    );
 
     return this.withdrawFromNonce(nonceAccountPubkey, to, accountInfo.lamports);
   }

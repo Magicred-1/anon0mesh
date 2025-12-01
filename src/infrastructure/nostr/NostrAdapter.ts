@@ -47,16 +47,14 @@ export class NostrAdapter implements INostrAdapter {
   private initialized = false;
 
   constructor() {
-    // Initialize SimplePool with extended timeouts to prevent internal rejections
+    // Initialize SimplePool with reconnection handling
+    // Updates 'since' filter on reconnect to avoid duplicate events
     this.pool = new SimplePool({
-      // Increase publish timeout from default (usually 3000ms) to 30 seconds
-      // This prevents "publish timed out" errors when relays are slow to respond
-      enablePing: true,
-      enableReconnect: true
+      enableReconnect: (filters: NostrFilter[]) => {
+        const newSince = Math.floor(Date.now() / 1000);
+        return filters.map((filter: NostrFilter) => ({ ...filter, since: newSince }));
+      }
     });
-  }
-  publishEncryptedMessage(recipientPubkey: string, content: string, tags?: string[][]): Promise<NostrPublishResult[]> {
-    throw new Error('Method not implemented.');
   }
 
   // ============================================
@@ -197,61 +195,69 @@ export class NostrAdapter implements INostrAdapter {
   // PUBLISHING (SEND MESSAGES)
   // ============================================
 
-// Replace your publishEvent method with this simplified version:
-
-// Keep publishEvent simple - the constructor timeout will prevent rejections
-async publishEvent(event: Omit<NostrEvent, 'id' | 'sig'>): Promise<any[]> {
-  if (!this.initialized || !this.privateKey) {
-    throw new Error('NostrAdapter not initialized');
-  }
-
-  const signedEvent = await this.signEvent(event);
-  const relayUrls = Array.from(this.relays.keys());
-  
-  if (relayUrls.length === 0) {
-    throw new Error('No relays connected');
-  }
-
-  console.log(`[Nostr] Publishing event ${signedEvent.id?.slice(0, 8)} to ${relayUrls.length} relays...`);
-
-  try {
-    // pool.publish() tracks each relay's OK response internally
-    // The publishTimeout (now 30s) determines how long to wait per relay
-    await this.pool.publish(relayUrls, signedEvent as NostrToolsEvent);
-
-    console.log(`[Nostr] ✅ Event published to ${relayUrls.length} relays`);
-
-    return relayUrls.map(url => ({
-      success: true,
-      relayUrl: url,
-      eventId: signedEvent.id
-    }));
-
-  } catch (err: any) {
-    const errMsg = err?.message || err?.toString() || String(err);
-    console.error(`[Nostr] ❌ Failed to publish event:`, errMsg);
-
-    return relayUrls.map(url => ({
-      success: false,
-      relayUrl: url,
-      error: errMsg
-    }));
-  }
-}
-
-// ALTERNATIVE: If you want to disable timeouts entirely, use this constructor:
-/*
-constructor() {
-  this.pool = new SimplePool({
-    // Disable publish timeout by setting it to a very large value
-    publishTimeout: 999999999, // Essentially infinite timeout
-    
-    enableReconnect: (filters: NostrFilter[]) => {
-      const newSince = Math.floor(Date.now() / 1000);
-      return filters.map((filter: NostrFilter) => ({ ...filter, since: newSince }));
+  async publishEvent(event: Omit<NostrEvent, 'id' | 'sig'>): Promise<NostrPublishResult[]> {
+    if (!this.initialized || !this.privateKey) {
+      throw new Error('NostrAdapter not initialized');
     }
-  });
-}
+
+    // Sign event
+    const signedEvent = await this.signEvent(event);
+
+    // Publish to all connected relays
+    const relayUrls = Array.from(this.relays.keys());
+    const results: NostrPublishResult[] = [];
+
+    if (relayUrls.length === 0) {
+      throw new Error('No relays connected');
+    }
+
+    console.log(`[Nostr] Publishing event ${signedEvent.id} to ${relayUrls.length} relays...`);
+
+    try {
+      const promises = this.pool.publish(relayUrls, signedEvent as NostrToolsEvent);
+      
+      // Wait for all relays to respond
+      const responses = await Promise.allSettled(promises);
+
+      responses.forEach((response: PromiseSettledResult<any>, index: number) => {
+        const relayUrl = relayUrls[index];
+        if (response.status === 'fulfilled') {
+          results.push({
+            success: true,
+            relayUrl,
+            eventId: signedEvent.id,
+          });
+        } else {
+          const reasonMessage =
+            (response as PromiseRejectedResult).reason?.message ||
+            (response as any).reason ||
+            'Unknown error';
+          results.push({
+            success: false,
+            relayUrl,
+            error: reasonMessage,
+          });
+        }
+      });
+
+      const successCount = results.filter(r => r.success).length;
+      console.log(`[Nostr] ✅ Published to ${successCount}/${relayUrls.length} relays`);
+
+    } catch (error) {
+      console.error('[Nostr] Publish error:', error);
+      
+      // Mark all as failed
+      for (const url of relayUrls) {
+        results.push({
+          success: false,
+          relayUrl: url,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return results;
+  }
 
   async publishEncryptedMessage(
     recipientPubkey: string,
@@ -305,33 +311,29 @@ constructor() {
     let eventTags: string[][];
     let eventKind: number;
 
-    // If no recipient, publish a group message
+    // If no recipient, use NIP-104 group chat encryption (NIP-44 based)
     if (!recipientPubkey) {
-      // NOTE: This repo supports multiple group encryption schemes (NIP-44, NIP-17).
-      // For now we keep the existing encryption (nip44) for backward compatibility,
-      // but include the required NIP-29/'d' tag so relays and clients expecting a
-      // room identifier can accept the event. Later we can switch to true NIP-17
-      // encryption (gift-wrap) by replacing the encryption below.
-      console.log(`[Nostr] Publishing GROUP message (including 'd' room tag)`);
-
+      console.log(`[Nostr] Publishing NIP-104 GROUP message (encrypted with NIP-44)`);
+      
       // Use a shared group public key that everyone can derive the conversation key from
+      // For anon0mesh public mesh, we use a well-known group pubkey
+      // Everyone derives: conversationKey = nip44.getConversationKey(myPrivateKey, groupPubkey)
       const groupPubkey = '0000000000000000000000000000000000000000000000000000000000000001';
       const conversationKey = nip44.getConversationKey(this.privateKey, groupPubkey);
       eventContent = nip44.encrypt(content, conversationKey);
-
+      
       eventKind = NOSTR_EVENT_KINDS.MESH_MESSAGE; // Kind 30000
       eventTags = [
         ['t', 'anon0mesh'], // App tag
         ['t', 'group'], // Group chat tag
-        ['g', groupId], // Group identifier (legacy)
-        ['d', groupId], // NIP-29 / room identifier tag (required by some relays)
+        ['g', groupId], // Group identifier
         ...tags,
       ];
     } else {
       console.log(`[Nostr] Publishing NIP-04 PRIVATE message for ${recipientPubkey.slice(0, 8)}...`);
       
       // Encrypt content (NIP-04) for specific recipient (1-to-1 DM)
-      eventContent = nip04.encrypt(this.privateKey, recipientPubkey, content);
+      eventContent = await nip04.encrypt(this.privateKey, recipientPubkey, content);
       
       eventKind = NOSTR_EVENT_KINDS.ENCRYPTED_DM; // Kind 4
       eventTags = [
@@ -545,7 +547,6 @@ constructor() {
           NOSTR_EVENT_KINDS.SOLANA_TRANSACTION,
         ],
         '#p': [myPubkey], // Only events addressed to me
-        '#d': ['anon0mesh'], // Tagged with anon0mesh
         ...(sinceTimestamp && { since: sinceTimestamp }),
       },
     ];

@@ -75,7 +75,6 @@ export interface NostrFilter {
   limit?: number; // Max results
   '#e'?: string[]; // Event references
   '#p'?: string[]; // Pubkey references (mentions)
-  '#d'?: string[]; // Custom tag for anon0mesh
   '#t'?: string[]; // Hashtag/topic references
 }
 

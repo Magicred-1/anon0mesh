@@ -2,7 +2,7 @@
  * NostrRelayManager - Manages Nostr relay connections
  * 
  * Features:
- * - Load relays from JSON file
+ * - Load relays from CSV file
  * - Auto-select optimal relays based on geolocation
  * - Health monitoring and failover
  * - Geo-distributed relay selection
@@ -13,105 +13,65 @@
  * 3. Recommended: Mix of closest + random (60/40 split)
  */
 
-export interface RelayEntry {
+import { NostrRelayInfo } from './INostrAdapter';
+
+export interface RelayCSVEntry {
   url: string;
   latitude?: number;
   longitude?: number;
-  name?: string;
-  description?: string;
 }
 
-// Support both array format and object format
-export type RelayJSON = 
-  | RelayEntry[]
-  | { relays: RelayEntry[] }
-  | { "Relay URL": string; Latitude: number; Longitude: number }[];
-
 export class NostrRelayManager {
-  private relays: RelayEntry[] = [];
+  private relays: RelayCSVEntry[] = [];
 
   /**
-   * Load relays from JSON data
+   * Load relays from CSV data
    * 
-   * Supports multiple JSON formats:
-   * 
-   * Format 1 - Array with "Relay URL", "Latitude", "Longitude":
-   * ```json
-   * [
-   *   { "Relay URL": "wss://relay.example.com", "Latitude": 40.7128, "Longitude": -74.006 }
-   * ]
+   * CSV Format:
    * ```
-   * 
-   * Format 2 - Object with relays array:
-   * ```json
-   * {
-   *   "relays": [
-   *     { "url": "wss://relay.example.com", "latitude": 40.7128, "longitude": -74.006 }
-   *   ]
-   * }
-   * ```
-   * 
-   * Format 3 - Simple array:
-   * ```json
-   * [
-   *   { "url": "wss://relay.example.com", "latitude": 40.7128, "longitude": -74.006 }
-   * ]
+   * Relay URL,Latitude,Longitude
+   * wss://relay.example.com,40.7128,-74.006
    * ```
    */
-  async loadRelaysFromJSON(
-    jsonData: RelayJSON,
-    // latitude: number,
-    // longitude: number
-  ): Promise<void> {
-    let relayArray: any[];
-
-    // Handle different JSON formats
-    if (Array.isArray(jsonData)) {
-      relayArray = jsonData;
-    } else if (jsonData && typeof jsonData === 'object' && 'relays' in jsonData) {
-      relayArray = (jsonData as { relays: any[] }).relays;
-    } else {
-      throw new Error('Invalid JSON format: expected array or { relays: [...] }');
+  async loadRelaysFromCSV(csvData: string): Promise<void> {
+    const lines = csvData.trim().split('\n');
+    
+    if (lines.length === 0) {
+      throw new Error('CSV data is empty');
     }
 
-    if (!Array.isArray(relayArray) || relayArray.length === 0) {
-      throw new Error('JSON data contains no relays');
-    }
+    // Skip header row
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
 
-    // Validate and load relays
-    for (const relay of relayArray) {
-      // Support both formats: { "Relay URL": ... } and { url: ... }
-      let url = relay['Relay URL'] || relay.url;
-      const lat = relay.Latitude || relay.latitude;
-      const lon = relay.Longitude || relay.longitude;
+      const parts = line.split(',');
+      if (parts.length < 1) continue;
 
-      if (!url) {
-        console.warn('[NostrRelayManager] Skipping relay: missing URL');
-        continue;
-      }
+      const url = parts[0].trim();
+      const lat = parts[1] ? parseFloat(parts[1].trim()) : undefined;
+      const lon = parts[2] ? parseFloat(parts[2].trim()) : undefined;
 
-      // Auto-add wss:// prefix if missing
+      // Validate URL
       if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
-        url = `wss://${url}`;
-        console.log(`[NostrRelayManager] Added wss:// prefix to: ${url}`);
+        console.warn(`[NostrRelayManager] Invalid relay URL: ${url}`);
+        continue;
       }
 
       this.relays.push({
         url,
         latitude: lat,
         longitude: lon,
-        name: relay.name || relay.Name,
-        description: relay.description || relay.Description,
       });
     }
 
-    console.log(`[NostrRelayManager] Loaded ${this.relays.length} relays from JSON`);
+    console.log(`[NostrRelayManager] Loaded ${this.relays.length} relays from CSV`);
   }
 
   /**
    * Get all available relays
    */
-  getAllRelays(): RelayEntry[] {
+  getAllRelays(): RelayCSVEntry[] {
     return [...this.relays];
   }
 
@@ -127,7 +87,7 @@ export class NostrRelayManager {
     userLat: number,
     userLon: number,
     count: number = 5
-  ): RelayEntry[] {
+  ): RelayCSVEntry[] {
     const relaysWithDistance = this.relays
       .filter((r) => r.latitude !== undefined && r.longitude !== undefined)
       .map((relay) => ({
@@ -154,7 +114,7 @@ export class NostrRelayManager {
    * @param count Number of relays to return
    * @returns Array of random relays
    */
-  getRandomRelays(count: number = 5): RelayEntry[] {
+  getRandomRelays(count: number = 5): RelayCSVEntry[] {
     const shuffled = [...this.relays].sort(() => Math.random() - 0.5);
     const random = shuffled.slice(0, Math.min(count, shuffled.length));
     
@@ -180,7 +140,7 @@ export class NostrRelayManager {
     userLat?: number,
     userLon?: number,
     count: number = 10
-  ): RelayEntry[] {
+  ): RelayCSVEntry[] {
     if (userLat !== undefined && userLon !== undefined) {
       // Get 60% closest, 40% random for diversity
       const closestCount = Math.ceil(count * 0.6);

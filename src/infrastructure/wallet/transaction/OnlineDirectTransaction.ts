@@ -15,14 +15,14 @@
  */
 
 import {
-  Connection,
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-  TransactionInstruction,
-  TransactionSignature,
+    Connection,
+    Keypair,
+    LAMPORTS_PER_SOL,
+    PublicKey,
+    SystemProgram,
+    Transaction,
+    TransactionInstruction,
+    TransactionSignature,
 } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 
@@ -264,7 +264,7 @@ export async function getTransactionStatus(
 
   return {
     confirmed: status.value.confirmationStatus === 'confirmed' || 
-              status.value.confirmationStatus === 'finalized',
+               status.value.confirmationStatus === 'finalized',
     finalized: status.value.confirmationStatus === 'finalized',
     err: status.value.err,
     confirmations: status.value.confirmations || undefined,

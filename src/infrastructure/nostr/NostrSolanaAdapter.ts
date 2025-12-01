@@ -19,7 +19,6 @@ import { encode as bs58encode } from 'bs58';
 
 import { LocalWalletAdapter } from '../wallet/LocalWallet/LocalWalletAdapter';
 import { NOSTR_EVENT_KINDS, NostrEvent } from './INostrAdapter';
-import { nip17Decrypt } from './Nip17';
 import { NostrAdapter } from './NostrAdapter';
 
 // Transaction receipt tracking
@@ -387,23 +386,5 @@ export class NostrSolanaAdapter extends NostrAdapter {
     console.log('  Nostr:', nostrPubkey);
 
     return true; // Both derive from same private key
-  }
-
-  /**
-   * Decrypt NIP-17 group message
-   */
-  decryptNip17GroupMessage(event: NostrEvent, recipientPrivateKey: Uint8Array): string | null {
-    // Find wrapped key for this user
-    const myPubkey = this.getPublicKey();
-    const wrappedTag = event.tags.find(t => t[0] === 'wrapped' && t[1] === myPubkey);
-    const nonceTag = event.tags.find(t => t[0] === 'nonce');
-    if (!wrappedTag || !nonceTag) return null;
-    const wrappedKey = wrappedTag[2];
-    const nonce = Buffer.from(nonceTag[1], 'utf8'); // TODO: Use real nonce encoding
-    try {
-      return nip17Decrypt(event.content, wrappedKey, recipientPrivateKey, nonce);
-    } catch {
-      return null;
-    }
   }
 }
