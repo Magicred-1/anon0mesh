@@ -58,15 +58,31 @@ export class NostrChatRepository implements INostrChatRepository {
     this.ensureInitialized();
 
     const subscription = await this.nostrAdapter!.subscribeMeshEvents(
-      async (event) => {
+      async (event: any) => {
         try {
           let content: string;
 
           // Check message type by tags
-          const isGroupMessage = event.tags.some(tag => tag[0] === 't' && tag[1] === 'group');
-          const isPrivateMessage = event.tags.some(tag => tag[0] === 'p');
+          const isNip17Group = event.tags.some((tag: string[]) => tag[0] === 'nip17');
+          const isGroupMessage = event.tags.some((tag: string[]) => tag[0] === 't' && tag[1] === 'group');
+          const isPrivateMessage = event.tags.some((tag: string[]) => tag[0] === 'p');
 
-          if (isGroupMessage) {
+          if (isNip17Group) {
+            // NIP-17 Group message - decrypt with NIP-17
+            console.log('[NostrChatRepository] Received NIP-17 GROUP message:', event.id.slice(0, 8));
+            try {
+              // Use Solana wallet's private key for decryption
+              const privKey = await this.walletAdapter!.exportPrivateKey();
+              const nostrPrivKey = privKey.slice(0, 32);
+              const decrypted = this.nostrAdapter!.decryptNip17GroupMessage(event, nostrPrivKey);
+              if (!decrypted) throw new Error('Failed to decrypt NIP-17 group message');
+              content = decrypted;
+              console.log('[NostrChatRepository] ✅ Decrypted NIP-17 group message successfully');
+            } catch {
+              console.log('[NostrChatRepository] ⚠️ Failed to decrypt NIP-17 group message:', event.id.slice(0, 8));
+              return;
+            }
+          } else if (isGroupMessage) {
             // NIP-104 Group message - decrypt with NIP-44
             console.log('[NostrChatRepository] Received NIP-104 GROUP message:', event.id.slice(0, 8));
             try {
