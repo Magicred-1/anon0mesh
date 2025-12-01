@@ -132,7 +132,7 @@ export function useEscrow() {
 
         const txs = [];
         for (const { method, offset } of compDefs) {
-            const [compDefAccount] = getCompDefPDA(offset);
+            const [compDefAccount] = getCompDefPDA(offset.toString());
             
             console.log(`🔍 Initializing ${method}:`, compDefAccount.toString());
             
@@ -203,7 +203,7 @@ export function useEscrow() {
         const [mempoolAccount] = getMempoolPDA();
         const [executingPool] = getExecpoolPDA();
         const [computationAccount] = getComputationPDA(computationOffset.toNumber());
-        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_INIT_ESCROW_STATS);
+        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_INIT_ESCROW_STATS.toString());
         const [clusterAccount] = getClusterPDA();
         const [signPdaAccount] = getSignPDA();
 
@@ -304,7 +304,7 @@ export function useEscrow() {
         const [mempoolAccount] = getMempoolPDA();
         const [executingPool] = getExecpoolPDA();
         const [computationAccount] = getComputationPDA(computationOffset.toNumber());
-        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_PROCESS_PAYMENT);
+        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_PROCESS_PAYMENT.toString());
         const [clusterAccount] = getClusterPDA();
         const [signPdaAccount] = getSignPDA();
 
@@ -513,7 +513,7 @@ export function useEscrow() {
         const [mempoolAccount] = getMempoolPDA();
         const [executingPool] = getExecpoolPDA();
         const [computationAccount] = getComputationPDA(computationOffset.toNumber());
-        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_CHECK_THRESHOLD);
+        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_CHECK_THRESHOLD.toString());
         const [clusterAccount] = getClusterPDA();
 
         const tx = await program.methods
@@ -554,7 +554,7 @@ export function useEscrow() {
         const [mempoolAccount] = getMempoolPDA();
         const [executingPool] = getExecpoolPDA();
         const [computationAccount] = getComputationPDA(computationOffset.toNumber());
-        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_REVEAL_COUNT);
+        const [compDefAccount] = getCompDefPDA(COMP_DEF_OFFSET_REVEAL_COUNT.toString());
         const [clusterAccount] = getClusterPDA();
 
         const tx = await program.methods
