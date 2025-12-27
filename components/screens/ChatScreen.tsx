@@ -66,14 +66,14 @@ export default function ChatScreen() {
   // Combine Nostr and BLE messages
   const allMessages = React.useMemo(() => {
     console.log('[ChatScreen] Computing allMessages - Nostr:', nostrMessages.length, 'BLE:', bleMessages.length);
-    
+
     // Mark Nostr messages
     const markedNostrMessages = nostrMessages.map(msg => ({
       ...msg,
       isNostr: true,
       isEncrypted: true,
     }));
-    
+
     // Combine and sort by timestamp
     const combined = [...markedNostrMessages, ...bleMessages].sort((a, b) => a.ts - b.ts);
     console.log('[ChatScreen] Total messages:', combined.length);
@@ -84,14 +84,17 @@ export default function ChatScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const hasWallet = await WalletFactory.hasLocalWallet();
-        if (!hasWallet) {
-          Alert.alert('No Wallet', 'Please create a wallet first.');
-          router.replace('/onboarding' as any);
-          return;
+        // Try to create a wallet adapter (works for both local and MWA)
+        console.log('[ChatScreen] Attempting to create wallet adapter...');
+        const walletAdapter = await WalletFactory.createAuto();
+        console.log('[ChatScreen] Wallet adapter created:', walletAdapter.getMode());
+
+        // Ensure wallet is connected (especially for MWA)
+        if (!walletAdapter.isConnected()) {
+          console.log('[ChatScreen] Connecting wallet...');
+          await walletAdapter.connect();
         }
 
-        const walletAdapter = await WalletFactory.createAuto();
         const publicKey = await walletAdapter.getPublicKey();
         setPubKey(publicKey?.toString ? publicKey.toString() : String(publicKey));
         // TODO: Use publicKey for BLE mesh networking integration
@@ -219,7 +222,7 @@ export default function ChatScreen() {
     try {
       // Get wallet adapter
       const walletAdapter = await WalletFactory.createAuto();
-      
+
       if (!walletAdapter.isConnected()) {
         throw new Error('Wallet not connected');
       }
@@ -232,7 +235,7 @@ export default function ChatScreen() {
       // For now, we'll send a message about the payment request
       // In production, you'd integrate with SendScreen logic or create a transaction
       const paymentMessage = `💸 Payment Request: ${paymentCommand.amount} ${token} to @${paymentCommand.recipient}`;
-      
+
       if (nostrConnected) {
         await sendNostrMessage(paymentMessage, selectedPeer || undefined);
       } else {
@@ -270,7 +273,7 @@ export default function ChatScreen() {
     clearNostrMessages();
     setBleMessages((prev: Message[]) => prev.filter((m: Message) => m.isMine));
     console.log('[Chat] Cleared all received messages');
-    
+
     // Navigate to landing page
     try {
       router.replace('/landing' as any);
@@ -296,16 +299,16 @@ export default function ChatScreen() {
   // Filter messages based on selected peer
   const filteredMessages = selectedPeer
     ? allMessages.filter(
-        (m: Message) =>
-          (m.from === selectedPeer && m.to === nickname) ||
-          (m.from === nickname && m.to === selectedPeer)
-      )
+      (m: Message) =>
+        (m.from === selectedPeer && m.to === nickname) ||
+        (m.from === nickname && m.to === selectedPeer)
+    )
     : allMessages.filter((m: Message) => !m.to);
 
   const onlinePeers = peers.filter((p) => p.online);
 
   return (
-  <LinearGradient
+    <LinearGradient
       colors={['#0D0D0D', '#06181B', '#072B31']}
       locations={[0, 0.94, 1]}
       start={{ x: 0.2125, y: 0 }}
@@ -352,28 +355,28 @@ export default function ChatScreen() {
             />
           </View>
 
-        <ChatSidebar
-          visible={showSidebar}
-          peers={peers}
-          selectedPeerId={selectedPeer}
-          onPeerSelect={setSelectedPeer}
-          onClose={() => setShowSidebar(false)}
-        />
-        <EditNicknameModal
-          visible={editNickVisible}
-          currentNickname={nickname}
-          onSave={async (newNick: string) => {
-            setNickname(newNick);
-            try {
-              await SecureStore.setItemAsync('nickname', newNick);
-            } catch (e) {
-              console.warn('[ChatScreen] Failed to persist nickname to SecureStore', e);
-            }
-            setEditNickVisible(false);
-          }}
-          onClose={() => setEditNickVisible(false)}
-          pubKey={pubKey}
-        />
+          <ChatSidebar
+            visible={showSidebar}
+            peers={peers}
+            selectedPeerId={selectedPeer}
+            onPeerSelect={setSelectedPeer}
+            onClose={() => setShowSidebar(false)}
+          />
+          <EditNicknameModal
+            visible={editNickVisible}
+            currentNickname={nickname}
+            onSave={async (newNick: string) => {
+              setNickname(newNick);
+              try {
+                await SecureStore.setItemAsync('nickname', newNick);
+              } catch (e) {
+                console.warn('[ChatScreen] Failed to persist nickname to SecureStore', e);
+              }
+              setEditNickVisible(false);
+            }}
+            onClose={() => setEditNickVisible(false)}
+            pubKey={pubKey}
+          />
 
           {/* Bluetooth Permission Request */}
           {showPermissionRequest && !permissionsGranted && (

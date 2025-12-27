@@ -43,7 +43,7 @@ export class WalletFactory {
   static async createAuto(keypair?: any): Promise<IWalletAdapter> {
     const recommendedMode = DeviceDetector.getRecommendedWalletMode();
     console.log(`[WalletFactory] Auto-detected mode: ${recommendedMode}`);
-    
+
     return WalletFactory.create(recommendedMode, keypair);
   }
 
@@ -62,10 +62,24 @@ export class WalletFactory {
   }
 
   /**
-   * Check if local wallet exists
+   * Check if local wallet exists or if running on Solana Mobile
    */
   static async hasLocalWallet(): Promise<boolean> {
-    return LocalWalletAdapter.hasStoredWallet();
+    // On Solana Mobile (Saga/Seeker), we always have a wallet (Seed Vault)
+    const isSolanaMobile = DeviceDetector.isSolanaMobileDevice();
+    const hasStored = LocalWalletAdapter.hasStoredWallet();
+
+    console.log('[WalletFactory] hasLocalWallet check:', {
+      isSolanaMobile,
+      hasStored,
+      deviceInfo: DeviceDetector.getDeviceInfo(),
+    });
+
+    if (isSolanaMobile) {
+      console.log('[WalletFactory] ✅ Detected Solana Mobile device - returning true');
+      return true;
+    }
+    return hasStored;
   }
 
   /**

@@ -26,7 +26,7 @@ const loadMWA = async () => {
   if (Platform.OS !== 'android') {
     throw new Error('Mobile Wallet Adapter is only available on Android');
   }
-  
+
   const mwa = await import('@solana-mobile/mobile-wallet-adapter-protocol-web3js');
   return mwa.transact;
 };
@@ -35,7 +35,7 @@ const loadMWA = async () => {
 const APP_IDENTITY = {
   name: 'anon0mesh',
   uri: 'https://anonme.sh',
-  icon: 'https://anonme.sh/7a7e8f94-a843-456f-a3d7-0105a501cea9_removalai_preview.png',
+  //   icon: 'https://anonme.sh/7a7e8f94-a843-456f-a3d7-0105a501cea9_removalai_preview.png',
 };
 
 export class MWAWalletAdapter implements IWalletAdapter {
@@ -55,10 +55,10 @@ export class MWAWalletAdapter implements IWalletAdapter {
     }
 
     console.log('[MWA] Initializing Mobile Wallet Adapter...');
-    
+
     // MWA doesn't need initialization - connection happens on authorize
     this.initialized = true;
-    
+
     console.log('[MWA] ✅ Initialized (call connect() to authorize)');
   }
 
@@ -94,7 +94,7 @@ export class MWAWalletAdapter implements IWalletAdapter {
 
     try {
       const transact = await loadMWA();
-      
+
       const result = await transact(async (wallet: any) => {
         return await wallet.authorize({
           cluster: 'devnet',
@@ -103,7 +103,8 @@ export class MWAWalletAdapter implements IWalletAdapter {
       });
 
       // Store connection info (MWA returns accounts array)
-      this.publicKey = new PublicKey(result.accounts[0].address);
+      // Address is returned as Base64, need to convert to Buffer for PublicKey
+      this.publicKey = new PublicKey(Buffer.from(result.accounts[0].address, 'base64'));
       this.accountLabel = result.accounts[0].label ?? null;
       this.connected = true;
 
@@ -130,7 +131,7 @@ export class MWAWalletAdapter implements IWalletAdapter {
       this.publicKey = null;
       this.accountLabel = null;
       this.connected = false;
-      
+
       console.log('[MWA] ✅ Disconnected');
     } catch (error) {
       console.error('[MWA] Disconnect error:', error);
@@ -154,7 +155,7 @@ export class MWAWalletAdapter implements IWalletAdapter {
 
     try {
       const transact = await loadMWA();
-      
+
       const signedTx = await transact(async (wallet: any) => {
         // Authorize within the session (MWA handles auth token internally)
         await wallet.authorize({
@@ -189,7 +190,7 @@ export class MWAWalletAdapter implements IWalletAdapter {
 
     try {
       const transact = await loadMWA();
-      
+
       const signedTransactions = await transact(async (wallet: any) => {
         // Authorize within the session
         await wallet.authorize({
@@ -220,7 +221,7 @@ export class MWAWalletAdapter implements IWalletAdapter {
 
     try {
       const transact = await loadMWA();
-      
+
       const signature = await transact(async (wallet: any) => {
         // Authorize within the session
         await wallet.authorize({
@@ -278,7 +279,7 @@ export class MWAWalletAdapter implements IWalletAdapter {
 
     try {
       const transact = await loadMWA();
-      
+
       const signature = await transact(async (wallet: any) => {
         // Authorize within the session
         await wallet.authorize({
@@ -296,7 +297,7 @@ export class MWAWalletAdapter implements IWalletAdapter {
 
       const signatureBase58 = Buffer.from(signature).toString('base64');
       console.log('[MWA] ✅ Transaction signed and sent:', signatureBase58);
-      
+
       return signatureBase58;
     } catch (error) {
       console.error('[MWA] Sign and send failed:', error);

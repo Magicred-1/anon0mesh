@@ -34,19 +34,22 @@ export default function WalletScreen() {
   // Initialize wallet and fetch balances
   useEffect(() => {
     let mounted = true;
-    
+
     (async () => {
       try {
-        const hasWallet = await WalletFactory.hasLocalWallet();
-        if (!hasWallet) {
-          Alert.alert('No Wallet', 'Please create a wallet first.');
-          router.replace('/onboarding' as any);
-          return;
+        // Try to create a wallet adapter (works for both local and MWA)
+        console.log('[Wallet] Attempting to create wallet adapter...');
+        const walletAdapter = await WalletFactory.createAuto();
+        console.log('[Wallet] Wallet adapter created:', walletAdapter.getMode());
+
+        // Ensure wallet is connected (especially for MWA)
+        if (!walletAdapter.isConnected()) {
+          console.log('[Wallet] Connecting wallet...');
+          await walletAdapter.connect();
         }
 
-        const walletAdapter = await WalletFactory.createAuto();
         const pubKey = await walletAdapter.getPublicKey();
-        
+
         if (pubKey && mounted) {
           const pubKeyString = pubKey.toBase58();
           setPublicKey(pubKeyString);
@@ -100,7 +103,7 @@ export default function WalletScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Wallet</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.settingsButton}
             onPress={() => router.push('/wallet/settings')}
           >
@@ -123,10 +126,10 @@ export default function WalletScreen() {
           <View style={styles.qrContainer}>
             <View style={styles.qrWrapper}>
               {publicKey ? (
-                <QRCode 
-                  value={publicKey} 
-                  size={320} 
-                  backgroundColor="transparent" 
+                <QRCode
+                  value={publicKey}
+                  size={320}
+                  backgroundColor="transparent"
                   color="#D4F9FF"
                   quietZone={20}
                 />

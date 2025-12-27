@@ -34,62 +34,61 @@ export const ARCIUM_POOL_ACCOUNT_ADDRESS = new PublicKey('7MGSS4iKNM4sVib7bDZDJh
 export const USDC_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
 export const ZENZEC_MINT = new PublicKey('JDt9rRGaieF6aN1cJkXFeUmsy7ZE4yY3CZb8tVMXVroS');
 
- 
 export function getProgram(connection: Connection, wallet: any): Program<EscrowAnonmesh> {
-  if (!wallet) {
-    throw new Error('Wallet is required');
-  }
-  
-  const provider = new AnchorProvider(connection, wallet, {
-    commitment: 'confirmed',
-  });
-  
-  return new Program(IDL, provider) as Program<EscrowAnonmesh>;
+    if (!wallet) {
+        throw new Error('Wallet is required');
+    }
+    
+    const provider = new AnchorProvider(connection, wallet, {
+        commitment: 'confirmed',
+    });
+    
+    return new Program(IDL, provider) as Program<EscrowAnonmesh>;
 }
 
 // Escrow PDA derivation
 export function getEscrowPDA(owner: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [
-      Buffer.from('escrow'),
-      owner.toBuffer(),
-    ],
-    PROGRAM_ID
-  );
+    return PublicKey.findProgramAddressSync(
+        [
+        Buffer.from('escrow'),
+        owner.toBuffer(),
+        ],
+        PROGRAM_ID
+    );
 }
 
 // Payment PDA derivation
 export function getPaymentPDA(
-  sender: PublicKey, 
-  identifier: number | string
+    sender: PublicKey, 
+    identifier: number | string
 ): [PublicKey, number] {
-  let idBuffer: Buffer;
-  
-  if (typeof identifier === 'number') {
-    // For encrypted payments, use computation_offset
-    const offsetBN = new BN(identifier);
-    idBuffer = offsetBN.toArrayLike(Buffer, 'le', 8);
-  } else {
-    // For regular payments, use payment type string ('sol', 'usdc', 'zenzec')
-    idBuffer = Buffer.from(identifier);
-  }
-  
-  return PublicKey.findProgramAddressSync(
-    [
-      Buffer.from('payments'),
-      sender.toBuffer(),
-      idBuffer,
-    ],
-    PROGRAM_ID
-  );
+    let idBuffer: Buffer;
+    
+    if (typeof identifier === 'number') {
+        // For encrypted payments, use computation_offset
+        const offsetBN = new BN(identifier);
+        idBuffer = offsetBN.toArrayLike(Buffer, 'le', 8);
+    } else {
+        // For regular payments, use payment type string ('sol', 'usdc', 'zenzec')
+        idBuffer = Buffer.from(identifier);
+    }
+    
+    return PublicKey.findProgramAddressSync(
+        [
+        Buffer.from('payments'),
+        sender.toBuffer(),
+        idBuffer,
+        ],
+        PROGRAM_ID
+    );
 }
 
 // Sign PDA derivation
 export function getSignPDA(): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('sign_pda')],
-    PROGRAM_ID
-  );
+    return PublicKey.findProgramAddressSync(
+        [Buffer.from('sign_pda')],
+        PROGRAM_ID
+    );
 }
 
 export function getMXEPDA(): [PublicKey, number] {
@@ -97,29 +96,29 @@ export function getMXEPDA(): [PublicKey, number] {
 }
 
 export function getMempoolPDA(): [PublicKey, number] {
-  return [getMempoolAccAddress(PROGRAM_ID), 0];
+    return [getMempoolAccAddress(PROGRAM_ID), 0];
 }
 
 export function getExecpoolPDA(): [PublicKey, number] {
-  return [getExecutingPoolAccAddress(PROGRAM_ID), 0];
+    return [getExecutingPoolAccAddress(PROGRAM_ID), 0];
 }
 
 export function getComputationPDA(offset: number): [PublicKey, number] {
-  return [getComputationAccAddress(PROGRAM_ID, new BN(offset)), 0];
+    return [getComputationAccAddress(PROGRAM_ID, new BN(offset)), 0];
 }
 
 // Computation definition PDAs for different encrypted instructions
 export function getCompDefPDA(instructionName: string): [PublicKey, number] {
-  // Use Arcium client to compute the correct PDA
-  const baseSeedCompDefAcc = getArciumAccountBaseSeed("ComputationDefinitionAccount");
-  const offsetUint8Array = getCompDefAccOffset(instructionName);
-  
-  const [compDefPDA] = PublicKey.findProgramAddressSync(
-    [baseSeedCompDefAcc, PROGRAM_ID.toBuffer(), offsetUint8Array],
-    getArciumProgAddress()
-  );
-  
-  return [compDefPDA, 0];
+    // Use Arcium client to compute the correct PDA
+    const baseSeedCompDefAcc = getArciumAccountBaseSeed("ComputationDefinitionAccount");
+    const offsetUint8Array = getCompDefAccOffset(instructionName);
+    
+    const [compDefPDA] = PublicKey.findProgramAddressSync(
+        [baseSeedCompDefAcc, PROGRAM_ID.toBuffer(), offsetUint8Array],
+        getArciumProgAddress()
+    );
+    
+    return [compDefPDA, 0];
 }
 
 export function getClusterPDA(): [PublicKey, number] {
@@ -127,20 +126,20 @@ export function getClusterPDA(): [PublicKey, number] {
 }
 
 export function getPoolPDA(): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('pool')],
-    ARCIUM_PROGRAM_ID
-  );
+    return PublicKey.findProgramAddressSync(
+        [Buffer.from('pool')],
+        ARCIUM_PROGRAM_ID
+    );
 }
 
 // Computation definition instruction names (matching Rust circuit names)
 export const COMP_DEF_INSTRUCTIONS = {
-  INIT_ESCROW_STATS: 'init_escrow_stats',
-  INIT_REFERRAL_STATS: 'init_referral_stats',
-  PROCESS_PAYMENT: 'process_payment',
-  UPDATE_REFERRAL: 'update_referral_stats',
-  CHECK_THRESHOLD: 'check_volume_threshold',
-  REVEAL_COUNT: 'reveal_payment_count',
+    INIT_ESCROW_STATS: 'init_escrow_stats',
+    INIT_REFERRAL_STATS: 'init_referral_stats',
+    PROCESS_PAYMENT: 'process_payment',
+    UPDATE_REFERRAL: 'update_referral_stats',
+    CHECK_THRESHOLD: 'check_volume_threshold',
+    REVEAL_COUNT: 'reveal_payment_count',
 } as const;
 
 // Fee configuration (matching Rust program - basis points per thousand)
