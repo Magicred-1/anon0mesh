@@ -49,7 +49,15 @@ export class NostrSolanaAdapter extends NostrAdapter {
     }
 
     // Get Solana keypair's secret key
-    const secretKey = await walletAdapter.exportPrivateKey();
+    let secretKey: Uint8Array;
+    try {
+      secretKey = walletAdapter.getSecretKey() as unknown as Uint8Array;
+      if (!secretKey || secretKey.length === 0) {
+        throw new Error('Secret key is empty');
+      }
+    } catch (error) {
+      throw new Error('Unable to access wallet secret key');
+    }
 
     // Solana uses Ed25519 keypair (64 bytes: 32 private + 32 public)
     // Nostr uses only the 32-byte private key (secp256k1)

@@ -18,10 +18,10 @@ export class NostrChatRepository implements INostrChatRepository {
   /**
    * Initialize repository with wallet and Nostr adapter
    */
-  async initialize(relayUrls: string[]): Promise<void> {
+  async initialize(relayUrls: string[], pin: string): Promise<void> {
     // Initialize wallet
     this.walletAdapter = new LocalWalletAdapter();
-    await this.walletAdapter.initialize();
+    await this.walletAdapter.initialize(pin);
 
     // Initialize Nostr with unified Solana identity
     this.nostrAdapter = new NostrSolanaAdapter();
