@@ -18,10 +18,10 @@ export class NostrChatRepository implements INostrChatRepository {
   /**
    * Initialize repository with wallet and Nostr adapter
    */
-  async initialize(relayUrls: string[], pin: string): Promise<void> {
+  async initialize(relayUrls: string[], privateKey: string): Promise<void> {
     // Initialize wallet
     this.walletAdapter = new LocalWalletAdapter();
-    await this.walletAdapter.initialize(pin);
+    await this.walletAdapter.initialize(privateKey);
 
     // Initialize Nostr with unified Solana identity
     this.nostrAdapter = new NostrSolanaAdapter();
@@ -91,7 +91,7 @@ export class NostrChatRepository implements INostrChatRepository {
               // Check if it's a decryption error (message not intended for us)
               if (decryptError instanceof Error && 
                   (decryptError.message.includes('wrong padding') || 
-                   decryptError.message.includes('decrypt'))) {
+                  decryptError.message.includes('decrypt'))) {
                 console.log('[NostrChatRepository] Skipping private message not for us:', event.id.slice(0, 8));
                 return; // Silently skip messages we can't decrypt
               }

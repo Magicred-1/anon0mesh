@@ -129,6 +129,12 @@ async function decryptSecretKey(
 ======================================================= */
 
 export class LocalWalletAdapter implements IWalletAdapter {
+  airdropSol(amount: number, rpcUrl?: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  getWalletPin(): Promise<string | null> {
+    throw new Error('Method not implemented.');
+  }
   getSecretKey() {
     throw new Error('Method not implemented.');
   }
@@ -193,6 +199,26 @@ export class LocalWalletAdapter implements IWalletAdapter {
     this.keypair = null;
     this.initialized = false;
   }
+
+  /* ================= Secret Key Export ================= */
+
+  async exportSecretKey(pin?: string): Promise<Uint8Array> {
+    if (!this.keypair) throw new Error('Wallet not initialized');
+    
+    if (!pin) throw new Error('PIN required for local wallet');
+    
+    // Verify PIN by attempting to decrypt stored key
+    const stored = await SecureStore.getItemAsync(STORAGE_KEY);
+    if (!stored) throw new Error('No stored wallet found');
+    
+    await requireBiometric();
+    
+    const payload = JSON.parse(stored) as EncryptedKeyPayload;
+    await decryptSecretKey(payload, pin); // Validates PIN
+    
+    return this.keypair.secretKey;
+  }
+
 
   /* ================= Signing ================= */
 

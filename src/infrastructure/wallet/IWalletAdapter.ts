@@ -104,4 +104,14 @@ export interface IWalletAdapter {
      * @param rpcUrl Optional RPC endpoint
      */
     getBalance(rpcUrl?: string): Promise<number>;
+
+    /**
+     * Airdrop SOL (for devnet/testnet) 
+     */
+    airdropSol(amount: number, rpcUrl?: string): Promise<void>;
+
+    /**
+     * Export secret key (for local wallet)
+     */
+    exportSecretKey(): Promise<Uint8Array>;
 }

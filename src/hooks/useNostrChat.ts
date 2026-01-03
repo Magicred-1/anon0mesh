@@ -126,8 +126,14 @@ export function useNostrChat(
 
       // Create and initialize repository
       const repository = new NostrChatRepository();
-      await repository.initialize(relayUrls);
-
+      
+      // Get PIN from wallet context
+      const privateKey = await wallet.exportPrivateKey();
+      if (!privateKey) {
+        throw new Error('Wallet PIN not available');
+      }
+      
+      await repository.initialize(relayUrls, privateKey);
       repositoryRef.current = repository;
       
       // Get public keys

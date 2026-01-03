@@ -15,6 +15,7 @@
  */
 
 import { PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
 import { useRouter } from 'expo-router';
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
@@ -49,6 +50,7 @@ interface WalletContextValue {
     connect: () => Promise<void>;
     disconnect: () => Promise<void>;
     refresh: () => Promise<void>;
+    exportPrivateKey: () => Promise<string | null>;
     
     // Error state
     error: string | null;
@@ -214,6 +216,28 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
         }
     }, [wallet, initialize]);
 
+    /**
+     * Get wallet PIN (for local wallets with AES + Argon2 encryption)
+     * Only works for local wallet mode
+     */
+    const exportPrivateKey = useCallback(async (): Promise<string | null> => {
+        if (!wallet) {
+            console.warn('[WalletContext] Cannot get PIN: wallet not initialized');
+            return null;
+        }
+        try {
+            console.log('[WalletContext] Exporting wallet secret key...');
+            const secretKey = await wallet.exportSecretKey();
+            const secretKeyBase58 = bs58.encode(secretKey);
+            console.log('[WalletContext] Secret key exported');
+            return secretKeyBase58;
+        } catch (err) {
+            console.error('[WalletContext] Export secret key error:', err);
+            Alert.alert('Error', 'Failed to export secret key. Please try again.');
+            return null;
+        }
+    }, [wallet]);
+
     // Auto-initialize on mount
     useEffect(() => {
         if (autoInitialize) {
@@ -234,6 +258,7 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
         connect,
         disconnect,
         refresh,
+        exportPrivateKey,
         error,
     };
 
@@ -243,10 +268,6 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
         </WalletContext.Provider>
     );
 }
-
-/**
- * Hook to use wallet context
- */
 export function useWallet() {
     const context = useContext(WalletContext);
     

@@ -13,7 +13,8 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth for mesh networking with nearby devices",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to advertise as a mesh network node",
-        "NSCameraUsageDescription": "This app uses the camera to scan wallet QR codes."
+        "NSCameraUsageDescription": "This app uses the camera to scan wallet QR codes.",
+        "NSFaceIDUsageDescription": "This app uses Face ID to authenticate access to your encrypted keys."
       },
       "bundleIdentifier": "com.magicred1.anon0mesh"
     },
