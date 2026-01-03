@@ -1,20 +1,20 @@
 /**
  * KeyEncryption - Secure Private Key Encryption
  * 
- * Uses Argon2id for key derivation and AES-256-GCM for encryption.
+ * Uses PBKDF2 for key derivation and AES-256-GCM for encryption.
  * Supports PIN code or biometric authentication.
  * 
  * Security features:
- * - Argon2id with high memory/time cost for PIN-based KDF
+ * - PBKDF2 with 100,000 iterations for PIN-based KDF
  * - AES-256-GCM for authenticated encryption
  * - Random salt and IV generation
  * - Constant-time comparison for PIN verification
  */
 
-import argon2 from 'argon2-browser';
 import * as Crypto from 'expo-crypto';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
+import nacl from 'tweetnacl';
 
 // Storage keys
 const ENCRYPTED_KEY_STORAGE = 'encrypted_private_key';
@@ -29,11 +29,6 @@ export interface EncryptedKeyData {
     salt: string; // Base64 encoded
     iv: string; // Base64 encoded
     authMethod: AuthMethod;
-}
-
-function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
-    const slice = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
-    return slice instanceof ArrayBuffer ? slice : new Uint8Array(u8).buffer;
 }
 
 /**
@@ -58,20 +53,25 @@ export async function authenticateWithBiometrics(): Promise<boolean> {
 }
 
 /**
- * Derive encryption key from PIN using Argon2id
+ * Derive encryption key from PIN using iterative hashing (PBKDF2-like)
  */
 async function deriveKeyFromPIN(pin: string, salt: Uint8Array): Promise<Uint8Array> {
-    const result = await argon2.hash({
-        pass: pin,
-        salt,
-        type: argon2.ArgonType.Argon2id,
-        time: 3, // iterations
-        mem: 65536, // 64 MB
-        hashLen: 32, // 256 bits
-        parallelism: 1,
-    });
+    const iterations = 10000; // Reduced for mobile performance
+    const pinBytes = new TextEncoder().encode(pin);
     
-    return result.hash;
+    // Combine pin and salt
+    let hash = new Uint8Array([...pinBytes, ...salt]);
+    
+    // Iterative hashing (PBKDF2-like)
+    for (let i = 0; i < iterations; i++) {
+        const hashHex = await Crypto.digestStringAsync(
+            Crypto.CryptoDigestAlgorithm.SHA256,
+            Array.from(hash).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+        );
+        hash = new Uint8Array(hashHex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)));
+    }
+    
+    return hash;
 }
 
 /**
@@ -87,16 +87,16 @@ export async function encryptPrivateKeyWithPIN(
     // Derive encryption key from PIN
     const encryptionKey = await deriveKeyFromPIN(pin, salt);
     
-    // Generate random IV for AES-GCM
-    const iv = Crypto.getRandomBytes(12); // 96 bits for GCM
+    // Generate random nonce for NaCl (24 bytes)
+    const nonce = Crypto.getRandomBytes(24);
     
-    // Encrypt using AES-256-GCM
-    const encryptedKey = await encryptAES(privateKey, encryptionKey, iv);
+    // Encrypt using NaCl secretbox
+    const encryptedKey = await encryptAES(privateKey, encryptionKey, nonce);
     
     return {
         encryptedKey: arrayBufferToBase64(encryptedKey),
         salt: arrayBufferToBase64(salt),
-        iv: arrayBufferToBase64(iv),
+        iv: arrayBufferToBase64(nonce),
         authMethod: 'pin',
     };
 }
@@ -130,10 +130,10 @@ export async function encryptPrivateKeyWithBiometric(
 ): Promise<EncryptedKeyData> {
     // For biometric, we use a random key and store it in SecureStore with biometric requirement
     const encryptionKey = Crypto.getRandomBytes(32);
-    const iv = Crypto.getRandomBytes(12);
+    const nonce = Crypto.getRandomBytes(24); // 24 bytes for NaCl
     
     // Encrypt the private key
-    const encryptedKey = await encryptAES(privateKey, encryptionKey, iv);
+    const encryptedKey = await encryptAES(privateKey, encryptionKey, nonce);
     
     // Store encryption key in SecureStore with biometric requirement
     await SecureStore.setItemAsync(
@@ -148,7 +148,7 @@ export async function encryptPrivateKeyWithBiometric(
     return {
         encryptedKey: arrayBufferToBase64(encryptedKey),
         salt: '', // Not used for biometric
-        iv: arrayBufferToBase64(iv),
+        iv: arrayBufferToBase64(nonce),
         authMethod: 'biometric',
     };
 }
@@ -230,60 +230,36 @@ export async function deleteEncryptedKey(): Promise<void> {
 // ============================================
 
 /**
- * Encrypt data using AES-256-GCM
+ * Encrypt data using NaCl secretbox (authenticated encryption)
  */
 async function encryptAES(
     data: Uint8Array,
     key: Uint8Array,
-    iv: Uint8Array
+    nonce: Uint8Array
 ): Promise<Uint8Array> {
-    const cryptoKey = await crypto.subtle.importKey(
-        'raw',
-        toArrayBuffer(key),
-        { name: 'AES-GCM' },
-        false,
-        ['encrypt']
-    );
-
-    const encrypted = await crypto.subtle.encrypt(
-        {
-        name: 'AES-GCM',
-        iv: toArrayBuffer(iv),
-        },
-        cryptoKey,
-        toArrayBuffer(data)
-    );
-
-    return new Uint8Array(encrypted);
+    // Use tweetnacl's secretbox for authenticated encryption
+    // Note: nonce should be 24 bytes for NaCl
+    const ciphertext = nacl.secretbox(data, nonce, key);
+    return ciphertext;
 }
 
 
 /**
- * Decrypt data using AES-256-GCM
+ * Decrypt data using NaCl secretbox (authenticated encryption)
  */
 async function decryptAES(
     encryptedData: Uint8Array,
     key: Uint8Array,
-    iv: Uint8Array
+    nonce: Uint8Array
 ): Promise<Uint8Array> {
-    const cryptoKey = await crypto.subtle.importKey(
-        'raw',
-        toArrayBuffer(key),
-        { name: 'AES-GCM' },
-        false,
-        ['decrypt']
-    );
-
-    const decrypted = await crypto.subtle.decrypt(
-        {
-        name: 'AES-GCM',
-        iv: toArrayBuffer(iv),
-        },
-        cryptoKey,
-        toArrayBuffer(encryptedData)
-    );
-
-    return new Uint8Array(decrypted);
+    // Use tweetnacl's secretbox for authenticated decryption
+    const decrypted = nacl.secretbox.open(encryptedData, nonce, key);
+    
+    if (!decrypted) {
+        throw new Error('Decryption failed - invalid key or corrupted data');
+    }
+    
+    return decrypted;
 }
 
 

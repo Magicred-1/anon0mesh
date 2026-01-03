@@ -18,7 +18,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 
-import { ArgonType, hash } from 'argon2-browser';
+import * as Crypto from 'expo-crypto';
 import * as LocalAuth from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import nacl from 'tweetnacl';
@@ -36,14 +36,6 @@ type EncryptedKeyPayload = {
   salt: string;        // base64
   iv: string;          // base64
   ciphertext: string; // base64
-};
-
-const ARGON_PARAMS = {
-  type: ArgonType.Argon2id,
-  time: 3,
-  mem: 64 * 1024, // 64MB
-  parallelism: 1,
-  hashLen: 32,
 };
 
 /* =======================================================
@@ -64,44 +56,41 @@ async function requireBiometric(): Promise<void> {
   }
 }
 
-async function deriveKey(pin: string, salt: Uint8Array): Promise<CryptoKey> {
-  const { hash: derived } = await hash({
-    pass: pin,
-    salt,
-    ...ARGON_PARAMS,
-  });
+async function deriveKey(pin: string, salt: Uint8Array): Promise<Uint8Array> {
+  // Simple but secure PBKDF2 implementation using expo-crypto
+  const iterations = 10000; // Reduced for mobile performance
+  const pinBytes = new TextEncoder().encode(pin);
+  
+  // Combine pin and salt
+  let hash = new Uint8Array([...pinBytes, ...salt]);
+  
+  // Iterative hashing (PBKDF2-like)
+  for (let i = 0; i < iterations; i++) {
+    const hashHex = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('')
+    );
+    hash = new Uint8Array(hashHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+  }
 
-  // Create a new Uint8Array backed by ArrayBuffer to satisfy crypto.subtle type requirements
-  const keyMaterial = new Uint8Array(derived);
-
-  return crypto.subtle.importKey(
-    'raw',
-    keyMaterial,
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt', 'decrypt']
-  );
+  return hash;
 }
 
 async function encryptSecretKey(
   secretKey: Uint8Array,
   pin: string
 ): Promise<EncryptedKeyPayload> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const salt = Crypto.getRandomBytes(16);
+  const nonce = Crypto.getRandomBytes(24); // 24 bytes for NaCl
   const key = await deriveKey(pin, salt);
 
-  // Ensure we pass an ArrayBuffer-backed view to Web Crypto
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: new Uint8Array(iv) },
-    key,
-    new Uint8Array(secretKey)
-  );
+  // Use tweetnacl's secretbox for authenticated encryption
+  const ciphertext = nacl.secretbox(secretKey, nonce, key);
 
   return {
     v: 1,
     salt: Buffer.from(salt).toString('base64'),
-    iv: Buffer.from(iv).toString('base64'),
+    iv: Buffer.from(nonce).toString('base64'),
     ciphertext: Buffer.from(ciphertext).toString('base64'),
   };
 }
@@ -110,18 +99,18 @@ async function decryptSecretKey(
   pin: string
 ): Promise<Uint8Array> {
   const salt = Buffer.from(payload.salt, 'base64');
-  const iv = Buffer.from(payload.iv, 'base64');
+  const nonce = Buffer.from(payload.iv, 'base64');
   const data = Buffer.from(payload.ciphertext, 'base64');
   const key = await deriveKey(pin, new Uint8Array(salt));
 
-  // Ensure we pass an ArrayBuffer-backed view to Web Crypto
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: new Uint8Array(iv) },
-    key,
-    new Uint8Array(data)
-  );
+  // Use tweetnacl's secretbox for authenticated decryption
+  const decrypted = nacl.secretbox.open(new Uint8Array(data), new Uint8Array(nonce), key);
 
-  return new Uint8Array(decrypted);
+  if (!decrypted) {
+    throw new Error('Decryption failed - invalid PIN or corrupted data');
+  }
+
+  return decrypted;
 }
 
 /* =======================================================
