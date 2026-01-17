@@ -127,13 +127,18 @@ export function useNostrChat(
       // Create and initialize repository
       const repository = new NostrChatRepository();
       
-      // Get PIN from wallet context
-      const privateKey = await wallet.exportPrivateKey();
-      if (!privateKey) {
-        throw new Error('Wallet PIN not available');
+      // Check if wallet adapter is available
+      if (!wallet.wallet) {
+        throw new Error('Wallet adapter not available');
       }
       
-      await repository.initialize(relayUrls, privateKey);
+      if (!wallet.isConnected) {
+        console.log('[useNostrChat] Wallet not connected, connecting...');
+        await wallet.connect();
+      }
+      
+      // Pass the wallet adapter directly to the repository
+      await repository.initialize(relayUrls, wallet.wallet);
       repositoryRef.current = repository;
       
       // Get public keys
@@ -160,7 +165,7 @@ export function useNostrChat(
       setIsInitializing(false);
       Alert.alert('Nostr Error', 'Failed to connect to Nostr relays. Using offline mode.');
     }
-  }, [relayUrls]);
+  }, [relayUrls, wallet]);
 
   /**
    * Subscribe to incoming messages

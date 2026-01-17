@@ -1,3 +1,5 @@
+import { NOSTR_RELAYS } from '@/src/utils/nostrRelays';
+import { getDefaultRelays, selectRelaysForZone } from '@/src/utils/relaySelector';
 import React, { Component } from 'react';
 import {
     Animated,
@@ -12,7 +14,7 @@ import {
     View,
 } from 'react-native';
 
-type NostrZoneType = 'local' | 'neighborhood' | 'city' | 'internet';
+type NostrZoneType = 'local' | 'neighborhood' | 'city' | 'regional' | 'national' | 'global';
 
 interface NostrZone {
     id: NostrZoneType;
@@ -25,8 +27,9 @@ interface NostrZone {
 type Props = {
     visible: boolean;
     onClose: () => void;
-    onSelectZone: (zone: NostrZoneType) => void;
+    onSelectZone: (zone: NostrZoneType, relays: string[]) => void;
     selectedZone?: NostrZoneType;
+    userLocation?: { latitude: number; longitude: number } | null;
 };
 
 interface NostrZoneSelectorModalState {
@@ -37,9 +40,9 @@ const ZONES: NostrZone[] = [
     { id: 'local', label: 'Local', range: '100m', icon: '📍' },
     { id: 'neighborhood', label: 'Neighborhood', range: '10km', icon: '🏠' },
     { id: 'city', label: 'City', range: '100km', icon: '🏙️' },
-    { id: 'internet', label: 'Regional', range: '1 000km', icon: '👥' },
-    { id: 'internet', label: 'National', range: '5 000km', icon: '📖' },
-    { id: 'internet', label: 'Global', range: '', icon: '🌐' },
+    { id: 'regional', label: 'Regional', range: '1 000km', icon: '👥' },
+    { id: 'national', label: 'National', range: '5 000km', icon: '📖' },
+    { id: 'global', label: 'Global', range: 'Worldwide', icon: '🌐' },
 ];
 
 export default class ZoneSelectorModal extends Component<Props, NostrZoneSelectorModalState> {
@@ -91,11 +94,41 @@ export default class ZoneSelectorModal extends Component<Props, NostrZoneSelecto
         this._closeAnim.start(() => this.props.onClose());
     }
 
-    _handleZoneSelect = (zone: NostrZone) => {
+    _handleZoneSelect = async (zone: NostrZone) => {
         if (zone.disabled) return;
         
-        this.props.onSelectZone(zone.id);
-        this._handleDismiss();
+        try {
+            let selectedRelays: string[] = [];
+            
+            // Try to use location-based relay selection
+            if (this.props.userLocation) {
+                try {
+                    selectedRelays = selectRelaysForZone(
+                        NOSTR_RELAYS,
+                        this.props.userLocation.latitude,
+                        this.props.userLocation.longitude,
+                        zone.id
+                    );
+                } catch (error) {
+                    console.warn('[ZoneSelector] Error selecting relays by location:', error);
+                }
+            }
+            
+            // Fallback to default relays if location not available or no relays selected
+            if (selectedRelays.length === 0) {
+                selectedRelays = getDefaultRelays(6);
+            }
+            
+            console.log(`[ZoneSelector] Selected ${selectedRelays.length} relays for zone ${zone.id}:`, selectedRelays);
+            
+            this.props.onSelectZone(zone.id, selectedRelays);
+            this._handleDismiss();
+        } catch (error) {
+            console.error('[ZoneSelector] Error selecting relays:', error);
+            // Fallback to default relays on error
+            this.props.onSelectZone(zone.id, getDefaultRelays(6));
+            this._handleDismiss();
+        }
     }
 
     render() {

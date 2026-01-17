@@ -62,6 +62,7 @@ This BLE adapter implements **both Central and Peripheral modes simultaneously**
 # Install BLE packages
 npm install react-native-ble-plx@3.2.1
 npm install react-native-multi-ble-peripheral@1.0.0
+npm install react-native-nitro-modules
 
 # Install Expo crypto (already installed)
 # expo-crypto is included in your package.json

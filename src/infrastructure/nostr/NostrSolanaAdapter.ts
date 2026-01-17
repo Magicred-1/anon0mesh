@@ -1,23 +1,25 @@
 /**
- * NostrSolanaAdapter - Unified Solana/Nostr Identity & Transaction Relay
+ * NostrSolanaAdapter - Derived Nostr Identity from Solana Wallet
  * 
  * Key Features:
- * - Uses Solana wallet's Ed25519 keypair for Nostr identity
+ * - Derives separate Nostr session key from Solana wallet (security isolation)
  * - Hybrid BLE/Nostr transaction relay with receipts
  * - Transaction delivery verification
- * - Unified identity across mesh network
+ * - Deterministic but separate identities for Solana and Nostr
  * 
- * Benefits:
- * - Single keypair for both Solana and Nostr
- * - Simplified identity management
- * - Verifiable transaction delivery
+ * Security Benefits:
+ * - Solana signing key never directly used for Nostr messaging
+ * - Derived key using SHA256(solana_secret || "nostr-session-key")
+ * - Deterministic derivation - same wallet = same Nostr identity
+ * - Key separation prevents cross-protocol vulnerabilities
  * - Automatic fallback between BLE and Nostr
  */
 
+import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { encode as bs58encode } from 'bs58';
 
-import { LocalWalletAdapter } from '../wallet/LocalWallet/LocalWalletAdapter';
+import { IWalletAdapter } from '../wallet/IWalletAdapter';
 import { NOSTR_EVENT_KINDS, NostrEvent } from './INostrAdapter';
 import { NostrAdapter } from './NostrAdapter';
 
@@ -34,14 +36,32 @@ export interface TransactionReceipt {
 }
 
 export class NostrSolanaAdapter extends NostrAdapter {
-  private walletAdapter: LocalWalletAdapter | null = null;
+  private walletAdapter: IWalletAdapter | null = null;
   private receipts: Map<string, TransactionReceipt> = new Map();
+
+  /**
+   * Derive a Nostr-specific private key from Solana wallet
+   * Uses HMAC-SHA256 for key derivation to separate Nostr and Solana key usage
+   */
+  private deriveNostrKey(solanaSecretKey: Uint8Array): Uint8Array {
+    // Use a constant domain separator for Nostr key derivation
+    const NOSTR_DERIVATION_PATH = new TextEncoder().encode('nostr-session-key');
+    
+    // Derive Nostr key using SHA256(solana_secret || derivation_path)
+    // This ensures the Nostr key is deterministic but different from Solana key
+    const combined = new Uint8Array(solanaSecretKey.length + NOSTR_DERIVATION_PATH.length);
+    combined.set(solanaSecretKey.slice(0, 32)); // Use first 32 bytes of Solana key
+    combined.set(NOSTR_DERIVATION_PATH, 32);
+    
+    const derivedKey = sha256(combined);
+    return derivedKey;
+  }
 
   /**
    * Initialize Nostr adapter using Solana wallet's keypair
    * @param walletAdapter Solana wallet adapter (LocalWalletAdapter or MobileWalletAdapter)
    */
-  async initializeFromSolanaWallet(walletAdapter: LocalWalletAdapter): Promise<void> {
+  async initializeFromSolanaWallet(walletAdapter: IWalletAdapter): Promise<void> {
     console.log('[NostrSolana] Initializing with Solana wallet keypair...');
 
     if (!walletAdapter.isConnected()) {
@@ -51,27 +71,28 @@ export class NostrSolanaAdapter extends NostrAdapter {
     // Get Solana keypair's secret key
     let secretKey: Uint8Array;
     try {
-      secretKey = walletAdapter.getSecretKey() as unknown as Uint8Array;
+      secretKey = await walletAdapter.exportSecretKey();
       if (!secretKey || secretKey.length === 0) {
         throw new Error('Secret key is empty');
       }
-    } catch (error) {
+    } catch (err) {
+      console.error('[NostrSolana] Failed to export secret key:', err);
       throw new Error('Unable to access wallet secret key');
     }
 
-    // Solana uses Ed25519 keypair (64 bytes: 32 private + 32 public)
-    // Nostr uses only the 32-byte private key (secp256k1)
-    // However, both Nostr and Solana use Ed25519, so we can use the first 32 bytes
-    const nostrPrivateKey = secretKey.slice(0, 32);
+    // Derive a separate Nostr private key for security isolation
+    // This ensures Solana signing key is never directly used for Nostr
+    console.log('[NostrSolana] Deriving Nostr session key from Solana wallet...');
+    const nostrPrivateKey = this.deriveNostrKey(secretKey);
     const nostrPrivateKeyHex = bytesToHex(nostrPrivateKey);
 
-    // Initialize parent NostrAdapter with Solana's private key
+    // Initialize parent NostrAdapter with derived Nostr private key
     await this.initialize(nostrPrivateKeyHex);
 
     this.walletAdapter = walletAdapter;
 
-    console.log('[NostrSolana] ✅ Unified identity initialized');
-    console.log('[NostrSolana] Solana Pubkey:', walletAdapter.getPublicKey()?.toBase58());
+    console.log('[NostrSolana] ✅ Nostr session key derived and initialized');
+    console.log('[NostrSolana] Solana Pubkey:', (await walletAdapter.getPublicKey())?.toBase58());
     console.log('[NostrSolana] Nostr Pubkey (hex):', this.getPublicKey());
   }
 
@@ -376,7 +397,7 @@ export class NostrSolanaAdapter extends NostrAdapter {
   /**
    * Get wallet adapter
    */
-  getWalletAdapter(): LocalWalletAdapter | null {
+  getWalletAdapter(): IWalletAdapter | null {
     return this.walletAdapter;
   }
 

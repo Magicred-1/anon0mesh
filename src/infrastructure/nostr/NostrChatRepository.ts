@@ -7,21 +7,25 @@
 
 import { NostrChatMessage } from '../../domain/entities/NostrChatMessage';
 import { INostrChatRepository } from '../../domain/repositories/INostrChatRepository';
-import { LocalWalletAdapter } from '../wallet/LocalWallet/LocalWalletAdapter';
+import { IWalletAdapter } from '../wallet/IWalletAdapter';
 import { NostrSolanaAdapter } from './NostrSolanaAdapter';
 
 export class NostrChatRepository implements INostrChatRepository {
   private nostrAdapter: NostrSolanaAdapter | null = null;
-  private walletAdapter: LocalWalletAdapter | null = null;
+  private walletAdapter: IWalletAdapter | null = null;
   private initialized = false;
 
   /**
    * Initialize repository with wallet and Nostr adapter
    */
-  async initialize(relayUrls: string[], privateKey: string): Promise<void> {
-    // Initialize wallet
-    this.walletAdapter = new LocalWalletAdapter();
-    await this.walletAdapter.initialize(privateKey);
+  async initialize(relayUrls: string[], walletAdapter: IWalletAdapter): Promise<void> {
+    // Use the provided wallet adapter (already initialized)
+    this.walletAdapter = walletAdapter;
+
+    // Ensure wallet is connected
+    if (!this.walletAdapter.isConnected()) {
+      await this.walletAdapter.connect();
+    }
 
     // Initialize Nostr with unified Solana identity
     this.nostrAdapter = new NostrSolanaAdapter();

@@ -3,8 +3,8 @@
  * Represents a network packet in the mesh protocol
  */
 
-import { PeerId } from '../value-objects/PeerId';
 import { Buffer } from 'buffer';
+import { PeerId } from '../value-objects/PeerId';
 
 export enum PacketType {
   MESSAGE = 0,
@@ -15,6 +15,11 @@ export enum PacketType {
   NOISE_HANDSHAKE_INIT = 5,
   NOISE_HANDSHAKE_RESPONSE = 6,
   NOISE_HANDSHAKE_FINAL = 7,
+  DELIVERY_ACK = 8,           // Delivery acknowledgment for private messages
+  READ_RECEIPT = 9,           // Read receipt when message displayed
+  FRAGMENT_START = 10,        // Start of fragmented message
+  FRAGMENT_CONTINUE = 11,     // Continuation fragment
+  FRAGMENT_END = 12,          // Final fragment
 }
 
 export interface PacketProps {

@@ -13,7 +13,6 @@
  * 3. Recommended: Mix of closest + random (60/40 split)
  */
 
-import { NostrRelayInfo } from './INostrAdapter';
 
 export interface RelayCSVEntry {
   url: string;

@@ -261,6 +261,48 @@ export class MWAWalletAdapter implements IWalletAdapter {
     }
   }
 
+  /**
+   * Airdrop SOL (for devnet/testnet)
+   */
+  async airdropSol(amount: number, rpcUrl?: string): Promise<void> {
+    if (!this.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    const endpoint = rpcUrl || 'https://api.devnet.solana.com';
+    const connection = new Connection(endpoint, 'confirmed');
+
+    try {
+      console.log(`[MWA] Requesting ${amount} SOL airdrop...`);
+      const signature = await connection.requestAirdrop(
+        this.publicKey,
+        amount * 1e9 // Convert SOL to lamports
+      );
+
+      console.log('[MWA] Airdrop signature:', signature);
+      console.log('[MWA] Confirming airdrop...');
+
+      const latestBlockhash = await connection.getLatestBlockhash();
+      await connection.confirmTransaction({
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      }, 'confirmed');
+
+      console.log('[MWA] ✅ Airdrop confirmed');
+    } catch (error) {
+      console.error('[MWA] Airdrop failed:', error);
+      throw new Error(`Airdrop failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Export secret key (Not supported for MWA)
+   */
+  async exportSecretKey(): Promise<Uint8Array> {
+    throw new Error('Secret key export is not supported for Mobile Wallet Adapter. Your keys are securely managed by your wallet app.');
+  }
+
   // ============================================
   // Advanced MWA Features
   // ============================================

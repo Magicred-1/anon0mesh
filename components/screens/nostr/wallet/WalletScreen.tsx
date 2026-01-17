@@ -29,6 +29,7 @@ import BottomNavWithMenu from '../../../ui/BottomNavWithMenu';
 export default function WalletScreen() {
   const router = useRouter();
   const [publicKey, setPublicKey] = useState<string>('');
+  const [isAirdropping, setIsAirdropping] = useState(false);
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
 
   // Initialize wallet and fetch balances
@@ -83,6 +84,53 @@ export default function WalletScreen() {
 
   const handleSwap = () => {
     router.push('/wallet/swap' as any);
+  };
+
+  const handleAirdrop = async () => {
+    try {
+      setIsAirdropping(true);
+      console.log('[Wallet] Requesting airdrop...');
+      
+      const walletAdapter = await WalletFactory.createAuto();
+      await walletAdapter.airdropSol(1); // Request 1 SOL
+      
+      Alert.alert(
+        'Success!', 
+        '1 SOL airdrop confirmed! Your balance will update shortly.',
+        [{ text: 'OK' }]
+      );
+      
+      // Refresh balances after airdrop
+      setTimeout(async () => {
+        const pubKey = await walletAdapter.getPublicKey();
+        if (pubKey) {
+          await fetchBalances(pubKey);
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('[Wallet] Airdrop error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      
+      Alert.alert(
+        'Airdrop Failed',
+        errorMsg,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Use Web Faucet',
+            onPress: () => {
+              Alert.alert(
+                'Web Faucet',
+                `Visit https://faucet.solana.com and paste your address:\n\n${publicKey}`,
+                [{ text: 'OK' }]
+              );
+            },
+          },
+        ]
+      );
+    } finally {
+      setIsAirdropping(false);
+    }
   };
 
   // Format address for display (XXXX...XXXX)
@@ -156,6 +204,21 @@ export default function WalletScreen() {
             <TouchableOpacity style={styles.actionButton} onPress={handleSwap}>
               <SwapIcon size={20} color="#ffffffff" />
               <Text style={styles.actionText}>Swap</Text>
+            </TouchableOpacity>
+            {/* Airdrop button - Devnet only */}
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.airdropButton]} 
+              onPress={handleAirdrop}
+              disabled={isAirdropping}
+            >
+              {isAirdropping ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Text style={styles.airdropIcon}>💧</Text>
+                  <Text style={styles.actionText}>Airdrop</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -330,6 +393,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffffff',
     fontWeight: '500',
+  },
+  airdropButton: {
+    borderColor: '#14B8A6',
+    backgroundColor: '#0A2E2A',
+  },
+  airdropIcon: {
+    fontSize: 20,
   },
   balancesSection: {
     marginTop: 32,

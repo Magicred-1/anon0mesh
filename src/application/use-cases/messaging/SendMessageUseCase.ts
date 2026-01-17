@@ -10,10 +10,12 @@
 
 import { Message } from '../../../domain/entities/Message';
 import { Packet, PacketType } from '../../../domain/entities/Packet';
+import { FragmentationService } from '../../../domain/services/FragmentationService';
 import { MessageCacheManager } from '../../../domain/services/MessageCacheManager';
+import { MessageRetryService } from '../../../domain/services/MessageRetryService';
+import { TTLService } from '../../../domain/services/TTLService';
 import { MessageId } from '../../../domain/value-objects/MessageId';
 import { PeerId } from '../../../domain/value-objects/PeerId';
-import { TTLService } from '../../../domain/services/TTLService';
 
 export interface SendMessageRequest {
   senderId: string; // Public key
@@ -35,29 +37,26 @@ export interface SendMessageResponse {
 
 export class SendMessageUseCase {
   constructor(
-    private readonly messageCacheManager: MessageCacheManager, // In-memory cache (ephemeral)
+    private readonly messageCacheManager: MessageCacheManager,
     private readonly ttlService: TTLService,
-    private readonly encryptMessage: (content: string) => Promise<Uint8Array>, // Arcium SDK
-    private readonly signPayload: (payload: Uint8Array) => Promise<Uint8Array>, // Noise Protocol
-    private readonly broadcastPacket: (packet: Packet) => Promise<void> // BLE Mesh (react-native-ble-plx)
-  ) {}
+    private readonly retryService: MessageRetryService,
+    private readonly fragmentationService: FragmentationService,
+    private readonly encryptMessage: (content: string) => Promise<Uint8Array>,
+    private readonly signPayload: (payload: Uint8Array) => Promise<Uint8Array>,
+    private readonly broadcastPacket: (packet: Packet) => Promise<void>
+  ) { }
 
   async execute(request: SendMessageRequest): Promise<SendMessageResponse> {
     try {
       // Step 1: Compose Message (U1)
-      const messageId = await MessageId.create(); // expo-crypto for UUID
+      const messageId = await MessageId.create();
       const senderId = PeerId.fromString(request.senderId);
       const recipientId = request.recipientId
         ? PeerId.fromString(request.recipientId)
         : undefined;
 
-      // Calculate TTL based on priority
-      const ttl = request.ttl ?? this.ttlService.calculateTTL(
-        'MESSAGE',
-        undefined // network size unknown
-      );
+      const ttl = request.ttl ?? this.ttlService.calculateTTL('MESSAGE');
 
-      // Create message entity
       const message = new Message({
         id: messageId,
         senderId,
@@ -75,11 +74,9 @@ export class SendMessageUseCase {
 
       // Step 3: Sign with Noise Protocol (U2 + U4)
       const signature = await this.signPayload(encryptedPayload);
-
-      // Create signed message
       const signedMessage = message.sign(Buffer.from(signature));
 
-      // Convert to packet for BLE transmission
+      // Create packet for BLE transmission
       const packet = new Packet({
         type: PacketType.MESSAGE,
         senderId,
@@ -90,14 +87,19 @@ export class SendMessageUseCase {
         ttl,
       });
 
-      // Step 4: Cache temporarily for delivery tracking (ephemeral - no save to DB)
+      // Step 4: Cache temporarily
       this.messageCacheManager.cacheMessage(signedMessage);
 
-      // Step 5: Broadcast via BLE Mesh (U4)
-      await this.broadcastPacket(packet);
-      
-      // Note: Message will auto-expire from cache after delivery or timeout
-      // NO persistence - purely peer-to-peer over Bluetooth
+      // Step 5: Handle Fragmentation and Broadcast (U4)
+      const packets = this.fragmentationService.fragment(packet);
+      for (const p of packets) {
+        await this.broadcastPacket(p);
+      }
+
+      // Step 6: Track for retry if it's a private message
+      if (recipientId) {
+        this.retryService.trackMessage(packet);
+      }
 
       return {
         messageId: messageId.toString(),

@@ -25,7 +25,7 @@ export class MessageRoutingService {
     currentPeerId: PeerId,
     availablePeers: Peer[]
   ): RoutingDecision {
-    // Don't relay if TTL is expired
+    // 1. Don't relay if TTL is 0 or less
     if (packet.ttl <= 0) {
       return {
         shouldRelay: false,
@@ -34,7 +34,7 @@ export class MessageRoutingService {
       };
     }
 
-    // Don't relay if we're the sender
+    // 2. Don't relay if we're the sender
     if (packet.senderId.equals(currentPeerId)) {
       return {
         shouldRelay: false,
@@ -43,9 +43,12 @@ export class MessageRoutingService {
       };
     }
 
-    // Filter available peers (exclude sender and disconnected peers)
-    const eligiblePeers = availablePeers.filter(peer => 
-      !peer.id.equals(packet.senderId) && 
+    // 3. Filter available peers (exclude sender and disconnected peers)
+    // In a gossip protocol, we flood to all connected peers except the one who sent it to us
+    // Note: We don't have the "previous hop" ID here, so we exclude the original sender for now.
+    // In a real implementation, the transport layer would provide the peer ID of the incoming connection.
+    const eligiblePeers = availablePeers.filter(peer =>
+      !peer.id.equals(packet.senderId) &&
       !peer.id.equals(currentPeerId) &&
       peer.status === PeerStatus.ONLINE
     );
@@ -58,41 +61,39 @@ export class MessageRoutingService {
       };
     }
 
-    // Select peers based on zone and signal strength
-    const targetPeers = this.selectBestPeers(packet, eligiblePeers);
+    // 4. For private messages, if we see the recipient in our direct peers, 
+    // we could potentially optimize, but for gossip we still flood to ensure delivery
+    // in case the direct connection is unstable.
 
     return {
       shouldRelay: true,
-      targetPeers: targetPeers.map(p => p.id),
-      reason: `Relaying to ${targetPeers.length} peers`,
+      targetPeers: eligiblePeers.map(p => p.id),
+      reason: `Gossip: Flooding to ${eligiblePeers.length} peers`,
     };
-  }
-
-  /**
-   * Select best peers for relaying based on zone and signal strength
-   */
-  private selectBestPeers(packet: Packet, peers: Peer[]): Peer[] {
-    // Note: Zone-based routing could be added when zone info is in packet
-    // For now, sort by connection strength and take top 3
-    return peers
-      .sort((a, b) => (b.connectionStrength || 0) - (a.connectionStrength || 0))
-      .slice(0, 3);
   }
 
   /**
    * Check if a packet should be processed locally
    */
-  shouldProcessLocally(packet: Packet, currentPeerId: PeerId, recipientId?: PeerId): boolean {
+  shouldProcessLocally(packet: Packet, currentPeerId: PeerId): boolean {
     // Process if we're the recipient
-    if (recipientId && packet.recipientId?.equals(recipientId)) {
+    if (packet.recipientId && packet.recipientId.equals(currentPeerId)) {
       return true;
     }
 
-    // Process broadcast messages
-    if (!packet.recipientId) {
+    // Process broadcast messages (special broadcast ID or no recipient)
+    if (!packet.recipientId || this.isBroadcastId(packet.recipientId)) {
       return true;
     }
 
     return false;
+  }
+
+  /**
+   * Check if a PeerId is the special broadcast ID (all 1s in truncated form)
+   */
+  private isBroadcastId(peerId: PeerId): boolean {
+    // For anonmesh, we defined 0xFFFFFFFFFFFFFFFF as broadcast in the plan
+    return peerId.toString().toLowerCase().startsWith('ffffffffffffffff');
   }
 }
