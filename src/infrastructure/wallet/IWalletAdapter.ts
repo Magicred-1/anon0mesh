@@ -41,9 +41,9 @@ export interface SignedMessage {
 export interface IWalletAdapter {
     /**
      * Initialize the wallet
-     * @param keypair Optional keypair for local mode
+     * @param pin Optional PIN for encryption (local mode)
      */
-    initialize(keypair?: any): Promise<void>;
+    initialize(pin?: string): Promise<void>;
 
     /**
      * Check if wallet is initialized

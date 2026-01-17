@@ -9,10 +9,6 @@
 // Crypto randomness - MUST BE FIRST
 import 'react-native-get-random-values';
 
-// Crypto polyfill for noise-c.wasm
-import { install } from 'react-native-quick-crypto';
-install();
-
 // Text encoding/decoding
 import 'fast-text-encoding';
 
@@ -20,9 +16,6 @@ import 'fast-text-encoding';
 import { Buffer } from 'buffer';
 global.Buffer = Buffer;
 
-// Polyfill crypto global for packages that expect it
-import QuickCrypto from 'react-native-quick-crypto';
-(global as any).crypto = QuickCrypto;
 
 // MessageChannel polyfill for nostr-tools
 // React Native doesn't have MessageChannel, so we provide a simple implementation
@@ -68,14 +61,6 @@ if (typeof global.MessageChannel === 'undefined') {
   }
 
   (global as any).MessageChannel = MessageChannel;
-}
-
-// Browser-like environment polyfills
-if (typeof global.window === 'undefined') {
-  (global as any).window = global;
-}
-if (typeof global.location === 'undefined') {
-  (global as any).location = { href: '', protocol: 'https:', host: 'localhost', hostname: 'localhost', port: '', pathname: '/', search: '', hash: '' };
 }
 
 console.log('✅ Solana polyfills loaded');

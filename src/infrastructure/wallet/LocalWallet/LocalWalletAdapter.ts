@@ -60,10 +60,10 @@ async function deriveKey(pin: string, salt: Uint8Array): Promise<Uint8Array> {
   // Simple but secure PBKDF2 implementation using expo-crypto
   const iterations = 10000; // Reduced for mobile performance
   const pinBytes = new TextEncoder().encode(pin);
-  
+
   // Combine pin and salt
   let hash = new Uint8Array([...pinBytes, ...salt]);
-  
+
   // Iterative hashing (PBKDF2-like)
   for (let i = 0; i < iterations; i++) {
     const hashHex = await Crypto.digestStringAsync(
@@ -128,11 +128,11 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
     try {
       console.log(`[LocalWallet] Requesting ${amount} SOL airdrop...`);
-      
+
       // Try the airdrop with retry logic
       let retries = 3;
       let lastError: Error | null = null;
-      
+
       for (let i = 0; i < retries; i++) {
         try {
           const signature = await connection.requestAirdrop(
@@ -142,7 +142,7 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
           console.log('[LocalWallet] Airdrop signature:', signature);
           console.log('[LocalWallet] Confirming airdrop...');
-          
+
           // Wait for confirmation with timeout
           const latestBlockhash = await connection.getLatestBlockhash();
           await connection.confirmTransaction({
@@ -150,33 +150,33 @@ export class LocalWalletAdapter implements IWalletAdapter {
             blockhash: latestBlockhash.blockhash,
             lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
           }, 'confirmed');
-          
+
           console.log('[LocalWallet] Airdrop confirmed:', signature);
           return; // Success!
         } catch (err) {
           lastError = err instanceof Error ? err : new Error('Unknown error');
           const errMsg = lastError.message;
-          
+
           console.log(`[LocalWallet] Airdrop attempt ${i + 1} failed:`, errMsg);
-          
+
           // Don't retry on rate limits or daily limits
           if (errMsg.includes('429') || errMsg.includes('airdrop limit') || errMsg.includes('run dry')) {
             throw lastError;
           }
-          
+
           if (i < retries - 1) {
             // Wait before retry (exponential backoff)
             await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
           }
         }
       }
-      
+
       // All retries failed
       throw lastError || new Error('Airdrop failed after retries');
     } catch (error) {
       console.error('[LocalWallet] Airdrop failed:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      
+
       // Provide more helpful error messages
       if (errorMsg.includes('429') || errorMsg.includes('airdrop limit') || errorMsg.includes('run dry')) {
         throw new Error('Daily airdrop limit reached. Please use the web faucet at https://faucet.solana.com');
@@ -195,21 +195,22 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   /* ================= Core ================= */
 
-  async initialize(pin: string): Promise<void> {
+  async initialize(pin?: string): Promise<void> {
     if (this.initialized) return;
 
+    const activePin = pin || '0000'; // Default PIN for now
     const stored = await SecureStore.getItemAsync(STORAGE_KEY);
 
     if (stored) {
       // Load existing wallet - no biometric required for normal use
       const payload = JSON.parse(stored) as EncryptedKeyPayload;
-      const secretKey = await decryptSecretKey(payload, pin);
+      const secretKey = await decryptSecretKey(payload, activePin);
       this.keypair = Keypair.fromSecretKey(secretKey);
     } else {
       // Creating new wallet - require biometric for extra security
       await requireBiometric();
       this.keypair = Keypair.generate();
-      await this.saveToStorage(pin);
+      await this.saveToStorage(activePin);
     }
 
     this.initialized = true;
@@ -244,8 +245,8 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   async connect(pin?: string): Promise<void> {
     if (!this.initialized) {
-      if (!pin) throw new Error('PIN required for local wallet initialization');
-      await this.initialize(pin);
+      const activePin = pin || '0000';
+      await this.initialize(activePin);
     }
   }
 
@@ -258,24 +259,24 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   async exportSecretKey(pin?: string): Promise<Uint8Array> {
     if (!this.keypair) throw new Error('Wallet not initialized');
-    
+
+    const activePin = pin || '0000';
+
     // If wallet is already initialized and unlocked, return the secret key directly
     // This is safe because the wallet was already unlocked with PIN during initialization
     if (this.initialized && !pin) {
       return this.keypair.secretKey;
     }
-    
-    if (!pin) throw new Error('PIN required for local wallet');
-    
+
     // Verify PIN by attempting to decrypt stored key
     const stored = await SecureStore.getItemAsync(STORAGE_KEY);
     if (!stored) throw new Error('No stored wallet found');
-    
+
     await requireBiometric();
-    
+
     const payload = JSON.parse(stored) as EncryptedKeyPayload;
-    await decryptSecretKey(payload, pin); // Validates PIN
-    
+    await decryptSecretKey(payload, activePin); // Validates PIN
+
     return this.keypair.secretKey;
   }
 

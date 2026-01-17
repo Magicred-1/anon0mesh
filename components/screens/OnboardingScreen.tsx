@@ -25,21 +25,21 @@ interface Props {
 // Generate random nickname
 const generateRandomNickname = (): string => {
     const adjectives = [
-        'Anonymous', 'Phantom', 'Shadow', 'Cyber', 'Digital', 'Virtual', 
+        'Anonymous', 'Phantom', 'Shadow', 'Cyber', 'Digital', 'Virtual',
         'Silent', 'Stealth', 'Mystic', 'Hidden', 'Encrypted', 'Secure',
         'Ghost', 'Ninja', 'Elite', 'Alpha', 'Beta', 'Quantum', 'Matrix', 'Node'
     ];
-    
+
     const nouns = [
         'Mesh', 'Node', 'Peer', 'Link', 'Chain', 'Bridge', 'Hub', 'Socket',
         'Relay', 'Router', 'Gateway', 'Beacon', 'Signal', 'Network', 'Protocol',
         'Cipher', 'Key', 'Token', 'Block', 'Hash', 'Sync', 'Stream'
     ];
-    
+
     const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
     const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
     const randomNumber = Math.floor(Math.random() * 999) + 1;
-    
+
     return `${randomAdjective}${randomNoun}${randomNumber}`;
 };
 
@@ -48,10 +48,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
     const [nickname, setNickname] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
     const [isSeeker, setIsSeeker] = useState<boolean>(false);
-    
+
     // Hooks
     const router = useRouter();
-    
+
     // Animation refs
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(50)).current;
@@ -59,7 +59,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
     const loadingScale = useRef(new Animated.Value(1)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const loadingDotAnim = useRef(new Animated.Value(0)).current;
-    
+
     // Loading overlay animation states
     const loadingOverlayOpacity = useRef(new Animated.Value(0)).current;
     const enteringTextOpacity = useRef(new Animated.Value(0)).current;
@@ -127,7 +127,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
         try {
             const wallet = new MWAWalletAdapter();
             await wallet.initialize();
-            
+
             // Connect to wallet
             await wallet.connect();
 
@@ -179,7 +179,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
         try {
             // Create local wallet (generates new keypair)
             const wallet = new LocalWalletAdapter();
-            await wallet.initialize();
+            await wallet.initialize('0000');
 
             const publicKey = wallet.getPublicKey();
             if (!publicKey) {
@@ -351,7 +351,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
             <View style={styles.glowTop} />
             <View style={styles.glowBottom} />
 
-            <Animated.View 
+            <Animated.View
                 style={[
                     styles.inner,
                     {
@@ -366,11 +366,11 @@ export default function OnboardingScreen({ onComplete }: Props) {
                         source={require('../../assets/images/anon0mesh_logo.png')}
                         style={{ width: 422, height: 100, resizeMode: 'contain' }}
                     />
-                    
+
                     <Text style={styles.tagline}>
                         [ DECENTRALIZED P2P MESSAGING ]
                     </Text>
-                    
+
                     {/* Show generated nickname */}
                     {nickname && !loading && (
                         <Text style={styles.generatedNickname}>
@@ -427,95 +427,95 @@ export default function OnboardingScreen({ onComplete }: Props) {
                             locations={[0, 0.5, 1]}
                             style={styles.loadingOverlay}
                         >
-                        {/* Entering Text */}
-                        <Animated.Text 
-                            style={[
-                                styles.enteringText,
-                                { opacity: enteringTextOpacity }
-                            ]}
-                        >
-                            ENTERING...
-                        </Animated.Text>
+                            {/* Entering Text */}
+                            <Animated.Text
+                                style={[
+                                    styles.enteringText,
+                                    { opacity: enteringTextOpacity }
+                                ]}
+                            >
+                                ENTERING...
+                            </Animated.Text>
 
-                        {/* Logo Section */}
-                        <View style={styles.loadingLogoContainer}>
-                            <Animated.Text 
-                                style={[
-                                    styles.logoText,
-                                    { opacity: logoFadeIn }
-                                ]}
-                            >
-                                ANON<Text style={styles.logoAccent}>⬡</Text>MESH
-                            </Animated.Text>
-                            
-                            <Animated.Text 
-                                style={[
-                                    styles.loadingStatus,
-                                    { opacity: statusFadeIn }
-                                ]}
-                            >
-                                [ {isSeeker ? 'WALLET_CONNECTED' : 'WALLET_CREATED'} ]
-                            </Animated.Text>
-                            
-                            {nickname && (
-                                <Animated.Text 
+                            {/* Logo Section */}
+                            <View style={styles.loadingLogoContainer}>
+                                <Animated.Text
                                     style={[
-                                        styles.loadingNickname,
-                                        { opacity: nicknameFadeIn }
+                                        styles.logoText,
+                                        { opacity: logoFadeIn }
                                     ]}
                                 >
-                                    {"( "}@{nickname}{" )"}
+                                    ANON<Text style={styles.logoAccent}>⬡</Text>MESH
                                 </Animated.Text>
-                            )}
-                        </View>
 
-                        {/* Loading Animation */}
-                        <Animated.View 
-                            style={[
-                                styles.loadingButtonContainer,
-                                { opacity: buttonFadeIn }
-                            ]}
-                        >
-                            <View style={styles.loadingButton}>
-                                <LinearGradient
-                                    colors={['rgba(0, 212, 212, 0.15)', 'rgba(0, 212, 212, 0.08)']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.loadingButtonGradient}
+                                <Animated.Text
+                                    style={[
+                                        styles.loadingStatus,
+                                        { opacity: statusFadeIn }
+                                    ]}
                                 >
-                                    <Text style={styles.loadingButtonText}>
-                                        LOADING...
-                                    </Text>
-                                </LinearGradient>
-                            </View>
-                            
-                            <Text style={styles.loadingDetails}>
-                                {isSeeker 
-                                    ? 'CONNECTING TO MOBILE WALLET' 
-                                    : 'GENERATING SECURE KEYPAIR'}
-                            </Text>
-                        </Animated.View>
+                                    [ {isSeeker ? 'WALLET_CONNECTED' : 'WALLET_CREATED'} ]
+                                </Animated.Text>
 
-                        {/* Animated Solana Logo (subtle, bottom) */}
-                        <Animated.View 
-                            style={[
-                                styles.loadingSolanaContainer,
-                                {
-                                    opacity: buttonFadeIn, // Fade in with button
-                                    transform: [
-                                        {
-                                            rotate: loadingRotation.interpolate({
-                                                inputRange: [0, 1],
-                                                outputRange: ['0deg', '360deg'],
-                                            }),
-                                        },
-                                        { scale: loadingScale },
-                                    ],
-                                },
-                            ]}
-                        >
-                            <SolanaLogo size={60} />
-                        </Animated.View>
+                                {nickname && (
+                                    <Animated.Text
+                                        style={[
+                                            styles.loadingNickname,
+                                            { opacity: nicknameFadeIn }
+                                        ]}
+                                    >
+                                        {"( "}@{nickname}{" )"}
+                                    </Animated.Text>
+                                )}
+                            </View>
+
+                            {/* Loading Animation */}
+                            <Animated.View
+                                style={[
+                                    styles.loadingButtonContainer,
+                                    { opacity: buttonFadeIn }
+                                ]}
+                            >
+                                <View style={styles.loadingButton}>
+                                    <LinearGradient
+                                        colors={['rgba(0, 212, 212, 0.15)', 'rgba(0, 212, 212, 0.08)']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.loadingButtonGradient}
+                                    >
+                                        <Text style={styles.loadingButtonText}>
+                                            LOADING...
+                                        </Text>
+                                    </LinearGradient>
+                                </View>
+
+                                <Text style={styles.loadingDetails}>
+                                    {isSeeker
+                                        ? 'CONNECTING TO MOBILE WALLET'
+                                        : 'GENERATING SECURE KEYPAIR'}
+                                </Text>
+                            </Animated.View>
+
+                            {/* Animated Solana Logo (subtle, bottom) */}
+                            <Animated.View
+                                style={[
+                                    styles.loadingSolanaContainer,
+                                    {
+                                        opacity: buttonFadeIn, // Fade in with button
+                                        transform: [
+                                            {
+                                                rotate: loadingRotation.interpolate({
+                                                    inputRange: [0, 1],
+                                                    outputRange: ['0deg', '360deg'],
+                                                }),
+                                            },
+                                            { scale: loadingScale },
+                                        ],
+                                    },
+                                ]}
+                            >
+                                <SolanaLogo size={60} />
+                            </Animated.View>
                         </LinearGradient>
                     </Animated.View>
                 </View>

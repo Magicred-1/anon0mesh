@@ -21,4 +21,10 @@ config.transformer = {
     babelTransformerPath: require.resolve('react-native-svg-transformer'),
 };
 
+// Map Node modules to React Native compatible ones
+config.resolver.extraNodeModules = {
+    ...config.resolver.extraNodeModules,
+    buffer: require.resolve('buffer'),
+};
+
 module.exports = withNativeWind(config, { input: './global.css' });

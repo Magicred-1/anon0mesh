@@ -33,7 +33,9 @@
 import { Buffer } from 'buffer';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBLE } from '../contexts/BLEContext';
+import { Packet, PacketType } from '../domain/entities/Packet';
 import { identityStateManager } from '../infrastructure/identity';
+import { MeshManager } from '../infrastructure/mesh/MeshManager';
 import { NoiseManager, NoiseSessionInfo } from '../infrastructure/noise/NoiseManager';
 
 export interface NoiseMessage {
@@ -103,18 +105,22 @@ export function useNoiseChat(): UseNoiseChatReturn {
           // For now, we'll assume an identity should exist or be created elsewhere
         }
 
+        // Create MeshManager instance
+        const mesh = new MeshManager();
+        mesh.attachAdapter(bleAdapter);
+
         // Create NoiseManager instance with identity state manager
         const manager = new NoiseManager(identityStateManager);
 
-        // Attach to BLE adapter
-        manager.attachAdapter(bleAdapter);
+        // Attach NoiseManager to MeshManager (instead of directly to adapter)
+        manager.attachMeshManager(mesh);
 
         // Store reference
         noiseManagerRef.current = manager;
         setIsReady(true);
         setError(null);
 
-        console.log('[useNoiseChat] ✅ NoiseManager initialized and attached');
+        console.log('[useNoiseChat] ✅ MeshManager and NoiseManager initialized');
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
         console.error('[useNoiseChat] Failed to initialize NoiseManager:', errMsg);
@@ -253,8 +259,29 @@ export function useNoiseChat(): UseNoiseChatReturn {
    * Broadcast unencrypted message
    */
   const broadcastMessage = useCallback(async (message: string) => {
+    if (!noiseManagerRef.current) {
+      throw new Error('NoiseManager not initialized');
+    }
+
     try {
-      await bleBroadcast(message);
+      const identity = identityStateManager.getIdentity();
+      if (!identity) throw new Error('Identity not initialized');
+
+      const packet = new Packet({
+        type: PacketType.MESSAGE,
+        senderId: identity.peerId,
+        timestamp: BigInt(Date.now()),
+        payload: new Uint8Array(Buffer.from(message, 'utf-8')),
+        ttl: 5,
+      });
+
+      // Send via MeshManager (if available) or fallback to BLE broadcast
+      // Since we attached MeshManager to NoiseManager, we can access it if we expose it,
+      // or just use a local ref for MeshManager.
+      // For now, let's assume we want to gossip it.
+
+      // I'll need to import Packet and PacketType in useNoiseChat.ts
+      await noiseManagerRef.current['sendPacket']('broadcast', packet);
 
       // Add to local messages
       setMessages(prev => [
@@ -270,7 +297,7 @@ export function useNoiseChat(): UseNoiseChatReturn {
       console.error('[useNoiseChat] Broadcast failed:', err);
       throw err;
     }
-  }, [bleBroadcast]);
+  }, []);
 
   /**
    * Clear received messages

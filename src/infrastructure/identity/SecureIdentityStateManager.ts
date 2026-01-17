@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer';
+import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
-import crypto from 'react-native-quick-crypto';
+import nacl from 'tweetnacl';
 import { Identity } from '../../domain/entities/Identity';
 import { IdentityManager } from '../crypto/IdentityManager';
 
@@ -9,7 +10,7 @@ const MASTER_KEY_STORAGE_KEY = 'anon0mesh_master_key';
 
 export class SecureIdentityStateManager {
     private currentIdentity: Identity | null = null;
-    private masterKey: Buffer | null = null;
+    private masterKey: Uint8Array | null = null;
 
     /**
      * Initialize the state manager
@@ -78,53 +79,52 @@ export class SecureIdentityStateManager {
     }
 
     // ============================================
-    // Encryption Helpers (AES-256-GCM)
+    // Encryption Helpers (NaCl Secretbox)
     // ============================================
 
     private async ensureMasterKey(): Promise<void> {
         let keyHex = await SecureStore.getItemAsync(MASTER_KEY_STORAGE_KEY);
         if (!keyHex) {
             console.log('[SecureIdentityStateManager] Generating new master key...');
-            const newKey = crypto.randomBytes(32);
-            keyHex = newKey.toString('hex');
+            const newKey = Crypto.getRandomBytes(32);
+            keyHex = Buffer.from(newKey).toString('hex');
             await SecureStore.setItemAsync(MASTER_KEY_STORAGE_KEY, keyHex);
             console.log('[SecureIdentityStateManager] New master key stored');
         }
-        this.masterKey = Buffer.from(keyHex, 'hex') as any; // Cast to avoid Buffer type mismatch in some environments
+        this.masterKey = new Uint8Array(Buffer.from(keyHex, 'hex'));
     }
 
     private encrypt(plaintext: string): string {
         if (!this.masterKey) throw new Error('Master key not initialized');
 
-        const iv = crypto.randomBytes(12); // GCM standard IV size
-        const cipher = crypto.createCipheriv('aes-256-gcm', this.masterKey, iv);
+        const iv = Crypto.getRandomBytes(24); // NaCl secretbox nonce size is 24 bytes
+        const messageBytes = Buffer.from(plaintext, 'utf8');
+        const encrypted = nacl.secretbox(messageBytes, iv, this.masterKey);
 
-        let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-        encrypted += cipher.final('hex');
-
-        const authTag = cipher.getAuthTag().toString('hex');
-
-        // Format: iv:authTag:encrypted
-        return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+        // Format: iv:encrypted
+        return `${Buffer.from(iv).toString('hex')}:${Buffer.from(encrypted).toString('hex')}`;
     }
 
     private decrypt(encryptedData: string): string {
         if (!this.masterKey) throw new Error('Master key not initialized');
 
-        const [ivHex, authTagHex, encryptedHex] = encryptedData.split(':');
-        if (!ivHex || !authTagHex || !encryptedHex) {
+        const parts = encryptedData.split(':');
+        // Handle both old format (iv:authTag:encrypted) and new format (iv:encrypted)
+        // We'll just try to decrypt with the first part as IV and the rest as ciphertext
+        // if it's the new format. If it's the old format, it will fail decryption.
+
+        if (parts.length < 2) {
             throw new Error('Invalid encrypted data format');
         }
 
-        const iv = Buffer.from(ivHex, 'hex') as any;
-        const authTag = Buffer.from(authTagHex, 'hex') as any;
-        const decipher = crypto.createDecipheriv('aes-256-gcm', this.masterKey, iv);
+        const iv = Buffer.from(parts[0], 'hex');
+        const encrypted = Buffer.from(parts[parts.length - 1], 'hex');
 
-        decipher.setAuthTag(authTag);
+        const decrypted = nacl.secretbox.open(encrypted, iv, this.masterKey);
+        if (!decrypted) {
+            throw new Error('Decryption failed - possibly invalid master key or legacy format');
+        }
 
-        let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-
-        return decrypted;
+        return Buffer.from(decrypted).toString('utf8');
     }
 }

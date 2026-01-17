@@ -65,6 +65,7 @@ export class NostrChatPresenter {
   private subscriptionId: string | null = null;
 
   constructor(
+    walletAdapter: any, // IWalletAdapter
     relayUrls: string[] = [
       'wss://relay.damus.io',
       'wss://relay.nostr.band',
@@ -79,7 +80,7 @@ export class NostrChatPresenter {
     this.subscribeUseCase = new SubscribeToNostrMessagesUseCase(this.repository);
 
     // Auto-initialize
-    this.initialize(relayUrls);
+    this.initialize(relayUrls, walletAdapter);
   }
 
   /**
@@ -106,7 +107,7 @@ export class NostrChatPresenter {
   /**
    * Initialize connection
    */
-  private async initialize(relayUrls: string[]): Promise<void> {
+  private async initialize(relayUrls: string[], walletAdapter: any): Promise<void> {
     try {
       this.updateState({
         connecting: true,
@@ -115,7 +116,7 @@ export class NostrChatPresenter {
       });
 
       // Initialize repository
-      await this.repository.initialize(relayUrls);
+      await this.repository.initialize(relayUrls, walletAdapter);
 
       // Get identity info
       const myNostrPubkey = this.repository.getMyPubkey();

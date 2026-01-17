@@ -9,6 +9,7 @@ import { useBLE } from '@/src/contexts/BLEContext';
 import { useWallet } from '@/src/contexts/WalletContext';
 import { useNoiseChat } from '@/src/hooks/useNoiseChat';
 import { useNostrChat } from '@/src/hooks/useNostrChat';
+import { checkInternetConnectivity } from '@/src/infrastructure/wallet/utils/connectivity';
 import '@/src/polyfills';
 import { parseCommand, SendCommandResult } from '@/src/utils/chatCommands';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -66,6 +67,7 @@ export default function ChatScreen() {
   // BLE and Noise integration
   const {
     bleAdapter,
+    isInitialized,
     initialize: initBLE,
     startScanning,
     startAdvertising,
@@ -154,21 +156,34 @@ export default function ChatScreen() {
     setPeers(mappedPeers);
   }, [discoveredDevices, connectedDeviceIds]);
 
-  // Initialize BLE when permissions granted
+  // 1. Initialize BLE when permissions granted
   useEffect(() => {
-    if (permissionsGranted) {
+    if (permissionsGranted && !isInitialized) {
       (async () => {
         try {
           console.log('[Chat] Permissions granted, initializing BLE...');
           await initBLE();
-          await startAdvertising();
-          await startScanning();
         } catch (err) {
           console.error('[Chat] BLE Init error:', err);
         }
       })();
     }
-  }, [permissionsGranted]);
+  }, [permissionsGranted, isInitialized, initBLE]);
+
+  // 2. Start services once BLE is initialized
+  useEffect(() => {
+    if (isInitialized) {
+      (async () => {
+        try {
+          console.log('[Chat] BLE initialized, starting services...');
+          await startAdvertising();
+          await startScanning();
+        } catch (err) {
+          console.error('[Chat] BLE Service startup error:', err);
+        }
+      })();
+    }
+  }, [isInitialized, startAdvertising, startScanning]);
 
   // Monitor BLE connection
   useEffect(() => {
@@ -177,6 +192,52 @@ export default function ChatScreen() {
     }, 3000);
     return () => clearInterval(interval);
   }, [peers]);
+
+  // --- Automatic Peer Connection Logic ---
+  const connectingRef = useRef<Set<string>>(new Set());
+  const handshakingRef = useRef<Set<string>>(new Set());
+
+  // 3. Auto-connect to discovered devices
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    discoveredDevices.forEach(async (device) => {
+      if (!connectedDeviceIds.includes(device.id) && !connectingRef.current.has(device.id)) {
+        try {
+          connectingRef.current.add(device.id);
+          console.log('[Chat] Auto-connecting to:', device.name || device.id);
+          await connectToDevice(device.id);
+        } catch (err) {
+          console.error('[Chat] Auto-connect failed:', device.id, err);
+        } finally {
+          // Keep in set for a while to avoid immediate retry
+          setTimeout(() => connectingRef.current.delete(device.id), 10000);
+        }
+      }
+    });
+  }, [discoveredDevices, connectedDeviceIds, isInitialized, connectToDevice]);
+
+  // 4. Auto-handshake with connected devices
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    connectedDeviceIds.forEach(async (deviceId) => {
+      const session = sessions.get(deviceId);
+      if (!session && !handshakingRef.current.has(deviceId)) {
+        try {
+          handshakingRef.current.add(deviceId);
+          console.log('[Chat] Auto-initiating handshake with:', deviceId);
+          await initiateHandshake(deviceId);
+        } catch (err) {
+          console.error('[Chat] Auto-handshake failed:', deviceId, err);
+        } finally {
+          // Keep in set for a while to avoid immediate retry
+          setTimeout(() => handshakingRef.current.delete(deviceId), 10000);
+        }
+      }
+    });
+  }, [connectedDeviceIds, sessions, isInitialized, initiateHandshake]);
+  // ----------------------------------------
 
   // Send message
   const handleSend = async () => {
@@ -207,6 +268,10 @@ export default function ChatScreen() {
     Keyboard.dismiss();
 
     try {
+      // Check internet connectivity
+      const isOnline = await checkInternetConnectivity();
+      console.log('[Chat] Connectivity check:', isOnline ? 'Online' : 'Offline');
+
       // Prioritize BLE if a session exists for the selected peer
       const bleSession = selectedPeer ? sessions.get(selectedPeer) : null;
 
@@ -216,13 +281,22 @@ export default function ChatScreen() {
       } else if (!selectedPeer && bleConnected) {
         console.log('[Chat] Broadcasting via BLE:', messageContent);
         await broadcastBLE(messageContent);
-        // Also send via Nostr if connected for redundancy
-        if (nostrConnected) {
+        // Also send via Nostr if connected and online for redundancy
+        if (nostrConnected && isOnline) {
           await sendNostrMessage(messageContent);
+        } else if (nostrConnected && !isOnline) {
+          console.log('[Chat] Skipping Nostr broadcast (Offline)');
         }
-      } else if (nostrConnected) {
+      } else if (nostrConnected && isOnline) {
         console.log('[Chat] Sending via Nostr:', messageContent);
         await sendNostrMessage(messageContent, selectedPeer || undefined);
+      } else if (nostrConnected && !isOnline) {
+        console.log('[Chat] Cannot send via Nostr (Offline)');
+        if (!selectedPeer) {
+          Alert.alert('Offline', 'No internet connection. Messages will only be sent via BLE mesh.');
+        } else {
+          Alert.alert('Offline', 'No internet connection and no secure BLE session with this peer.');
+        }
       } else if (selectedPeer) {
         // If peer selected but no session, try to initiate handshake
         console.log('[Chat] Initiating BLE handshake with:', selectedPeer);
