@@ -6,12 +6,12 @@
  * Reference: https://github.com/nazar-pc/noise-c.wasm
  */
 
-import { PeerId } from '@/src/domain';
 import { Buffer } from 'buffer';
 // @ts-ignore - noise-c.wasm has no TypeScript declarations
 import Noise from 'noise-c.wasm';
 import { Packet, PacketType } from '../../domain/entities/Packet';
 import { IBLEAdapter } from '../ble/IBLEAdapter';
+import { SecureIdentityStateManager } from '../identity/SecureIdentityStateManager';
 
 /**
  * NoiseManager
@@ -22,7 +22,7 @@ export class NoiseManager {
     private adapter: IBLEAdapter | null = null;
     private sessions: Map<string, { session: NoiseSession; initiator: boolean }> = new Map();
 
-    // No explicit constructor needed; fields are initialized inline
+    constructor(private readonly identityStateManager: SecureIdentityStateManager) { }
 
     attachAdapter(adapter: IBLEAdapter) {
         this.adapter = adapter;
@@ -50,16 +50,19 @@ export class NoiseManager {
     /**
      * Initiate handshake to a remote device (as initiator)
      */
-    async initiateHandshakeTo(deviceId: string, staticKeyPair: KeyPair): Promise<void> {
+    async initiateHandshakeTo(deviceId: string): Promise<void> {
         if (!this.adapter) throw new Error('Adapter not attached');
 
-        const session = this.getOrCreateSession(deviceId, staticKeyPair, true);
+        const identity = this.identityStateManager.getIdentity();
+        if (!identity) throw new Error('Identity not initialized');
+
+        const session = this.getOrCreateSession(deviceId, identity.noiseStaticKeyPair, true);
         await session.initialize();
         const msg = await session.initiateHandshake();
 
         const packet = new Packet({
             type: PacketType.NOISE_HANDSHAKE_INIT,
-            senderId: PeerId.fromString('local'),
+            senderId: identity.peerId,
             timestamp: BigInt(Date.now()),
             payload: new Uint8Array(msg),
             ttl: 5,
@@ -85,10 +88,13 @@ export class NoiseManager {
         const { session } = entry;
         if (!session.isHandshakeComplete()) throw new Error('Handshake not complete');
 
+        const identity = this.identityStateManager.getIdentity();
+        if (!identity) throw new Error('Identity not initialized');
+
         const ct = await session.encryptMessage(Buffer.from(plaintext));
         const packet = new Packet({
             type: PacketType.MESSAGE,
-            senderId: PeerId.fromString('local'),
+            senderId: identity.peerId,
             timestamp: BigInt(Date.now()),
             payload: new Uint8Array(ct),
             ttl: 5,
@@ -112,13 +118,13 @@ export class NoiseManager {
                 // Ensure a session exists (responder side)
                 let entry = this.sessions.get(senderDeviceId);
                 if (!entry) {
-                    // Create a responder session with a generated keypair placeholder
-                    // TODO: Replace with actual device keypair provisioning
-                    const kp: KeyPair = {
-                        publicKey: new Uint8Array(32),
-                        privateKey: new Uint8Array(32),
-                    };
-                    const session = new NoiseSession(kp, false);
+                    const identity = this.identityStateManager.getIdentity();
+                    if (!identity) {
+                        console.error('[NOISE] Identity not initialized, cannot respond to handshake');
+                        return;
+                    }
+
+                    const session = new NoiseSession(identity.noiseStaticKeyPair, false);
                     await session.initialize();
                     entry = { session, initiator: false };
                     this.sessions.set(senderDeviceId, entry);
@@ -126,10 +132,11 @@ export class NoiseManager {
 
                 const response = await entry.session.processHandshakeMessage(Buffer.from(packet.payload));
                 if (response) {
+                    const identity = this.identityStateManager.getIdentity();
                     // Send response back
                     const respPacket = new Packet({
                         type: PacketType.NOISE_HANDSHAKE_RESPONSE,
-                        senderId: PeerId.fromString('local'),
+                        senderId: identity!.peerId,
                         timestamp: BigInt(Date.now()),
                         payload: new Uint8Array(response),
                         ttl: 5,
@@ -195,22 +202,22 @@ export class NoiseSession {
     private noiseState: any; // noise-c.wasm state object
     private isInitiator: boolean;
     private remoteStaticKey?: Uint8Array;
-    
+
     constructor(private staticKeyPair: KeyPair, isInitiator: boolean = false) {
         this.isInitiator = isInitiator;
     }
-    
+
     // ========================================================================
     // INITIALIZATION
     // ========================================================================
-    
+
     /**
      * Initialize the Noise session
      * Must be called before any other operations
      */
     async initialize(): Promise<void> {
         await ensureNoiseReady();
-        
+
         // Create Noise state for XX pattern
         // Pattern: Noise_XX_25519_ChaChaPoly_SHA256
         this.noiseState = Noise.State(
@@ -219,14 +226,14 @@ export class NoiseSession {
             this.staticKeyPair.privateKey,
             null // No pre-shared key
         );
-        
+
         console.log('[NOISE] Initialized session as', this.isInitiator ? 'initiator' : 'responder');
     }
-    
+
     // ========================================================================
     // HANDSHAKE
     // ========================================================================
-    
+
     /**
      * Start handshake (for initiator)
      * Returns the first handshake message
@@ -235,63 +242,63 @@ export class NoiseSession {
         if (!this.isInitiator) {
             throw new Error('Only initiator can initiate handshake');
         }
-        
+
         if (this.state !== NoiseState.INIT) {
             throw new Error('Handshake already initiated');
         }
-        
+
         await ensureNoiseReady();
-        
+
         // Write first message (-> e)
         const message = this.noiseState.write_message(Buffer.alloc(0));
-        
+
         this.state = NoiseState.HANDSHAKE_IN_PROGRESS;
         console.log('[NOISE] Sent handshake message 1 (-> e)');
-        
+
         return Buffer.from(message);
     }
-    
+
     /**
      * Process a received handshake message
      * Returns a response message if needed, or null if handshake is complete
      */
     async processHandshakeMessage(message: Buffer): Promise<Buffer | null> {
         await ensureNoiseReady();
-        
+
         if (this.state === NoiseState.TRANSPORT) {
             throw new Error('Handshake already complete');
         }
-        
+
         // Read the incoming message
         this.noiseState.read_message(message);
-        
+
         // Check if handshake is complete
         if (this.noiseState.handshake_done) {
             // Extract remote static key
             this.remoteStaticKey = this.noiseState.get_remote_public_key();
-            
+
             this.state = NoiseState.TRANSPORT;
             console.log('[NOISE] Handshake complete!');
-            console.log('[NOISE] Remote public key:', 
+            console.log('[NOISE] Remote public key:',
                 Buffer.from(this.remoteStaticKey!).toString('hex').slice(0, 16) + '...'
             );
-            
+
             return null; // No more messages needed
         }
-        
+
         // Handshake not complete, send response
         this.state = NoiseState.HANDSHAKE_IN_PROGRESS;
         const response = this.noiseState.write_message(Buffer.alloc(0));
-        
+
         console.log('[NOISE] Sent handshake response');
-        
+
         return Buffer.from(response);
     }
-    
+
     // ========================================================================
     // TRANSPORT MODE
     // ========================================================================
-    
+
     /**
      * Encrypt a message (transport mode)
      */
@@ -299,13 +306,13 @@ export class NoiseSession {
         if (this.state !== NoiseState.TRANSPORT) {
             throw new Error('Not in transport mode');
         }
-        
+
         await ensureNoiseReady();
-        
+
         const ciphertext = this.noiseState.write_message(plaintext);
         return Buffer.from(ciphertext);
     }
-    
+
     /**
      * Decrypt a message (transport mode)
      */
@@ -313,9 +320,9 @@ export class NoiseSession {
         if (this.state !== NoiseState.TRANSPORT) {
             throw new Error('Not in transport mode');
         }
-        
+
         await ensureNoiseReady();
-        
+
         try {
             const plaintext = this.noiseState.read_message(ciphertext);
             return Buffer.from(plaintext);
@@ -323,27 +330,27 @@ export class NoiseSession {
             throw new Error('Decryption failed: ' + (error instanceof Error ? error.message : 'unknown error'));
         }
     }
-    
+
     // ========================================================================
     // PUBLIC API
     // ========================================================================
-    
+
     getState(): NoiseState {
         return this.state;
     }
-    
+
     getRemoteStaticKey(): Uint8Array | undefined {
         return this.remoteStaticKey;
     }
-    
+
     isHandshakeComplete(): boolean {
         return this.state === NoiseState.TRANSPORT;
     }
-    
+
     getStaticPublicKey(): Uint8Array {
         return this.staticKeyPair.publicKey;
     }
-    
+
     /**
      * Cleanup resources
      */
