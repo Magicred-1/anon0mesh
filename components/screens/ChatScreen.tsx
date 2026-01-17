@@ -5,8 +5,10 @@ import ChatMessages, { Message } from '@/components/chat/ChatMessages';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import EditNicknameModal from '@/components/modals/EditNicknameModal';
 import PaymentRequestModal from '@/components/modals/PaymentRequestModal';
+import { useBLE } from '@/src/contexts/BLEContext';
+import { useWallet } from '@/src/contexts/WalletContext';
+import { useNoiseChat } from '@/src/hooks/useNoiseChat';
 import { useNostrChat } from '@/src/hooks/useNostrChat';
-import { WalletFactory } from '@/src/infrastructure/wallet';
 import '@/src/polyfills';
 import { parseCommand, SendCommandResult } from '@/src/utils/chatCommands';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,6 +34,7 @@ interface Peer {
 
 export default function ChatScreen() {
   const router = useRouter();
+  const { wallet, publicKey: walletPublicKey, isConnected, connect, isLoading: isWalletLoading } = useWallet();
   const [nickname, setNickname] = useState<string>('');
   const [pubKey, setPubKey] = useState<string>('');
   const [editNickVisible, setEditNickVisible] = useState(false);
@@ -60,90 +63,112 @@ export default function ChatScreen() {
     lookbackHours: 24,
   });
 
-  // Local BLE messages state (for BLE-only messages)
-  const [bleMessages, setBleMessages] = useState<Message[]>([]);
+  // BLE and Noise integration
+  const {
+    bleAdapter,
+    initialize: initBLE,
+    startScanning,
+    startAdvertising,
+    discoveredDevices,
+    connectedDeviceIds,
+    connectToDevice,
+  } = useBLE();
+
+  const {
+    sendEncryptedMessage,
+    initiateHandshake,
+    sessions,
+    messages: noiseMessages,
+    broadcastMessage: broadcastBLE,
+    isReady: noiseReady,
+  } = useNoiseChat();
 
   // Combine Nostr and BLE messages
   const allMessages = React.useMemo(() => {
-    console.log('[ChatScreen] Computing allMessages - Nostr:', nostrMessages.length, 'BLE:', bleMessages.length);
+    // Convert Noise messages to UI format
+    const bleMessages: Message[] = noiseMessages.map((msg, idx) => ({
+      id: `ble-${msg.timestamp}-${idx}`,
+      from: msg.isMine ? nickname : (msg.deviceId.slice(0, 8)),
+      to: msg.to,
+      msg: msg.message,
+      ts: msg.timestamp,
+      isMine: msg.isMine,
+      isEncrypted: true,
+    }));
 
     // Mark Nostr messages
-    const markedNostrMessages = nostrMessages.map(msg => ({
+    const markedNostrMessages = (nostrMessages as any[]).map(msg => ({
       ...msg,
       isNostr: true,
       isEncrypted: true,
     }));
 
     // Combine and sort by timestamp
-    const combined = [...markedNostrMessages, ...bleMessages].sort((a, b) => a.ts - b.ts);
-    console.log('[ChatScreen] Total messages:', combined.length);
-    return combined;
-  }, [nostrMessages, bleMessages]);
+    return [...markedNostrMessages, ...bleMessages].sort((a, b) => a.ts - b.ts);
+  }, [nostrMessages, noiseMessages, nickname]);
 
   // Initialize wallet and user data
   useEffect(() => {
+    let mounted = true;
+
     (async () => {
       try {
-        // Try to create a wallet adapter (works for both local and MWA)
-        console.log('[ChatScreen] Attempting to create wallet adapter...');
-        const walletAdapter = await WalletFactory.createAuto();
-        console.log('[ChatScreen] Wallet adapter created:', walletAdapter.getMode());
-
-        // Ensure wallet is connected (especially for MWA)
-        if (!walletAdapter.isConnected()) {
-          console.log('[ChatScreen] Connecting wallet...');
-          await walletAdapter.connect();
+        // If not connected, trigger connection
+        if (!isConnected && !isWalletLoading) {
+          console.log('[ChatScreen] Wallet not connected, triggering connection...');
+          await connect();
         }
 
-        const publicKey = await walletAdapter.getPublicKey();
-        setPubKey(publicKey?.toString ? publicKey.toString() : String(publicKey));
-        // TODO: Use publicKey for BLE mesh networking integration
+        if (walletPublicKey && mounted) {
+          setPubKey(walletPublicKey.toBase58());
+        }
 
         const storedNickname = await SecureStore.getItemAsync('nickname');
-        setNickname(storedNickname || 'Anonymous');
+        if (mounted) {
+          setNickname(storedNickname || 'Anonymous');
+        }
 
         // Show Bluetooth permission request after a short delay
         setTimeout(() => {
-          setShowPermissionRequest(true);
+          if (mounted) {
+            setShowPermissionRequest(true);
+          }
         }, 1000);
-
-        // Mock BLE messages for demo (will be replaced with real BLE integration)
-        setBleMessages([
-          {
-            id: 'ble-1',
-            from: 'Alice',
-            msg: 'Hey there! Welcome to the mesh chat 👋',
-            ts: Date.now() - 120000,
-            isMine: false,
-          },
-          {
-            id: 'ble-2',
-            from: 'Bob',
-            msg: 'This is a mock conversation to showcase the UI.',
-            ts: Date.now() - 90000,
-            isMine: false,
-          },
-          {
-            id: 'ble-3',
-            from: storedNickname || 'Anonymous',
-            msg: "Hey, I'm testing offline mesh chat! 🚀",
-            ts: Date.now() - 60000,
-            isMine: true,
-          },
-        ]);
-
-        // Mock peers for demo
-        setPeers([
-          { id: 'ShadowNode82#2134', nickname: 'ShadowNode82#2134', online: true },
-          { id: 'Alice', nickname: 'Alice', online: true },
-          { id: 'Bob', nickname: 'Bob', online: false },
-        ]);
       } catch (error) {
         console.error('[Chat] Error initializing:', error);
-        Alert.alert('Error', 'Failed to initialize chat');
       }
     })();
-  }, [router]);
+
+    return () => {
+      mounted = false;
+    };
+  }, [isConnected, isWalletLoading, walletPublicKey, connect]);
+
+  // Map discovered devices to peers
+  useEffect(() => {
+    const mappedPeers: Peer[] = discoveredDevices.map(device => ({
+      id: device.id,
+      nickname: device.name || device.id.slice(0, 8),
+      online: connectedDeviceIds.includes(device.id),
+    }));
+    setPeers(mappedPeers);
+  }, [discoveredDevices, connectedDeviceIds]);
+
+  // Initialize BLE when permissions granted
+  useEffect(() => {
+    if (permissionsGranted) {
+      (async () => {
+        try {
+          console.log('[Chat] Permissions granted, initializing BLE...');
+          await initBLE();
+          await startAdvertising();
+          await startScanning();
+        } catch (err) {
+          console.error('[Chat] BLE Init error:', err);
+        }
+      })();
+    }
+  }, [permissionsGranted]);
 
   // Monitor BLE connection
   useEffect(() => {
@@ -182,22 +207,32 @@ export default function ChatScreen() {
     Keyboard.dismiss();
 
     try {
-      // Send via Nostr if connected
-      if (nostrConnected) {
+      // Prioritize BLE if a session exists for the selected peer
+      const bleSession = selectedPeer ? sessions.get(selectedPeer) : null;
+
+      if (selectedPeer && bleSession?.isHandshakeComplete) {
+        console.log('[Chat] Sending via BLE (Noise):', messageContent);
+        await sendEncryptedMessage(selectedPeer, messageContent);
+      } else if (!selectedPeer && bleConnected) {
+        console.log('[Chat] Broadcasting via BLE:', messageContent);
+        await broadcastBLE(messageContent);
+        // Also send via Nostr if connected for redundancy
+        if (nostrConnected) {
+          await sendNostrMessage(messageContent);
+        }
+      } else if (nostrConnected) {
         console.log('[Chat] Sending via Nostr:', messageContent);
         await sendNostrMessage(messageContent, selectedPeer || undefined);
+      } else if (selectedPeer) {
+        // If peer selected but no session, try to initiate handshake
+        console.log('[Chat] Initiating BLE handshake with:', selectedPeer);
+        if (!connectedDeviceIds.includes(selectedPeer)) {
+          await connectToDevice(selectedPeer);
+        }
+        await initiateHandshake(selectedPeer);
+        Alert.alert('Handshake Initiated', 'Establishing secure BLE connection...');
       } else {
-        // Fallback to BLE-only message
-        console.log('[Chat] Sending via BLE only:', messageContent);
-        const newMessage: Message = {
-          id: `ble-${Date.now()}_${Math.random()}`,
-          from: nickname,
-          to: selectedPeer || undefined,
-          msg: messageContent,
-          ts: Date.now(),
-          isMine: true,
-        };
-        setBleMessages((prev: Message[]) => [...prev, newMessage]);
+        Alert.alert('No Connection', 'Connect to a peer or Nostr relay to send messages.');
       }
 
       setTimeout(() => {
@@ -220,12 +255,11 @@ export default function ChatScreen() {
     });
 
     try {
-      // Get wallet adapter
-      const walletAdapter = await WalletFactory.createAuto();
-
-      if (!walletAdapter.isConnected()) {
+      if (!wallet || !wallet.isConnected()) {
         throw new Error('Wallet not connected');
       }
+
+      const walletAdapter = wallet;
 
       const publicKey = walletAdapter.getPublicKey();
       if (!publicKey) {
@@ -236,18 +270,16 @@ export default function ChatScreen() {
       // In production, you'd integrate with SendScreen logic or create a transaction
       const paymentMessage = `💸 Payment Request: ${paymentCommand.amount} ${token} to @${paymentCommand.recipient}`;
 
-      if (nostrConnected) {
+      const bleSession = selectedPeer ? sessions.get(selectedPeer) : null;
+
+      if (selectedPeer && bleSession?.isHandshakeComplete) {
+        await sendEncryptedMessage(selectedPeer, paymentMessage);
+      } else if (nostrConnected) {
         await sendNostrMessage(paymentMessage, selectedPeer || undefined);
       } else {
-        const newMessage: Message = {
-          id: `payment-${Date.now()}_${Math.random()}`,
-          from: nickname,
-          to: selectedPeer || undefined,
-          msg: paymentMessage,
-          ts: Date.now(),
-          isMine: true,
-        };
-        setBleMessages((prev: Message[]) => [...prev, newMessage]);
+        // Fallback or alert if no connection
+        Alert.alert('No Connection', 'Cannot send payment request without a secure connection.');
+        return;
       }
 
       // TODO: Integrate actual transaction sending
@@ -269,9 +301,8 @@ export default function ChatScreen() {
 
   // Clear received messages (placeholder for cache clear)
   const handleClearReceivedMessages = () => {
-    // Clear both Nostr and BLE messages
+    // Clear Nostr messages (BLE messages are managed by hook state)
     clearNostrMessages();
-    setBleMessages((prev: Message[]) => prev.filter((m: Message) => m.isMine));
     console.log('[Chat] Cleared all received messages');
 
     // Navigate to landing page
@@ -285,9 +316,8 @@ export default function ChatScreen() {
   // Handle triple tap on username - clear all messages and go to landing
   const handleTripleTap = () => {
     console.log('[Chat] Triple tap detected - clearing all messages and navigating to landing');
-    // Clear ALL messages (both Nostr and BLE)
+    // Clear Nostr messages
     clearNostrMessages();
-    setBleMessages([]);
     // Navigate to landing
     try {
       router.replace('/landing' as any);
@@ -301,7 +331,8 @@ export default function ChatScreen() {
     ? allMessages.filter(
       (m: Message) =>
         (m.from === selectedPeer && m.to === nickname) ||
-        (m.from === nickname && m.to === selectedPeer)
+        (m.from === nickname && m.to === selectedPeer) ||
+        (m.from === selectedPeer && m.isMine) // Should not happen with current logic but for safety
     )
     : allMessages.filter((m: Message) => !m.to);
 

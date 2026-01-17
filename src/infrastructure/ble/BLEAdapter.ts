@@ -57,8 +57,53 @@ export class BLEAdapter implements IBLEAdapter {
   constructor() {
     this.bleManager = new BleManager();
   }
-  requestPermissions(): Promise<boolean> {
-    throw new Error('Method not implemented.');
+  async requestPermissions(): Promise<boolean> {
+    try {
+      if (Platform.OS === 'android') {
+        console.log('[BLE] Requesting Android permissions...');
+
+        // Android 12+ (API 31+) requires specific Bluetooth permissions
+        const androidVersion = Platform.Version as number;
+        const permissions: any[] = [];
+
+        if (androidVersion >= 31) {
+          // Android 12+
+          permissions.push(
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+          );
+        } else {
+          // Android 11 and below
+          permissions.push(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+          );
+        }
+
+        console.log('[BLE] Requesting permissions:', permissions);
+        const results = await PermissionsAndroid.requestMultiple(permissions);
+
+        const allGranted = Object.values(results).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+
+        console.log('[BLE] Android permissions result:', results);
+
+        if (!allGranted) {
+          console.error('[BLE] Not all permissions granted:', results);
+        }
+
+        return allGranted;
+      }
+
+      // iOS permissions are handled via Info.plist
+      console.log('[BLE] iOS - permissions handled via Info.plist');
+      return true;
+    } catch (error) {
+      console.error('[BLE] Permission request failed:', error);
+      return false;
+    }
   }
 
   // ============================================
@@ -254,57 +299,6 @@ export class BLEAdapter implements IBLEAdapter {
     return state === State.PoweredOn;
   }
 
-  // async requestPermissions(): Promise<boolean> {
-  //   try {
-  //     if (Platform.OS === 'android') {
-  //       console.log('[BLE] Requesting Android permissions...');
-
-  //       // Android 12+ (API 31+) requires specific Bluetooth permissions
-  //       const androidVersion = Platform.Version as number;
-  //       const permissions: Permission[] = [];
-
-  //       if (androidVersion >= 31) {
-  //         // Android 12+
-  //         permissions.push(
-  //           Permission.BLUETOOTH_ADVERTISE,
-  //           Permission
-  //           Permission.READABLE
-  //         );
-  //       } else {
-  //         // Android 11 and below
-  //         permissions.push(
-  //           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!
-  //         );
-  //       }
-
-  //       console.log('[BLE] Requesting permissions:', permissions);
-  //       const results = await PermissionsAndroid.requestMultiple(permissions);
-
-  //       const allGranted = Object.values(results).every(
-  //         result => result === PermissionsAndroid.RESULTS.GRANTED
-  //       );
-
-  //       console.log('[BLE] Android permissions result:', results);
-
-  //       if (!allGranted) {
-  //         console.error('[BLE] Not all permissions granted:', results);
-  //         const denied = Object.entries(results)
-  //           .filter(([_, result]) => result !== PermissionsAndroid.RESULTS.GRANTED)
-  //           .map(([perm]) => perm);
-  //         console.error('[BLE] Denied permissions:', denied);
-  //       }
-
-  //       return allGranted;
-  //     }
-
-  //     // iOS permissions are handled via Info.plist in app.json
-  //     console.log('[BLE] iOS - permissions handled via app.json');
-  //     return true;
-  //   } catch (error) {
-  //     console.error('[BLE] Permission request failed:', error);
-  //     return false;
-  //   }
-  // }
 
   async getState(): Promise<'PoweredOn' | 'PoweredOff' | 'Unauthorized' | 'Unsupported'> {
     const state = await this.bleManager.state();

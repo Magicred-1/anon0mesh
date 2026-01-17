@@ -18,7 +18,9 @@ export class SecureIdentityStateManager {
     async initialize(): Promise<Identity | null> {
         try {
             // 1. Load or generate master key (AES-256)
+            console.log('[SecureIdentityStateManager] Ensuring master key...');
             await this.ensureMasterKey();
+            console.log('[SecureIdentityStateManager] Master key ready');
 
             // 2. Load encrypted identity from SecureStore
             const encryptedData = await SecureStore.getItemAsync(IDENTITY_STORAGE_KEY);
@@ -82,9 +84,11 @@ export class SecureIdentityStateManager {
     private async ensureMasterKey(): Promise<void> {
         let keyHex = await SecureStore.getItemAsync(MASTER_KEY_STORAGE_KEY);
         if (!keyHex) {
+            console.log('[SecureIdentityStateManager] Generating new master key...');
             const newKey = crypto.randomBytes(32);
             keyHex = newKey.toString('hex');
             await SecureStore.setItemAsync(MASTER_KEY_STORAGE_KEY, keyHex);
+            console.log('[SecureIdentityStateManager] New master key stored');
         }
         this.masterKey = Buffer.from(keyHex, 'hex') as any; // Cast to avoid Buffer type mismatch in some environments
     }

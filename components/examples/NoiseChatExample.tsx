@@ -17,7 +17,7 @@ export function NoiseChatExample() {
     initiateHandshake,
     isHandshakeComplete,
     sessions,
-    receivedMessages,
+    messages,
     clearMessages,
     isReady,
     error,
@@ -177,17 +177,20 @@ export function NoiseChatExample() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            Received Messages ({receivedMessages.length})
+            Messages ({messages.length})
           </Text>
-          {receivedMessages.length > 0 && (
+          {messages.length > 0 && (
             <TouchableOpacity onPress={clearMessages}>
               <Text style={styles.clearButton}>Clear</Text>
             </TouchableOpacity>
           )}
         </View>
-        {receivedMessages.map((msg, idx) => (
-          <View key={idx} style={styles.messageCard}>
-            <Text style={styles.messageFrom}>From: {msg.deviceId.slice(0, 16)}...</Text>
+        {messages.map((msg, idx) => (
+          <View key={idx} style={[styles.messageCard, msg.isMine && styles.messageCardMine]}>
+            <Text style={styles.messageFrom}>
+              {msg.isMine ? 'Me' : `From: ${msg.deviceId.slice(0, 16)}...`}
+              {msg.to && ` (to ${msg.to.slice(0, 8)})`}
+            </Text>
             <Text style={styles.messageText}>{msg.message}</Text>
             <Text style={styles.messageTime}>
               {new Date(msg.timestamp).toLocaleTimeString()}
@@ -379,5 +382,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#9ca3af',
     textAlign: 'right',
+  },
+  messageCardMine: {
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
+    alignSelf: 'flex-end',
+    width: '80%',
   },
 });

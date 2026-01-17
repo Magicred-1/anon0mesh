@@ -4,7 +4,7 @@ import ZECIcon from '@/components/icons/ZECIcon';
 import QRScannerModal from '@/components/modals/QRScannerModal';
 import SendConfirmationModal from '@/components/modals/SendConfirmationModal';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
-import { WalletFactory } from '@/src/infrastructure/wallet';
+import { useWallet } from '@/src/contexts/WalletContext';
 import type { ConnectivityStatus } from '@/src/infrastructure/wallet/utils/connectivity';
 import * as ConnectivityUtils from '@/src/infrastructure/wallet/utils/connectivity';
 import '@/src/polyfills';
@@ -36,7 +36,7 @@ const SOL_USD_RATE = 141.457; // Approximate SOL/USD exchange rate
 
 export default function SendScreen() {
   const router = useRouter();
-  const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
+  const { wallet, publicKey, isConnected, isLoading: isWalletLoading } = useWallet();
   const [amount, setAmount] = useState('0.00');
   const [token, setToken] = useState<TokenType>('SOL');
   const [recipient, setRecipient] = useState('');
@@ -50,7 +50,7 @@ export default function SendScreen() {
 
   // Use wallet balances hook
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
-  
+
   // Get balance for selected token
   const balance = balances.find(b => b.symbol === token)?.balance ?? 0;
 
@@ -71,31 +71,18 @@ export default function SendScreen() {
 
   // Initialize wallet and fetch balances
   useEffect(() => {
-    (async () => {
-      try {
-        const hasWallet = await WalletFactory.hasLocalWallet();
-        if (!hasWallet) {
-          Alert.alert('No Wallet', 'Please create a wallet first.');
-          router.replace('/onboarding' as any);
-          return;
-        }
+    if (!isWalletLoading && !isConnected) {
+      Alert.alert('Wallet Required', 'Please connect your wallet first.');
+      router.replace('/wallet' as any);
+      return;
+    }
 
-        const walletAdapter = await WalletFactory.createAuto();
-        const pubKey = walletAdapter.getPublicKey();
-        
-        if (pubKey) {
-          setPublicKey(pubKey);
-          console.log('[Send] Wallet loaded:', pubKey.toBase58().slice(0, 8) + '...');
-          
-          // Fetch real balances from blockchain
-          await fetchBalances(pubKey);
-        }
-      } catch (error) {
-        console.error('[Send] Error initializing:', error);
-        Alert.alert('Error', 'Failed to initialize wallet');
-      }
-    })();
-  }, [router, fetchBalances]);
+    if (publicKey) {
+      console.log('[Send] Wallet loaded:', publicKey.toBase58().slice(0, 8) + '...');
+      // Fetch real balances from blockchain
+      fetchBalances(publicKey);
+    }
+  }, [isConnected, isWalletLoading, publicKey, router, fetchBalances]);
 
   const handleCreateNewAddress = () => {
     router.push('/wallet/settings');
@@ -168,7 +155,7 @@ export default function SendScreen() {
 
     // Check connectivity before sending
     const sendCheck = await ConnectivityUtils.canSendTransaction();
-    
+
     if (!sendCheck.canSend) {
       Alert.alert(
         'Cannot Send',
@@ -179,7 +166,7 @@ export default function SendScreen() {
     }
 
     const useOfflineMode = sendCheck.useOfflineMode || !connectivity?.isInternetConnected;
-    
+
     // Only SOL and USDC transfers supported (ZEC coming soon)
     if (token === 'ZEC') {
       Alert.alert('Coming Soon', `${token} transfers will be available soon. Currently only SOL and USDC transfers are supported.`);
@@ -209,21 +196,20 @@ export default function SendScreen() {
         console.log('[Send] To:', recipientPubKey.toBase58());
         console.log('[Send] Amount:', amountNum, token);
 
-        // Get wallet adapter
-        const walletAdapter = await WalletFactory.createAuto();
-        
-        if (!walletAdapter.isConnected()) {
+        if (!wallet || !wallet.isConnected()) {
           throw new Error('Wallet not connected');
         }
+
+        const walletAdapter = wallet;
 
         // Create connection
         const connection = new Connection(DEVNET_RPC, 'confirmed');
 
         // Build transaction using wallet adapter
         const { Transaction, SystemProgram, LAMPORTS_PER_SOL, TransactionInstruction } = await import('@solana/web3.js');
-        
+
         const transaction = new Transaction();
-        
+
         if (token === 'SOL') {
           // SOL transfer
           console.log('[Send] Building SOL transfer...');
@@ -239,11 +225,11 @@ export default function SendScreen() {
           console.log('[Send] Building USDC transfer...');
 
           const mintPubKey = new PublicKey(USDC_DEVNET_MINT);
-          
+
           // Token Program IDs
           const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
           const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-          
+
           // Manually derive associated token addresses
           const getAssociatedTokenAddressSync = (mint: PublicKey, owner: PublicKey): PublicKey => {
             const [address] = PublicKey.findProgramAddressSync(
@@ -252,19 +238,19 @@ export default function SendScreen() {
             );
             return address;
           };
-          
+
           const senderTokenAccount = getAssociatedTokenAddressSync(mintPubKey, publicKey);
           const recipientTokenAccount = getAssociatedTokenAddressSync(mintPubKey, recipientPubKey);
-          
+
           console.log('[Send] Sender token account:', senderTokenAccount.toBase58());
           console.log('[Send] Recipient token account:', recipientTokenAccount.toBase58());
-          
+
           // Check if recipient token account exists
           const recipientAccountInfo = await connection.getAccountInfo(recipientTokenAccount);
-          
+
           if (!recipientAccountInfo) {
             console.log('[Send] Recipient token account does not exist, creating...');
-            
+
             // Manually create associated token account instruction
             const keys = [
               { pubkey: publicKey, isSigner: true, isWritable: true }, // payer
@@ -274,7 +260,7 @@ export default function SendScreen() {
               { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // system program
               { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token program
             ];
-            
+
             transaction.add(
               new TransactionInstruction({
                 keys,
@@ -283,26 +269,26 @@ export default function SendScreen() {
               })
             );
           }
-          
+
           // Add token transfer instruction
           // USDC has 6 decimals on devnet
           const usdcDecimals = 6;
           const transferAmount = Math.floor(amountNum * Math.pow(10, usdcDecimals));
-          
+
           console.log('[Send] Transfer amount (base units):', transferAmount);
-          
+
           // Manually create transfer instruction
           // Instruction: 3 (Transfer) + amount (u64, 8 bytes)
           const dataLayout = Buffer.alloc(9);
           dataLayout.writeUInt8(3, 0); // Transfer instruction
           dataLayout.writeBigUInt64LE(BigInt(transferAmount), 1);
-          
+
           const transferKeys = [
             { pubkey: senderTokenAccount, isSigner: false, isWritable: true }, // source
             { pubkey: recipientTokenAccount, isSigner: false, isWritable: true }, // destination
             { pubkey: publicKey, isSigner: true, isWritable: false }, // owner
           ];
-          
+
           transaction.add(
             new TransactionInstruction({
               keys: transferKeys,
@@ -448,9 +434,9 @@ export default function SendScreen() {
                   <TouchableOpacity style={styles.tokenSelector} onPress={handleTokenDropdown}>
                     <View style={styles.tokenIconWrapper}>
                       {token === 'SOL' && (
-                        <Image 
-                          source={require('../../../../assets/images/sol-logo.png')} 
-                          style={styles.tokenImage} 
+                        <Image
+                          source={require('../../../../assets/images/sol-logo.png')}
+                          style={styles.tokenImage}
                         />
                       )}
                       {token === 'USDC' && <USDCIcon size={24} />}
@@ -480,9 +466,9 @@ export default function SendScreen() {
                           >
                             <View style={styles.tokenIconWrapper}>
                               {t === 'SOL' && (
-                                <Image 
-                                  source={require('../../../../assets/images/sol-logo.png')} 
-                                  style={styles.tokenImage} 
+                                <Image
+                                  source={require('../../../../assets/images/sol-logo.png')}
+                                  style={styles.tokenImage}
                                 />
                               )}
                               {t === 'USDC' && <USDCIcon size={24} />}
@@ -504,7 +490,7 @@ export default function SendScreen() {
                   placeholderTextColor="#4a6c6c"
                 />
               </View>
-             
+
 
               <View style={styles.balanceRow}>
                 <View style={styles.balanceLeft}>
@@ -528,8 +514,8 @@ export default function SendScreen() {
                     {token === 'SOL'
                       ? (balance * SOL_USD_RATE).toFixed(2)
                       : token === 'USDC'
-                      ? balance.toFixed(2)
-                      : '0.00'}
+                        ? balance.toFixed(2)
+                        : '0.00'}
                   </Text>
                 )}
               </View>
@@ -556,7 +542,7 @@ export default function SendScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>From</Text>
               <View style={styles.fromContainer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.fromSelector}
                   onPress={() => setShowFromDropdown(!showFromDropdown)}
                 >
@@ -598,7 +584,7 @@ export default function SendScreen() {
                       </Text>
                       <Text style={styles.fromOptionBalance}>75.89 SOL</Text>
                     </TouchableOpacity> */}
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.createNewButton}
                       onPress={handleCreateNewAddress}
                     >
@@ -631,15 +617,17 @@ export default function SendScreen() {
               <View style={styles.connectivityBanner}>
                 <View style={[
                   styles.statusDot,
-                  { backgroundColor: connectivity.isInternetConnected ? '#22D3EE' : 
-                                    connectivity.isBluetoothAvailable ? '#ffa500' : '#ff4444' }
+                  {
+                    backgroundColor: connectivity.isInternetConnected ? '#22D3EE' :
+                      connectivity.isBluetoothAvailable ? '#ffa500' : '#ff4444'
+                  }
                 ]} />
                 <Text style={styles.connectivityText}>
-                  {connectivity.isInternetConnected 
+                  {connectivity.isInternetConnected
                     ? 'Connected to Internet'
                     : connectivity.isBluetoothAvailable
-                    ? 'Offline mode - Using Bluetooth Mesh'
-                    : 'No connection available'
+                      ? 'Offline mode - Using Bluetooth Mesh'
+                      : 'No connection available'
                   }
                 </Text>
               </View>
@@ -647,8 +635,8 @@ export default function SendScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      
-      <SendConfirmationModal 
+
+      <SendConfirmationModal
         visible={showConfirmation}
         onClose={() => {
           setShowConfirmation(false);

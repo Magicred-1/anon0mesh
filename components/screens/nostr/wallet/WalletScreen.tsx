@@ -1,4 +1,4 @@
-import { WalletFactory } from '@/src/infrastructure/wallet';
+import { useWallet } from '@/src/contexts/WalletContext';
 import '@/src/polyfills';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -28,6 +28,7 @@ import BottomNavWithMenu from '../../../ui/BottomNavWithMenu';
 
 export default function WalletScreen() {
   const router = useRouter();
+  const { wallet, publicKey: walletPublicKey, isConnected, connect, isLoading: isWalletLoading } = useWallet();
   const [publicKey, setPublicKey] = useState<string>('');
   const [isAirdropping, setIsAirdropping] = useState(false);
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
@@ -38,38 +39,30 @@ export default function WalletScreen() {
 
     (async () => {
       try {
-        // Try to create a wallet adapter (works for both local and MWA)
-        console.log('[Wallet] Attempting to create wallet adapter...');
-        const walletAdapter = await WalletFactory.createAuto();
-        console.log('[Wallet] Wallet adapter created:', walletAdapter.getMode());
-
-        // Ensure wallet is connected (especially for MWA)
-        if (!walletAdapter.isConnected()) {
-          console.log('[Wallet] Connecting wallet...');
-          await walletAdapter.connect();
+        // If not connected, trigger connection
+        if (!isConnected && !isWalletLoading) {
+          console.log('[Wallet] Wallet not connected, triggering connection...');
+          await connect();
         }
 
-        const pubKey = await walletAdapter.getPublicKey();
-
-        if (pubKey && mounted) {
-          const pubKeyString = pubKey.toBase58();
+        if (walletPublicKey && mounted) {
+          const pubKeyString = walletPublicKey.toBase58();
           setPublicKey(pubKeyString);
           console.log('[Wallet] Initialized:', pubKeyString.slice(0, 8) + '...');
 
           // Fetch real balances from Devnet
-          await fetchBalances(pubKey);
+          await fetchBalances(walletPublicKey);
         }
       } catch (error) {
         console.error('[Wallet] Error initializing:', error);
-        Alert.alert('Error', 'Failed to initialize wallet');
+        // Don't alert here if it's just a cancellation
       }
     })();
 
     return () => {
       mounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, [isConnected, isWalletLoading, walletPublicKey, connect, fetchBalances]);
 
   const handleCopyAddress = () => {
     if (publicKey) {
@@ -90,27 +83,29 @@ export default function WalletScreen() {
     try {
       setIsAirdropping(true);
       console.log('[Wallet] Requesting airdrop...');
-      
-      const walletAdapter = await WalletFactory.createAuto();
-      await walletAdapter.airdropSol(1); // Request 1 SOL
-      
+
+      if (!wallet) {
+        throw new Error('Wallet not initialized');
+      }
+
+      await wallet.airdropSol(1); // Request 1 SOL
+
       Alert.alert(
-        'Success!', 
+        'Success!',
         '1 SOL airdrop confirmed! Your balance will update shortly.',
         [{ text: 'OK' }]
       );
-      
+
       // Refresh balances after airdrop
       setTimeout(async () => {
-        const pubKey = await walletAdapter.getPublicKey();
-        if (pubKey) {
-          await fetchBalances(pubKey);
+        if (walletPublicKey) {
+          await fetchBalances(walletPublicKey);
         }
       }, 2000);
     } catch (error) {
       console.error('[Wallet] Airdrop error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      
+
       Alert.alert(
         'Airdrop Failed',
         errorMsg,
@@ -206,8 +201,8 @@ export default function WalletScreen() {
               <Text style={styles.actionText}>Swap</Text>
             </TouchableOpacity>
             {/* Airdrop button - Devnet only */}
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.airdropButton]} 
+            <TouchableOpacity
+              style={[styles.actionButton, styles.airdropButton]}
               onPress={handleAirdrop}
               disabled={isAirdropping}
             >

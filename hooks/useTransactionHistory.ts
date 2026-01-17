@@ -1,6 +1,6 @@
-import { WalletFactory } from '@/src/infrastructure/wallet';
+import { useWallet } from '@/src/contexts/WalletContext';
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 // Solana RPC endpoint (devnet) - Using a more reliable endpoint
 const SOLANA_RPC_ENDPOINT = 'https://api.devnet.solana.com';
@@ -29,26 +29,23 @@ interface UseTransactionHistoryResult {
 }
 
 export function useTransactionHistory(): UseTransactionHistoryResult {
+  const { publicKey, isConnected } = useWallet();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string>('');
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
+    if (!publicKey) {
+      console.log('[useTransactionHistory] No public key available, skipping fetch');
+      setTransactions([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-
-      // Get wallet adapter and public key
-      const walletAdapter = await WalletFactory.createAuto();
-      const publicKey = walletAdapter.getPublicKey();
-
-      if (!publicKey) {
-        console.warn('[useTransactionHistory] No public key available');
-        setTransactions([]);
-        setLoading(false);
-        return;
-      }
 
       const address = publicKey.toBase58();
       setWalletAddress(address);
@@ -68,7 +65,7 @@ export function useTransactionHistory(): UseTransactionHistoryResult {
       const pubKey = new PublicKey(address);
 
       // Get fewer transaction signatures to avoid rate limits (limit: 5 for minimal API calls)
-      const signatureList = await connection.getSignaturesForAddress(pubKey, { 
+      const signatureList = await connection.getSignaturesForAddress(pubKey, {
         limit: 5
       });
 
@@ -85,21 +82,21 @@ export function useTransactionHistory(): UseTransactionHistoryResult {
       // Fetch transaction details one at a time with delays to avoid rate limits
       // This is slower but more reliable with free RPC endpoints
       const transactionDetails: any[] = [];
-      
+
       for (let i = 0; i < signatureList.length; i++) {
         const signature = signatureList[i].signature;
-        
+
         try {
           // Use getTransaction with jsonParsed encoding for better performance
           const txDetail = await connection.getParsedTransaction(
-            signature, 
-            { 
+            signature,
+            {
               maxSupportedTransactionVersion: 0,
               commitment: 'finalized'
             }
           );
           transactionDetails.push(txDetail);
-          
+
           // Add delay between each request to avoid rate limits (500ms)
           if (i < signatureList.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -115,7 +112,7 @@ export function useTransactionHistory(): UseTransactionHistoryResult {
       const parsedTransactions: Transaction[] = signatureList
         .map((txSignature, index) => {
           const txDetail = transactionDetails[index];
-          
+
           // Skip if transaction detail is null (batch fetch failed)
           if (!txDetail) {
             const date = new Date(txSignature.blockTime! * 1000);
@@ -136,9 +133,9 @@ export function useTransactionHistory(): UseTransactionHistoryResult {
               signature: txSignature.signature,
             };
           }
-          
+
           const date = new Date(txSignature.blockTime! * 1000);
-          
+
           // Determine transaction type and amount
           let type = 'Transfer';
           let amount = '0';
@@ -147,14 +144,14 @@ export function useTransactionHistory(): UseTransactionHistoryResult {
 
           if (txDetail?.transaction.message.instructions) {
             const instructions = txDetail.transaction.message.instructions;
-            
+
             // Look for transfer instructions
             instructions.forEach((instruction: any) => {
               if (instruction.parsed?.type === 'transfer') {
                 const info = instruction.parsed.info;
                 const lamports = info.lamports || 0;
                 amount = (lamports / LAMPORTS_PER_SOL).toFixed(4);
-                
+
                 // Determine if sent or received
                 if (info.source === address) {
                   type = 'Send';
@@ -168,7 +165,7 @@ export function useTransactionHistory(): UseTransactionHistoryResult {
           }
 
           // Format address (first 4 + last 4 chars)
-          const shortAddress = recipientAddress.length > 8 
+          const shortAddress = recipientAddress.length > 8
             ? `${recipientAddress.slice(0, 4)}...${recipientAddress.slice(-4)}`
             : recipientAddress;
 
@@ -192,37 +189,37 @@ export function useTransactionHistory(): UseTransactionHistoryResult {
         .filter(tx => tx !== null); // Remove any null transactions
 
       console.log('[useTransactionHistory] Fetched', parsedTransactions.length, 'transactions');
-      
+
       // Cache the results
-      transactionCache[address] = { 
-        transactions: parsedTransactions, 
-        timestamp: Date.now() 
+      transactionCache[address] = {
+        transactions: parsedTransactions,
+        timestamp: Date.now()
       };
-      
+
       setTransactions(parsedTransactions);
     } catch (err: any) {
       console.error('[useTransactionHistory] Error fetching transactions:', err);
-      
+
       // Check if it's a rate limit error
-      const isRateLimitError = err?.message?.includes('429') || 
-                                err?.message?.includes('Too many requests');
-      
+      const isRateLimitError = err?.message?.includes('429') ||
+        err?.message?.includes('Too many requests');
+
       if (isRateLimitError) {
         console.warn('[useTransactionHistory] Rate limit hit. Try again in a minute.');
         setError('Rate limit reached. Transaction history will refresh automatically in 1 minute.');
       } else {
         setError('Failed to load transaction history.');
       }
-      
+
       setTransactions([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [publicKey]);
 
   useEffect(() => {
     fetchTransactions();
-  }, []);
+  }, [fetchTransactions]);
 
   return {
     transactions,

@@ -28,6 +28,7 @@ interface BLEContextType {
   connectToDevice: (deviceId: string) => Promise<boolean>;
   disconnectFromDevice: (deviceId: string) => Promise<void>;
   clearDiscoveredDevices: () => void;
+  broadcastMessage: (message: string) => Promise<void>;
 }
 
 const BLEContext = createContext<BLEContextType | null>(null);
@@ -64,17 +65,17 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
       console.log('[BLEContext] Initializing BLE adapter...');
       const adapter = new BLEAdapter();
       await adapter.initialize();
-      
+
       setBleAdapter(adapter);
       setIsInitialized(true);
       setError(null);
-      
+
       console.log('[BLEContext] ✅ BLE adapter initialized successfully');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error('[BLEContext] Failed to initialize BLE adapter:', errorMessage);
       setError(errorMessage);
-      
+
       Alert.alert(
         'BLE Initialization Failed',
         `Failed to initialize Bluetooth: ${errorMessage}\n\nPlease check:\n• Bluetooth is turned on\n• App has required permissions\n• Device supports BLE`,
@@ -98,7 +99,7 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
     try {
       console.log('[BLEContext] Starting scan...');
       setDiscoveredDevices([]); // Clear previous results
-      
+
       await bleAdapter.startScanning(
         (device) => {
           console.log('[BLEContext] Device discovered:', device.name || device.id);
@@ -117,7 +118,7 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
           allowDuplicates: false,
         }
       );
-      
+
       setIsScanning(true);
       setError(null);
       console.log('[BLEContext] ✅ Scanning started');
@@ -146,85 +147,85 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
   }, [bleAdapter, isScanning]);
 
   // Start advertising
-const startAdvertising = useCallback(async () => {
-  if (!bleAdapter || !isInitialized) {
-    Alert.alert('Error', 'BLE adapter not initialized');
-    return;
-  }
-
-  try {
-    // Check if already advertising
-    if (bleAdapter.isAdvertising()) {
-      console.log('[BLEContext] Already advertising');
-      setIsAdvertising(true);
+  const startAdvertising = useCallback(async () => {
+    if (!bleAdapter || !isInitialized) {
+      Alert.alert('Error', 'BLE adapter not initialized');
       return;
     }
 
-    console.log('[BLEContext] Starting advertising...');
+    try {
+      // Check if already advertising
+      if (bleAdapter.isAdvertising()) {
+        console.log('[BLEContext] Already advertising');
+        setIsAdvertising(true);
+        return;
+      }
 
-    const { Peer } = await import('../domain/entities/Peer');
-    const { PeerId } = await import('../domain/value-objects/PeerId');
-    const { Nickname } = await import('../domain/value-objects/Nickname');
-    const SecureStore = await import('expo-secure-store');
+      console.log('[BLEContext] Starting advertising...');
 
-    const username = await SecureStore.getItemAsync('username');
-    const publicKey = await SecureStore.getItemAsync('publicKey');
+      const { Peer } = await import('../domain/entities/Peer');
+      const { PeerId } = await import('../domain/value-objects/PeerId');
+      const { Nickname } = await import('../domain/value-objects/Nickname');
+      const SecureStore = await import('expo-secure-store');
 
-    const localPeer = new Peer({
-      id: PeerId.fromString(publicKey || 'anon-user'),
-      nickname: Nickname.create(username || 'Anonymous'),
-      publicKey: publicKey || 'mock-public-key',
-      lastSeen: new Date(),
-      status: 'active' as any,
-      discoveredAt: new Date(),
-    });
+      const username = await SecureStore.getItemAsync('username');
+      const publicKey = await SecureStore.getItemAsync('publicKey');
 
-    await bleAdapter.startAdvertising(localPeer, {
-      serviceUUIDs: [BLE_UUIDS.SERVICE_UUID],
-      connectable: true,
-      name: username || 'anon0mesh-device',
-    });
+      const localPeer = new Peer({
+        id: PeerId.fromString(publicKey || 'anon-user'),
+        nickname: Nickname.create(username || 'Anonymous'),
+        publicKey: publicKey || 'mock-public-key',
+        lastSeen: new Date(),
+        status: 'active' as any,
+        discoveredAt: new Date(),
+      });
 
-    setIsAdvertising(true);
-    setError(null);
+      await bleAdapter.startAdvertising(localPeer, {
+        serviceUUIDs: [BLE_UUIDS.SERVICE_UUID],
+        connectable: true,
+        name: username || 'anon0mesh-device',
+      });
 
-    console.log('[BLEContext] ✅ Advertising started');
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[BLEContext] Failed to start advertising:', errorMessage);
-    setError(errorMessage);
-    
-    // Provide user-friendly error messages
-    if (errorMessage.includes('permission') || errorMessage.includes('Permission')) {
-      Alert.alert(
-        'Permissions Required',
-        'BLE Advertising requires Bluetooth and Location permissions.\n\n' +
-        'Please go to:\nSettings → Apps → anon0mesh → Permissions\n\n' +
-        'And grant:\n• Bluetooth (Nearby devices)\n• Location (Allow all the time)',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() }
-        ]
-      );
-    } else if (errorMessage.includes('Error on advertising, code 1')) {
-      Alert.alert(
-        'Advertising Error',
-        'Failed to start BLE advertising (Error code 1).\n\n' +
-        'This usually means permissions are not granted.\n\n' +
-        'Please ensure:\n' +
-        '1. Bluetooth is ON\n' +
-        '2. Location permission granted (Allow all the time)\n' +
-        '3. Bluetooth Advertise permission granted',
-        [
-          { text: 'OK' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() }
-        ]
-      );
-    } else {
-      Alert.alert('Advertising Failed', errorMessage);
+      setIsAdvertising(true);
+      setError(null);
+
+      console.log('[BLEContext] ✅ Advertising started');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[BLEContext] Failed to start advertising:', errorMessage);
+      setError(errorMessage);
+
+      // Provide user-friendly error messages
+      if (errorMessage.includes('permission') || errorMessage.includes('Permission')) {
+        Alert.alert(
+          'Permissions Required',
+          'BLE Advertising requires Bluetooth and Location permissions.\n\n' +
+          'Please go to:\nSettings → Apps → anon0mesh → Permissions\n\n' +
+          'And grant:\n• Bluetooth (Nearby devices)\n• Location (Allow all the time)',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
+        );
+      } else if (errorMessage.includes('Error on advertising, code 1')) {
+        Alert.alert(
+          'Advertising Error',
+          'Failed to start BLE advertising (Error code 1).\n\n' +
+          'This usually means permissions are not granted.\n\n' +
+          'Please ensure:\n' +
+          '1. Bluetooth is ON\n' +
+          '2. Location permission granted (Allow all the time)\n' +
+          '3. Bluetooth Advertise permission granted',
+          [
+            { text: 'OK' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
+        );
+      } else {
+        Alert.alert('Advertising Failed', errorMessage);
+      }
     }
-  }
-}, [bleAdapter, isInitialized]);
+  }, [bleAdapter, isInitialized]);
 
 
   // Stop advertising
@@ -254,7 +255,7 @@ const startAdvertising = useCallback(async () => {
       try {
         console.log('[BLEContext] Connecting to device:', deviceId);
         const success = await bleAdapter.connect(deviceId);
-        
+
         if (success) {
           setConnectedDeviceIds((prev) => [...new Set([...prev, deviceId])]);
           setError(null);
@@ -262,7 +263,7 @@ const startAdvertising = useCallback(async () => {
         } else {
           Alert.alert('Connection Failed', 'Failed to connect to device');
         }
-        
+
         return success;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -294,10 +295,40 @@ const startAdvertising = useCallback(async () => {
     [bleAdapter]
   );
 
-  // Clear discovered devices
   const clearDiscoveredDevices = useCallback(() => {
     setDiscoveredDevices([]);
   }, []);
+
+  // Broadcast unencrypted message to all nearby devices
+  const broadcastMessage = useCallback(async (message: string) => {
+    if (!bleAdapter || !isInitialized) {
+      throw new Error('BLE adapter not initialized');
+    }
+
+    try {
+      console.log('[BLEContext] Broadcasting message:', message);
+
+      const { Packet, PacketType } = await import('../domain/entities/Packet');
+      const { PeerId } = await import('../domain/value-objects/PeerId');
+      const SecureStore = await import('expo-secure-store');
+
+      const publicKey = await SecureStore.getItemAsync('publicKey');
+
+      const packet = new Packet({
+        type: PacketType.MESSAGE,
+        senderId: PeerId.fromString(publicKey || 'anon-user'),
+        timestamp: BigInt(Date.now()),
+        payload: new TextEncoder().encode(message),
+        ttl: 5,
+      });
+
+      await bleAdapter.broadcastPacket(packet);
+      console.log('[BLEContext] ✅ Broadcast complete');
+    } catch (err) {
+      console.error('[BLEContext] Broadcast failed:', err);
+      throw err;
+    }
+  }, [bleAdapter, isInitialized]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -327,6 +358,7 @@ const startAdvertising = useCallback(async () => {
     connectToDevice,
     disconnectFromDevice,
     clearDiscoveredDevices,
+    broadcastMessage,
   };
 
   return <BLEContext.Provider value={value}>{children}</BLEContext.Provider>;

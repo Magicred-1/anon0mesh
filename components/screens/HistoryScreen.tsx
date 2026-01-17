@@ -99,15 +99,15 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 ];
 
 // Variable pour activer/désactiver les données mock (mettre à true pour utiliser les mock data)
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = false;
 
 export default function HistoryScreen() {
   const router = useRouter();
-  
+
   // Use the custom hook for fetching transactions
   // refetch is available for future pull-to-refresh functionality
   const { transactions: realTransactions, loading, error, walletAddress } = useTransactionHistory();
-  
+
   // Utiliser les mock data ou les vraies données selon USE_MOCK_DATA
   const transactions = USE_MOCK_DATA ? MOCK_TRANSACTIONS : realTransactions;
 
@@ -169,53 +169,53 @@ export default function HistoryScreen() {
           ) : (
             <View style={styles.transactionsList}>
               {transactions.map((transaction) => (
-              <TouchableOpacity
-                key={transaction.id}
-                style={styles.transactionItem}
-                onPress={() => handleTransactionPress(transaction)}
-              >
-                <View style={styles.transactionLeft}>
-                <View
-                    style={[
-                      styles.statusBadge,
-                      transaction.status === 'Success'
-                        ? styles.statusSuccess
-                        : styles.statusPending,
-                    ]}
-                  >
+                <TouchableOpacity
+                  key={transaction.id}
+                  style={styles.transactionItem}
+                  onPress={() => handleTransactionPress(transaction)}
+                >
+                  <View style={styles.transactionLeft}>
                     <View
                       style={[
-                        styles.statusDot,
+                        styles.statusBadge,
                         transaction.status === 'Success'
-                          ? styles.statusDotSuccess
-                          : styles.statusDotPending,
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.statusText,
-                        transaction.status === 'Success'
-                          ? styles.statusTextSuccess
-                          : styles.statusTextPending,
+                          ? styles.statusSuccess
+                          : styles.statusPending,
                       ]}
                     >
-                      {transaction.status}
+                      <View
+                        style={[
+                          styles.statusDot,
+                          transaction.status === 'Success'
+                            ? styles.statusDotSuccess
+                            : styles.statusDotPending,
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.statusText,
+                          transaction.status === 'Success'
+                            ? styles.statusTextSuccess
+                            : styles.statusTextPending,
+                        ]}
+                      >
+                        {transaction.status}
+                      </Text>
+                    </View>
+                    <Text style={styles.transactionType}>
+                      {transaction.type} to {transaction.address}
                     </Text>
+                    <Text style={styles.transactionTime}>{transaction.timestamp}</Text>
+
                   </View>
-                  <Text style={styles.transactionType}>
-                    {transaction.type} to {transaction.address}
-                  </Text>
-                  <Text style={styles.transactionTime}>{transaction.timestamp}</Text>
-                  
-                </View>
-                <View style={styles.transactionRight}>
-                  <Text style={styles.transactionAmount}>
-                    {transaction.amount} {transaction.currency}
-                  </Text>
-                  
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.transactionRight}>
+                    <Text style={styles.transactionAmount}>
+                      {transaction.amount} {transaction.currency}
+                    </Text>
+
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </ScrollView>

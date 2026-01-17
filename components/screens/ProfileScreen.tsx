@@ -1,4 +1,4 @@
-import { WalletFactory } from '@/src/infrastructure/wallet';
+import { useWallet } from '@/src/contexts/WalletContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
@@ -31,6 +31,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     onNavigateToProfile,
     onDisconnect,
 }) => {
+    const { wallet, publicKey: walletPublicKey, isConnected, connect, isLoading: isWalletLoading } = useWallet();
     const [nickname, setNickname] = useState('');
     const [pubKey, setPubKey] = useState<string>('');
     const [isValidating, setIsValidating] = useState(false);
@@ -43,12 +44,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         let mounted = true;
         (async () => {
             try {
-                // Get wallet public key
-                const walletAdapter = await WalletFactory.createAuto();
-                const publicKey = await walletAdapter.getPublicKey();
-                
-                if (publicKey && mounted) {
-                    const pubKeyString = publicKey.toBase58 ? publicKey.toBase58() : publicKey.toString();
+                // If not connected, trigger connection
+                if (!isConnected && !isWalletLoading) {
+                    console.log('[ProfileScreen] Wallet not connected, triggering connection...');
+                    await connect();
+                }
+
+                if (walletPublicKey && mounted) {
+                    const pubKeyString = walletPublicKey.toBase58();
                     setPubKey(pubKeyString);
 
                     // Load persisted nickname for this pubKey
@@ -95,7 +98,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             }
         })();
         return () => { mounted = false; };
-    }, []);
+    }, [isConnected, isWalletLoading, walletPublicKey, connect]);
 
     const validateAndSave = async (nick?: string) => {
         const trimmedNickname = (nick ?? nickname).trim();
@@ -239,7 +242,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '500', marginBottom: 16 }}>
                             SNS Domain
                         </Text>
-                        
+
                         {/* SNS Domain Items */}
                         <View style={{ gap: 12 }}>
                             {snsDomains.length > 0 ? (
@@ -253,25 +256,25 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                                             gap: 8,
                                         }}
                                     >
-                                          <View style={{ transform: [{ scale: 0.75 }] }}>
+                                        <View style={{ transform: [{ scale: 0.75 }] }}>
                                             <Switch
-                                              value={useSns && snsNickname === domain}
-                                              onValueChange={(val) => {
-                                                  setUseSns(val);
-                                                  if (val) {
-                                                      setSnsNickname(domain);
-                                                  } else {
-                                                      setSnsNickname(null);
-                                                  }
-                                              }}
-                                              trackColor={{ false: '#9CA3AF', true: '#22D3EE' }}
-                                              thumbColor={useSns && snsNickname === domain ? '#FFFFFF' : '#fff'}
+                                                value={useSns && snsNickname === domain}
+                                                onValueChange={(val) => {
+                                                    setUseSns(val);
+                                                    if (val) {
+                                                        setSnsNickname(domain);
+                                                    } else {
+                                                        setSnsNickname(null);
+                                                    }
+                                                }}
+                                                trackColor={{ false: '#9CA3AF', true: '#22D3EE' }}
+                                                thumbColor={useSns && snsNickname === domain ? '#FFFFFF' : '#fff'}
                                             />
-                                          </View>
+                                        </View>
                                         <Text style={{ color: '#FFFFFF', fontSize: 16 }}>
                                             {domain}
                                         </Text>
-                                      
+
                                     </View>
                                 ))
                             ) : (
@@ -287,7 +290,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '500', marginBottom: 16 }}>
                             Seeker Domain Address
                         </Text>
-                        
+
                         <View
                             style={{
                                 flexDirection: 'row',
@@ -296,18 +299,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                                 gap: 8,
                             }}
                         >
-                              <View style={{ transform: [{ scale: 0.75 }] }}>
+                            <View style={{ transform: [{ scale: 0.75 }] }}>
                                 <Switch
-                                  value={false}
-                                  onValueChange={() => {}}
-                                  trackColor={{ false: '#9CA3AF', true: '#22D3EE' }}
-                                  thumbColor='#fff'
+                                    value={false}
+                                    onValueChange={() => { }}
+                                    trackColor={{ false: '#9CA3AF', true: '#22D3EE' }}
+                                    thumbColor='#fff'
                                 />
-                              </View>
+                            </View>
                             <Text style={{ color: '#FFFFFF', fontSize: 16 }}>
                                 popo.skr
                             </Text>
-                          
+
                         </View>
                     </View>
                 </View>

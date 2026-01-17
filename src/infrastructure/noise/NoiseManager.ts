@@ -13,6 +13,13 @@ import { Packet, PacketType } from '../../domain/entities/Packet';
 import { IBLEAdapter } from '../ble/IBLEAdapter';
 import { SecureIdentityStateManager } from '../identity/SecureIdentityStateManager';
 
+export interface NoiseSessionInfo {
+    deviceId: string;
+    isHandshakeComplete: boolean;
+    isInitiator: boolean;
+    remotePublicKey?: string;
+}
+
 /**
  * NoiseManager
  * - Manages NoiseSession instances per peer/device
@@ -21,10 +28,14 @@ import { SecureIdentityStateManager } from '../identity/SecureIdentityStateManag
 export class NoiseManager {
     private adapter: IBLEAdapter | null = null;
     private sessions: Map<string, { session: NoiseSession; initiator: boolean }> = new Map();
+    private listeners: Set<(deviceId: string, plaintext: Uint8Array) => void> = new Set();
+    private sessionListeners: Set<(deviceId: string, session: NoiseSessionInfo) => void> = new Set();
 
     constructor(private readonly identityStateManager: SecureIdentityStateManager) { }
 
     attachAdapter(adapter: IBLEAdapter) {
+        if (this.adapter === adapter) return;
+
         this.adapter = adapter;
         // Register packet handler for peripheral-mode incoming writes
         this.adapter.setPacketHandler((packet: Packet, senderDeviceId: string) => {
@@ -33,6 +44,32 @@ export class NoiseManager {
             });
         });
         console.log('[NOISE] Adapter attached');
+    }
+
+    addMessageListener(listener: (deviceId: string, plaintext: Uint8Array) => void) {
+        this.listeners.add(listener);
+    }
+
+    removeMessageListener(listener: (deviceId: string, plaintext: Uint8Array) => void) {
+        this.listeners.delete(listener);
+    }
+
+    addSessionListener(listener: (deviceId: string, session: NoiseSessionInfo) => void) {
+        this.sessionListeners.add(listener);
+    }
+
+    removeSessionListener(listener: (deviceId: string, session: NoiseSessionInfo) => void) {
+        this.sessionListeners.delete(listener);
+    }
+
+    private notifySessionUpdate(deviceId: string, session: NoiseSession, initiator: boolean) {
+        const info: NoiseSessionInfo = {
+            deviceId,
+            isHandshakeComplete: session.isHandshakeComplete(),
+            isInitiator: initiator,
+            remotePublicKey: session.getRemoteStaticKey() ? Buffer.from(session.getRemoteStaticKey()!).toString('hex') : undefined
+        };
+        this.sessionListeners.forEach(listener => listener(deviceId, info));
     }
 
     /**
@@ -58,6 +95,9 @@ export class NoiseManager {
 
         const session = this.getOrCreateSession(deviceId, identity.noiseStaticKeyPair, true);
         await session.initialize();
+
+        this.notifySessionUpdate(deviceId, session, true);
+
         const msg = await session.initiateHandshake();
 
         const packet = new Packet({
@@ -128,9 +168,14 @@ export class NoiseManager {
                     await session.initialize();
                     entry = { session, initiator: false };
                     this.sessions.set(senderDeviceId, entry);
+                    this.notifySessionUpdate(senderDeviceId, entry.session, entry.initiator);
                 }
 
                 const response = await entry.session.processHandshakeMessage(Buffer.from(packet.payload));
+
+                // Notify after processing message (state might have changed to TRANSPORT)
+                this.notifySessionUpdate(senderDeviceId, entry.session, entry.initiator);
+
                 if (response) {
                     const identity = this.identityStateManager.getIdentity();
                     // Send response back
@@ -153,10 +198,27 @@ export class NoiseManager {
                 return;
             }
 
-            // Transport messages (encrypted payload)
+            // Transport messages (encrypted payload or unencrypted broadcast)
             if (packet.type === PacketType.MESSAGE) {
                 const entry = this.sessions.get(senderDeviceId);
+
                 if (!entry) {
+                    // Check if it's a broadcast (unencrypted)
+                    if (!packet.recipientId) {
+                        const plaintext = packet.payload;
+                        console.log('[NOISE] Received unencrypted broadcast from', senderDeviceId);
+
+                        // Notify listeners
+                        this.listeners.forEach(listener => {
+                            try {
+                                listener(senderDeviceId, plaintext);
+                            } catch (err) {
+                                console.error('[NOISE] Error in message listener:', err);
+                            }
+                        });
+                        return;
+                    }
+
                     console.warn('[NOISE] Received encrypted message but no session exists');
                     return;
                 }
@@ -167,7 +229,16 @@ export class NoiseManager {
                 }
 
                 const plaintext = await entry.session.decryptMessage(Buffer.from(packet.payload));
-                // Emit or handle plaintext as needed - for demo we log
+
+                // Notify listeners
+                this.listeners.forEach(listener => {
+                    try {
+                        listener(senderDeviceId, plaintext);
+                    } catch (err) {
+                        console.error('[NOISE] Error in message listener:', err);
+                    }
+                });
+
                 console.log('[NOISE] Decrypted message from', senderDeviceId, ':', new TextDecoder().decode(plaintext));
                 return;
             }

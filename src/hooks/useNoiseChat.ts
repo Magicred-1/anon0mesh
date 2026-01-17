@@ -31,48 +31,44 @@
  */
 
 import { Buffer } from 'buffer';
-import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBLE } from '../contexts/BLEContext';
-import { KeyPair, NoiseManager } from '../infrastructure/noise/NoiseManager';
+import { identityStateManager } from '../infrastructure/identity';
+import { NoiseManager, NoiseSessionInfo } from '../infrastructure/noise/NoiseManager';
 
-const NOISE_KEYPAIR_KEY = 'noise_static_keypair';
-
-export interface NoiseSessionInfo {
-  deviceId: string;
-  isHandshakeComplete: boolean;
-  isInitiator: boolean;
-  remotePublicKey?: string;
-}
-
-export interface ReceivedMessage {
+export interface NoiseMessage {
   deviceId: string;
   message: string;
   timestamp: number;
+  isMine: boolean;
+  to?: string;
 }
 
 export interface UseNoiseChatReturn {
   /** Send an encrypted text message to a device */
   sendEncryptedMessage: (deviceId: string, message: string) => Promise<void>;
-  
+
   /** Initiate a Noise handshake with a device */
   initiateHandshake: (deviceId: string) => Promise<void>;
-  
+
   /** Check if handshake is complete for a device */
   isHandshakeComplete: (deviceId: string) => boolean;
-  
+
   /** Get all active sessions */
   sessions: Map<string, NoiseSessionInfo>;
-  
+
   /** Received decrypted messages */
-  receivedMessages: ReceivedMessage[];
-  
+  messages: NoiseMessage[];
+
+  /** Broadcast an unencrypted message to all nearby devices */
+  broadcastMessage: (message: string) => Promise<void>;
+
   /** Clear received messages */
   clearMessages: () => void;
-  
+
   /** Check if NoiseManager is ready */
   isReady: boolean;
-  
+
   /** Error state */
   error: string | null;
 }
@@ -81,60 +77,12 @@ export interface UseNoiseChatReturn {
  * Hook for encrypted messaging using Noise Protocol
  */
 export function useNoiseChat(): UseNoiseChatReturn {
-  const { bleAdapter, isInitialized } = useBLE();
+  const { bleAdapter, isInitialized, broadcastMessage: bleBroadcast } = useBLE();
   const noiseManagerRef = useRef<NoiseManager | null>(null);
   const [sessions, setSessions] = useState<Map<string, NoiseSessionInfo>>(new Map());
-  const [receivedMessages, setReceivedMessages] = useState<ReceivedMessage[]>([]);
+  const [messages, setMessages] = useState<NoiseMessage[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const keypairRef = useRef<KeyPair | null>(null);
-
-  /**
-   * Load or generate static keypair for this device
-   */
-  const loadKeypair = useCallback(async (): Promise<KeyPair> => {
-    try {
-      // Try to load existing keypair
-      const stored = await SecureStore.getItemAsync(NOISE_KEYPAIR_KEY);
-      
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        keypairRef.current = {
-          publicKey: new Uint8Array(Object.values(parsed.publicKey)),
-          privateKey: new Uint8Array(Object.values(parsed.privateKey)),
-        };
-        console.log('[useNoiseChat] Loaded existing keypair');
-        return keypairRef.current;
-      }
-
-      // Generate new keypair
-      console.log('[useNoiseChat] Generating new keypair...');
-      const publicKey = new Uint8Array(32);
-      const privateKey = new Uint8Array(32);
-      
-      // Generate random keys (in production, use proper Curve25519 key generation)
-      crypto.getRandomValues(privateKey);
-      crypto.getRandomValues(publicKey);
-
-      keypairRef.current = { publicKey, privateKey };
-
-      // Store for future use
-      await SecureStore.setItemAsync(
-        NOISE_KEYPAIR_KEY,
-        JSON.stringify({
-          publicKey: Array.from(publicKey),
-          privateKey: Array.from(privateKey),
-        })
-      );
-
-      console.log('[useNoiseChat] Generated and stored new keypair');
-      return keypairRef.current;
-    } catch (err) {
-      console.error('[useNoiseChat] Error loading/generating keypair:', err);
-      throw err;
-    }
-  }, []);
-
   /**
    * Initialize NoiseManager and attach to BLE adapter
    */
@@ -146,21 +94,26 @@ export function useNoiseChat(): UseNoiseChatReturn {
     const initNoiseManager = async () => {
       try {
         console.log('[useNoiseChat] Initializing NoiseManager...');
-        
-        // Load/generate keypair
-        await loadKeypair();
 
-        // Create NoiseManager instance
-        const manager = new NoiseManager();
-        
-        // Attach to BLE adapter with custom message handler
+        // Initialize identity state (loads or generates identity)
+        const identity = await identityStateManager.initialize();
+        if (!identity) {
+          console.warn('[useNoiseChat] No identity found, creating one...');
+          // In a real app, we might want to prompt for a nickname
+          // For now, we'll assume an identity should exist or be created elsewhere
+        }
+
+        // Create NoiseManager instance with identity state manager
+        const manager = new NoiseManager(identityStateManager);
+
+        // Attach to BLE adapter
         manager.attachAdapter(bleAdapter);
-        
+
         // Store reference
         noiseManagerRef.current = manager;
         setIsReady(true);
         setError(null);
-        
+
         console.log('[useNoiseChat] ✅ NoiseManager initialized and attached');
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -177,7 +130,47 @@ export function useNoiseChat(): UseNoiseChatReturn {
       noiseManagerRef.current = null;
       setIsReady(false);
     };
-  }, [bleAdapter, isInitialized, loadKeypair]);
+  }, [bleAdapter, isInitialized]);
+
+  /**
+   * Listen for messages and session updates
+   */
+  useEffect(() => {
+    const manager = noiseManagerRef.current;
+    if (!manager) return;
+
+    const messageListener = (deviceId: string, plaintext: Uint8Array) => {
+      const message = new TextDecoder().decode(plaintext);
+      console.log(`[useNoiseChat] Received message from ${deviceId}:`, message);
+
+      setMessages(prev => [
+        ...prev,
+        {
+          deviceId,
+          message,
+          timestamp: Date.now(),
+          isMine: false,
+        }
+      ]);
+    };
+
+    const sessionListener = (deviceId: string, sessionInfo: NoiseSessionInfo) => {
+      console.log(`[useNoiseChat] Session update for ${deviceId}:`, sessionInfo);
+      setSessions(prev => {
+        const next = new Map(prev);
+        next.set(deviceId, sessionInfo);
+        return next;
+      });
+    };
+
+    manager.addMessageListener(messageListener);
+    manager.addSessionListener(sessionListener);
+
+    return () => {
+      manager.removeMessageListener(messageListener);
+      manager.removeSessionListener(sessionListener);
+    };
+  }, [isReady]);
 
   /**
    * Initiate handshake with a device
@@ -186,15 +179,11 @@ export function useNoiseChat(): UseNoiseChatReturn {
     if (!noiseManagerRef.current) {
       throw new Error('NoiseManager not initialized');
     }
-    if (!keypairRef.current) {
-      throw new Error('Keypair not loaded');
-    }
-
     try {
       console.log(`[useNoiseChat] Initiating handshake with ${deviceId}...`);
-      
-      await noiseManagerRef.current.initiateHandshakeTo(deviceId, keypairRef.current);
-      
+
+      await noiseManagerRef.current.initiateHandshakeTo(deviceId);
+
       // Update session info
       setSessions(prev => {
         const next = new Map(prev);
@@ -205,7 +194,7 @@ export function useNoiseChat(): UseNoiseChatReturn {
         });
         return next;
       });
-      
+
       console.log(`[useNoiseChat] ✅ Handshake initiated with ${deviceId}`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -229,10 +218,22 @@ export function useNoiseChat(): UseNoiseChatReturn {
 
     try {
       console.log(`[useNoiseChat] Sending encrypted message to ${deviceId}...`);
-      
+
       const plaintext = Buffer.from(message, 'utf-8');
       await noiseManagerRef.current.encryptAndSend(deviceId, new Uint8Array(plaintext));
-      
+
+      // Add to local messages
+      setMessages(prev => [
+        ...prev,
+        {
+          deviceId,
+          message,
+          timestamp: Date.now(),
+          isMine: true,
+          to: deviceId,
+        }
+      ]);
+
       console.log(`[useNoiseChat] ✅ Encrypted message sent to ${deviceId}`);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -249,10 +250,33 @@ export function useNoiseChat(): UseNoiseChatReturn {
   }, [sessions]);
 
   /**
+   * Broadcast unencrypted message
+   */
+  const broadcastMessage = useCallback(async (message: string) => {
+    try {
+      await bleBroadcast(message);
+
+      // Add to local messages
+      setMessages(prev => [
+        ...prev,
+        {
+          deviceId: 'broadcast',
+          message,
+          timestamp: Date.now(),
+          isMine: true,
+        }
+      ]);
+    } catch (err) {
+      console.error('[useNoiseChat] Broadcast failed:', err);
+      throw err;
+    }
+  }, [bleBroadcast]);
+
+  /**
    * Clear received messages
    */
   const clearMessages = useCallback(() => {
-    setReceivedMessages([]);
+    setMessages([]);
   }, []);
 
   // Listen for session state changes (would need to be implemented in NoiseManager)
@@ -263,7 +287,8 @@ export function useNoiseChat(): UseNoiseChatReturn {
     initiateHandshake,
     isHandshakeComplete,
     sessions,
-    receivedMessages,
+    messages,
+    broadcastMessage,
     clearMessages,
     isReady,
     error,
