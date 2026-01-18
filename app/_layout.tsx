@@ -1,38 +1,44 @@
 // Import polyfills FIRST (before any other imports)
-import 'react-native-get-random-values';
+import "react-native-get-random-values";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from "@react-navigation/native";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import "react-native-reanimated";
 
-import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
-import '@/global.css';
-import { BLEProvider } from '@/src/contexts/BLEContext';
-import { WalletProvider } from '@/src/contexts/WalletContext';
+import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
+import "@/global.css";
+import { BLEProvider } from "@/src/contexts/BLEContext";
+import { WalletProvider } from "@/src/contexts/WalletContext";
 
-import { identityStateManager } from '@/src/infrastructure/identity';
+import { identityStateManager } from "@/src/infrastructure/identity";
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  anchor: "(tabs)",
 };
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
-    identityStateManager.initialize().catch(err => {
-      console.error('[RootLayout] Failed to initialize identity state:', err);
+    identityStateManager.initialize().catch((err) => {
+      console.error("[RootLayout] Failed to initialize identity state:", err);
     });
   }, []);
 
   return (
-    <GluestackUIProvider mode="dark" >
-      <BLEProvider>
-        <WalletProvider autoInitialize={true}>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <GluestackUIProvider mode="dark">
+      <WalletProvider autoInitialize={true}>
+        <BLEProvider>
+          <ThemeProvider
+            value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+          >
             {/* Hide default stack header globally */}
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="onboarding" />
@@ -46,8 +52,8 @@ export default function RootLayout() {
             </Stack>
             <StatusBar style="auto" />
           </ThemeProvider>
-        </WalletProvider>
-      </BLEProvider>
+        </BLEProvider>
+      </WalletProvider>
     </GluestackUIProvider>
   );
 }
