@@ -1,6 +1,6 @@
 /**
  * WalletFactory - Clean Factory Pattern with Auto-Detection
- * 
+ *
  * Creates wallet adapters with proper abstraction
  * - Hides implementation details
  * - Returns IWalletAdapter interface
@@ -8,23 +8,26 @@
  * - Easy to add new wallet types
  */
 
-import { IWalletAdapter, WalletMode } from './IWalletAdapter';
-import { LocalWalletAdapter } from './LocalWallet/LocalWalletAdapter';
-import { MWAWalletAdapter } from './MWA/MWAWalletAdapter';
-import { DeviceDetector } from './utils/DeviceDetector';
+import { IWalletAdapter, WalletMode } from "./IWalletAdapter";
+import { LocalWalletAdapter } from "./LocalWallet/LocalWalletAdapter";
+import { MWAWalletAdapter } from "./MWA/MWAWalletAdapter";
+import { DeviceDetector } from "./utils/DeviceDetector";
 
 export class WalletFactory {
   /**
    * Create wallet adapter by mode
    */
-  static async create(mode: WalletMode, keypair?: any): Promise<IWalletAdapter> {
+  static async create(
+    mode: WalletMode,
+    keypair?: any,
+  ): Promise<IWalletAdapter> {
     let adapter: IWalletAdapter;
 
     switch (mode) {
-      case 'local':
+      case "local":
         adapter = new LocalWalletAdapter();
         break;
-      case 'mwa':
+      case "mwa":
         adapter = new MWAWalletAdapter();
         break;
       default:
@@ -51,14 +54,14 @@ export class WalletFactory {
    * Create local wallet (convenience)
    */
   static async createLocal(keypair?: any): Promise<IWalletAdapter> {
-    return WalletFactory.create('local', keypair);
+    return WalletFactory.create("local", keypair);
   }
 
   /**
    * Create MWA wallet (convenience)
    */
   static async createMWA(): Promise<IWalletAdapter> {
-    return WalletFactory.create('mwa');
+    return WalletFactory.create("mwa");
   }
 
   /**
@@ -67,16 +70,18 @@ export class WalletFactory {
   static async hasLocalWallet(): Promise<boolean> {
     // On Solana Mobile (Saga/Seeker), we always have a wallet (Seed Vault)
     const isSolanaMobile = DeviceDetector.isSolanaMobileDevice();
-    const hasStored = LocalWalletAdapter.hasStoredWallet();
+    const hasStored = await LocalWalletAdapter.hasStoredWallet();
 
-    console.log('[WalletFactory] hasLocalWallet check:', {
+    console.log("[WalletFactory] hasLocalWallet check:", {
       isSolanaMobile,
       hasStored,
       deviceInfo: DeviceDetector.getDeviceInfo(),
     });
 
     if (isSolanaMobile) {
-      console.log('[WalletFactory] ✅ Detected Solana Mobile device - returning true');
+      console.log(
+        "[WalletFactory] ✅ Detected Solana Mobile device - returning true",
+      );
       return true;
     }
     return hasStored;

@@ -100,6 +100,7 @@ export default function ChatScreen({
     messages: noiseMessages,
     broadcastMessage: broadcastBLE,
     initiateHandshake,
+    isReady: noiseReady,
   } = useNoiseChat();
 
   // Message queue for offline messages
@@ -258,7 +259,7 @@ export default function ChatScreen({
 
   // Initiate handshake when a specific peer is selected (not broadcast)
   useEffect(() => {
-    if (selectedPeer && selectedPeer !== "broadcast" && isInitialized) {
+    if (selectedPeer && selectedPeer !== "broadcast" && noiseReady) {
       const session = sessions.get(selectedPeer);
       if (!session || !session.isHandshakeComplete) {
         console.log(
@@ -270,7 +271,7 @@ export default function ChatScreen({
         });
       }
     }
-  }, [selectedPeer, isInitialized, sessions, initiateHandshake]);
+  }, [selectedPeer, noiseReady, sessions, initiateHandshake]);
 
   // Setup queue send callback - process queued messages when peers available
   useEffect(() => {
