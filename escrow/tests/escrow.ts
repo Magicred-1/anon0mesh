@@ -8,7 +8,7 @@ import {
   getArciumEnv,
   getCompDefAccOffset,
   getArciumAccountBaseSeed,
-  getArciumProgAddress,
+  getArciumProgramId,
   uploadCircuit,
   buildFinalizeCompDefTx,
   RescueCipher,
@@ -34,13 +34,13 @@ const CLUSTER_OFFSET: number | null = null;
 /**
  * Gets the cluster account address based on configuration.
  * - If CLUSTER_OFFSET is set: Uses getClusterAccAddress (devnet/testnet)
- * - If null: Uses getArciumEnv().arciumClusterPubkey (localnet)
+ * - If null: Uses getArciumEnv().arciumClusterOffset (localnet)
  */
 function getClusterAccount(): PublicKey {
   if (CLUSTER_OFFSET !== null) {
     return getClusterAccAddress(CLUSTER_OFFSET);
   } else {
-    return getArciumEnv().arciumClusterPubkey;
+    return getClusterAccAddress(getArciumEnv().arciumClusterOffset);
   }
 }
 
@@ -116,13 +116,13 @@ describe("Escrow", () => {
       )
       .accountsPartial({
         computationAccount: getComputationAccAddress(
-          program.programId,
+          getArciumEnv().arciumClusterOffset,
           computationOffset
         ),
         clusterAccount,
         mxeAccount: getMXEAccAddress(program.programId),
-        mempoolAccount: getMempoolAccAddress(program.programId),
-        executingPool: getExecutingPoolAccAddress(program.programId),
+        mempoolAccount: getMempoolAccAddress(getArciumEnv().arciumClusterOffset),
+        executingPool: getExecutingPoolAccAddress(getArciumEnv().arciumClusterOffset),
         compDefAccount: getCompDefAccAddress(
           program.programId,
           Buffer.from(getCompDefAccOffset("add_together")).readUInt32LE()
@@ -157,7 +157,7 @@ describe("Escrow", () => {
 
     const compDefPDA = PublicKey.findProgramAddressSync(
       [baseSeedCompDefAcc, program.programId.toBuffer(), offset],
-      getArciumProgAddress()
+      getArciumProgramId()
     )[0];
 
     console.log("Comp def pda is ", compDefPDA);

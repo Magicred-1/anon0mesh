@@ -1,20 +1,11 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program_pack::Pack;
-use anchor_lang::solana_program::token_2022::spl_token::state::{Mint as SplMint, Account as SplAccount};
+use anchor_spl::token::{Token, TokenAccount as SplTokenAccount, Mint as SplMint, Transfer, transfer};
 use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::CallbackAccount;
 
-// Re-export token types for convenience
-pub use anchor_lang::solana_program::token_2022::spl_token::{
-    self,
-    instruction as token_instruction,
-    state as token_state,
-    ID as TOKEN_PROGRAM_ID,
-};
-
 // Type aliases for better readability
-pub type TokenAccount = Account<'info, token_state::Account>;
-pub type Mint = Account<'info, token_state::Mint>;
+pub type TokenAccountInfo<'info> = Account<'info, SplTokenAccount>;
+pub type MintInfo<'info> = Account<'info, SplMint>;
 
 const COMP_DEF_OFFSET_INIT_ESCROW_STATS: u32 = comp_def_offset("init_escrow_stats");
 const COMP_DEF_OFFSET_INIT_REFERRAL_STATS: u32 = comp_def_offset("init_referral_stats");
@@ -26,7 +17,7 @@ const COMP_DEF_OFFSET_REVEAL_COUNT: u32 = comp_def_offset("reveal_payment_count"
 pub const USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 pub const ZENZEC_MINT: Pubkey = pubkey!("JDt9rRGaieF6aN1cJkXFeUmsy7ZE4yY3CZb8tVMXVroS");
 
-declare_id!("EujENt3gyDVwqN2h3GXrpi2T6DdkGV5pafPAdXMRo3CM");
+declare_id!("BtZEFfbu3dSJtP5hyQsnnfrL19X2UfLwjts2N7KbJteo");
 
 #[arcium_program]
 pub mod escrow_anonmesh {
@@ -34,17 +25,17 @@ pub mod escrow_anonmesh {
 
     // Initialize computation definitions for encrypted instructions
     pub fn init_escrow_stats_comp_def(ctx: Context<InitEscrowStatsCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, 0, None, None)?;
+        init_comp_def(ctx.accounts, None, None)?;
         Ok(())
     }
 
     pub fn init_referral_stats_comp_def(ctx: Context<InitReferralStatsCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, 0, None, None)?;
+        init_comp_def(ctx.accounts, None, None)?;
         Ok(())
     }
 
     pub fn init_process_payment_comp_def(ctx: Context<InitProcessPaymentCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, 0, None, None)?;
+        init_comp_def(ctx.accounts, None, None)?;
         Ok(())
     }
 
@@ -71,18 +62,25 @@ pub mod escrow_anonmesh {
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
         // Initialize encrypted statistics through MPC
-        let args = vec![Argument::PlaintextU128(nonce)];
+        let args = ArgBuilder::new()
+            .plaintext_u128(nonce)
+            .build();
 
         queue_computation(
             ctx.accounts,
             computation_offset,
             args,
             None,
-            vec![InitEscrowStatsCallback::callback_ix(&[CallbackAccount {
-                pubkey: escrow_key,
-                is_writable: true,
-            }])],
+            vec![InitEscrowStatsCallback::callback_ix(
+                computation_offset,
+                &ctx.accounts.mxe_account,
+                &[CallbackAccount {
+                    pubkey: escrow_key,
+                    is_writable: true,
+                }]
+            )?],
             1,
+            0,  // cu_price_micro: priority fee (0 = no priority)
         )?;
 
         Ok(())
@@ -91,11 +89,17 @@ pub mod escrow_anonmesh {
     #[arcium_callback(encrypted_ix = "init_escrow_stats")]
     pub fn init_escrow_stats_callback(
         ctx: Context<InitEscrowStatsCallback>,
-        output: ComputationOutputs<InitEscrowStatsOutput>,
+        output: SignedComputationOutputs<InitEscrowStatsOutput>,
     ) -> Result<()> {
-        let o = match output {
-            ComputationOutputs::Success(InitEscrowStatsOutput { field_0 }) => field_0,
-            _ => return Err(EscrowError::AbortedComputation.into()),
+        let o = match output.verify_output(
+            &ctx.accounts.cluster_account,
+            &ctx.accounts.computation_account
+        ) {
+            Ok(InitEscrowStatsOutput { field_0 }) => field_0,
+            Err(e) => {
+                msg!("Computation verification failed: {}", e);
+                return Err(ErrorCode::AbortedComputation.into())
+            },
         };
 
         ctx.accounts.escrow.encrypted_stats = o.ciphertexts;
@@ -106,7 +110,7 @@ pub mod escrow_anonmesh {
 
     pub fn pause_escrow(ctx: Context<UpdateEscrowActive>) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow;
-        require!(escrow.active, EscrowError::AlreadyPaused);
+        require!(escrow.active, ErrorCode::AlreadyPaused);
         escrow.active = false;
         escrow.last_updated = Clock::get()?.unix_timestamp;
         Ok(())
@@ -114,7 +118,7 @@ pub mod escrow_anonmesh {
 
     pub fn resume_escrow(ctx: Context<UpdateEscrowActive>) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow;
-        require!(!escrow.active, EscrowError::AlreadyActive);
+        require!(!escrow.active, ErrorCode::AlreadyActive);
         escrow.active = true;
         escrow.last_updated = Clock::get()?.unix_timestamp;
         Ok(())
@@ -142,7 +146,7 @@ pub mod escrow_anonmesh {
         let escrow_key = ctx.accounts.escrow.key();
         let escrow_nonce = ctx.accounts.escrow.nonce;
 
-        require!(ctx.accounts.escrow.active, EscrowError::EscrowPaused);
+        require!(ctx.accounts.escrow.active, ErrorCode::EscrowPaused);
 
         let payment = &mut ctx.accounts.payment;
         payment.sender = ctx.accounts.sender.key();
@@ -206,25 +210,30 @@ pub mod escrow_anonmesh {
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-        let args = vec![
-            Argument::ArcisPubkey(payment_encryption_pubkey),
-            Argument::PlaintextU128(payment_nonce),
-            Argument::EncryptedU64(encrypted_amount),
-            Argument::PlaintextBool(true),
-            Argument::PlaintextU128(escrow_nonce),
-            Argument::Account(escrow_key, 8 + 1, 32 * 3),
-        ];
+        let args = ArgBuilder::new()
+            .x25519_pubkey(payment_encryption_pubkey)
+            .plaintext_u128(payment_nonce)
+            .encrypted_u64(encrypted_amount)
+            .plaintext_bool(true)
+            .plaintext_u128(escrow_nonce)
+            .account(escrow_key, 8 + 1, 32 * 3)
+            .build();
 
         queue_computation(
             ctx.accounts,
             computation_offset,
             args,
             None,
-            vec![ProcessPaymentCallback::callback_ix(&[CallbackAccount {
-                pubkey: escrow_key,
-                is_writable: true,
-            }])],
+            vec![ProcessPaymentCallback::callback_ix(
+                computation_offset,
+                &ctx.accounts.mxe_account,
+                &[CallbackAccount {
+                    pubkey: escrow_key,
+                    is_writable: true,
+                }]
+            )?],
             1,
+            0,  // cu_price_micro: priority fee (0 = no priority)
         )?;
 
         ctx.accounts.escrow.total_fund_regulated = ctx
@@ -240,11 +249,17 @@ pub mod escrow_anonmesh {
     #[arcium_callback(encrypted_ix = "process_payment")]
     pub fn process_payment_callback(
         ctx: Context<ProcessPaymentCallback>,
-        output: ComputationOutputs<ProcessPaymentOutput>,
+        output: SignedComputationOutputs<ProcessPaymentOutput>,
     ) -> Result<()> {
-        let o = match output {
-            ComputationOutputs::Success(ProcessPaymentOutput { field_0 }) => field_0,
-            _ => return Err(EscrowError::AbortedComputation.into()),
+        let o = match output.verify_output(
+            &ctx.accounts.cluster_account,
+            &ctx.accounts.computation_account
+        ) {
+            Ok(ProcessPaymentOutput { field_0 }) => field_0,
+            Err(e) => {
+                msg!("Computation verification failed: {}", e);
+                return Err(ErrorCode::AbortedComputation.into())
+            },
         };
 
         ctx.accounts.escrow.encrypted_stats = o.ciphertexts;
@@ -266,24 +281,29 @@ pub mod escrow_anonmesh {
     ) -> Result<()> {
         require!(
             ctx.accounts.authority.key() == ctx.accounts.escrow.owner,
-            EscrowError::InvalidAuthority
+            ErrorCode::InvalidAuthority
         );
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-        let args = vec![
-            Argument::PlaintextU128(ctx.accounts.escrow.nonce),
-            Argument::Account(ctx.accounts.escrow.key(), 8 + 1, 32 * 3),
-            Argument::PlaintextU64(threshold),
-        ];
+        let args = ArgBuilder::new()
+            .plaintext_u128(ctx.accounts.escrow.nonce)
+            .account(ctx.accounts.escrow.key(), 8 + 1, 32 * 3)
+            .plaintext_u64(threshold)
+            .build();
 
         queue_computation(
             ctx.accounts,
             computation_offset,
             args,
             None,
-            vec![CheckVolumeThresholdCallback::callback_ix(&[])],
+            vec![CheckVolumeThresholdCallback::callback_ix(
+                computation_offset,
+                &ctx.accounts.mxe_account,
+                &[]
+            )?],
             1,
+            0,
         )?;
 
         Ok(())
@@ -292,11 +312,17 @@ pub mod escrow_anonmesh {
     #[arcium_callback(encrypted_ix = "check_volume_threshold")]
     pub fn check_volume_threshold_callback(
         ctx: Context<CheckVolumeThresholdCallback>,
-        output: ComputationOutputs<CheckVolumeThresholdOutput>,
+        output: SignedComputationOutputs<CheckVolumeThresholdOutput>,
     ) -> Result<()> {
-        let result = match output {
-            ComputationOutputs::Success(CheckVolumeThresholdOutput { field_0 }) => field_0,
-            _ => return Err(EscrowError::AbortedComputation.into()),
+        let result = match output.verify_output(
+            &ctx.accounts.cluster_account,
+            &ctx.accounts.computation_account
+        ) {
+            Ok(CheckVolumeThresholdOutput { field_0 }) => field_0,
+            Err(e) => {
+                msg!("Computation verification failed: {}", e);
+                return Err(ErrorCode::AbortedComputation.into())
+            },
         };
 
         emit!(ThresholdCheckEvent {
@@ -313,23 +339,28 @@ pub mod escrow_anonmesh {
     ) -> Result<()> {
         require!(
             ctx.accounts.authority.key() == ctx.accounts.escrow.owner,
-            EscrowError::InvalidAuthority
+            ErrorCode::InvalidAuthority
         );
 
         ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-        let args = vec![
-            Argument::PlaintextU128(ctx.accounts.escrow.nonce),
-            Argument::Account(ctx.accounts.escrow.key(), 8 + 1, 32 * 3),
-        ];
+        let args = ArgBuilder::new()
+            .plaintext_u128(ctx.accounts.escrow.nonce)
+            .account(ctx.accounts.escrow.key(), 8 + 1, 32 * 3)
+            .build();
 
         queue_computation(
             ctx.accounts,
             computation_offset,
             args,
             None,
-            vec![RevealPaymentCountCallback::callback_ix(&[])],
+            vec![RevealPaymentCountCallback::callback_ix(
+                computation_offset,
+                &ctx.accounts.mxe_account,
+                &[]
+            )?],
             1,
+            0,
         )?;
 
         Ok(())
@@ -338,11 +369,17 @@ pub mod escrow_anonmesh {
     #[arcium_callback(encrypted_ix = "reveal_payment_count")]
     pub fn reveal_payment_count_callback(
         ctx: Context<RevealPaymentCountCallback>,
-        output: ComputationOutputs<RevealPaymentCountOutput>,
+        output: SignedComputationOutputs<RevealPaymentCountOutput>,
     ) -> Result<()> {
-        let count = match output {
-            ComputationOutputs::Success(RevealPaymentCountOutput { field_0 }) => field_0,
-            _ => return Err(EscrowError::AbortedComputation.into()),
+        let count = match output.verify_output(
+            &ctx.accounts.cluster_account,
+            &ctx.accounts.computation_account
+        ) {
+            Ok(RevealPaymentCountOutput { field_0 }) => field_0,
+            Err(e) => {
+                msg!("Computation verification failed: {}", e);
+                return Err(ErrorCode::AbortedComputation.into())
+            },
         };
 
         emit!(PaymentCountEvent {
@@ -361,7 +398,7 @@ pub mod escrow_anonmesh {
     ) -> Result<()> {
         let payment = &mut ctx.accounts.payment;
         let escrow = &mut ctx.accounts.escrow;
-        require!(escrow.active, EscrowError::EscrowPaused);
+        require!(escrow.active, ErrorCode::EscrowPaused);
 
         payment.sender = ctx.accounts.sender.key();
         payment.recipient = recipient;
@@ -432,7 +469,7 @@ pub mod escrow_anonmesh {
     ) -> Result<()> {
         let payment = &mut ctx.accounts.payment;
         let escrow = &mut ctx.accounts.escrow;
-        require!(escrow.active, EscrowError::EscrowPaused);
+        require!(escrow.active, ErrorCode::EscrowPaused);
 
         // Update payment details
         payment.sender = ctx.accounts.sender.key();
@@ -463,35 +500,35 @@ pub mod escrow_anonmesh {
         // Transfer to recipient
         let cpi_recipient = CpiContext::new(
             token_program.clone(),
-            token_instruction::Transfer {
+            Transfer {
                 from: ctx.accounts.sender_token_account.to_account_info(),
                 to: ctx.accounts.recipient_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token_instruction::transfer(cpi_recipient, transferable_amount)?;
+        transfer(cpi_recipient, transferable_amount)?;
 
         // Transfer to treasury
         let cpi_treasury = CpiContext::new(
             token_program.clone(),
-            token_instruction::Transfer {
+            Transfer {
                 from: ctx.accounts.sender_token_account.to_account_info(),
                 to: ctx.accounts.treasury_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token_instruction::transfer(cpi_treasury, payment.treasury_reward)?;
+        transfer(cpi_treasury, payment.treasury_reward)?;
 
         // Transfer to referral
         let cpi_referral = CpiContext::new(
             token_program.clone(),
-            token_instruction::Transfer {
+            Transfer {
                 from: ctx.accounts.sender_token_account.to_account_info(),
                 to: ctx.accounts.referral_token_account.to_account_info(),
                 authority,
             },
         );
-        token_instruction::transfer(cpi_referral, payment.referal_reward)?;
+        transfer(cpi_referral, payment.referal_reward)?;
 
         // Update escrow stats
         escrow.total_fund_regulated = escrow
@@ -502,10 +539,7 @@ pub mod escrow_anonmesh {
         // Emit event
         emit!(ConfidentialPaymentEvent {
             sender: payment.sender,
-            recipient: payment.recipient,
-            amount,
             timestamp: payment.timestamp,
-            asset_mint: payment.asset_mint,
         });
 
         Ok(())
@@ -519,7 +553,7 @@ pub mod escrow_anonmesh {
     ) -> Result<()> {
         let payment = &mut ctx.accounts.payment;
         let escrow = &mut ctx.accounts.escrow;
-        require!(escrow.active, EscrowError::EscrowPaused);
+        require!(escrow.active, ErrorCode::EscrowPaused);
 
         // Update payment details
         payment.sender = ctx.accounts.sender.key();
@@ -550,35 +584,35 @@ pub mod escrow_anonmesh {
         // Transfer to recipient
         let cpi_recipient = CpiContext::new(
             token_program.clone(),
-            token_instruction::Transfer {
+            Transfer {
                 from: ctx.accounts.sender_token_account.to_account_info(),
                 to: ctx.accounts.recipient_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token_instruction::transfer(cpi_recipient, transferable_amount)?;
+        transfer(cpi_recipient, transferable_amount)?;
 
         // Transfer to treasury
         let cpi_treasury = CpiContext::new(
             token_program.clone(),
-            token_instruction::Transfer {
+            Transfer {
                 from: ctx.accounts.sender_token_account.to_account_info(),
                 to: ctx.accounts.treasury_token_account.to_account_info(),
                 authority: authority.clone(),
             },
         );
-        token_instruction::transfer(cpi_treasury, payment.treasury_reward)?;
+        transfer(cpi_treasury, payment.treasury_reward)?;
 
         // Transfer to referral
         let cpi_referral = CpiContext::new(
             token_program.clone(),
-            token_instruction::Transfer {
+            Transfer {
                 from: ctx.accounts.sender_token_account.to_account_info(),
                 to: ctx.accounts.referral_token_account.to_account_info(),
                 authority,
             },
         );
-        token_instruction::transfer(cpi_referral, payment.referal_reward)?;
+        transfer(cpi_referral, payment.referal_reward)?;
 
         // Update escrow stats
         escrow.total_fund_regulated = escrow
@@ -589,10 +623,7 @@ pub mod escrow_anonmesh {
         // Emit event
         emit!(ConfidentialPaymentEvent {
             sender: payment.sender,
-            recipient: payment.recipient,
-            amount,
             timestamp: payment.timestamp,
-            asset_mint: payment.asset_mint,
         });
 
         Ok(())
@@ -614,7 +645,7 @@ pub struct InitializeEscrow<'info> {
         bump,
         address = derive_sign_pda!(),
     )]
-    pub sign_pda_account: Account<'info, SignerAccount>,
+    pub sign_pda_account: Account<'info, ArciumSignerAccount>,
 
     #[account(
         address = derive_mxe_pda!()
@@ -623,21 +654,21 @@ pub struct InitializeEscrow<'info> {
 
     #[account(
         mut,
-        address = derive_mempool_pda!()
+        address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: mempool_account
     pub mempool_account: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_execpool_pda!()
+        address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: executing_pool
     pub executing_pool: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_comp_pda!(computation_offset)
+        address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
@@ -649,7 +680,7 @@ pub struct InitializeEscrow<'info> {
 
     #[account(
         mut,
-        address = derive_cluster_pda!(mxe_account, EscrowError::ClusterNotSet)
+        address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     pub cluster_account: Account<'info, Cluster>,
 
@@ -660,6 +691,7 @@ pub struct InitializeEscrow<'info> {
     pub pool_account: Account<'info, FeePool>,
 
     #[account(
+        mut,
         address = ARCIUM_CLOCK_ACCOUNT_ADDRESS,
     )]
     pub clock_account: Account<'info, ClockAccount>,
@@ -686,6 +718,15 @@ pub struct InitEscrowStatsCallback<'info> {
         address = derive_comp_def_pda!(COMP_DEF_OFFSET_INIT_ESCROW_STATS)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
+
+    #[account(address = derive_mxe_pda!())]
+    pub mxe_account: Account<'info, MXEAccount>,
+
+    /// CHECK: computation_account, checked by arcium program
+    pub computation_account: UncheckedAccount<'info>,
+
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
+    pub cluster_account: Account<'info, Cluster>,
 
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -755,18 +796,24 @@ pub struct InitProcessPaymentCompDef<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// Split the large struct into smaller components
-#[account]
-pub struct PaymentAccounts<'info> {
+#[queue_computation_accounts("process_payment", sender)]
+#[derive(Accounts)]
+#[instruction(computation_offset: u64)]
+pub struct SendPaymentSolEncrypted<'info> {
     #[account(mut)]
     pub sender: Signer<'info>,
+
     #[account(
-        mut,
+        init,
+        payer = sender,
+        space = 8 + PaymentAccount::INIT_SPACE,
         seeds = [b"payments", sender.key().as_ref(), &computation_offset.to_le_bytes()],
         bump
     )]
     pub payment: Account<'info, PaymentAccount>,
+
     pub owner: SystemAccount<'info>,
+
     #[account(
         mut,
         seeds = [b"escrow", owner.key().as_ref()],
@@ -774,52 +821,50 @@ pub struct PaymentAccounts<'info> {
         constraint = escrow.owner == owner.key(),
     )]
     pub escrow: Account<'info, EscrowAccount>,
-}
 
-#[derive(Accounts)]
-pub struct PaymentTransferAccounts<'info> {
     #[account(mut)]
     pub recipient: SystemAccount<'info>,
+
     /// CHECK: Referral account
     #[account(mut)]
-    pub referrer: AccountInfo<'info>,
+    pub referral: SystemAccount<'info>,
+
     /// CHECK: Treasury account
     #[account(mut)]
-    pub treasury: AccountInfo<'info>,
-}
+    pub treasury: SystemAccount<'info>,
 
-#[derive(Accounts)]
-pub struct ComputationAccounts<'info> {
-    /// CHECK: Computation account
-    #[account(mut)]
-    pub computation: AccountInfo<'info>,
-    /// CHECK: Callback account
-    #[account(mut)]
-    pub callback: AccountInfo<'info>,
-    /// CHECK: Callback accounts
-    pub remaining_accounts: Vec<AccountInfo<'info>>,
-}
+    #[account(
+        init_if_needed,
+        space = 9,
+        payer = sender,
+        seeds = [&SIGN_PDA_SEED],
+        bump,
+        address = derive_sign_pda!(),
+    )]
+    pub sign_pda_account: Account<'info, ArciumSignerAccount>,
 
-// Grouped computation accounts for better organization
-#[derive(Accounts)]
-pub struct ComputationPdaAccounts<'info> {
+    #[account(
+        address = derive_mxe_pda!()
+    )]
+    pub mxe_account: Account<'info, MXEAccount>,
+
     #[account(
         mut,
-        address = derive_mempool_pda!()
+        address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: mempool_account
     pub mempool_account: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_execpool_pda!()
+        address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: executing_pool
     pub executing_pool: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_comp_pda!(computation_offset)
+        address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
@@ -828,31 +873,10 @@ pub struct ComputationPdaAccounts<'info> {
         address = derive_comp_def_pda!(COMP_DEF_OFFSET_PROCESS_PAYMENT)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-}
-
-#[queue_computation_accounts("process_payment", sender)]
-#[derive(Accounts)]
-#[instruction(computation_offset: u64)]
-pub struct SendPaymentSolEncrypted<'info> {
-    // Payment related accounts
-    #[account(mut)]
-    pub payment_accounts: PaymentAccounts<'info>,
-    
-    // Transfer related accounts
-    pub transfer_accounts: PaymentTransferAccounts<'info>,
-    
-    // Computation related accounts
-    pub computation_accounts: ComputationAccounts<'info>,
-    
-    // Computation PDA accounts
-    pub pda_accounts: ComputationPdaAccounts<'info>,
-    
-    // System program
-    pub system_program: Program<'info, System>,
 
     #[account(
         mut,
-        address = derive_cluster_pda!(mxe_account, EscrowError::ClusterNotSet)
+        address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     pub cluster_account: Account<'info, Cluster>,
 
@@ -863,6 +887,7 @@ pub struct SendPaymentSolEncrypted<'info> {
     pub pool_account: Account<'info, FeePool>,
 
     #[account(
+        mut,
         address = ARCIUM_CLOCK_ACCOUNT_ADDRESS,
     )]
     pub clock_account: Account<'info, ClockAccount>,
@@ -880,6 +905,15 @@ pub struct ProcessPaymentCallback<'info> {
         address = derive_comp_def_pda!(COMP_DEF_OFFSET_PROCESS_PAYMENT)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
+
+    #[account(address = derive_mxe_pda!())]
+    pub mxe_account: Account<'info, MXEAccount>,
+
+    /// CHECK: computation_account, checked by arcium program
+    pub computation_account: UncheckedAccount<'info>,
+
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
+    pub cluster_account: Account<'info, Cluster>,
 
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -910,7 +944,7 @@ pub struct CheckVolumeThreshold<'info> {
         bump,
         address = derive_sign_pda!(),
     )]
-    pub sign_pda_account: Account<'info, SignerAccount>,
+    pub sign_pda_account: Account<'info, ArciumSignerAccount>,
 
     #[account(
         address = derive_mxe_pda!()
@@ -919,21 +953,21 @@ pub struct CheckVolumeThreshold<'info> {
 
     #[account(
         mut,
-        address = derive_mempool_pda!()
+        address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: mempool_account
     pub mempool_account: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_execpool_pda!()
+        address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: executing_pool
     pub executing_pool: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_comp_pda!(computation_offset)
+        address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
@@ -945,7 +979,7 @@ pub struct CheckVolumeThreshold<'info> {
 
     #[account(
         mut,
-        address = derive_cluster_pda!(mxe_account, EscrowError::ClusterNotSet)
+        address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     pub cluster_account: Account<'info, Cluster>,
 
@@ -956,6 +990,7 @@ pub struct CheckVolumeThreshold<'info> {
     pub pool_account: Account<'info, FeePool>,
 
     #[account(
+        mut,
         address = ARCIUM_CLOCK_ACCOUNT_ADDRESS,
     )]
     pub clock_account: Account<'info, ClockAccount>,
@@ -973,6 +1008,15 @@ pub struct CheckVolumeThresholdCallback<'info> {
         address = derive_comp_def_pda!(COMP_DEF_OFFSET_CHECK_THRESHOLD)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
+
+    #[account(address = derive_mxe_pda!())]
+    pub mxe_account: Account<'info, MXEAccount>,
+
+    /// CHECK: computation_account, checked by arcium program
+    pub computation_account: UncheckedAccount<'info>,
+
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
+    pub cluster_account: Account<'info, Cluster>,
 
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -1000,7 +1044,7 @@ pub struct RevealPaymentCount<'info> {
         bump,
         address = derive_sign_pda!(),
     )]
-    pub sign_pda_account: Account<'info, SignerAccount>,
+    pub sign_pda_account: Account<'info, ArciumSignerAccount>,
 
     #[account(
         address = derive_mxe_pda!()
@@ -1009,21 +1053,21 @@ pub struct RevealPaymentCount<'info> {
 
     #[account(
         mut,
-        address = derive_mempool_pda!()
+        address = derive_mempool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: mempool_account
     pub mempool_account: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_execpool_pda!()
+        address = derive_execpool_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: executing_pool
     pub executing_pool: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        address = derive_comp_pda!(computation_offset)
+        address = derive_comp_pda!(computation_offset, mxe_account, ErrorCode::ClusterNotSet)
     )]
     /// CHECK: computation_account
     pub computation_account: UncheckedAccount<'info>,
@@ -1035,7 +1079,7 @@ pub struct RevealPaymentCount<'info> {
 
     #[account(
         mut,
-        address = derive_cluster_pda!(mxe_account, EscrowError::ClusterNotSet)
+        address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet)
     )]
     pub cluster_account: Account<'info, Cluster>,
 
@@ -1046,6 +1090,7 @@ pub struct RevealPaymentCount<'info> {
     pub pool_account: Account<'info, FeePool>,
 
     #[account(
+        mut,
         address = ARCIUM_CLOCK_ACCOUNT_ADDRESS,
     )]
     pub clock_account: Account<'info, ClockAccount>,
@@ -1063,6 +1108,15 @@ pub struct RevealPaymentCountCallback<'info> {
         address = derive_comp_def_pda!(COMP_DEF_OFFSET_REVEAL_COUNT)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
+
+    #[account(address = derive_mxe_pda!())]
+    pub mxe_account: Account<'info, MXEAccount>,
+
+    /// CHECK: computation_account, checked by arcium program
+    pub computation_account: UncheckedAccount<'info>,
+
+    #[account(address = derive_cluster_pda!(mxe_account, ErrorCode::ClusterNotSet))]
+    pub cluster_account: Account<'info, Cluster>,
 
     #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar
@@ -1134,13 +1188,13 @@ pub struct SendPaymentZenZec<'info> {
     
     // Token accounts
     #[account(mut)]
-    pub sender_token_account: Account<'info, token_state::Account>,
+    pub sender_token_account: Account<'info, SplTokenAccount>,
     #[account(mut)]
-    pub recipient_token_account: Account<'info, token_state::Account>,
+    pub recipient_token_account: Account<'info, SplTokenAccount>,
     #[account(mut)]
-    pub referral_token_account: Account<'info, token_state::Account>,
+    pub referral_token_account: Account<'info, SplTokenAccount>,
     #[account(mut)]
-    pub treasury_token_account: Account<'info, token_state::Account>,
+    pub treasury_token_account: Account<'info, SplTokenAccount>,
     
     // Payment account
     #[account(
@@ -1164,8 +1218,8 @@ pub struct SendPaymentZenZec<'info> {
     // Program accounts
     pub owner: SystemAccount<'info>,
     #[account(address = ZENZEC_MINT)]
-    pub mint: Account<'info, token_state::Mint>,
-    pub token_program: Program<'info, token_2022::spl_token::ID>,
+    pub mint: Account<'info, SplMint>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     
     // System accounts
@@ -1194,13 +1248,13 @@ pub struct SendPaymentUsdc<'info> {
     
     // Token accounts
     #[account(mut)]
-    pub sender_token_account: Account<'info, token_state::Account>,
+    pub sender_token_account: Account<'info, SplTokenAccount>,
     #[account(mut)]
-    pub recipient_token_account: Account<'info, token_state::Account>,
+    pub recipient_token_account: Account<'info, SplTokenAccount>,
     #[account(mut)]
-    pub referral_token_account: Account<'info, token_state::Account>,
+    pub referral_token_account: Account<'info, SplTokenAccount>,
     #[account(mut)]
-    pub treasury_token_account: Account<'info, token_state::Account>,
+    pub treasury_token_account: Account<'info, SplTokenAccount>,
     
     // Payment account
     #[account(
@@ -1223,11 +1277,11 @@ pub struct SendPaymentUsdc<'info> {
     
     // Mint account
     #[account(address = USDC_MINT)]
-    pub mint: Account<'info, token_state::Mint>,
+    pub mint: Account<'info, SplMint>,
     
     // Program accounts
     pub owner: SystemAccount<'info>,
-    pub token_program: Program<'info, token_2022::spl_token::ID>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     
     // Additional token accounts (kept for backward compatibility)
@@ -1247,7 +1301,6 @@ pub struct SendPaymentUsdc<'info> {
     // System accounts
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
-    pub system_program: Program<'info, System>,
 }
 
 // Updated EscrowAccount with encrypted statistics
@@ -1282,7 +1335,7 @@ pub struct PaymentAccount {
 
 // Enhanced error codes
 #[error_code]
-pub enum EscrowError {
+pub enum ErrorCode {
     #[msg("Escrow is paused")]
     EscrowPaused,
     #[msg("Escrow already paused")]
