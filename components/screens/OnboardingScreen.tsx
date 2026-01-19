@@ -1,21 +1,21 @@
 import SolanaLogo from "@/components/ui/SolanaLogo";
 import {
-    DeviceDetector,
-    LocalWalletAdapter,
-    MWAWalletAdapter,
-    WalletFactory,
+  DeviceDetector,
+  LocalWalletAdapter,
+  MWAWalletAdapter,
+  WalletFactory,
 } from "@/src/infrastructure/wallet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Animated,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 interface Props {
@@ -312,7 +312,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
     try {
       // Create local wallet (generates new keypair)
       const wallet = new LocalWalletAdapter();
-      await wallet.initialize("0000");
+      await wallet.initialize(); // No PIN needed - uses biometric or device keychain
 
       const publicKey = wallet.getPublicKey();
       if (!publicKey) {
@@ -397,15 +397,30 @@ export default function OnboardingScreen({ onComplete }: Props) {
   async function handleOnboard() {
     if (loading) return;
 
-    // BLE-only mode (no wallet required)
-    await onboardBLEOnly();
+    // Double-check device type before attempting MWA
+    // This prevents race conditions with device detection
+    const deviceInfo = DeviceDetector.getDeviceInfo();
+    const isSolanaMobileDevice = deviceInfo.isSolanaMobile;
 
-    // Original wallet-based onboarding (commented out for BLE-only)
-    if (isSeeker) {
+    console.log("[Onboarding] Final device check:", {
+      stateIsSeeker: isSeeker,
+      actualIsSolanaMobile: isSolanaMobileDevice,
+      deviceInfo,
+    });
+
+    // Use wallet-based onboarding with actual device detection
+    if (isSolanaMobileDevice) {
+      console.log("[Onboarding] Confirmed Solana Mobile device - using MWA");
       await onboardWithMWA();
     } else {
+      console.log(
+        "[Onboarding] Not a Solana Mobile device - using Local Wallet",
+      );
       await onboardWithLocalWallet();
     }
+
+    // BLE-only mode (alternative - currently not used)
+    // await onboardBLEOnly();
   }
 
   return (
@@ -521,12 +536,6 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
               {/* Logo Section */}
               <View style={styles.loadingLogoContainer}>
-                <Animated.Text
-                  style={[styles.logoText, { opacity: logoFadeIn }]}
-                >
-                  ANON<Text style={styles.logoAccent}>⬡</Text>MESH
-                </Animated.Text>
-
                 <Animated.Text
                   style={[styles.loadingStatus, { opacity: statusFadeIn }]}
                 >

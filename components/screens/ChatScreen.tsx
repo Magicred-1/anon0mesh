@@ -57,7 +57,7 @@ export default function ChatScreen({
   const [inputText, setInputText] = useState("");
   const [peers, setPeers] = useState<Peer[]>([]);
   const [selectedPeer, setSelectedPeer] = useState<string | null>(
-    initialSelectedPeer !== undefined ? initialSelectedPeer : "broadcast",
+    initialSelectedPeer === undefined ? "broadcast" : initialSelectedPeer,
   );
   const [showSidebar, setShowSidebar] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);

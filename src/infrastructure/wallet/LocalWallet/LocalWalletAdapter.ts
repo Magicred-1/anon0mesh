@@ -2,10 +2,9 @@
  * LocalWalletAdapter - Encrypted Device Keypair Storage
  *
  * Security:
- * - Argon2id key derivation
- * - AES-256-GCM encryption
- * - Optional biometric gate
- * - Encrypted private key in SecureStore
+ * - SecureStore native encryption
+ * - Optional biometric authentication
+ * - Hardware-backed keychain on iOS/Android
  */
 
 import "@/src/polyfills";
@@ -18,10 +17,8 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 
-import * as Crypto from "expo-crypto";
 import * as LocalAuth from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
-import nacl from "tweetnacl";
 
 import { IWalletAdapter, WalletInfo, WalletMode } from "../IWalletAdapter";
 import { DeviceDetector } from "../utils/DeviceDetector";
@@ -30,15 +27,7 @@ import { DeviceDetector } from "../utils/DeviceDetector";
     Constants & Types
 ======================================================= */
 
-const STORAGE_KEY = "anon0mesh_wallet_keypair_v2";
-const PIN_STORAGE_KEY = "anon0mesh_wallet_pin"; // Store PIN separately with biometric protection
-
-type EncryptedKeyPayload = {
-  v: 1;
-  salt: string; // base64
-  iv: string; // base64
-  ciphertext: string; // base64
-};
+const STORAGE_KEY = "anon0mesh_wallet_keypair_v3"; // v3 = direct storage, no PIN
 
 /* =======================================================
     Crypto Helpers
@@ -56,71 +45,6 @@ async function requireBiometric(): Promise<void> {
   if (!result.success) {
     throw new Error("Biometric authentication failed");
   }
-}
-
-async function deriveKey(pin: string, salt: Uint8Array): Promise<Uint8Array> {
-  // Fast key derivation for mobile - reduced iterations for onboarding speed
-  const iterations = 1000; // Reduced from 10000 for faster wallet creation
-  const pinBytes = new TextEncoder().encode(pin);
-
-  // Combine pin and salt
-  let hash = new Uint8Array([...pinBytes, ...salt]);
-
-  // Iterative hashing (PBKDF2-like)
-  for (let i = 0; i < iterations; i++) {
-    const hashHex = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      Array.from(hash)
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join(""),
-    );
-    hash = new Uint8Array(
-      hashHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)),
-    );
-  }
-
-  return hash;
-}
-
-async function encryptSecretKey(
-  secretKey: Uint8Array,
-  pin: string,
-): Promise<EncryptedKeyPayload> {
-  const salt = Crypto.getRandomBytes(16);
-  const nonce = Crypto.getRandomBytes(24); // 24 bytes for NaCl
-  const key = await deriveKey(pin, salt);
-
-  // Use tweetnacl's secretbox for authenticated encryption
-  const ciphertext = nacl.secretbox(secretKey, nonce, key);
-
-  return {
-    v: 1,
-    salt: Buffer.from(salt).toString("base64"),
-    iv: Buffer.from(nonce).toString("base64"),
-    ciphertext: Buffer.from(ciphertext).toString("base64"),
-  };
-}
-async function decryptSecretKey(
-  payload: EncryptedKeyPayload,
-  pin: string,
-): Promise<Uint8Array> {
-  const salt = Buffer.from(payload.salt, "base64");
-  const nonce = Buffer.from(payload.iv, "base64");
-  const data = Buffer.from(payload.ciphertext, "base64");
-  const key = await deriveKey(pin, new Uint8Array(salt));
-
-  // Use tweetnacl's secretbox for authenticated decryption
-  const decrypted = nacl.secretbox.open(
-    new Uint8Array(data),
-    new Uint8Array(nonce),
-    key,
-  );
-
-  if (!decrypted) {
-    throw new Error("Decryption failed - invalid PIN or corrupted data");
-  }
-
-  return decrypted;
 }
 
 /* =======================================================
@@ -222,87 +146,78 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   /* ================= Core ================= */
 
-  async initialize(pin?: string): Promise<void> {
+  async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    const stored = await SecureStore.getItemAsync(STORAGE_KEY);
+    // Check if biometric authentication is available
+    const isSeeker = DeviceDetector.isSolanaMobileDevice();
+    const hasHardware = await LocalAuth.hasHardwareAsync();
+    const isEnrolled = await LocalAuth.isEnrolledAsync();
+    const canUseBiometric = !isSeeker && hasHardware && isEnrolled;
 
-    if (stored) {
-      // Load existing wallet
-      console.log("[LocalWallet] Loading existing wallet from SecureStore...");
-
-      // Get the stored PIN (protected by biometric if available)
-      let activePin = pin;
-
-      if (!activePin) {
-        // Try to get biometric-protected PIN
-        const storedPin = await SecureStore.getItemAsync(PIN_STORAGE_KEY, {
-          requireAuthentication: true, // Requires biometric to access
+    // Determine SecureStore options based on device capabilities
+    const secureStoreOptions = canUseBiometric
+      ? {
+          requireAuthentication: true,
           authenticationPrompt: "Unlock your wallet",
-        });
-
-        if (storedPin) {
-          console.log("[LocalWallet] Retrieved biometric-protected PIN");
-          activePin = storedPin;
-        } else {
-          // Fallback to default PIN (for wallets created before biometric implementation)
-          console.log(
-            "[LocalWallet] No stored PIN found, using default (legacy wallet)",
-          );
-          activePin = "0000";
-        }
-      }
-
-      const payload = JSON.parse(stored) as EncryptedKeyPayload;
-      const secretKey = await decryptSecretKey(payload, activePin);
-      this.keypair = Keypair.fromSecretKey(secretKey);
-      console.log("[LocalWallet] ✅ Wallet loaded successfully");
-    } else {
-      // Creating new wallet
-      console.log("[LocalWallet] Creating new wallet...");
-
-      // Generate a random PIN for encryption
-      const randomPin = Crypto.getRandomBytes(32).toString();
-
-      // Require biometric ONLY for non-Seeker devices
-      // Seeker phones have hardware-level security (Seed Vault), no need for extra biometric
-      const isSeeker = DeviceDetector.isSolanaMobileDevice();
-
-      if (isSeeker) {
-        console.log(
-          "[LocalWallet] Seeker device detected - skipping biometric (Seed Vault provides security)",
-        );
-      } else {
-        console.log(
-          "[LocalWallet] Non-Seeker device detected - requiring biometric authentication",
-        );
-        await requireBiometric();
-      }
-
-      // Generate and save wallet
-      this.keypair = Keypair.generate();
-      await this.saveToStorage(randomPin);
-
-      // Store the PIN with biometric protection (if not Seeker)
-      if (!isSeeker) {
-        await SecureStore.setItemAsync(PIN_STORAGE_KEY, randomPin, {
-          requireAuthentication: true, // Requires biometric to access
-          authenticationPrompt: "Secure your wallet",
           keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-        });
-        console.log("[LocalWallet] PIN stored with biometric protection");
+        }
+      : {
+          keychainAccessible: isSeeker
+            ? SecureStore.AFTER_FIRST_UNLOCK
+            : SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+        };
+
+    try {
+      const stored = await SecureStore.getItemAsync(
+        STORAGE_KEY,
+        canUseBiometric ? secureStoreOptions : undefined,
+      );
+
+      if (stored) {
+        // Load existing wallet
+        console.log(
+          "[LocalWallet] Loading existing wallet from SecureStore...",
+        );
+        const secretKeyArray = JSON.parse(stored);
+        this.keypair = Keypair.fromSecretKey(new Uint8Array(secretKeyArray));
+        console.log("[LocalWallet] ✅ Wallet loaded successfully");
       } else {
-        // For Seeker, still store PIN but without biometric (Seed Vault handles security)
-        await SecureStore.setItemAsync(PIN_STORAGE_KEY, randomPin, {
-          keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
-        });
-        console.log("[LocalWallet] PIN stored (Seed Vault device)");
+        // Creating new wallet
+        console.log("[LocalWallet] Creating new wallet...");
+
+        if (isSeeker) {
+          console.log(
+            "[LocalWallet] Seeker device - using Seed Vault security",
+          );
+        } else if (canUseBiometric) {
+          console.log(
+            "[LocalWallet] Biometrics available - requiring authentication",
+          );
+          await requireBiometric();
+        } else {
+          console.log("[LocalWallet] Using device keychain security");
+        }
+
+        // Generate and save wallet
+        this.keypair = Keypair.generate();
+
+        // Store secret key directly (SecureStore handles encryption)
+        const secretKeyArray = Array.from(this.keypair.secretKey);
+        await SecureStore.setItemAsync(
+          STORAGE_KEY,
+          JSON.stringify(secretKeyArray),
+          secureStoreOptions,
+        );
+
+        console.log("[LocalWallet] ✅ New wallet created and secured");
       }
 
-      console.log("[LocalWallet] ✅ New wallet created and secured");
+      this.initialized = true;
+    } catch (error) {
+      console.error("[LocalWallet] ❌ Initialization error:", error);
+      throw error;
     }
-
-    this.initialized = true;
   }
 
   isInitialized(): boolean {
@@ -332,9 +247,9 @@ export class LocalWalletAdapter implements IWalletAdapter {
     return this.keypair !== null;
   }
 
-  async connect(pin?: string): Promise<void> {
+  async connect(): Promise<void> {
     if (!this.initialized) {
-      await this.initialize(pin);
+      await this.initialize();
     }
   }
 
@@ -345,35 +260,11 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   /* ================= Secret Key Export ================= */
 
-  async exportSecretKey(pin?: string): Promise<Uint8Array> {
+  async exportSecretKey(): Promise<Uint8Array> {
     if (!this.keypair) throw new Error("Wallet not initialized");
 
-    // Get the stored PIN with biometric protection
-    let activePin = pin;
-
-    if (!activePin) {
-      const storedPin = await SecureStore.getItemAsync(PIN_STORAGE_KEY, {
-        requireAuthentication: true,
-        authenticationPrompt: "Authenticate to export private key",
-      });
-
-      if (storedPin) {
-        activePin = storedPin;
-      } else {
-        // Fallback for legacy wallets
-        activePin = "0000";
-      }
-    }
-
-    // If wallet is already initialized and unlocked, verify with biometric
+    // Require biometric authentication to export private key
     await requireBiometric();
-
-    // Verify PIN by attempting to decrypt stored key
-    const stored = await SecureStore.getItemAsync(STORAGE_KEY);
-    if (!stored) throw new Error("No stored wallet found");
-
-    const payload = JSON.parse(stored) as EncryptedKeyPayload;
-    await decryptSecretKey(payload, activePin); // Validates PIN
 
     return this.keypair.secretKey;
   }
@@ -404,6 +295,9 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   async signMessage(message: Uint8Array): Promise<Uint8Array> {
     if (!this.keypair) throw new Error("Wallet not initialized");
+
+    // Import nacl for signing
+    const nacl = await import("tweetnacl");
     return nacl.sign.detached(message, this.keypair.secretKey);
   }
 
@@ -417,22 +311,8 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   /* ================= Storage ================= */
 
-  private async saveToStorage(pin: string): Promise<void> {
-    if (!this.keypair) return;
-
-    // Biometric is already handled in initialize() for new wallets
-    // No need to require it again here
-
-    const payload = await encryptSecretKey(this.keypair.secretKey, pin);
-
-    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(payload), {
-      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
-    });
-  }
-
   async deleteFromStorage(): Promise<void> {
     await SecureStore.deleteItemAsync(STORAGE_KEY);
-    await SecureStore.deleteItemAsync(PIN_STORAGE_KEY); // Also delete the PIN
     this.keypair = null;
     this.initialized = false;
   }
@@ -458,12 +338,21 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   static async importFromSecretKey(
     secretKey: Uint8Array,
-    pin: string,
   ): Promise<LocalWalletAdapter> {
     const adapter = new LocalWalletAdapter();
-    await adapter.initialize(pin);
     adapter.keypair = Keypair.fromSecretKey(secretKey);
-    await adapter.saveToStorage(pin);
+
+    // Store the wallet
+    const secretKeyArray = Array.from(secretKey);
+    await SecureStore.setItemAsync(
+      STORAGE_KEY,
+      JSON.stringify(secretKeyArray),
+      {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      },
+    );
+
+    adapter.initialized = true;
     return adapter;
   }
 }
