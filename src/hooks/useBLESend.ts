@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
-import { useBLE } from '../contexts/BLEContext';
-import { Packet, PacketType } from '../domain/entities/Packet';
-import { PeerId } from '../domain/value-objects/PeerId';
+import { useCallback, useState } from "react";
+import { useBLE } from "../contexts/BLEContext";
+import { Packet, PacketType } from "../domain/entities/Packet";
+import { PeerId } from "../domain/value-objects/PeerId";
 
 export interface BLESendOptions {
   type?: PacketType;
@@ -18,8 +18,15 @@ export interface BLESendResult {
 }
 
 export interface UseBLESendReturn {
-  sendPayload: (payload: Uint8Array, options?: BLESendOptions) => Promise<BLESendResult[]>;
-  sendToDevice: (deviceId: string, payload: Uint8Array, options?: BLESendOptions) => Promise<BLESendResult>;
+  sendPayload: (
+    payload: Uint8Array,
+    options?: BLESendOptions,
+  ) => Promise<BLESendResult[]>;
+  sendToDevice: (
+    deviceId: string,
+    payload: Uint8Array,
+    options?: BLESendOptions,
+  ) => Promise<BLESendResult>;
   isSending: boolean;
   lastError: string | null;
   lastSuccess: boolean | null;
@@ -27,20 +34,20 @@ export interface UseBLESendReturn {
 
 /**
  * Custom hook for sending payloads over Bluetooth Low Energy
- * 
+ *
  * @example
  * ```tsx
  * const { sendPayload, sendToDevice, isSending } = useBLESend();
- * 
+ *
  * // Send to specific device (Central writes to Peripheral OR Peripheral notifies Central)
- * await sendToDevice('device-123', new Uint8Array([1, 2, 3]), { 
- *   type: PacketType.MESSAGE 
+ * await sendToDevice('device-123', new Uint8Array([1, 2, 3]), {
+ *   type: PacketType.MESSAGE
  * });
- * 
+ *
  * // Broadcast to all connected devices
- * await sendPayload(new Uint8Array([1, 2, 3]), { 
+ * await sendPayload(new Uint8Array([1, 2, 3]), {
  *   broadcast: true,
- *   type: PacketType.ANNOUNCE 
+ *   type: PacketType.ANNOUNCE
  * });
  * ```
  */
@@ -52,7 +59,7 @@ export function useBLESend(): UseBLESendReturn {
 
   /**
    * Send payload to a specific device
-   * 
+   *
    * @param deviceId - Target device ID
    * @param payload - Binary data to send
    * @param options - Packet configuration options
@@ -61,17 +68,17 @@ export function useBLESend(): UseBLESendReturn {
     async (
       deviceId: string,
       payload: Uint8Array,
-      options?: BLESendOptions
+      options?: BLESendOptions,
     ): Promise<BLESendResult> => {
       if (!bleAdapter) {
-        const error = 'BLE adapter not initialized';
+        const error = "BLE adapter not initialized";
         setLastError(error);
         setLastSuccess(false);
         return { success: false, error };
       }
 
       if (payload.length === 0) {
-        const error = 'Payload cannot be empty';
+        const error = "Payload cannot be empty";
         setLastError(error);
         setLastSuccess(false);
         return { success: false, error };
@@ -85,7 +92,7 @@ export function useBLESend(): UseBLESendReturn {
         // Create packet entity
         const packet = new Packet({
           type: options?.type ?? PacketType.MESSAGE,
-          senderId: options?.recipientId ?? PeerId.fromString('local'),
+          senderId: options?.recipientId ?? PeerId.fromString("local"),
           recipientId: options?.recipientId,
           timestamp: BigInt(Date.now()),
           payload,
@@ -95,8 +102,9 @@ export function useBLESend(): UseBLESendReturn {
         // Determine if we're sending from Central (write) or Peripheral (notify)
         const isConnectedAsCentral = await bleAdapter.isConnected(deviceId);
         const incomingConnections = await bleAdapter.getIncomingConnections();
-        const isConnectedAsPeripheral = bleAdapter.isAdvertising() && 
-                                       incomingConnections.some(conn => conn.deviceId === deviceId);
+        const isConnectedAsPeripheral =
+          bleAdapter.isAdvertising() &&
+          incomingConnections.some((conn) => conn.deviceId === deviceId);
 
         let result;
 
@@ -117,13 +125,14 @@ export function useBLESend(): UseBLESendReturn {
 
         setLastSuccess(result.success);
         if (!result.success) {
-          setLastError(result.error ?? 'Unknown error');
+          setLastError(result.error ?? "Unknown error");
         }
 
         return result;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('[useBLESend] Error sending to device:', error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error("[useBLESend] Error sending to device:", error);
         setLastError(errorMessage);
         setLastSuccess(false);
         return {
@@ -135,29 +144,29 @@ export function useBLESend(): UseBLESendReturn {
         setIsSending(false);
       }
     },
-    [bleAdapter]
+    [bleAdapter],
   );
 
   /**
    * Send payload to all connected devices or a specific device
-   * 
+   *
    * @param payload - Binary data to send
    * @param options - Packet configuration options (use broadcast: true for all devices)
    */
   const sendPayload = useCallback(
     async (
       payload: Uint8Array,
-      options?: BLESendOptions
+      options?: BLESendOptions,
     ): Promise<BLESendResult[]> => {
       if (!bleAdapter) {
-        const error = 'BLE adapter not initialized';
+        const error = "BLE adapter not initialized";
         setLastError(error);
         setLastSuccess(false);
         return [{ success: false, error }];
       }
 
       if (payload.length === 0) {
-        const error = 'Payload cannot be empty';
+        const error = "Payload cannot be empty";
         setLastError(error);
         setLastSuccess(false);
         return [{ success: false, error }];
@@ -171,7 +180,7 @@ export function useBLESend(): UseBLESendReturn {
         // Create packet entity
         const packet = new Packet({
           type: options?.type ?? PacketType.MESSAGE,
-          senderId: options?.recipientId ?? PeerId.fromString('local'),
+          senderId: options?.recipientId ?? PeerId.fromString("local"),
           recipientId: options?.recipientId,
           timestamp: BigInt(Date.now()),
           payload,
@@ -182,31 +191,36 @@ export function useBLESend(): UseBLESendReturn {
 
         if (options?.broadcast) {
           // Broadcast to all connected devices
-          console.log('[useBLESend] Broadcasting to all connections');
+          console.log("[useBLESend] Broadcasting to all connections");
           results = await bleAdapter.broadcastPacket(packet);
         } else {
           // Send to all currently connected devices
-          console.log(`[useBLESend] Sending to ${connectedDeviceIds.length} connected devices`);
+          console.log(
+            `[useBLESend] Sending to ${connectedDeviceIds.length} connected devices`,
+          );
           results = await Promise.all(
-            connectedDeviceIds.map(deviceId => sendToDevice(deviceId, payload, options))
+            connectedDeviceIds.map((deviceId) =>
+              sendToDevice(deviceId, payload, options),
+            ),
           );
         }
 
-        const allSuccessful = results.every(r => r.success);
+        const allSuccessful = results.every((r) => r.success);
         setLastSuccess(allSuccessful);
 
         if (!allSuccessful) {
           const errors = results
-            .filter(r => !r.success)
-            .map(r => r.error)
-            .join(', ');
+            .filter((r) => !r.success)
+            .map((r) => r.error)
+            .join(", ");
           setLastError(errors);
         }
 
         return results;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('[useBLESend] Error sending payload:', error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error("[useBLESend] Error sending payload:", error);
         setLastError(errorMessage);
         setLastSuccess(false);
         return [
@@ -219,7 +233,7 @@ export function useBLESend(): UseBLESendReturn {
         setIsSending(false);
       }
     },
-    [bleAdapter, connectedDeviceIds, sendToDevice]
+    [bleAdapter, connectedDeviceIds, sendToDevice],
   );
 
   return {

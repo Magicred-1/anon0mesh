@@ -35,6 +35,13 @@ export class NoiseManager {
     (deviceId: string, session: NoiseSessionInfo) => void
   > = new Set();
 
+  // Transaction packet listeners (for Solana transactions)
+  private transactionPacketListeners: Set<(packet: Packet) => void> = new Set();
+
+  // Beacon packet listeners (for beacon/relay functionality)
+  private readonly beaconPacketListeners: Set<(packet: Packet) => void> =
+    new Set();
+
   constructor(
     private readonly identityStateManager: SecureIdentityStateManager,
   ) {}
@@ -89,6 +96,30 @@ export class NoiseManager {
     listener: (deviceId: string, session: NoiseSessionInfo) => void,
   ) {
     this.sessionListeners.delete(listener);
+  }
+
+  /**
+   * Add listener for Solana transaction packets
+   * Used by useSolanaTransaction hook to handle incoming transaction requests/responses
+   */
+  addTransactionPacketListener(listener: (packet: Packet) => void) {
+    this.transactionPacketListeners.add(listener);
+  }
+
+  removeTransactionPacketListener(listener: (packet: Packet) => void) {
+    this.transactionPacketListeners.delete(listener);
+  }
+
+  /**
+   * Add listener for beacon/relay packets
+   * Used by useBeaconRelay hook to handle incoming beacon announcements and relay requests
+   */
+  addBeaconPacketListener(listener: (packet: Packet) => void) {
+    this.beaconPacketListeners.add(listener);
+  }
+
+  removeBeaconPacketListener(listener: (packet: Packet) => void) {
+    this.beaconPacketListeners.delete(listener);
   }
 
   private notifySessionUpdate(
@@ -399,6 +430,45 @@ export class NoiseManager {
           ":",
           new TextDecoder().decode(plaintext),
         );
+        return;
+      }
+
+      // Solana transaction packets - delegate to transaction listeners
+      if (
+        packet.type === PacketType.SOLANA_TX_REQUEST ||
+        packet.type === PacketType.SOLANA_TX_SIGNED ||
+        packet.type === PacketType.SOLANA_TX_RECEIPT ||
+        packet.type === PacketType.SOLANA_TX_REJECT
+      ) {
+        console.log(
+          `[NOISE] Routing transaction packet (type: ${packet.type}) to listeners`,
+        );
+        this.transactionPacketListeners.forEach((listener) => {
+          try {
+            listener(packet);
+          } catch (err) {
+            console.error("[NOISE] Error in transaction packet listener:", err);
+          }
+        });
+        return;
+      }
+
+      // Beacon/relay packets - delegate to beacon listeners
+      if (
+        packet.type === PacketType.BEACON_ANNOUNCE ||
+        packet.type === PacketType.SOLANA_TX_RELAY_REQUEST ||
+        packet.type === PacketType.SOLANA_TX_RELAY_RECEIPT
+      ) {
+        console.log(
+          `[NOISE] Routing beacon packet (type: ${packet.type}) to listeners`,
+        );
+        this.beaconPacketListeners.forEach((listener) => {
+          try {
+            listener(packet);
+          } catch (err) {
+            console.error("[NOISE] Error in beacon packet listener:", err);
+          }
+        });
         return;
       }
     } catch (error) {

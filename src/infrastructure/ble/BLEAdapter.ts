@@ -726,10 +726,10 @@ export class BLEAdapter implements IBLEAdapter {
           console.log(
             `[BLE Central] ✅ Packet received from ${deviceId} (${packetData.length} bytes)`,
           );
-          
+
           // Call the per-subscription callback
           onPacketReceived(packet);
-          
+
           // Also call the global packet handler (for NoiseManager/MeshManager)
           if (this.peripheralPacketHandler) {
             this.peripheralPacketHandler(packet, deviceId);
@@ -1435,7 +1435,9 @@ export class BLEAdapter implements IBLEAdapter {
   async broadcastPacket(packet: Packet): Promise<BLETransmissionResult[]> {
     const results: BLETransmissionResult[] = [];
 
-    console.log("[BLE] Broadcasting packet to all connections and peripheral subscribers...");
+    console.log(
+      "[BLE] Broadcasting packet to all connections and peripheral subscribers...",
+    );
 
     // Broadcast to outgoing connections (Central mode - write to devices we scanned)
     for (const [deviceId] of this.outgoingConnections) {

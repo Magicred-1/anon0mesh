@@ -21,6 +21,7 @@ interface ChatHeaderProps {
 export default function ChatHeader({
   nickname,
   selectedPeer,
+  onlinePeersCount,
   onNavigateToSelection,
 }: ChatHeaderProps) {
   // Connectivity state
@@ -76,6 +77,16 @@ export default function ChatHeader({
 
       {/* Right side icons */}
       <View style={styles.headerRight}>
+        {/* BLE Peers Counter */}
+        <View style={styles.peersContainer}>
+          <View style={styles.peopleIcon}>
+            {/* Simple person icon using shapes */}
+            <View style={styles.personHead} />
+            <View style={styles.personBody} />
+          </View>
+          <Text style={styles.peerCount}>{onlinePeersCount}</Text>
+        </View>
+
         {/* Connection Status Indicators */}
         <View style={styles.statusContainer}>
           {/* Internet Status */}
@@ -150,6 +161,44 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  peersContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(0, 212, 212, 0.1)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0, 212, 212, 0.3)",
+  },
+  peopleIcon: {
+    width: 14,
+    height: 14,
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  personHead: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: "#00CED1",
+    marginBottom: 1,
+  },
+  personBody: {
+    width: 9,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: "#00CED1",
+  },
+  peerCount: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#00CED1",
+    fontFamily: "monospace",
+    minWidth: 16,
+    textAlign: "center",
   },
   statusContainer: {
     flexDirection: "column",

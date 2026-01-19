@@ -14,7 +14,12 @@
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth for mesh networking with nearby devices",
         "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to advertise as a mesh network node",
         "NSCameraUsageDescription": "This app uses the camera to scan wallet QR codes.",
-        "NSFaceIDUsageDescription": "This app uses Face ID to authenticate access to your encrypted keys."
+        "NSFaceIDUsageDescription": "This app uses Face ID to authenticate access to your encrypted keys.",
+        "UIBackgroundModes": [
+          "bluetooth-central",
+          "bluetooth-peripheral",
+          "processing"
+        ]
       },
       "bundleIdentifier": "com.magicred1.anon0mesh"
     },
@@ -27,11 +32,19 @@
         "BLUETOOTH_SCAN",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_CONNECTED_DEVICE",
+        "WAKE_LOCK",
+        "POST_NOTIFICATIONS",
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -68,10 +81,7 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": [
-            "peripheral",
-            "central"
-          ],
+          "modes": ["peripheral", "central"],
           "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to bluetooth devices"
         }
       ],

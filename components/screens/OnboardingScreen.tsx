@@ -3,6 +3,7 @@ import {
     DeviceDetector,
     LocalWalletAdapter,
     MWAWalletAdapter,
+    WalletFactory,
 } from "@/src/infrastructure/wallet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -154,6 +155,96 @@ export default function OnboardingScreen({ onComplete }: Props) {
     ).start();
   }, [fadeAnim, slideAnim, pulseAnim, nickname]);
 
+  // Trigger loading animations when loading state changes
+  useEffect(() => {
+    if (loading) {
+      // Start all loading animations immediately
+      Animated.sequence([
+        // 1. Fade in overlay
+        Animated.timing(loadingOverlayOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        // 2. Show "ENTERING..." text
+        Animated.timing(enteringTextOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        // 3. Fade in logo
+        Animated.timing(logoFadeIn, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        // 4. Show status
+        Animated.timing(statusFadeIn, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        // 5. Show nickname
+        Animated.timing(nicknameFadeIn, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        // 6. Show button
+        Animated.timing(buttonFadeIn, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Continuous rotation for Solana logo
+      Animated.loop(
+        Animated.timing(loadingRotation, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+        }),
+      ).start();
+
+      // Pulse scale animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(loadingScale, {
+            toValue: 1.1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(loadingScale, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      // Reset animations when not loading
+      loadingOverlayOpacity.setValue(0);
+      enteringTextOpacity.setValue(0);
+      logoFadeIn.setValue(0);
+      statusFadeIn.setValue(0);
+      nicknameFadeIn.setValue(0);
+      buttonFadeIn.setValue(0);
+      loadingRotation.setValue(0);
+      loadingScale.setValue(1);
+    }
+  }, [
+    loading,
+    loadingOverlayOpacity,
+    enteringTextOpacity,
+    logoFadeIn,
+    statusFadeIn,
+    nicknameFadeIn,
+    buttonFadeIn,
+    loadingRotation,
+    loadingScale,
+  ]);
+
   /**
    * Onboard with Solana Mobile (MWA)
    */
@@ -192,14 +283,14 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
       console.log("[Onboarding] ✅ Success! Redirecting to landing...");
 
-      // Navigate to landing page after short delay
+      // Navigate to landing page immediately (reduced delay)
       setTimeout(() => {
         if (onComplete) {
           onComplete();
         } else {
           router.replace("/landing");
         }
-      }, 2000);
+      }, 500); // Reduced from 2000ms to 500ms
     } catch (error: any) {
       console.error("[Onboarding] MWA error:", error);
       alert(
@@ -243,14 +334,14 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
       console.log("[Onboarding] ✅ Success! Redirecting to landing...");
 
-      // Navigate to landing page after short delay
+      // Navigate to landing page immediately (reduced delay)
       setTimeout(() => {
         if (onComplete) {
           onComplete();
         } else {
           router.replace("/landing");
         }
-      }, 2000);
+      }, 500); // Reduced from 2000ms to 500ms
     } catch (error: any) {
       console.error("[Onboarding] Local wallet error:", error);
       alert(error?.message || "Failed to create local wallet.");
@@ -261,32 +352,37 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
   /**
    * Onboard with BLE-only (no wallet required)
+   * Creates a basic local wallet for mesh functionality
    */
   async function onboardBLEOnly() {
     setLoading(true);
     console.log("[Onboarding] 📡 Setting up BLE-only mode...");
 
     try {
-      // Save nickname
+      // Save nickname first (fast operation)
       if (nickname) {
         await SecureStore.setItemAsync("nickname", nickname);
       }
 
-      // Generate a random peer ID for BLE
-      const randomId = `ble-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      await SecureStore.setItemAsync("publicKey", randomId);
+      // Create a local wallet even for BLE-only mode
+      // This prevents initialization issues and provides basic wallet functionality
+      console.log("[Onboarding] Creating local wallet for BLE mode...");
+      const localWallet = await WalletFactory.createLocal();
 
-      console.log("[Onboarding] ✅ BLE-only setup complete");
-      console.log("[Onboarding] 📡 Peer ID:", randomId);
+      const publicKey = localWallet.getPublicKey();
+      const publicKeyBase58 = publicKey?.toBase58() || "";
 
-      // Navigate to landing page after short delay
+      console.log("[Onboarding] ✅ BLE-only wallet created");
+      console.log("[Onboarding] 📡 Public Key:", publicKeyBase58);
+
+      // Navigate to landing page immediately (reduced delay)
       setTimeout(() => {
         if (onComplete) {
           onComplete();
         } else {
           router.replace("/landing");
         }
-      }, 2000);
+      }, 500); // Reduced from 2000ms to 500ms
     } catch (error: any) {
       console.error("[Onboarding] BLE-only setup error:", error);
       alert(error?.message || "Failed to setup BLE-only mode.");
@@ -305,125 +401,12 @@ export default function OnboardingScreen({ onComplete }: Props) {
     await onboardBLEOnly();
 
     // Original wallet-based onboarding (commented out for BLE-only)
-    // if (isSeeker) {
-    //     await onboardWithMWA();
-    // } else {
-    //     await onboardWithLocalWallet();
-    // }
-  }
-
-  // Loading animation with staggered timing
-  useEffect(() => {
-    if (loading) {
-      // Reset all animations
-      loadingOverlayOpacity.setValue(0);
-      enteringTextOpacity.setValue(0);
-      logoFadeIn.setValue(0);
-      statusFadeIn.setValue(0);
-      nicknameFadeIn.setValue(0);
-      buttonFadeIn.setValue(0);
-
-      // Staggered sequence of animations
-      Animated.sequence([
-        // 1. Fade in overlay (200ms)
-        Animated.timing(loadingOverlayOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        // 2. Show "ENTERING..." (300ms delay + 400ms fade)
-        Animated.timing(enteringTextOpacity, {
-          toValue: 1,
-          duration: 400,
-          delay: 300,
-          useNativeDriver: true,
-        }),
-        // 3. Show logo (200ms delay + 500ms fade)
-        Animated.timing(logoFadeIn, {
-          toValue: 1,
-          duration: 500,
-          delay: 200,
-          useNativeDriver: true,
-        }),
-        // 4. Show status (300ms delay + 400ms fade)
-        Animated.timing(statusFadeIn, {
-          toValue: 1,
-          duration: 400,
-          delay: 300,
-          useNativeDriver: true,
-        }),
-        // 5. Show nickname (500ms delay + 500ms fade) - increased delay
-        Animated.timing(nicknameFadeIn, {
-          toValue: 1,
-          duration: 500,
-          delay: 500,
-          useNativeDriver: true,
-        }),
-        // 6. Show loading button (400ms delay + 500ms fade)
-        Animated.timing(buttonFadeIn, {
-          toValue: 1,
-          duration: 500,
-          delay: 400,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // Slow rotation animation for Solana logo (6 seconds per rotation)
-      Animated.loop(
-        Animated.timing(loadingRotation, {
-          toValue: 1,
-          duration: 6000,
-          useNativeDriver: true,
-        }),
-      ).start();
-
-      // Subtle pulse animation for Solana logo
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(loadingScale, {
-            toValue: 1.05,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(loadingScale, {
-            toValue: 1,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
-
-      // Dot animation for "LOADING..."
-      Animated.loop(
-        Animated.timing(loadingDotAnim, {
-          toValue: 3,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ).start();
+    if (isSeeker) {
+      await onboardWithMWA();
     } else {
-      loadingRotation.setValue(0);
-      loadingScale.setValue(1);
-      loadingDotAnim.setValue(0);
-      loadingOverlayOpacity.setValue(0);
-      enteringTextOpacity.setValue(0);
-      logoFadeIn.setValue(0);
-      statusFadeIn.setValue(0);
-      nicknameFadeIn.setValue(0);
-      buttonFadeIn.setValue(0);
+      await onboardWithLocalWallet();
     }
-  }, [
-    loading,
-    loadingRotation,
-    loadingScale,
-    loadingDotAnim,
-    loadingOverlayOpacity,
-    enteringTextOpacity,
-    logoFadeIn,
-    statusFadeIn,
-    nicknameFadeIn,
-    buttonFadeIn,
-  ]);
+  }
 
   return (
     <LinearGradient
@@ -466,7 +449,8 @@ export default function OnboardingScreen({ onComplete }: Props) {
         <View style={styles.instructionsContainer}>
           <Text style={styles.instructionsText}>
             TO GET STARTED{"\n"}
-            CREATE A SECURE WALLET{"\n"}
+            {isSeeker ? "CONNECT YOUR WALLET" : "CREATE A SECURE WALLET"}
+            {"\n"}
             YOUR NICKNAME WILL BE GENERATED{"\n"}
             AUTOMATICALLY
           </Text>
@@ -481,13 +465,26 @@ export default function OnboardingScreen({ onComplete }: Props) {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={["rgba(0, 212, 212, 0.1)", "rgba(0, 212, 212, 0.05)"]}
+              colors={
+                loading
+                  ? ["rgba(100, 100, 100, 0.1)", "rgba(100, 100, 100, 0.05)"]
+                  : ["rgba(0, 212, 212, 0.1)", "rgba(0, 212, 212, 0.05)"]
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.buttonGradient}
             >
-              <Text style={styles.buttonText}>
-                {loading ? "LOADING..." : "CREATE_WALLET"}
+              <Text
+                style={[
+                  styles.buttonText,
+                  loading && styles.buttonTextDisabled,
+                ]}
+              >
+                {(() => {
+                  if (loading) return "LOADING...";
+                  if (isSeeker) return "CONNECT_WALLET";
+                  return "CREATE_WALLET";
+                })()}
               </Text>
               {!loading && (
                 <View style={styles.buttonIcon}>
@@ -572,7 +569,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
                 <Text style={styles.loadingDetails}>
                   {isSeeker
-                    ? "CONNECTING TO MOBILE WALLET"
+                    ? "CONNECTING TO SEED WALLET"
                     : "GENERATING SECURE KEYPAIR"}
                 </Text>
               </Animated.View>
@@ -732,6 +729,9 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     fontFamily: "monospace",
     marginRight: 15,
+  },
+  buttonTextDisabled: {
+    color: "#6a7a7a",
   },
   buttonIcon: {
     flexDirection: "row",

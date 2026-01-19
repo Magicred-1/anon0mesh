@@ -8,7 +8,7 @@
  * - Encrypted private key in SecureStore
  */
 
-import '@/src/polyfills';
+import "@/src/polyfills";
 
 import {
   Connection,
@@ -16,25 +16,27 @@ import {
   PublicKey,
   Transaction,
   VersionedTransaction,
-} from '@solana/web3.js';
+} from "@solana/web3.js";
 
-import * as Crypto from 'expo-crypto';
-import * as LocalAuth from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
-import nacl from 'tweetnacl';
+import * as Crypto from "expo-crypto";
+import * as LocalAuth from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
+import nacl from "tweetnacl";
 
-import { IWalletAdapter, WalletInfo, WalletMode } from '../IWalletAdapter';
+import { IWalletAdapter, WalletInfo, WalletMode } from "../IWalletAdapter";
+import { DeviceDetector } from "../utils/DeviceDetector";
 
 /* =======================================================
     Constants & Types
 ======================================================= */
 
-const STORAGE_KEY = 'anon0mesh_wallet_keypair_v2';
+const STORAGE_KEY = "anon0mesh_wallet_keypair_v2";
+const PIN_STORAGE_KEY = "anon0mesh_wallet_pin"; // Store PIN separately with biometric protection
 
 type EncryptedKeyPayload = {
   v: 1;
-  salt: string;        // base64
-  iv: string;          // base64
+  salt: string; // base64
+  iv: string; // base64
   ciphertext: string; // base64
 };
 
@@ -47,18 +49,18 @@ async function requireBiometric(): Promise<void> {
   if (!available) return;
 
   const result = await LocalAuth.authenticateAsync({
-    promptMessage: 'Unlock wallet',
-    cancelLabel: 'Cancel',
+    promptMessage: "Unlock wallet",
+    cancelLabel: "Cancel",
   });
 
   if (!result.success) {
-    throw new Error('Biometric authentication failed');
+    throw new Error("Biometric authentication failed");
   }
 }
 
 async function deriveKey(pin: string, salt: Uint8Array): Promise<Uint8Array> {
-  // Simple but secure PBKDF2 implementation using expo-crypto
-  const iterations = 10000; // Reduced for mobile performance
+  // Fast key derivation for mobile - reduced iterations for onboarding speed
+  const iterations = 1000; // Reduced from 10000 for faster wallet creation
   const pinBytes = new TextEncoder().encode(pin);
 
   // Combine pin and salt
@@ -68,9 +70,13 @@ async function deriveKey(pin: string, salt: Uint8Array): Promise<Uint8Array> {
   for (let i = 0; i < iterations; i++) {
     const hashHex = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('')
+      Array.from(hash)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
     );
-    hash = new Uint8Array(hashHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    hash = new Uint8Array(
+      hashHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)),
+    );
   }
 
   return hash;
@@ -78,7 +84,7 @@ async function deriveKey(pin: string, salt: Uint8Array): Promise<Uint8Array> {
 
 async function encryptSecretKey(
   secretKey: Uint8Array,
-  pin: string
+  pin: string,
 ): Promise<EncryptedKeyPayload> {
   const salt = Crypto.getRandomBytes(16);
   const nonce = Crypto.getRandomBytes(24); // 24 bytes for NaCl
@@ -89,25 +95,29 @@ async function encryptSecretKey(
 
   return {
     v: 1,
-    salt: Buffer.from(salt).toString('base64'),
-    iv: Buffer.from(nonce).toString('base64'),
-    ciphertext: Buffer.from(ciphertext).toString('base64'),
+    salt: Buffer.from(salt).toString("base64"),
+    iv: Buffer.from(nonce).toString("base64"),
+    ciphertext: Buffer.from(ciphertext).toString("base64"),
   };
 }
 async function decryptSecretKey(
   payload: EncryptedKeyPayload,
-  pin: string
+  pin: string,
 ): Promise<Uint8Array> {
-  const salt = Buffer.from(payload.salt, 'base64');
-  const nonce = Buffer.from(payload.iv, 'base64');
-  const data = Buffer.from(payload.ciphertext, 'base64');
+  const salt = Buffer.from(payload.salt, "base64");
+  const nonce = Buffer.from(payload.iv, "base64");
+  const data = Buffer.from(payload.ciphertext, "base64");
   const key = await deriveKey(pin, new Uint8Array(salt));
 
   // Use tweetnacl's secretbox for authenticated decryption
-  const decrypted = nacl.secretbox.open(new Uint8Array(data), new Uint8Array(nonce), key);
+  const decrypted = nacl.secretbox.open(
+    new Uint8Array(data),
+    new Uint8Array(nonce),
+    key,
+  );
 
   if (!decrypted) {
-    throw new Error('Decryption failed - invalid PIN or corrupted data');
+    throw new Error("Decryption failed - invalid PIN or corrupted data");
   }
 
   return decrypted;
@@ -120,11 +130,11 @@ async function decryptSecretKey(
 export class LocalWalletAdapter implements IWalletAdapter {
   async airdropSol(amount: number, rpcUrl?: string): Promise<void> {
     if (!this.keypair) {
-      throw new Error('Wallet not initialized');
+      throw new Error("Wallet not initialized");
     }
 
-    const endpoint = rpcUrl || 'https://api.devnet.solana.com';
-    const connection = new Connection(endpoint, 'confirmed');
+    const endpoint = rpcUrl || "https://api.devnet.solana.com";
+    const connection = new Connection(endpoint, "confirmed");
 
     try {
       console.log(`[LocalWallet] Requesting ${amount} SOL airdrop...`);
@@ -137,53 +147,70 @@ export class LocalWalletAdapter implements IWalletAdapter {
         try {
           const signature = await connection.requestAirdrop(
             this.keypair.publicKey,
-            amount * 1e9 // Convert SOL to lamports
+            amount * 1e9, // Convert SOL to lamports
           );
 
-          console.log('[LocalWallet] Airdrop signature:', signature);
-          console.log('[LocalWallet] Confirming airdrop...');
+          console.log("[LocalWallet] Airdrop signature:", signature);
+          console.log("[LocalWallet] Confirming airdrop...");
 
           // Wait for confirmation with timeout
           const latestBlockhash = await connection.getLatestBlockhash();
-          await connection.confirmTransaction({
-            signature,
-            blockhash: latestBlockhash.blockhash,
-            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-          }, 'confirmed');
+          await connection.confirmTransaction(
+            {
+              signature,
+              blockhash: latestBlockhash.blockhash,
+              lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+            },
+            "confirmed",
+          );
 
-          console.log('[LocalWallet] Airdrop confirmed:', signature);
+          console.log("[LocalWallet] Airdrop confirmed:", signature);
           return; // Success!
         } catch (err) {
-          lastError = err instanceof Error ? err : new Error('Unknown error');
+          lastError = err instanceof Error ? err : new Error("Unknown error");
           const errMsg = lastError.message;
 
           console.log(`[LocalWallet] Airdrop attempt ${i + 1} failed:`, errMsg);
 
           // Don't retry on rate limits or daily limits
-          if (errMsg.includes('429') || errMsg.includes('airdrop limit') || errMsg.includes('run dry')) {
+          if (
+            errMsg.includes("429") ||
+            errMsg.includes("airdrop limit") ||
+            errMsg.includes("run dry")
+          ) {
             throw lastError;
           }
 
           if (i < retries - 1) {
             // Wait before retry (exponential backoff)
-            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+            await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
           }
         }
       }
 
       // All retries failed
-      throw lastError || new Error('Airdrop failed after retries');
+      throw lastError || new Error("Airdrop failed after retries");
     } catch (error) {
-      console.error('[LocalWallet] Airdrop failed:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error("[LocalWallet] Airdrop failed:", error);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
 
       // Provide more helpful error messages
-      if (errorMsg.includes('429') || errorMsg.includes('airdrop limit') || errorMsg.includes('run dry')) {
-        throw new Error('Daily airdrop limit reached. Please use the web faucet at https://faucet.solana.com');
-      } else if (errorMsg.includes('Internal error')) {
-        throw new Error('Devnet airdrop service is busy. Please try again in a few moments or use https://faucet.solana.com');
-      } else if (errorMsg.includes('rate limit')) {
-        throw new Error('Rate limit exceeded. Please wait a moment before requesting another airdrop.');
+      if (
+        errorMsg.includes("429") ||
+        errorMsg.includes("airdrop limit") ||
+        errorMsg.includes("run dry")
+      ) {
+        throw new Error(
+          "Daily airdrop limit reached. Please use the web faucet at https://faucet.solana.com",
+        );
+      } else if (errorMsg.includes("Internal error")) {
+        throw new Error(
+          "Devnet airdrop service is busy. Please try again in a few moments or use https://faucet.solana.com",
+        );
+      } else if (errorMsg.includes("rate limit")) {
+        throw new Error(
+          "Rate limit exceeded. Please wait a moment before requesting another airdrop.",
+        );
       } else {
         throw new Error(`Airdrop failed: ${errorMsg}`);
       }
@@ -198,19 +225,81 @@ export class LocalWalletAdapter implements IWalletAdapter {
   async initialize(pin?: string): Promise<void> {
     if (this.initialized) return;
 
-    const activePin = pin || '0000'; // Default PIN for now
     const stored = await SecureStore.getItemAsync(STORAGE_KEY);
 
     if (stored) {
-      // Load existing wallet - no biometric required for normal use
+      // Load existing wallet
+      console.log("[LocalWallet] Loading existing wallet from SecureStore...");
+
+      // Get the stored PIN (protected by biometric if available)
+      let activePin = pin;
+
+      if (!activePin) {
+        // Try to get biometric-protected PIN
+        const storedPin = await SecureStore.getItemAsync(PIN_STORAGE_KEY, {
+          requireAuthentication: true, // Requires biometric to access
+          authenticationPrompt: "Unlock your wallet",
+        });
+
+        if (storedPin) {
+          console.log("[LocalWallet] Retrieved biometric-protected PIN");
+          activePin = storedPin;
+        } else {
+          // Fallback to default PIN (for wallets created before biometric implementation)
+          console.log(
+            "[LocalWallet] No stored PIN found, using default (legacy wallet)",
+          );
+          activePin = "0000";
+        }
+      }
+
       const payload = JSON.parse(stored) as EncryptedKeyPayload;
       const secretKey = await decryptSecretKey(payload, activePin);
       this.keypair = Keypair.fromSecretKey(secretKey);
+      console.log("[LocalWallet] ✅ Wallet loaded successfully");
     } else {
-      // Creating new wallet - require biometric for extra security
-      await requireBiometric();
+      // Creating new wallet
+      console.log("[LocalWallet] Creating new wallet...");
+
+      // Generate a random PIN for encryption
+      const randomPin = Crypto.getRandomBytes(32).toString();
+
+      // Require biometric ONLY for non-Seeker devices
+      // Seeker phones have hardware-level security (Seed Vault), no need for extra biometric
+      const isSeeker = DeviceDetector.isSolanaMobileDevice();
+
+      if (isSeeker) {
+        console.log(
+          "[LocalWallet] Seeker device detected - skipping biometric (Seed Vault provides security)",
+        );
+      } else {
+        console.log(
+          "[LocalWallet] Non-Seeker device detected - requiring biometric authentication",
+        );
+        await requireBiometric();
+      }
+
+      // Generate and save wallet
       this.keypair = Keypair.generate();
-      await this.saveToStorage(activePin);
+      await this.saveToStorage(randomPin);
+
+      // Store the PIN with biometric protection (if not Seeker)
+      if (!isSeeker) {
+        await SecureStore.setItemAsync(PIN_STORAGE_KEY, randomPin, {
+          requireAuthentication: true, // Requires biometric to access
+          authenticationPrompt: "Secure your wallet",
+          keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+        });
+        console.log("[LocalWallet] PIN stored with biometric protection");
+      } else {
+        // For Seeker, still store PIN but without biometric (Seed Vault handles security)
+        await SecureStore.setItemAsync(PIN_STORAGE_KEY, randomPin, {
+          keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+        });
+        console.log("[LocalWallet] PIN stored (Seed Vault device)");
+      }
+
+      console.log("[LocalWallet] ✅ New wallet created and secured");
     }
 
     this.initialized = true;
@@ -221,7 +310,7 @@ export class LocalWalletAdapter implements IWalletAdapter {
   }
 
   getMode(): WalletMode {
-    return 'local';
+    return "local";
   }
 
   getInfo(): WalletInfo | null {
@@ -229,8 +318,8 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
     return {
       publicKey: this.keypair.publicKey,
-      mode: 'local',
-      displayName: 'Local Wallet',
+      mode: "local",
+      displayName: "Local Wallet",
       connected: true,
     };
   }
@@ -245,8 +334,7 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   async connect(pin?: string): Promise<void> {
     if (!this.initialized) {
-      const activePin = pin || '0000';
-      await this.initialize(activePin);
+      await this.initialize(pin);
     }
   }
 
@@ -258,21 +346,31 @@ export class LocalWalletAdapter implements IWalletAdapter {
   /* ================= Secret Key Export ================= */
 
   async exportSecretKey(pin?: string): Promise<Uint8Array> {
-    if (!this.keypair) throw new Error('Wallet not initialized');
+    if (!this.keypair) throw new Error("Wallet not initialized");
 
-    const activePin = pin || '0000';
+    // Get the stored PIN with biometric protection
+    let activePin = pin;
 
-    // If wallet is already initialized and unlocked, return the secret key directly
-    // This is safe because the wallet was already unlocked with PIN during initialization
-    if (this.initialized && !pin) {
-      return this.keypair.secretKey;
+    if (!activePin) {
+      const storedPin = await SecureStore.getItemAsync(PIN_STORAGE_KEY, {
+        requireAuthentication: true,
+        authenticationPrompt: "Authenticate to export private key",
+      });
+
+      if (storedPin) {
+        activePin = storedPin;
+      } else {
+        // Fallback for legacy wallets
+        activePin = "0000";
+      }
     }
+
+    // If wallet is already initialized and unlocked, verify with biometric
+    await requireBiometric();
 
     // Verify PIN by attempting to decrypt stored key
     const stored = await SecureStore.getItemAsync(STORAGE_KEY);
-    if (!stored) throw new Error('No stored wallet found');
-
-    await requireBiometric();
+    if (!stored) throw new Error("No stored wallet found");
 
     const payload = JSON.parse(stored) as EncryptedKeyPayload;
     await decryptSecretKey(payload, activePin); // Validates PIN
@@ -280,17 +378,16 @@ export class LocalWalletAdapter implements IWalletAdapter {
     return this.keypair.secretKey;
   }
 
-
   /* ================= Signing ================= */
 
   async signTransaction(
-    transaction: Transaction | VersionedTransaction
+    transaction: Transaction | VersionedTransaction,
   ): Promise<Transaction | VersionedTransaction> {
-    if (!this.keypair) throw new Error('Wallet not initialized');
+    if (!this.keypair) throw new Error("Wallet not initialized");
 
     const tx = this.cloneTransaction(transaction);
 
-    if ('version' in tx) {
+    if ("version" in tx) {
       tx.sign([this.keypair]);
     } else {
       tx.partialSign(this.keypair);
@@ -300,22 +397,20 @@ export class LocalWalletAdapter implements IWalletAdapter {
   }
 
   async signAllTransactions(
-    transactions: (Transaction | VersionedTransaction)[]
+    transactions: (Transaction | VersionedTransaction)[],
   ): Promise<(Transaction | VersionedTransaction)[]> {
     return Promise.all(transactions.map((tx) => this.signTransaction(tx)));
   }
 
   async signMessage(message: Uint8Array): Promise<Uint8Array> {
-    if (!this.keypair) throw new Error('Wallet not initialized');
+    if (!this.keypair) throw new Error("Wallet not initialized");
     return nacl.sign.detached(message, this.keypair.secretKey);
   }
 
-  async getBalance(
-    rpcUrl = 'https://api.devnet.solana.com'
-  ): Promise<number> {
-    if (!this.keypair) throw new Error('Wallet not initialized');
+  async getBalance(rpcUrl = "https://api.devnet.solana.com"): Promise<number> {
+    if (!this.keypair) throw new Error("Wallet not initialized");
 
-    const connection = new Connection(rpcUrl, 'confirmed');
+    const connection = new Connection(rpcUrl, "confirmed");
     const lamports = await connection.getBalance(this.keypair.publicKey);
     return lamports / 1e9;
   }
@@ -330,15 +425,14 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
     const payload = await encryptSecretKey(this.keypair.secretKey, pin);
 
-    await SecureStore.setItemAsync(
-      STORAGE_KEY,
-      JSON.stringify(payload),
-      { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK }
-    );
+    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(payload), {
+      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+    });
   }
 
   async deleteFromStorage(): Promise<void> {
     await SecureStore.deleteItemAsync(STORAGE_KEY);
+    await SecureStore.deleteItemAsync(PIN_STORAGE_KEY); // Also delete the PIN
     this.keypair = null;
     this.initialized = false;
   }
@@ -346,13 +440,13 @@ export class LocalWalletAdapter implements IWalletAdapter {
   /* ================= Utils ================= */
 
   private cloneTransaction(
-    transaction: Transaction | VersionedTransaction
+    transaction: Transaction | VersionedTransaction,
   ): Transaction | VersionedTransaction {
-    if ('version' in transaction) {
+    if ("version" in transaction) {
       return VersionedTransaction.deserialize(transaction.serialize());
     }
     return Transaction.from(
-      transaction.serialize({ requireAllSignatures: false })
+      transaction.serialize({ requireAllSignatures: false }),
     );
   }
 
@@ -364,7 +458,7 @@ export class LocalWalletAdapter implements IWalletAdapter {
 
   static async importFromSecretKey(
     secretKey: Uint8Array,
-    pin: string
+    pin: string,
   ): Promise<LocalWalletAdapter> {
     const adapter = new LocalWalletAdapter();
     await adapter.initialize(pin);

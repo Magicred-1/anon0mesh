@@ -10,12 +10,17 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
-import { Alert, Linking } from "react-native";
+import { Alert, AppState, AppStateStatus, Linking } from "react-native";
 
 import { BLEAdapter } from "../infrastructure/ble/BLEAdapter";
 import { BLEDeviceInfo, BLE_UUIDS } from "../infrastructure/ble/IBLEAdapter";
+import {
+  hideBLEForegroundNotification,
+  showBLEForegroundNotification,
+} from "../utils/bleNotification";
 import { useWallet } from "./WalletContext";
 
 interface BLEContextType {
@@ -72,6 +77,10 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
     walletMode,
   } = useWallet();
 
+  // Track app state to maintain BLE in background
+  const appState = useRef(AppState.currentState);
+  const [appStateVisible, setAppStateVisible] = useState(appState.current);
+
   // Log wallet state for debugging
   useEffect(() => {
     console.log("[BLEContext] Wallet state:", {
@@ -81,6 +90,33 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
       mode: walletMode,
     });
   }, [walletPublicKey, walletConnected, walletMode]);
+
+  // Monitor app state changes to handle background transitions
+  useEffect(() => {
+    const subscription = AppState.addEventListener(
+      "change",
+      (nextAppState: AppStateStatus) => {
+        if (
+          appState.current.match(/inactive|background/) &&
+          nextAppState === "active"
+        ) {
+          console.log("[BLEContext] 📲 App has come to foreground");
+        } else if (nextAppState.match(/inactive|background/)) {
+          console.log(
+            "[BLEContext] 📴 App has gone to background - BLE continues running",
+          );
+        }
+
+        appState.current = nextAppState;
+        setAppStateVisible(nextAppState);
+        console.log("[BLEContext] AppState:", nextAppState);
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Initialize BLE adapter
   const initialize = useCallback(async () => {
@@ -131,13 +167,16 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
       console.log("[BLEContext] Starting scan...");
       setDiscoveredDevices([]); // Clear previous results
 
+      // Show foreground notification for background operation (Android only)
+      await showBLEForegroundNotification();
+
       await bleAdapter.startScanning(
         async (device) => {
           console.log(
             "[BLEContext] Device discovered:",
             device.name || device.id,
           );
-          
+
           setDiscoveredDevices((prev) => {
             // Avoid duplicates
             const exists = prev.find((d) => d.id === device.id);
@@ -145,14 +184,23 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
               // Update RSSI if device already exists
               return prev.map((d) => (d.id === device.id ? device : d));
             }
-            
+
             // Subscribe to packets from this device for broadcast reception
-            bleAdapter.subscribeToPackets(device.id, (packet) => {
-              console.log('[BLEContext] Received broadcast packet from:', device.id);
-            }).catch((err) => {
-              console.log('[BLEContext] Note: Could not subscribe to', device.id, '(expected for peripheral-only devices)');
-            });
-            
+            bleAdapter
+              .subscribeToPackets(device.id, (packet) => {
+                console.log(
+                  "[BLEContext] Received broadcast packet from:",
+                  device.id,
+                );
+              })
+              .catch((err) => {
+                console.log(
+                  "[BLEContext] Note: Could not subscribe to",
+                  device.id,
+                  "(expected for peripheral-only devices)",
+                );
+              });
+
             return [...prev, device];
           });
         },
@@ -191,11 +239,17 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
       console.log("[BLEContext] Stopping scan...");
       await bleAdapter.stopScanning();
       setIsScanning(false);
+
+      // Hide notification only if advertising is also stopped
+      if (!isAdvertising) {
+        await hideBLEForegroundNotification();
+      }
+
       console.log("[BLEContext] ✅ Scanning stopped");
     } catch (err) {
       console.error("[BLEContext] Failed to stop scanning:", err);
     }
-  }, [bleAdapter, isScanning]);
+  }, [bleAdapter, isScanning, isAdvertising]);
 
   // Start advertising
   const startAdvertising = useCallback(async () => {
@@ -218,6 +272,9 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
       const { PeerId } = await import("../domain/value-objects/PeerId");
       const { Nickname } = await import("../domain/value-objects/Nickname");
       const SecureStore = await import("expo-secure-store");
+
+      // Show foreground notification for background operation (Android only)
+      await showBLEForegroundNotification();
 
       // Get nickname from SecureStore (set during onboarding)
       const nickname = await SecureStore.getItemAsync("nickname");
@@ -340,11 +397,17 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
       console.log("[BLEContext] Stopping advertising...");
       await bleAdapter.stopAdvertising();
       setIsAdvertising(false);
+
+      // Hide notification only if scanning is also stopped
+      if (!isScanning) {
+        await hideBLEForegroundNotification();
+      }
+
       console.log("[BLEContext] ✅ Advertising stopped");
     } catch (err) {
       console.error("[BLEContext] Failed to stop advertising:", err);
     }
-  }, [bleAdapter, isAdvertising]);
+  }, [bleAdapter, isAdvertising, isScanning]);
 
   // Connect to device
   const connectToDevice = useCallback(
@@ -462,6 +525,12 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
     return () => {
       if (bleAdapter) {
         console.log("[BLEContext] Cleaning up BLE adapter...");
+
+        // Hide notification on cleanup
+        hideBLEForegroundNotification().catch((err) => {
+          console.error("[BLEContext] Error hiding notification:", err);
+        });
+
         bleAdapter.shutdown().catch((err) => {
           console.error("[BLEContext] Error during cleanup:", err);
         });

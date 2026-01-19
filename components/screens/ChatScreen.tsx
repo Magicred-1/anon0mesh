@@ -8,6 +8,7 @@ import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
 import QueueIndicator from "@/components/ui/QueueIndicator";
 import { useBLE } from "@/src/contexts/BLEContext";
 import { useWallet } from "@/src/contexts/WalletContext";
+import { useBLENotificationUpdater } from "@/src/hooks/useBLENotificationUpdater";
 import { useMessageQueue } from "@/src/hooks/useMessageQueue";
 import { useNoiseChat } from "@/src/hooks/useNoiseChat";
 import { checkInternetConnectivity } from "@/src/infrastructure/wallet/utils/connectivity";
@@ -46,6 +47,7 @@ export default function ChatScreen({
     wallet,
     publicKey: walletPublicKey,
     isConnected,
+    isInitialized: isWalletInitialized,
     connect,
     isLoading: isWalletLoading,
   } = useWallet();
@@ -133,13 +135,15 @@ export default function ChatScreen({
 
     // BLE messages only (Nostr disabled)
     const sorted = [...bleMessages].sort((a, b) => a.ts - b.ts);
-    
+
     // DEBUG: Log message array updates
-    console.log(`[ChatScreen] 📊 allMessages count: ${sorted.length}, noiseMessages count: ${noiseMessages.length}`);
+    console.log(
+      `[ChatScreen] 📊 allMessages count: ${sorted.length}, noiseMessages count: ${noiseMessages.length}`,
+    );
     if (sorted.length > 0) {
       console.log(`[ChatScreen] Latest message:`, sorted[sorted.length - 1]);
     }
-    
+
     return sorted;
   }, [noiseMessages, nickname]);
 
@@ -149,10 +153,17 @@ export default function ChatScreen({
 
     (async () => {
       try {
-        // If not connected, trigger connection
-        if (!isConnected && !isWalletLoading) {
+        // Wait for wallet initialization first
+        if (!isWalletInitialized && !isWalletLoading) {
+          console.log("[ChatScreen] Wallet not initialized, waiting...");
+          // Wallet will auto-initialize via WalletContext
+          return;
+        }
+
+        // If initialized but not connected, trigger connection
+        if (isWalletInitialized && !isConnected && !isWalletLoading) {
           console.log(
-            "[ChatScreen] Wallet not connected, triggering connection...",
+            "[ChatScreen] Wallet initialized but not connected, triggering connection...",
           );
           await connect();
         }
@@ -180,7 +191,14 @@ export default function ChatScreen({
     return () => {
       mounted = false;
     };
-  }, [isConnected, isWalletLoading, walletPublicKey, connect]);
+  }, [
+    isWalletInitialized,
+    isInitialized,
+    isConnected,
+    isWalletLoading,
+    walletPublicKey,
+    connect,
+  ]);
 
   // Map discovered devices to peers
   useEffect(() => {
@@ -243,7 +261,10 @@ export default function ChatScreen({
     if (selectedPeer && selectedPeer !== "broadcast" && isInitialized) {
       const session = sessions.get(selectedPeer);
       if (!session || !session.isHandshakeComplete) {
-        console.log("[Chat] Initiating handshake with selected peer:", selectedPeer);
+        console.log(
+          "[Chat] Initiating handshake with selected peer:",
+          selectedPeer,
+        );
         initiateHandshake(selectedPeer).catch((err) => {
           console.error("[Chat] Failed to initiate handshake:", err);
         });
@@ -382,12 +403,18 @@ export default function ChatScreen({
 
       if (selectedPeer && bleSession?.isHandshakeComplete) {
         // Have encrypted session - send encrypted
-        console.log("[Chat] Sending encrypted via BLE (Noise) to:", selectedPeer);
+        console.log(
+          "[Chat] Sending encrypted via BLE (Noise) to:",
+          selectedPeer,
+        );
         await sendEncryptedMessage(selectedPeer, messageContent);
       } else if (selectedPeer && isInitialized) {
         // Peer selected but no encrypted session - send as targeted broadcast
         // This allows immediate messaging without waiting for handshakes
-        console.log("[Chat] Sending unencrypted targeted message to:", selectedPeer);
+        console.log(
+          "[Chat] Sending unencrypted targeted message to:",
+          selectedPeer,
+        );
         await broadcastBLE(messageContent); // Will be filtered by recipient on UI
         // Note: For now this broadcasts to all, but recipient filtering happens in UI
       } else if (!selectedPeer && isInitialized) {
@@ -579,9 +606,24 @@ export default function ChatScreen({
         : allMessages.filter((m: Message) => !m.to);
 
   // DEBUG: Log filtered messages
-  console.log(`[ChatScreen] 🎯 selectedPeer: "${selectedPeer}", filteredMessages count: ${filteredMessages.length}`);
+  console.log(
+    `[ChatScreen] 🎯 selectedPeer: "${selectedPeer}", filteredMessages count: ${filteredMessages.length}`,
+  );
 
-  const onlinePeers = peers.filter((p) => p.online);
+  // Calculate connected peers count from Noise sessions with completed handshakes
+  const connectedPeersCount = React.useMemo(() => {
+    return Array.from(sessions.values()).filter(
+      (session) => session.isHandshakeComplete,
+    ).length;
+  }, [sessions]);
+
+  // Update BLE notification with connected peers
+  // Note: ChatScreen doesn't track pending transactions, so we only update peer count
+  useBLENotificationUpdater({
+    connectedPeerCount: connectedPeersCount,
+    pendingTransactionCount: 0, // Transactions are tracked in wallet screens
+    updateInterval: 5000,
+  });
 
   return (
     <LinearGradient
@@ -601,7 +643,7 @@ export default function ChatScreen({
             <ChatHeader
               nickname={selectedPeer || nickname}
               selectedPeer={selectedPeer}
-              onlinePeersCount={onlinePeers.length}
+              onlinePeersCount={connectedPeersCount}
               bleConnected={bleConnected}
               onMenuPress={() => setShowSidebar(!showSidebar)}
               onWalletPress={() => router.push("/wallet")}
