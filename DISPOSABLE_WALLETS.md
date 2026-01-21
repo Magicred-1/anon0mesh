@@ -190,7 +190,7 @@ await deleteWallet(walletId, true);
 
 ### Important: Nonce Advancement ⚠️
 
-**Critical:** The nonce **automatically advances** when a nonce transaction is confirmed!
+**Critical:** The nonce **automatically advances** when a nonce transaction is confirmed! 
 
 - ✅ **Automatic advancement**: When you submit a nonce transaction and it confirms, the nonce advances automatically
 - ⚠️ **Manual advancement needed**: Only advance manually if:
@@ -199,7 +199,6 @@ await deleteWallet(walletId, true);
   3. Testing or debugging nonce behavior
 
 **How it works:**
-
 ```typescript
 // Every nonce transaction has this as the FIRST instruction:
 SystemProgram.nonceAdvance({
@@ -212,18 +211,17 @@ SystemProgram.nonceAdvance({
 ```
 
 **Example: Nonce Management**
-
 ```typescript
-const {
-  createNonceTransaction,
+const { 
+  createNonceTransaction, 
   submitNonceTransaction,
   advanceNonce,
-  getNonceValue,
+  getNonceValue 
 } = useDisposableWallets({ connection, authority });
 
 // Get current nonce
 const nonce1 = await getNonceValue(walletId);
-console.log("Nonce before:", nonce1);
+console.log('Nonce before:', nonce1);
 
 // Create and submit transaction
 const { transaction } = await createNonceTransaction(walletId, instructions);
@@ -231,13 +229,10 @@ await submitNonceTransaction(transaction);
 
 // Nonce has changed automatically!
 const nonce2 = await getNonceValue(walletId);
-console.log("Nonce after:", nonce2); // Different!
+console.log('Nonce after:', nonce2); // Different!
 
 // ✅ Can create another transaction now
-const { transaction: tx2 } = await createNonceTransaction(
-  walletId,
-  moreInstructions,
-);
+const { transaction: tx2 } = await createNonceTransaction(walletId, moreInstructions);
 await submitNonceTransaction(tx2); // Uses nonce2
 
 // ❌ WRONG: Reusing old nonce will fail

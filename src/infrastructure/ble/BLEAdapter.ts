@@ -123,16 +123,6 @@ export class BLEAdapter implements IBLEAdapter {
     console.log("[BLE] Initializing dual-mode adapter for Expo...");
     console.log("[BLE] Platform:", Platform.OS, "Version:", Platform.Version);
 
-    // Request permissions first (critical for both platforms)
-    console.log("[BLE] Requesting permissions...");
-    const hasPermissions = await this.requestPermissions();
-
-    if (!hasPermissions) {
-      throw new Error(
-        "Bluetooth permissions not granted. Please enable Bluetooth permissions in Settings.",
-      );
-    }
-
     // Initialize Central mode (react-native-ble-plx)
     const state = await this.bleManager.state();
     console.log("[BLE Central] Initial state:", state);
@@ -472,19 +462,6 @@ export class BLEAdapter implements IBLEAdapter {
             hasAnon0meshName,
           });
 
-          // DUAL-ROLE ARCHITECTURE:
-          // In dual-role mode (both devices advertising as peripherals), we CANNOT
-          // use traditional Central-Peripheral connections. Instead:
-          //
-          // Packet TX: Device writes to discovered peer's TX characteristic
-          // Packet RX: Device receives via peripheral's "write" event
-          //
-          // This requires connectable: true in advertising, but connections are
-          // managed automatically by the BLE stack when writing characteristics.
-          //
-          // We track discovered devices but DON'T pre-connect. Connections happen
-          // on-demand when sendPacket() is called.
-
           onDeviceFound({
             id: device.id,
             name: device.name ?? undefined,
@@ -569,47 +546,6 @@ export class BLEAdapter implements IBLEAdapter {
     } catch (error) {
       console.error(`[BLE Central] Connection failed to ${deviceId}:`, error);
       return false;
-    }
-  }
-
-  /**
-   * Connect to a device AND subscribe to its RX characteristic for packet reception.
-   * This is CRITICAL for receiving handshake packets and encrypted messages.
-   */
-  async connectAndSubscribe(deviceId: string): Promise<void> {
-    console.log(
-      `[BLE Central] 🔗 Connecting and subscribing to ${deviceId}...`,
-    );
-
-    // Check if already connected and subscribed
-    if (
-      this.outgoingConnections.has(deviceId) &&
-      this.packetSubscriptions.has(deviceId)
-    ) {
-      console.log(
-        `[BLE Central] Already connected and subscribed to ${deviceId}`,
-      );
-      return;
-    }
-
-    // Connect if not already connected
-    if (!this.outgoingConnections.has(deviceId)) {
-      const connected = await this.connect(deviceId);
-      if (!connected) {
-        throw new Error(`Failed to connect to ${deviceId}`);
-      }
-    }
-
-    // Subscribe if not already subscribed
-    if (!this.packetSubscriptions.has(deviceId)) {
-      console.log(
-        `[BLE Central] 📡 Subscribing to packets from ${deviceId}...`,
-      );
-      await this.subscribeToPackets(deviceId, (packet) => {
-        // Packets are already handled by peripheralPacketHandler in subscribeToPackets
-        // This callback is just to satisfy the API
-      });
-      console.log(`[BLE Central] ✅ Subscribed to ${deviceId}`);
     }
   }
 
@@ -712,38 +648,18 @@ export class BLEAdapter implements IBLEAdapter {
     deviceId: string,
     packet: Packet,
   ): Promise<BLETransmissionResult> {
+    const device = this.outgoingConnections.get(deviceId);
+    if (!device) {
+      return {
+        success: false,
+        deviceId,
+        error: "Not connected",
+      };
+    }
+
     try {
-      // In dual-role mode, connect on-demand for packet transmission
-      let device = this.outgoingConnections.get(deviceId);
-
-      if (!device) {
-        console.log(
-          `[BLE Central] 🔗 On-demand connect to ${deviceId} for packet write...`,
-        );
-        const connected = await this.connect(deviceId);
-        if (!connected) {
-          return {
-            success: false,
-            deviceId,
-            error: "Connection failed",
-          };
-        }
-        device = this.outgoingConnections.get(deviceId);
-        if (!device) {
-          return {
-            success: false,
-            deviceId,
-            error: "Device not found after connection",
-          };
-        }
-      }
-
       const packetData = this.serializePacket(packet);
       const base64Data = this.uint8ArrayToBase64(packetData);
-
-      console.log(
-        `[BLE Central] 📤 Writing packet to ${deviceId} TX characteristic (${packetData.length} bytes)...`,
-      );
 
       await device.writeCharacteristicWithResponseForService(
         BLE_UUIDS.SERVICE_UUID,
@@ -755,7 +671,7 @@ export class BLEAdapter implements IBLEAdapter {
       this.stats.totalBytesSent += packetData.length;
 
       console.log(
-        `[BLE Central] ✅ Packet written to ${deviceId} (${packetData.length} bytes) - waiting for write event on peer...`,
+        `[BLE Central] ✅ Packet written to ${deviceId} (${packetData.length} bytes)`,
       );
 
       return {
@@ -792,36 +708,7 @@ export class BLEAdapter implements IBLEAdapter {
       BLE_UUIDS.RX_CHARACTERISTIC_UUID,
       (error: any, characteristic: any) => {
         if (error) {
-          const errorMsg = error?.message || String(error);
-          const errorReason = error?.reason || "unknown";
-
-          // Categorize errors
-          if (
-            errorMsg.includes("disconnected") ||
-            errorMsg.includes("Device disconnected") ||
-            errorReason === "DeviceDisconnected"
-          ) {
-            console.warn(
-              `[BLE Central] ⚠️ Device ${deviceId} disconnected during monitoring`,
-            );
-            // Clean up connection
-            this.outgoingConnections.delete(deviceId);
-            this.packetSubscriptions.delete(deviceId);
-          } else if (
-            errorMsg.includes("Unknown error") ||
-            errorReason === "UnknownError"
-          ) {
-            // This is often a BLE stack issue, ignore and continue
-            console.warn(
-              `[BLE Central] ⚠️ BLE stack error for ${deviceId} (continuing...):`,
-              errorReason,
-            );
-          } else {
-            console.error(
-              `[BLE Central] Monitor error for ${deviceId}:`,
-              error,
-            );
-          }
+          console.error(`[BLE Central] Monitor error for ${deviceId}:`, error);
           return;
         }
 
@@ -1131,82 +1018,35 @@ export class BLEAdapter implements IBLEAdapter {
       this.peripheralManager.removeAllListeners("subscribe");
       this.peripheralManager.removeAllListeners("unsubscribe");
 
-      console.log(
-        "[BLE Peripheral] 🎧 Registering event handlers for incoming packets...",
-      );
-
-      // Add write handler - THIS IS CRITICAL FOR RECEIVING HANDSHAKE PACKETS
+      // Add write handler
       this.peripheralManager.on("write", (event: any) => {
-        // Log FULL event to debug property names
-        console.log(
-          "[BLE Peripheral] 📨 RAW Write event received:",
-          JSON.stringify(event, null, 2),
-        );
-
-        console.log("[BLE Peripheral] 📨 Write event received:", {
-          characteristicUUID: event.characteristicUUID,
-          characteristic: event.characteristic,
-          characteristicUuid: event.characteristicUuid,
+        console.log("[BLE Peripheral] Write event:", {
+          characteristic: event.characteristicUuid,
           deviceId: event.device,
           dataLength: event.value?.length,
-          timestamp: Date.now(),
         });
 
-        // Handle both iOS and Android property names
-        // iOS: event.characteristicUUID (uppercase UUID)
-        // Android: event.characteristic (no UUID suffix)
-        const characteristicUUID =
-          event.characteristicUUID ||
-          event.characteristic ||
-          event.characteristicUuid;
-        const deviceId = event.device || "unknown";
-
-        // Null safety: Check if characteristicUUID exists
-        if (!characteristicUUID) {
-          console.warn(
-            "[BLE Peripheral] ⚠️ Write event missing characteristic UUID",
-          );
-          return;
-        }
-
         if (
-          characteristicUUID.toLowerCase() ===
+          event.characteristicUuid.toLowerCase() ===
           BLE_UUIDS.TX_CHARACTERISTIC_UUID.toLowerCase()
         ) {
-          console.log(
-            "[BLE Peripheral] ✅ Write to TX characteristic - processing packet...",
-          );
-          this.handleIncomingPacket(event.value, deviceId);
-        } else {
-          console.log(
-            `[BLE Peripheral] ⏭️ Ignoring write to ${characteristicUUID} (not TX)`,
-          );
+          this.handleIncomingPacket(event.value, event.device || "unknown");
         }
       });
 
       // Add subscription handler
       this.peripheralManager.on("subscribe", (event: any) => {
-        console.log("[BLE Peripheral] 📡 Device subscribed:", event.device);
+        console.log("[BLE Peripheral] Device subscribed:", event.device);
         if (event.device) {
           this.incomingConnections.add(event.device);
-          console.log(
-            `[BLE Peripheral] ✅ Subscriber added. Total subscribers: ${this.incomingConnections.size}`,
-          );
-        } else {
-          console.warn("[BLE Peripheral] Subscribe event missing device ID");
         }
       });
 
       // Add unsubscribe handler
       this.peripheralManager.on("unsubscribe", (event: any) => {
-        console.log("[BLE Peripheral] 📴 Device unsubscribed:", event.device);
+        console.log("[BLE Peripheral] Device unsubscribed:", event.device);
         if (event.device) {
           this.incomingConnections.delete(event.device);
-          console.log(
-            `[BLE Peripheral] ✅ Subscriber removed. Total subscribers: ${this.incomingConnections.size}`,
-          );
-        } else {
-          console.warn("[BLE Peripheral] Unsubscribe event missing device ID");
         }
       });
 
@@ -1220,7 +1060,7 @@ export class BLEAdapter implements IBLEAdapter {
 
       await this.peripheralManager.startAdvertising({
         connectable: options?.connectable ?? true,
-        includeDeviceName: false, // Must be false to avoid ADVERTISE_FAILED_DATA_TOO_LARGE (error code 1)
+        includeDeviceName: true, // 🔥 REQUIRED
       });
 
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1235,7 +1075,7 @@ export class BLEAdapter implements IBLEAdapter {
           BLE_UUIDS.RX_CHARACTERISTIC_UUID,
         ],
         connectable: options?.connectable ?? true,
-        note: "Service UUID is advertised. Device name available via PEER_INFO characteristic.",
+        note: "Service UUID is automatically advertised when service is added",
       });
     } catch (error) {
       const errorMessage =
@@ -1455,7 +1295,6 @@ export class BLEAdapter implements IBLEAdapter {
 
   async stopAdvertising(): Promise<void> {
     if (!this.advertising || !this.peripheralManager) {
-      console.log("[BLE Peripheral] Not advertising, nothing to stop");
       return;
     }
 
@@ -1463,6 +1302,8 @@ export class BLEAdapter implements IBLEAdapter {
 
     try {
       await this.peripheralManager.stopAdvertising();
+      this.advertising = false;
+      console.log("[BLE Peripheral] ✅ Advertising stopped");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -1472,14 +1313,12 @@ export class BLEAdapter implements IBLEAdapter {
         console.log(
           "[BLE Peripheral] Device does not support advertising (stop ignored)",
         );
-      } else {
-        console.error("[BLE Peripheral] Error stopping advertising:", error);
+        this.advertising = false;
+        return;
       }
-    } finally {
-      // ALWAYS update state, even if stop fails
-      this.advertising = false;
-      this.advertisingInProgress = false;
-      console.log("[BLE Peripheral] ✅ Advertising stopped and state cleared");
+
+      console.error("[BLE Peripheral] Error stopping advertising:", error);
+      this.advertising = false; // Set to false anyway
     }
   }
 
@@ -1532,23 +1371,11 @@ export class BLEAdapter implements IBLEAdapter {
       };
     }
 
-    // Check if any devices are subscribed
-    if (this.incomingConnections.size === 0) {
-      console.warn(
-        "[BLE Peripheral] ⚠️ No subscribers - cannot broadcast (need at least one central to subscribe)",
-      );
-      return {
-        success: false,
-        deviceId: deviceId || "unknown",
-        error: "No subscribers",
-      };
-    }
-
     try {
       const packetData = this.serializePacket(packet);
 
       console.log(
-        `[BLE Peripheral] Broadcasting to ${this.incomingConnections.size} subscriber(s) (${packetData.length} bytes) - intended for ${deviceId || "all"}`,
+        `[BLE Peripheral] Broadcasting packet notification (${packetData.length} bytes) - intended for ${deviceId || "all"}`,
       );
 
       await this.peripheralManager.sendNotification(
@@ -1562,7 +1389,7 @@ export class BLEAdapter implements IBLEAdapter {
       this.stats.totalBytesSent += packetData.length;
 
       console.log(
-        `[BLE Peripheral] ✅ Packet broadcast complete to ${this.incomingConnections.size} subscriber(s) (intended for ${deviceId || "all"})`,
+        `[BLE Peripheral] ✅ Packet broadcast complete (intended for ${deviceId || "all"})`,
       );
 
       return {
@@ -1571,47 +1398,15 @@ export class BLEAdapter implements IBLEAdapter {
         bytesTransferred: packetData.length,
       };
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-
-      // Categorize errors for better handling
-      if (errorMsg.includes("bluetoothLeAdvertiser")) {
-        console.error(
-          "[BLE Peripheral] ❌ Device does not support BLE advertising",
-        );
-        this.advertising = false; // Disable advertising state
-        return {
-          success: false,
-          deviceId: deviceId || "unknown",
-          error: "BLE advertising not supported on this device",
-        };
-      } else if (errorMsg.includes("Characteristic not found")) {
-        console.error(
-          "[BLE Peripheral] ❌ Characteristic destroyed - advertising state invalid",
-        );
-        this.advertising = false; // Reset state
-        return {
-          success: false,
-          deviceId: deviceId || "unknown",
-          error: "Characteristic not found - need to restart advertising",
-        };
-      } else if (errorMsg.includes("permission")) {
-        console.error("[BLE Peripheral] ❌ Permission denied:", errorMsg);
-        return {
-          success: false,
-          deviceId: deviceId || "unknown",
-          error: "BLE permission denied",
-        };
-      } else {
-        console.error(
-          `[BLE Peripheral] Failed to broadcast packet (intended for ${deviceId || "unknown"}):`,
-          error,
-        );
-        return {
-          success: false,
-          deviceId: deviceId || "unknown",
-          error: errorMsg,
-        };
-      }
+      console.error(
+        `[BLE Peripheral] Failed to broadcast packet (intended for ${deviceId || "unknown"}):`,
+        error,
+      );
+      return {
+        success: false,
+        deviceId: deviceId || "unknown",
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 

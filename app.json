@@ -4,7 +4,7 @@
     "slug": "anon0mesh",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/favicon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "anon0mesh",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -18,12 +18,8 @@
         "UIBackgroundModes": [
           "bluetooth-central",
           "bluetooth-peripheral",
-          "processing",
-          "bluetooth-central",
-          "bluetooth-peripheral",
           "processing"
-        ],
-        "ITSAppUsesNonExemptEncryption": false
+        ]
       },
       "bundleIdentifier": "com.magicred1.anon0mesh"
     },
@@ -52,9 +48,9 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/icons/anonmesh_icon.png",
-        "backgroundImage": "./assets/images/icons/anonmesh_icon.png",
-        "monochromeImage": "./assets/images/icons/anonmesh_icon.png"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -62,7 +58,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/icons/anonmesh_icon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
@@ -95,12 +91,11 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icons/anonmesh_icon.png",
-          "imageWidth": 300,
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#E6F4FE",
+          "backgroundColor": "#ffffff",
           "dark": {
-            "image": "./assets/images/icons/anonmesh_icon.png",
             "backgroundColor": "#000000"
           }
         }

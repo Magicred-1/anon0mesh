@@ -3,7 +3,6 @@ import USDCIcon from "@/components/icons/USDCIcon";
 import ZECIcon from "@/components/icons/ZECIcon";
 import QRScannerModal from "@/components/modals/QRScannerModal";
 import SendConfirmationModal from "@/components/modals/SendConfirmationModal";
-import NumericKeyboard from "@/components/ui/NumericKeyboard";
 import { useWalletBalances } from "@/hooks/useWalletBalances";
 import { useBLE } from "@/src/contexts/BLEContext";
 import { useWallet } from "@/src/contexts/WalletContext";
@@ -29,6 +28,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -96,15 +97,6 @@ export default function SendScreen() {
     };
     loadKeypair();
   }, [wallet]);
-
-  // Security: Clear keypair from memory when component unmounts
-  useEffect(() => {
-    return () => {
-      if (walletKeypair?.secretKey) {
-        walletKeypair.secretKey.fill(0);
-      }
-    };
-  }, [walletKeypair]);
 
   // Solana transaction hook for BLE offline transactions
   const connection = createSolanaConnection({ network: "devnet" });
@@ -640,158 +632,168 @@ export default function SendScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          style={styles.content}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
-          {/* Network Badge */}
-          <View style={styles.networkBadge}>
-            <View style={styles.networkIcon}>
-              <SolanaIcon size={16} color="#22D3EE" />
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Network Badge */}
+            <View style={styles.networkBadge}>
+              <View style={styles.networkIcon}>
+                <SolanaIcon size={16} color="#22D3EE" />
+              </View>
+              <Text style={styles.networkText}>Solana Network</Text>
             </View>
-            <Text style={styles.networkText}>Solana Network</Text>
-          </View>
 
-          {/* Token Selector & Amount */}
-          <View style={styles.amountCard}>
-            <View style={styles.amountCardHeader}>
-              <View style={styles.tokenSelectorContainer}>
-                <TouchableOpacity
-                  style={styles.tokenSelector}
-                  onPress={handleTokenDropdown}
-                >
-                  <View style={styles.tokenIconWrapper}>
-                    {token === "SOL" && (
-                      <Image
-                        source={require("../../../../assets/images/sol-logo.png")}
-                        style={styles.tokenImage}
-                      />
+            {/* Token Selector & Amount */}
+            <View style={styles.amountCard}>
+              <View style={styles.amountCardHeader}>
+                <View style={styles.tokenSelectorContainer}>
+                  <TouchableOpacity
+                    style={styles.tokenSelector}
+                    onPress={handleTokenDropdown}
+                  >
+                    <View style={styles.tokenIconWrapper}>
+                      {token === "SOL" && (
+                        <Image
+                          source={require("../../../../assets/images/sol-logo.png")}
+                          style={styles.tokenImage}
+                        />
+                      )}
+                      {token === "USDC" && <USDCIcon size={24} />}
+                      {token === "ZEC" && <ZECIcon size={24} />}
+                    </View>
+                    <Text style={styles.tokenText}>{token}</Text>
+                    {showTokenDropdown ? (
+                      <CaretUp size={20} color="#22D3EE" weight="regular" />
+                    ) : (
+                      <CaretDown size={20} color="#22D3EE" weight="regular" />
                     )}
-                    {token === "USDC" && <USDCIcon size={24} />}
-                    {token === "ZEC" && <ZECIcon size={24} />}
-                  </View>
-                  <Text style={styles.tokenText}>{token}</Text>
-                  {showTokenDropdown ? (
-                    <CaretUp size={20} color="#22D3EE" weight="regular" />
+                  </TouchableOpacity>
+
+                  {/* Token Dropdown */}
+                  {showTokenDropdown && (
+                    <View style={styles.tokenDropdown}>
+                      {(["SOL", "USDC", "ZEC"] as TokenType[])
+                        .filter((t) => t !== token)
+                        .map((t, index) => (
+                          <TouchableOpacity
+                            key={t}
+                            style={[
+                              styles.tokenOption,
+                              index === 0 && styles.tokenOptionFirst,
+                            ]}
+                            onPress={() => handleSelectToken(t)}
+                          >
+                            <View style={styles.tokenIconWrapper}>
+                              {t === "SOL" && (
+                                <Image
+                                  source={require("../../../../assets/images/sol-logo.png")}
+                                  style={styles.tokenImage}
+                                />
+                              )}
+                              {t === "USDC" && <USDCIcon size={24} />}
+                              {t === "ZEC" && <ZECIcon size={24} />}
+                            </View>
+                            <Text style={styles.tokenOptionText}>{t}</Text>
+                          </TouchableOpacity>
+                        ))}
+                    </View>
+                  )}
+                </View>
+
+                <TextInput
+                  style={styles.amountInput}
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor="#4a6c6c"
+                />
+              </View>
+
+              <View style={styles.balanceRow}>
+                <View style={styles.balanceLeft}>
+                  <Text style={styles.balanceLabel}>Balance:</Text>
+                  {isRefreshing ? (
+                    <ActivityIndicator size="small" color="#22D3EE" />
                   ) : (
-                    <CaretDown size={20} color="#22D3EE" weight="regular" />
+                    <>
+                      <Text style={styles.balanceAmount}>
+                        {balance.toFixed(token === "SOL" ? 4 : 2)} {token}
+                      </Text>
+                      <TouchableOpacity onPress={handleMaxAmount}>
+                        <Text style={styles.maxLabel}>(Max)</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+                {!isRefreshing && (
+                  <Text style={styles.usdValue}>
+                    ≈${" "}
+                    {token === "SOL"
+                      ? (balance * SOL_USD_RATE).toFixed(2)
+                      : token === "USDC"
+                        ? balance.toFixed(2)
+                        : "0.00"}
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* To Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>To</Text>
+              <View style={styles.recipientContainer}>
+                <TextInput
+                  style={styles.recipientInput}
+                  placeholder="Enter recipient address..."
+                  value={recipient}
+                  onChangeText={setRecipient}
+                  placeholderTextColor="#22D3EE"
+                />
+                <TouchableOpacity
+                  onPress={handleQRScan}
+                  style={styles.qrButton}
+                >
+                  <Scan size={24} color="#22D3EE" weight="regular" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* From Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>From</Text>
+              <View style={styles.fromContainer}>
+                <TouchableOpacity
+                  style={styles.fromSelector}
+                  onPress={() => setShowFromDropdown(!showFromDropdown)}
+                >
+                  {/* Primary Wallet Address */}
+                  <Text style={styles.fromPrimaryText}>
+                    Primary Wallet (
+                    {publicKey
+                      ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+                      : "Loading..."}
+                    )
+                  </Text>
+                  {showFromDropdown ? (
+                    <CaretUp size={20} color="#9CA3AF" weight="regular" />
+                  ) : (
+                    <CaretDown size={20} color="#9CA3AF" weight="regular" />
                   )}
                 </TouchableOpacity>
 
-                {/* Token Dropdown */}
-                {showTokenDropdown && (
-                  <View style={styles.tokenDropdown}>
-                    {(["SOL", "USDC", "ZEC"] as TokenType[])
-                      .filter((t) => t !== token)
-                      .map((t, index) => (
-                        <TouchableOpacity
-                          key={t}
-                          style={[
-                            styles.tokenOption,
-                            index === 0 && styles.tokenOptionFirst,
-                          ]}
-                          onPress={() => handleSelectToken(t)}
-                        >
-                          <View style={styles.tokenIconWrapper}>
-                            {t === "SOL" && (
-                              <Image
-                                source={require("../../../../assets/images/sol-logo.png")}
-                                style={styles.tokenImage}
-                              />
-                            )}
-                            {t === "USDC" && <USDCIcon size={24} />}
-                            {t === "ZEC" && <ZECIcon size={24} />}
-                          </View>
-                          <Text style={styles.tokenOptionText}>{t}</Text>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-                )}
-              </View>
-
-              <TextInput
-                style={styles.amountInput}
-                value={amount}
-                onChangeText={setAmount}
-                showSoftInputOnFocus={false}
-                placeholder="0.00"
-                placeholderTextColor="#4a6c6c"
-                caretHidden={false}
-              />
-            </View>
-
-            <View style={styles.balanceRow}>
-              <View style={styles.balanceLeft}>
-                <Text style={styles.balanceLabel}>Balance:</Text>
-                {isRefreshing ? (
-                  <ActivityIndicator size="small" color="#22D3EE" />
-                ) : (
-                  <>
-                    <Text style={styles.balanceAmount}>
-                      {balance.toFixed(token === "SOL" ? 4 : 2)} {token}
-                    </Text>
-                  </>
-                )}
-              </View>
-              {!isRefreshing && (
-                <Text style={styles.usdValue}>
-                  ≈${" "}
-                  {token === "SOL"
-                    ? (balance * SOL_USD_RATE).toFixed(2)
-                    : token === "USDC"
-                      ? balance.toFixed(2)
-                      : "0.00"}
-                </Text>
-              )}
-            </View>
-          </View>
-
-          {/* To Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>To</Text>
-            <View style={styles.recipientContainer}>
-              <TextInput
-                style={styles.recipientInput}
-                placeholder="Enter recipient address..."
-                value={recipient}
-                onChangeText={setRecipient}
-                placeholderTextColor="#22D3EE"
-              />
-              <TouchableOpacity onPress={handleQRScan} style={styles.qrButton}>
-                <Scan size={24} color="#22D3EE" weight="regular" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* From Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>From</Text>
-            <View style={styles.fromContainer}>
-              <TouchableOpacity
-                style={styles.fromSelector}
-                onPress={() => setShowFromDropdown(!showFromDropdown)}
-              >
-                {/* Primary Wallet Address */}
-                <Text style={styles.fromPrimaryText}>
-                  Primary Wallet (
-                  {publicKey
-                    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
-                    : "Loading..."}
-                  )
-                </Text>
-                {showFromDropdown ? (
-                  <CaretUp size={20} color="#9CA3AF" weight="regular" />
-                ) : (
-                  <CaretDown size={20} color="#9CA3AF" weight="regular" />
-                )}
-              </TouchableOpacity>
-
-              {/* From Dropdown */}
-              {showFromDropdown && (
-                <View style={styles.fromDropdown}>
-                  {/* <TouchableOpacity 
+                {/* From Dropdown */}
+                {showFromDropdown && (
+                  <View style={styles.fromDropdown}>
+                    {/* <TouchableOpacity 
                       style={styles.fromOption}
                       onPress={() => {
                         setSelectedFrom('disposable1');
@@ -815,105 +817,68 @@ export default function SendScreen() {
                       </Text>
                       <Text style={styles.fromOptionBalance}>75.89 SOL</Text>
                     </TouchableOpacity> */}
-                  <TouchableOpacity
-                    style={styles.createNewButton}
-                    onPress={handleCreateNewAddress}
-                  >
-                    <Text style={styles.createNewIcon}>+</Text>
-                    <Text style={styles.createNewText}>
-                      Create new disposable address
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+                    <TouchableOpacity
+                      style={styles.createNewButton}
+                      onPress={handleCreateNewAddress}
+                    >
+                      <Text style={styles.createNewIcon}>+</Text>
+                      <Text style={styles.createNewText}>
+                        Create new disposable address
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             </View>
-          </View>
 
-          {/* Send Button */}
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (isSending || !recipient || !amount || parseFloat(amount) <= 0) &&
-                styles.sendButtonDisabled,
-            ]}
-            onPress={handleSendTransaction}
-            disabled={
-              isSending || !recipient || !amount || parseFloat(amount) <= 0
-            }
-          >
-            {isSending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.sendButtonText}>Send</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Custom Numeric Keyboard */}
-          {!isSending && (
-            <NumericKeyboard
-              showDoneButton={false}
-              maxAmount={balance}
-              onPercentage={(percentage) => {
-                const calculatedAmount = (balance * percentage) / 100;
-                setAmount(calculatedAmount.toFixed(5));
-              }}
-              onPress={(key) => {
-                setAmount((prev) => {
-                  // If current amount is "0.00" or "0", replace it
-                  if (prev === "0.00" || prev === "0") {
-                    return key === "." ? "0." : key;
-                  }
-
-                  // Prevent multiple decimal points
-                  if (key === "." && prev.includes(".")) {
-                    return prev;
-                  }
-
-                  // Limit to 5 decimal places
-                  if (prev.includes(".")) {
-                    const decimalPart = prev.split(".")[1];
-                    if (decimalPart && decimalPart.length >= 5) {
-                      return prev; // Don't add more digits
-                    }
-                  }
-
-                  return prev + key;
-                });
-              }}
-              onBackspace={() =>
-                setAmount((prev) => {
-                  const newAmount = prev.slice(0, -1);
-                  return newAmount || "0.00";
-                })
+            {/* Send Button */}
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (isSending ||
+                  !recipient ||
+                  !amount ||
+                  parseFloat(amount) <= 0) &&
+                  styles.sendButtonDisabled,
+              ]}
+              onPress={handleSendTransaction}
+              disabled={
+                isSending || !recipient || !amount || parseFloat(amount) <= 0
               }
-            />
-          )}
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.sendButtonText}>Send</Text>
+              )}
+            </TouchableOpacity>
 
-          {/* Connectivity Status */}
-          {connectivity && (
-            <View style={styles.connectivityBanner}>
-              <View
-                style={[
-                  styles.statusDot,
-                  {
-                    backgroundColor: connectivity.isInternetConnected
-                      ? "#22D3EE"
-                      : connectivity.isBluetoothAvailable
-                        ? "#ffa500"
-                        : "#ff4444",
-                  },
-                ]}
-              />
-              <Text style={styles.connectivityText}>
-                {connectivity.isInternetConnected
-                  ? "Connected to Internet"
-                  : connectivity.isBluetoothAvailable
-                    ? "Offline mode - Using Bluetooth Mesh"
-                    : "No connection available"}
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+            {/* Connectivity Status */}
+            {connectivity && (
+              <View style={styles.connectivityBanner}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    {
+                      backgroundColor: connectivity.isInternetConnected
+                        ? "#22D3EE"
+                        : connectivity.isBluetoothAvailable
+                          ? "#ffa500"
+                          : "#ff4444",
+                    },
+                  ]}
+                />
+                <Text style={styles.connectivityText}>
+                  {connectivity.isInternetConnected
+                    ? "Connected to Internet"
+                    : connectivity.isBluetoothAvailable
+                      ? "Offline mode - Using Bluetooth Mesh"
+                      : "No connection available"}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
 
       <SendConfirmationModal
@@ -971,14 +936,14 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingTop: 20,
+    paddingBottom: 24,
   },
   networkBadge: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 20,
     gap: 8,
   },
   networkIcon: {
@@ -995,8 +960,8 @@ const styles = StyleSheet.create({
   amountCard: {
     backgroundColor: "#072B31",
     borderRadius: 16,
-    padding: 14,
-    marginVertical: 12,
+    padding: 16,
+    marginVertical: 20,
     overflow: "visible",
   },
   amountCardHeader: {
@@ -1106,7 +1071,7 @@ const styles = StyleSheet.create({
   },
   // Section
   section: {
-    marginBottom: 12,
+    marginBottom: 20,
   },
   sectionLabel: {
     color: "#fff",
@@ -1206,10 +1171,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderColor: "#22D3EE",
-    paddingVertical: 12,
+    paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 12,
+    marginVertical: 20,
   },
   sendButtonDisabled: {
     opacity: 0.3,

@@ -87,11 +87,7 @@ export default function WalletScreen() {
   };
 
   const handleSwap = () => {
-    Alert.alert(
-      "Coming Soon",
-      "Swap functionality will be available in a future update.",
-      [{ text: "OK" }],
-    );
+    router.push("/wallet/swap" as any);
   };
 
   const handleAirdrop = async () => {
@@ -213,9 +209,6 @@ export default function WalletScreen() {
             <TouchableOpacity style={styles.actionButton} onPress={handleSwap}>
               <SwapIcon size={20} color="#ffffffff" />
               <Text style={styles.actionText}>Swap</Text>
-              <View style={styles.comingSoonBadge}>
-                <Text style={styles.comingSoonText}>Soon</Text>
-              </View>
             </TouchableOpacity>
             {/* Airdrop button - Devnet only */}
             <TouchableOpacity
@@ -403,7 +396,6 @@ const styles = StyleSheet.create({
     borderColor: "#22D3EE",
     backgroundColor: "#0C2425",
     gap: 8,
-    position: "relative",
   },
   actionIcon: {
     fontSize: 20,
@@ -413,23 +405,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#ffffffff",
     fontWeight: "500",
-  },
-  comingSoonBadge: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    backgroundColor: "#F59E0B",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FBBF24",
-  },
-  comingSoonText: {
-    fontSize: 9,
-    color: "#ffffff",
-    fontWeight: "700",
-    textTransform: "uppercase",
   },
   airdropButton: {
     borderColor: "#14B8A6",

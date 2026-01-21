@@ -143,16 +143,9 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
       );
       setError(errorMessage);
 
-      // Check if it's a permissions issue
-      const isPermissionError =
-        errorMessage.toLowerCase().includes("unauthorized") ||
-        errorMessage.toLowerCase().includes("permission");
-
       Alert.alert(
         "BLE Initialization Failed",
-        isPermissionError
-          ? `Bluetooth permissions not granted.\n\n${errorMessage}\n\nPlease:\n1. Open Settings\n2. Find this app\n3. Enable Bluetooth permissions\n4. Restart the app`
-          : `Failed to initialize Bluetooth: ${errorMessage}\n\nPlease check:\n• Bluetooth is turned on\n• App has required permissions\n• Device supports BLE`,
+        `Failed to initialize Bluetooth: ${errorMessage}\n\nPlease check:\n• Bluetooth is turned on\n• App has required permissions\n• Device supports BLE`,
         [{ text: "OK" }],
       );
     }
@@ -192,48 +185,21 @@ export const BLEProvider: React.FC<BLEProviderProps> = ({ children }) => {
               return prev.map((d) => (d.id === device.id ? device : d));
             }
 
-            // Auto-connect and subscribe to packets from this device
-            // This allows bidirectional communication (both sending and receiving)
-            (async () => {
-              try {
+            // Subscribe to packets from this device for broadcast reception
+            bleAdapter
+              .subscribeToPackets(device.id, (packet) => {
                 console.log(
-                  `[BLEContext] Auto-connecting to discovered device: ${device.id}`,
+                  "[BLEContext] Received broadcast packet from:",
+                  device.id,
                 );
-
-                // Connect to the device first
-                const connected = await bleAdapter.connect(device.id);
-
-                if (connected) {
-                  console.log(
-                    `[BLEContext] ✅ Connected to ${device.id}, subscribing to packets...`,
-                  );
-
-                  // Small delay to ensure services are fully discovered
-                  await new Promise((resolve) => setTimeout(resolve, 500));
-
-                  // Now subscribe to packets
-                  await bleAdapter.subscribeToPackets(device.id, (packet) => {
-                    console.log(
-                      "[BLEContext] Received broadcast packet from:",
-                      device.id,
-                    );
-                  });
-
-                  console.log(
-                    `[BLEContext] ✅ Subscribed to packets from ${device.id}`,
-                  );
-                } else {
-                  console.log(
-                    `[BLEContext] ⚠️ Failed to connect to ${device.id}`,
-                  );
-                }
-              } catch (err) {
-                console.warn(
-                  `[BLEContext] Could not connect/subscribe to ${device.id}:`,
-                  err instanceof Error ? err.message : String(err),
+              })
+              .catch((err) => {
+                console.log(
+                  "[BLEContext] Note: Could not subscribe to",
+                  device.id,
+                  "(expected for peripheral-only devices)",
                 );
-              }
-            })();
+              });
 
             return [...prev, device];
           });

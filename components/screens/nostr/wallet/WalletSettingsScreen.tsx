@@ -2,8 +2,7 @@ import SolanaIcon from "@/components/icons/SolanaIcon";
 import CreateDisposableAddressModal from "@/components/modals/CreateDisposableAddressModal";
 import { useDisposableWallets } from "@/hooks/useDisposableWallets";
 import { useWallet } from "@/src/contexts/WalletContext";
-import { createSolanaConnection } from "@/src/utils/solana";
-import { Keypair } from "@solana/web3.js";
+import { Connection, Keypair, clusterApiUrl } from "@solana/web3.js";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { CaretLeft, Copy, Trash } from "phosphor-react-native";
@@ -34,9 +33,9 @@ export default function WalletSettingsScreen() {
     wallet,
   } = useWallet();
 
-  // Create connection (memoized) - uses env var if available
+  // Create connection (memoized)
   const connection = useMemo(
-    () => createSolanaConnection({ network: "devnet" }),
+    () => new Connection(clusterApiUrl("devnet"), "confirmed"),
     [],
   );
 
@@ -45,33 +44,21 @@ export default function WalletSettingsScreen() {
 
   useEffect(() => {
     const loadAuthority = async () => {
-      if (wallet && isConnected && walletMode === "local") {
+      if (wallet && isConnected) {
         try {
-          // Only for LocalWallet - MWA doesn't support secret key export
+          // For LocalWallet, we can get the keypair
           if ("exportSecretKey" in wallet) {
             const secretKey = await wallet.exportSecretKey();
             const keypair = Keypair.fromSecretKey(secretKey);
             setAuthority(keypair);
-            console.log(
-              "[WalletSettings] Authority loaded for disposable wallets",
-            );
           }
         } catch (err) {
           console.error("[WalletSettings] Failed to load authority:", err);
         }
-      } else if (walletMode === "mwa" && publicKey) {
-        // For MWA - we'll use the wallet's signTransaction method instead
-        // No need for keypair export!
-        console.log(
-          "[WalletSettings] MWA wallet ready - disposable wallets supported via transaction signing! 🔥",
-        );
-        // Create a pseudo-keypair with just the publicKey for compatibility
-        // The actual signing will be done by MWA wallet
-        setAuthority(null); // We'll handle this differently
       }
     };
     loadAuthority();
-  }, [wallet, isConnected, walletMode, publicKey]);
+  }, [wallet, isConnected]);
 
   // Use disposable wallets hook
   const {
@@ -187,10 +174,10 @@ export default function WalletSettingsScreen() {
   };
 
   const handleCreateNewAddress = () => {
-    if (!isConnected || !wallet || !publicKey) {
+    if (!authority) {
       Alert.alert(
         "Error",
-        "Primary wallet not connected. Please connect your wallet first.",
+        "Primary wallet not loaded. Please connect your wallet first.",
       );
       return;
     }
@@ -202,29 +189,13 @@ export default function WalletSettingsScreen() {
     amount?: number,
     token?: "SOL" | "USDC" | "ZEC",
   ) => {
-    if (!wallet || !publicKey || !isConnected) {
-      Alert.alert("Error", "Wallet not connected");
+    if (!authority) {
+      Alert.alert("Error", "Primary wallet not loaded");
       return;
     }
 
     try {
       const initialFunding = token === "SOL" ? amount : 0;
-
-      // For MWA wallets, we need to use the wallet adapter's signing
-      // For now, show a message that this feature is coming soon for MWA
-      if (walletMode === "mwa") {
-        Alert.alert(
-          "Coming Soon",
-          "Disposable wallets with MWA support is being implemented! For now, use a local wallet.",
-        );
-        return;
-      }
-
-      // For local wallets, continue with existing flow
-      if (!authority) {
-        Alert.alert("Error", "Primary wallet keypair not loaded");
-        return;
-      }
       const wallet = await createWallet({
         label,
         initialFundingSOL: initialFunding,
@@ -346,22 +317,7 @@ export default function WalletSettingsScreen() {
               )}
             </View>
 
-            {walletMode === "mwa" ? (
-              <View style={styles.mwaNoticeCard}>
-                <Text style={styles.mwaNoticeTitle}>
-                  � MWA + Nonce Accounts (Coming Soon!)
-                </Text>
-                <Text style={styles.mwaNoticeText}>
-                  Disposable wallets with nonce accounts ARE possible on Solana
-                  Mobile! We&apos;re implementing MWA transaction signing for
-                  nonce account creation.
-                </Text>
-                <Text style={styles.mwaNoticeSubtext}>
-                  For now, use a local wallet to access this feature. MWA
-                  support coming in the next update! 🚀
-                </Text>
-              </View>
-            ) : disposableWallets.length === 0 ? (
+            {disposableWallets.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>No disposable wallets yet</Text>
                 <Text style={styles.emptySubtext}>
@@ -448,7 +404,7 @@ export default function WalletSettingsScreen() {
             <TouchableOpacity
               style={styles.createNewButton}
               onPress={handleCreateNewAddress}
-              disabled={!isConnected || !wallet || !publicKey}
+              disabled={!authority}
             >
               <Text style={styles.createNewIcon}>+</Text>
               <Text style={styles.createNewText}>
@@ -701,31 +657,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#22D3EE",
     fontWeight: "600",
-  },
-  mwaNoticeCard: {
-    backgroundColor: "#0a2828",
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#ff9966",
-    padding: 20,
-    marginBottom: 16,
-  },
-  mwaNoticeTitle: {
-    fontSize: 16,
-    color: "#ff9966",
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  mwaNoticeText: {
-    fontSize: 14,
-    color: "#c9d1d9",
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  mwaNoticeSubtext: {
-    fontSize: 12,
-    color: "#8a9999",
-    fontStyle: "italic",
   },
   emptyState: {
     backgroundColor: "#06181B",

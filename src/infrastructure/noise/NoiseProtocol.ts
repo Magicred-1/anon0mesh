@@ -1,8 +1,10 @@
 import { Buffer } from "buffer";
 import {
-  _unstable_crypto_kdf_hkdf_sha256_expand,
-  _unstable_crypto_kdf_hkdf_sha256_extract,
-  crypto_generichash,
+    _unstable_crypto_kdf_hkdf_sha256_expand,
+    _unstable_crypto_kdf_hkdf_sha256_extract,
+    crypto_aead_xchacha20poly1305_ietf_decrypt,
+    crypto_aead_xchacha20poly1305_ietf_encrypt,
+    crypto_generichash,
 } from "react-native-libsodium";
 import * as nacl from "tweetnacl";
 
@@ -72,26 +74,16 @@ export class NoiseProtocol {
 
   private encryptAndHash(plaintext: Uint8Array): Uint8Array {
     if (this.k) {
-      // Use TweetNaCl's secretbox (XSalsa20-Poly1305) for AEAD
-      // Noise nonce: 96 bits (12 bytes), but secretbox needs 24 bytes
-      const noiseNonce = new Uint8Array(24);
-      // Write counter as little-endian in last 8 bytes
-      const view = new DataView(noiseNonce.buffer);
-      view.setBigUint64(16, BigInt(this.n), true);
+      const noiseNonce = Buffer.alloc(12);
+      noiseNonce.writeBigUInt64LE(BigInt(this.n), 4); // Noise uses last 8 bytes
 
-      console.log("[NOISE] Encrypting:", {
-        plaintextLength: plaintext.length,
-        nonce: Buffer.from(noiseNonce).toString("hex"),
-        keyLength: this.k.length,
-        counter: this.n,
-      });
-
-      const ciphertext = nacl.secretbox(plaintext, noiseNonce, this.k);
-
-      console.log("[NOISE] Encrypted result:", {
-        ciphertextLength: ciphertext.length,
-      });
-
+      const ciphertext = crypto_aead_xchacha20poly1305_ietf_encrypt(
+        plaintext,
+        this.h, // AD
+        null,
+        noiseNonce,
+        this.k,
+      );
       this.mixHash(ciphertext);
       this.n++;
       return ciphertext;
@@ -103,37 +95,19 @@ export class NoiseProtocol {
 
   private decryptAndHash(ciphertext: Uint8Array): Uint8Array {
     if (this.k) {
-      // Use TweetNaCl's secretbox (XSalsa20-Poly1305) for AEAD
-      // Noise nonce: 96 bits (12 bytes), but secretbox needs 24 bytes
-      const noiseNonce = new Uint8Array(24);
-      // Write counter as little-endian in last 8 bytes
-      const view = new DataView(noiseNonce.buffer);
-      view.setBigUint64(16, BigInt(this.n), true);
+      const noiseNonce = Buffer.alloc(12);
+      noiseNonce.writeBigUInt64LE(BigInt(this.n), 4);
 
-      console.log("[NOISE] Decrypting:", {
-        ciphertextLength: ciphertext.length,
-        nonce: Buffer.from(noiseNonce).toString("hex"),
-        keyLength: this.k.length,
-        counter: this.n,
-      });
-
-      try {
-        const plaintext = nacl.secretbox.open(ciphertext, noiseNonce, this.k);
-        if (!plaintext) {
-          throw new Error("Decryption failed - authentication tag mismatch");
-        }
-        this.mixHash(ciphertext);
-        this.n++;
-        return plaintext;
-      } catch (error) {
-        console.error("[NOISE] Decryption failed:", error);
-        console.error("[NOISE] Decrypt params:", {
-          ciphertext: Buffer.from(ciphertext).toString("hex"),
-          nonce: Buffer.from(noiseNonce).toString("hex"),
-          key: Buffer.from(this.k).toString("hex"),
-        });
-        throw error;
-      }
+      const plaintext = crypto_aead_xchacha20poly1305_ietf_decrypt(
+        null,
+        ciphertext,
+        this.h, // AD
+        noiseNonce,
+        this.k,
+      );
+      this.mixHash(ciphertext);
+      this.n++;
+      return plaintext;
     } else {
       this.mixHash(ciphertext);
       return ciphertext;
@@ -192,17 +166,12 @@ export class NoiseProtocol {
 
   // -> e
   public readMessageA(message: Uint8Array) {
-    console.log(
-      "[NOISE] [Responder] readMessageA: received e, length:",
-      message.length,
-    );
     this.re = message.slice(0, 32);
     this.mixHash(this.re);
   }
 
   // <- e, ee, s, es
   public writeMessageB(): Uint8Array {
-    console.log("[NOISE] [Responder] writeMessageB: sending e, ee, s, es");
     const kp = nacl.box.keyPair();
     this.e = { publicKey: kp.publicKey, privateKey: kp.secretKey };
     // e
@@ -221,43 +190,21 @@ export class NoiseProtocol {
     const msg = new Uint8Array(32 + encryptedS.length);
     msg.set(this.e.publicKey);
     msg.set(encryptedS, 32);
-    console.log(
-      "[NOISE] [Responder] writeMessageB: message length",
-      msg.length,
-    );
     return msg;
   }
 
   // -> s, se
   public readMessageC(message: Uint8Array) {
-    console.log(
-      "[NOISE] [Responder] readMessageC: received s, se, length:",
-      message.length,
-    );
     // s
     const encryptedS = message.slice(0, 32 + MACLEN);
     this.rs = this.decryptAndHash(encryptedS);
 
     // se
-    if (!this.e || !this.rs) {
-      console.error("[NOISE] [Responder] readMessageC: Invalid state!", {
-        has_e: !!this.e,
-        has_rs: !!this.rs,
-        e: this.e
-          ? {
-              publicKey: Buffer.from(this.e.publicKey).toString("hex"),
-              privateKey: Buffer.from(this.e.privateKey).toString("hex"),
-            }
-          : null,
-        rs: this.rs ? Buffer.from(this.rs).toString("hex") : null,
-      });
-      throw new Error("Invalid state");
-    }
+    if (!this.e || !this.rs) throw new Error("Invalid state");
     this.mixKey(nacl.scalarMult(this.e.privateKey, this.rs));
 
     const payload = message.slice(32 + MACLEN);
     this.decryptAndHash(payload);
-    console.log("[NOISE] [Responder] readMessageC: handshake complete");
   }
 
   public split(): [NoiseCipher, NoiseCipher] {
@@ -282,14 +229,16 @@ export class NoiseCipher {
     plaintext: Uint8Array,
     ad: Uint8Array = new Uint8Array(0),
   ): Uint8Array {
-    // Use TweetNaCl's secretbox (XSalsa20-Poly1305) for transport encryption
-    const noiseNonce = new Uint8Array(24);
-    // Write counter as little-endian in last 8 bytes
-    const view = new DataView(noiseNonce.buffer);
-    view.setBigUint64(16, BigInt(this.n), true);
+    const noiseNonce = Buffer.alloc(12);
+    noiseNonce.writeBigUInt64LE(BigInt(this.n), 4);
 
-    // Note: secretbox doesn't support AD, we ignore it (Noise spec allows this)
-    const ciphertext = nacl.secretbox(plaintext, noiseNonce, this.k);
+    const ciphertext = crypto_aead_xchacha20poly1305_ietf_encrypt(
+      plaintext,
+      ad,
+      null,
+      noiseNonce,
+      this.k,
+    );
     this.n++;
     return ciphertext;
   }
@@ -298,17 +247,16 @@ export class NoiseCipher {
     ciphertext: Uint8Array,
     ad: Uint8Array = new Uint8Array(0),
   ): Uint8Array {
-    // Use TweetNaCl's secretbox (XSalsa20-Poly1305) for transport decryption
-    const noiseNonce = new Uint8Array(24);
-    // Write counter as little-endian in last 8 bytes
-    const view = new DataView(noiseNonce.buffer);
-    view.setBigUint64(16, BigInt(this.n), true);
+    const noiseNonce = Buffer.alloc(12);
+    noiseNonce.writeBigUInt64LE(BigInt(this.n), 4);
 
-    // Note: secretbox doesn't support AD, we ignore it (Noise spec allows this)
-    const plaintext = nacl.secretbox.open(ciphertext, noiseNonce, this.k);
-    if (!plaintext) {
-      throw new Error("Decryption failed - authentication tag mismatch");
-    }
+    const plaintext = crypto_aead_xchacha20poly1305_ietf_decrypt(
+      null,
+      ciphertext,
+      ad,
+      noiseNonce,
+      this.k,
+    );
     this.n++;
     return plaintext;
   }

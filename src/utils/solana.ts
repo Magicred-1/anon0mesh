@@ -28,21 +28,6 @@ export interface SolanaConnectionConfig {
  * Get RPC URL from environment variables or use default
  */
 function getRpcUrl(network: SolanaNetwork = "devnet"): string {
-  // Debug: Log all env vars
-  console.log(`[Solana] 🔍 Checking RPC for network: ${network}`);
-  console.log(
-    `[Solana] 🔍 EXPO_PUBLIC_SOLANA_RPC_DEVNET:`,
-    process.env.EXPO_PUBLIC_SOLANA_RPC_DEVNET,
-  );
-  console.log(
-    `[Solana] 🔍 EXPO_PUBLIC_SOLANA_RPC_MAINNET:`,
-    process.env.EXPO_PUBLIC_SOLANA_RPC_MAINNET,
-  );
-  console.log(
-    `[Solana] 🔍 EXPO_PUBLIC_SOLANA_RPC_TESTNET:`,
-    process.env.EXPO_PUBLIC_SOLANA_RPC_TESTNET,
-  );
-
   // Check for custom RPC URLs in environment variables
   const envMapping = {
     mainnet: process.env.EXPO_PUBLIC_SOLANA_RPC_MAINNET,
@@ -52,14 +37,14 @@ function getRpcUrl(network: SolanaNetwork = "devnet"): string {
 
   const customRpcUrl = envMapping[network];
 
-  if (customRpcUrl && customRpcUrl.trim()) {
-    console.log(`[Solana] ✅ Using custom RPC for ${network}: ${customRpcUrl}`);
+  if (customRpcUrl) {
+    console.log(`[Solana] Using custom RPC for ${network}: ${customRpcUrl}`);
     return customRpcUrl;
   }
 
   // Fallback to default networks
   const defaultRpcUrl = SOLANA_NETWORKS[network];
-  console.log(`[Solana] ⚠️ Using default RPC for ${network}: ${defaultRpcUrl}`);
+  console.log(`[Solana] Using default RPC for ${network}: ${defaultRpcUrl}`);
   return defaultRpcUrl;
 }
 

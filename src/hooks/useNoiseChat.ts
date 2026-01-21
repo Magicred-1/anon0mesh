@@ -166,9 +166,6 @@ export function useNoiseChat(): UseNoiseChatReturn {
         // Create NoiseManager instance with identity state manager
         const manager = new NoiseManager(identityStateManager);
 
-        // Clear any stale sessions from previous runs
-        manager.clearAllSessions();
-
         // Attach BLE adapter to NoiseManager
         manager.attachAdapter(bleAdapter);
 
@@ -235,23 +232,7 @@ export function useNoiseChat(): UseNoiseChatReturn {
       );
       setSessions((prev) => {
         const next = new Map(prev);
-
-        // If session is incomplete and has no remote public key, it's been cleared - remove it
-        if (!sessionInfo.isHandshakeComplete && !sessionInfo.remotePublicKey) {
-          console.log(
-            `[useNoiseChat] Removing cleared session for ${deviceId}`,
-          );
-          next.delete(deviceId);
-
-          // CRITICAL: Clear rate limiting timestamp to allow immediate re-handshake
-          connectionAttemptsRef.current.delete(deviceId);
-          console.log(
-            `[useNoiseChat] Cleared retry timestamp for ${deviceId} - ready for immediate re-handshake`,
-          );
-        } else {
-          next.set(deviceId, sessionInfo);
-        }
-
+        next.set(deviceId, sessionInfo);
         return next;
       });
     };
@@ -603,9 +584,8 @@ export function useNoiseChat(): UseNoiseChatReturn {
       }
     });
     // Only depend on actual state changes, not function references
-    // Use sessions.size to trigger when sessions are added/removed
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [discoveredDevices, isReady, isAdvertising, sessions]);
+  }, [discoveredDevices, isReady, isAdvertising, sessions.size]);
 
   return {
     sendEncryptedMessage,

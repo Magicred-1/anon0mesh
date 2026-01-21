@@ -1,3 +1,4 @@
+import SolanaLogo from "@/components/ui/SolanaLogo";
 import {
   DeviceDetector,
   LocalWalletAdapter,
@@ -16,11 +17,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import ArciumIcon from "../icons/ArciumIcon";
-import BluetoothIcon from "../icons/BluetoothIcon";
-import GhostIcon from "../icons/GhostIcon";
-import GlobeIcon from "../icons/GlobeIcon";
-import LockIcon from "../icons/LockIcon";
 
 interface Props {
   // Optional props for external control (if needed)
@@ -90,41 +86,9 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const [nickname, setNickname] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [isSeeker, setIsSeeker] = useState<boolean>(false);
-  const [showBottomSheet, setShowBottomSheet] = useState(false);
 
   // Hooks
   const router = useRouter();
-
-  // Features data
-  const features = [
-    {
-      icon: <LockIcon />,
-      title: "END-TO-END_ENCRYPTED",
-      description: "Your messages are secured & encrypted",
-    },
-    {
-      icon: <BluetoothIcon />,
-      title: "MESH_NETWORK",
-      description:
-        "Connect directly with peers via Bluetooth, no internet needed",
-    },
-    {
-      icon: <GhostIcon />,
-      title: "STAY_ANONYMOUS",
-      description: "Own your identity with Solana keys, no sign-up required",
-    },
-    {
-      icon: <GlobeIcon />,
-      title: "ZONE_BASED_MESH",
-      description: "From local to global, control your message range",
-    },
-    {
-      icon: <ArciumIcon />,
-      title: "PRIVATE_OFFLINE_TRANSACTIONS",
-      description:
-        "Send confidential private on Solana using Bluetooth powered by Arcium",
-    },
-  ];
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -485,10 +449,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
             style={{ width: 422, height: 100, resizeMode: "contain" }}
           />
 
-          <Text style={styles.tagline}>[ OFF-GRID COLD WALLET ]</Text>
+          <Text style={styles.tagline}>[ DECENTRALIZED P2P MESSAGING ]</Text>
 
           {/* Show generated nickname */}
-          {loading && (
+          {nickname && !loading && (
             <Text style={styles.generatedNickname}>
               {"( "}@{nickname}
               {" )"}
@@ -617,6 +581,27 @@ export default function OnboardingScreen({ onComplete }: Props) {
                     ? "CONNECTING TO SEED WALLET"
                     : "GENERATING SECURE KEYPAIR"}
                 </Text>
+              </Animated.View>
+
+              {/* Animated Solana Logo (subtle, bottom) */}
+              <Animated.View
+                style={[
+                  styles.loadingSolanaContainer,
+                  {
+                    opacity: buttonFadeIn, // Fade in with button
+                    transform: [
+                      {
+                        rotate: loadingRotation.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0deg", "360deg"],
+                        }),
+                      },
+                      { scale: loadingScale },
+                    ],
+                  },
+                ]}
+              >
+                <SolanaLogo size={60} />
               </Animated.View>
             </LinearGradient>
           </Animated.View>

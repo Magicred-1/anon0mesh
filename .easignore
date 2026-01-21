@@ -3,4 +3,3 @@ test-ledger/
 *.rpc
 *.sock
 *.socket
-/ios
