@@ -1,4 +1,4 @@
-import { useSegments } from 'expo-router';
+import { useSegments } from "expo-router";
 import {
   ChatCircle,
   ClockClockwise,
@@ -6,9 +6,9 @@ import {
   Plugs,
   User,
   Wallet,
-  type Icon
-} from 'phosphor-react-native';
-import React, { useEffect, useRef, useState } from 'react';
+  type Icon,
+} from "phosphor-react-native";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -19,7 +19,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
-} from 'react-native';
+} from "react-native";
 
 type MenuOption = {
   id: string;
@@ -42,9 +42,9 @@ type Props = {
 
 export default function MainMenuModal(props: Props) {
   const segments = useSegments();
-  const screenHeight = Dimensions.get('screen').height;
+  const screenHeight = Dimensions.get("screen").height;
   const closedPosition = screenHeight - 80; // Show 80px peek at bottom
-  
+
   const [panY] = useState(new Animated.Value(closedPosition));
   const currentPanY = useRef(closedPosition);
   const resetPositionAnim = useRef<Animated.CompositeAnimation | null>(null);
@@ -60,7 +60,7 @@ export default function MainMenuModal(props: Props) {
       },
       onPanResponderRelease: (_, gs) => {
         const threshold = closedPosition / 2;
-        
+
         if (currentPanY.current > threshold || gs.vy > 0.5) {
           // Swipe down or fast downward velocity - close
           return closeAnim.current?.start(() => props.onClose());
@@ -69,7 +69,7 @@ export default function MainMenuModal(props: Props) {
           return resetPositionAnim.current?.start();
         }
       },
-    })
+    }),
   ).current;
 
   useEffect(() => {
@@ -112,67 +112,69 @@ export default function MainMenuModal(props: Props) {
   };
 
   // Determine active route
-  const currentRoute = segments.join('/') || '';
+  const currentRoute = segments.join("/") || "";
   const isActive = (route: string) => {
-    if (route === 'chat' && (currentRoute === 'chat' || currentRoute === '')) return true;
-    if (route === 'wallet' && currentRoute.startsWith('wallet')) return true;
-    if (route === 'wallet/history' && currentRoute === 'wallet/history') return true;
-    if (route === 'zone' && currentRoute.startsWith('zone')) return true;
-    if (route === 'profile' && currentRoute === 'profile') return true;
+    if (route === "chat" && (currentRoute === "chat" || currentRoute === ""))
+      return true;
+    if (route === "wallet" && currentRoute.startsWith("wallet")) return true;
+    if (route === "wallet/history" && currentRoute === "wallet/history")
+      return true;
+    if (route === "zone" && currentRoute.startsWith("zone")) return true;
+    if (route === "profile" && currentRoute === "profile") return true;
     return false;
   };
 
   const menuOptions: MenuOption[] = [
     {
-      id: 'messages',
-      label: 'Messages',
-      route: 'chat',
+      id: "messages",
+      label: "Messages",
+      route: "chat",
       icon: ChatCircle,
       onPress: props.onNavigateToMessages,
     },
     {
-      id: 'wallet',
-      label: 'Wallet',
-      route: 'wallet',
+      id: "wallet",
+      label: "Wallet",
+      route: "wallet",
       icon: Wallet,
       onPress: props.onNavigateToWallet,
     },
     {
-      id: 'history',
-      label: 'History',
-      route: 'wallet/history',
+      id: "history",
+      label: "History",
+      route: "wallet/history",
       icon: ClockClockwise,
       onPress: props.onNavigateToHistory,
     },
     {
-      id: 'mesh_zone',
-      label: 'Mesh_Zone',
-      route: 'zone',
+      id: "mesh_zone",
+      label: "Mesh_Zone",
+      route: "zone",
       icon: Network,
       onPress: props.onNavigateToMeshZone,
     },
     {
-      id: 'profile',
-      label: 'Profile',
-      route: 'profile',
+      id: "profile",
+      label: "Profile",
+      route: "profile",
       icon: User,
       onPress: props.onNavigateToProfile,
     },
     {
-      id: 'disconnect',
-      label: 'Disconnect',
-      route: '',
+      id: "disconnect",
+      label: "Disconnect",
+      route: "",
       icon: Plugs,
       onPress: props.onDisconnect,
     },
   ];
 
   const translateY = panY;
-  
+
   const backdropOpacity = panY.interpolate({
     inputRange: [0, screenHeight - 80],
     outputRange: [0.9, 0],
-    extrapolate: 'clamp',
+    extrapolate: "clamp",
   });
 
   // Don't render anything if not visible
@@ -190,33 +192,24 @@ export default function MainMenuModal(props: Props) {
     >
       <View style={styles.modalOverlay}>
         <TouchableWithoutFeedback onPress={handleDismiss}>
-          <Animated.View 
-            style={[
-              styles.background, 
-              { opacity: backdropOpacity }
-            ]}
+          <Animated.View
+            style={[styles.background, { opacity: backdropOpacity }]}
           />
         </TouchableWithoutFeedback>
-        
-        <Animated.View 
-          style={[
-            styles.modalContent, 
-            { transform: [{ translateY }] }
-          ]}
+
+        <Animated.View
+          style={[styles.modalContent, { transform: [{ translateY }] }]}
         >
-          <View 
-            style={styles.handleContainer}
-            {...panResponder.panHandlers}
-          >
+          <View style={styles.handleContainer} {...panResponder.panHandlers}>
             <View style={styles.handle} />
             <View style={styles.handle} />
           </View>
-          
+
           <View style={styles.menuGrid}>
             {menuOptions.map((option) => {
               const IconComponent = option.icon;
               const active = isActive(option.route);
-              
+
               return (
                 <TouchableOpacity
                   key={option.id}
@@ -224,15 +217,13 @@ export default function MainMenuModal(props: Props) {
                   onPress={() => handleOptionPress(option.onPress)}
                   activeOpacity={0.7}
                 >
-                  <View style={[
-                    styles.iconContainer,
-                    active && styles.iconContainerActive
-                  ]}>
-                    <IconComponent 
-                      size={36} 
-                      color="#FFFFFF" 
-                      weight="regular"
-                    />
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      active && styles.iconContainerActive,
+                    ]}
+                  >
+                    <IconComponent size={36} color="#FFFFFF" weight="regular" />
                   </View>
                   <Text style={styles.menuLabel}>{option.label}</Text>
                 </TouchableOpacity>
@@ -248,22 +239,22 @@ export default function MainMenuModal(props: Props) {
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   background: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#041A1D',
+    backgroundColor: "#041A1D",
   },
   modalContent: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#041A1D',
+    backgroundColor: "#041A1D",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 2,
-    borderColor: '#22D3EE',
+    borderColor: "#22D3EE",
     borderBottomWidth: 0,
     paddingTop: 12,
     paddingBottom: 32,
@@ -271,49 +262,49 @@ const styles = StyleSheet.create({
     height: 383,
   },
   handleContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 8,
     paddingBottom: 20,
-    cursor: 'grab' as any,
+    cursor: "grab" as any,
     gap: 6,
   },
   handle: {
     width: 50,
     height: 3,
-    backgroundColor: '#22D3EE',
+    backgroundColor: "#22D3EE",
     borderRadius: 2,
   },
   menuGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     paddingHorizontal: 10,
     paddingTop: 20,
   },
   menuItem: {
-    width: '30%',
-    alignItems: 'center',
+    width: "30%",
+    alignItems: "center",
     marginBottom: 32,
   },
   iconContainer: {
     width: 80,
     height: 80,
     borderRadius: 16,
-    backgroundColor: '#0d3333',
+    backgroundColor: "#0d3333",
     borderWidth: 2,
-    borderColor: '#22D3EE',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#22D3EE",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 12,
   },
   iconContainerActive: {
-    backgroundColor: '#106471', // Bleu plus clair pour la page active
+    backgroundColor: "#106471", // Bleu plus clair pour la page active
   },
   menuLabel: {
-    color: '#22D3EE',
+    color: "#22D3EE",
     fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-    fontFamily: 'monospace',
+    fontWeight: "500",
+    textAlign: "center",
+    fontFamily: "monospace",
   },
 });
