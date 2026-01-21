@@ -1,10 +1,11 @@
-import USDCIcon from '@/components/icons/USDCIcon';
-import ZECIcon from '@/components/icons/ZECIcon';
-import { useWalletBalances } from '@/hooks/useWalletBalances';
-import { useWallet } from '@/src/contexts/WalletContext';
-import { LinearGradient } from 'expo-linear-gradient';
-import { CaretDown, CaretUp } from 'phosphor-react-native';
-import React, { useEffect, useState } from 'react';
+import USDCIcon from "@/components/icons/USDCIcon";
+import ZECIcon from "@/components/icons/ZECIcon";
+import NumericKeyboard from "@/components/ui/NumericKeyboard";
+import { useWalletBalances } from "@/hooks/useWalletBalances";
+import { useWallet } from "@/src/contexts/WalletContext";
+import { LinearGradient } from "expo-linear-gradient";
+import { CaretDown, CaretUp } from "phosphor-react-native";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -15,9 +16,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
-type TokenType = 'SOL' | 'USDC' | 'ZEC';
+type TokenType = "SOL" | "USDC" | "ZEC";
 
 const SOL_USD_RATE = 141.457; // Approximate SOL/USD exchange rate
 const MIN_BALANCE_REQUIRED = 0.00144768; // Minimum SOL required for disposable address creation
@@ -25,19 +26,27 @@ const MIN_BALANCE_REQUIRED = 0.00144768; // Minimum SOL required for disposable 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onCreate: (label?: string, amount?: number, token?: TokenType) => Promise<void>;
+  onCreate: (
+    label?: string,
+    amount?: number,
+    token?: TokenType,
+  ) => Promise<void>;
 };
 
-const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => {
+const CreateDisposableAddressModal = ({
+  visible,
+  onClose,
+  onCreate,
+}: Props) => {
   const { publicKey } = useWallet();
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
-  
-  const [label, setLabel] = useState('');
+
+  const [label, setLabel] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-  const [token, setToken] = useState<TokenType>('SOL');
-  const [amount, setAmount] = useState('0.00');
+  const [token, setToken] = useState<TokenType>("SOL");
+  const [amount, setAmount] = useState("0.00");
   const [showTokenDropdown, setShowTokenDropdown] = useState(false);
-  const [newAddress, setNewAddress] = useState<string>('8NXF...QYAS');
+  const [newAddress, setNewAddress] = useState<string>("8NXF...QYAS");
 
   // Fetch balances when modal opens
   useEffect(() => {
@@ -50,7 +59,7 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
   }, [visible, publicKey, fetchBalances]);
 
   // Get balance for selected token
-  const balance = balances.find(b => b.symbol === token)?.balance ?? 0;
+  const balance = balances.find((b) => b.symbol === token)?.balance ?? 0;
 
   const handleTokenDropdown = () => {
     setShowTokenDropdown(!showTokenDropdown);
@@ -59,13 +68,13 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
   const handleSelectToken = (selectedToken: TokenType) => {
     setToken(selectedToken);
     setShowTokenDropdown(false);
-    setAmount('0.00');
+    setAmount("0.00");
   };
 
   const handleMaxAmount = () => {
     // Leave a small amount for transaction fees
     const maxAmount = Math.max(0, balance - 0.001);
-    setAmount(maxAmount.toFixed(token === 'SOL' ? 4 : 2));
+    setAmount(maxAmount.toFixed(token === "SOL" ? 4 : 2));
   };
 
   const handleCreate = async () => {
@@ -73,12 +82,15 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
     try {
       const amountNum = parseFloat(amount) || 0;
       await onCreate(label.trim() || undefined, amountNum, token);
-      setLabel('');
-      setAmount('0.00');
-      setToken('SOL');
+      setLabel("");
+      setAmount("0.00");
+      setToken("SOL");
       onClose();
     } catch (error) {
-      console.error('[CreateDisposableAddressModal] Error creating address:', error);
+      console.error(
+        "[CreateDisposableAddressModal] Error creating address:",
+        error,
+      );
     } finally {
       setIsCreating(false);
     }
@@ -86,9 +98,9 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
 
   const handleClose = () => {
     if (!isCreating) {
-      setLabel('');
-      setAmount('0.00');
-      setToken('SOL');
+      setLabel("");
+      setAmount("0.00");
+      setToken("SOL");
       setShowTokenDropdown(false);
       onClose();
     }
@@ -102,14 +114,14 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
-        <TouchableOpacity 
-          style={styles.backdrop} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
           onPress={handleClose}
         />
         <View style={styles.bottomSheet}>
           <LinearGradient
-            colors={['#041A1D', '#06181B', '#072B31']}
+            colors={["#041A1D", "#06181B", "#072B31"]}
             locations={[0, 0.5, 1]}
             style={styles.gradient}
           >
@@ -119,7 +131,7 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
             </View>
 
             {/* Content */}
-            <ScrollView 
+            <ScrollView
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
@@ -131,63 +143,70 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
 
               {/* Minimum Balance Required */}
               <Text style={styles.minBalanceText}>
-                Minimum Balance Required: {MIN_BALANCE_REQUIRED} SOL for Disposable Address creation
+                Minimum Balance Required: {MIN_BALANCE_REQUIRED} SOL for
+                Disposable Address creation
               </Text>
 
               {/* Add Funds Section */}
               <View style={styles.addFundsSection}>
-                <Text style={styles.addFundsTitle}>Add Funds from Primary Wallet</Text>
-                
+                <Text style={styles.addFundsTitle}>
+                  Add Funds from Primary Wallet
+                </Text>
+
                 {/* Amount Card - Same design as SendScreen */}
                 <View style={styles.amountCard}>
                   <View style={styles.amountCardHeader}>
                     <View style={styles.tokenSelectorContainer}>
-                      <TouchableOpacity 
-                        style={styles.tokenSelector} 
+                      <TouchableOpacity
+                        style={styles.tokenSelector}
                         onPress={handleTokenDropdown}
                         disabled={isCreating}
                       >
                         <View style={styles.tokenIconWrapper}>
-                          {token === 'SOL' && (
-                            <Image 
-                              source={require('../../assets/images/sol-logo.png')} 
-                              style={styles.tokenImage} 
+                          {token === "SOL" && (
+                            <Image
+                              source={require("../../assets/images/sol-logo.png")}
+                              style={styles.tokenImage}
                             />
                           )}
-                          {token === 'USDC' && <USDCIcon size={24} />}
-                          {token === 'ZEC' && <ZECIcon size={24} />}
+                          {token === "USDC" && <USDCIcon size={24} />}
+                          {token === "ZEC" && <ZECIcon size={24} />}
                         </View>
                         <Text style={styles.tokenText}>{token}</Text>
                         {showTokenDropdown ? (
                           <CaretUp size={20} color="#22D3EE" weight="regular" />
                         ) : (
-                          <CaretDown size={20} color="#22D3EE" weight="regular" />
+                          <CaretDown
+                            size={20}
+                            color="#22D3EE"
+                            weight="regular"
+                          />
                         )}
                       </TouchableOpacity>
 
                       {/* Token Dropdown */}
                       {showTokenDropdown && (
                         <View style={styles.tokenDropdown}>
-                          {(['SOL', 'USDC', 'ZEC'] as TokenType[])
+                          {(["SOL", "USDC", "ZEC"] as TokenType[])
                             .filter((t) => t !== token)
                             .map((t, index) => (
                               <TouchableOpacity
                                 key={t}
                                 style={[
                                   styles.tokenOption,
-                                  index === 0 && styles.tokenOptionFirst
+                                  index === 0 && styles.tokenOptionFirst,
                                 ]}
                                 onPress={() => handleSelectToken(t)}
                               >
                                 <View style={styles.tokenIconWrapper}>
-                                  {t === 'SOL' && (
-                                    <Image 
-                                      source={require('../../assets/images/sol-logo.png')} 
-                                      style={styles.tokenImage} 
+                                  {t === "SOL" && (
+                                    <Image
+                                      source={require("../../assets/images/sol-logo.png")}
+                                      style={styles.tokenImage}
                                     />
                                   )}
-                                  {t === 'USDC' && <USDCIcon size={24} />}
-                                  {t === 'ZEC' && <ZECIcon size={24} />}
+                                  {t === "USDC" && <USDCIcon size={24} />}
+                                  {t === "ZEC" && <ZECIcon size={24} />}
                                 </View>
                                 <Text style={styles.tokenOptionText}>{t}</Text>
                               </TouchableOpacity>
@@ -200,10 +219,11 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
                       style={styles.amountInput}
                       value={amount}
                       onChangeText={setAmount}
-                      keyboardType="decimal-pad"
+                      showSoftInputOnFocus={false}
                       placeholder="0.00"
                       placeholderTextColor="#4a6c6c"
                       editable={!isCreating}
+                      caretHidden={false}
                     />
                   </View>
 
@@ -215,9 +235,12 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
                       ) : (
                         <>
                           <Text style={styles.balanceAmount}>
-                            {balance.toFixed(token === 'SOL' ? 4 : 2)} {token}
+                            {balance.toFixed(token === "SOL" ? 4 : 2)} {token}
                           </Text>
-                          <TouchableOpacity onPress={handleMaxAmount} disabled={isCreating}>
+                          <TouchableOpacity
+                            onPress={handleMaxAmount}
+                            disabled={isCreating}
+                          >
                             <Text style={styles.maxLabel}>(Max)</Text>
                           </TouchableOpacity>
                         </>
@@ -225,12 +248,12 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
                     </View>
                     {!isRefreshing && (
                       <Text style={styles.usdValue}>
-                        ≈${' '}
-                        {token === 'SOL'
+                        ≈${" "}
+                        {token === "SOL"
                           ? (balance * SOL_USD_RATE).toFixed(2)
-                          : token === 'USDC'
-                          ? balance.toFixed(2)
-                          : '0.00'}
+                          : token === "USDC"
+                            ? balance.toFixed(2)
+                            : "0.00"}
                       </Text>
                     )}
                   </View>
@@ -238,10 +261,53 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
               </View>
             </ScrollView>
 
+            {/* Custom Numeric Keyboard */}
+            {!isCreating && (
+              <NumericKeyboard
+                maxAmount={balance}
+                onPercentage={(percentage) => {
+                  const calculatedAmount = (balance * percentage) / 100;
+                  setAmount(calculatedAmount.toFixed(5));
+                }}
+                onPress={(key) => {
+                  setAmount((prev) => {
+                    // If current amount is "0.00" or "0", replace it
+                    if (prev === "0.00" || prev === "0") {
+                      return key === "." ? "0." : key;
+                    }
+
+                    // Prevent multiple decimal points
+                    if (key === "." && prev.includes(".")) {
+                      return prev;
+                    }
+
+                    // Limit to 5 decimal places
+                    if (prev.includes(".")) {
+                      const decimalPart = prev.split(".")[1];
+                      if (decimalPart && decimalPart.length >= 5) {
+                        return prev;
+                      }
+                    }
+
+                    return prev + key;
+                  });
+                }}
+                onBackspace={() =>
+                  setAmount((prev) => {
+                    const newAmount = prev.slice(0, -1);
+                    return newAmount || "0.00";
+                  })
+                }
+              />
+            )}
+
             {/* Actions */}
             <View style={styles.actions}>
-              <TouchableOpacity 
-                style={[styles.createButton, isCreating && styles.createButtonDisabled]} 
+              <TouchableOpacity
+                style={[
+                  styles.createButton,
+                  isCreating && styles.createButtonDisabled,
+                ]}
                 onPress={handleCreate}
                 disabled={isCreating}
               >
@@ -262,15 +328,15 @@ const CreateDisposableAddressModal = ({ visible, onClose, onCreate }: Props) => 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   backdrop: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
   bottomSheet: {
     borderTopLeftRadius: 24,
@@ -279,12 +345,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderRightWidth: 2,
     borderBottomWidth: 0,
-    borderColor: '#22D3EE',
-    overflow: 'hidden',
-    maxHeight: '50%',
+    borderColor: "#22D3EE",
+    overflow: "hidden",
+    maxHeight: "75%",
   },
   gradient: {
-    minHeight: '100%',
+    minHeight: "100%",
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 32,
@@ -301,27 +367,27 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   title: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   addressPreview: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 16,
   },
   addressPreviewText: {
     fontSize: 18,
-    fontWeight: '500',
-    color: '#22D3EE',
+    fontWeight: "500",
+    color: "#22D3EE",
     letterSpacing: 1,
   },
   minBalanceText: {
     fontSize: 14,
-    color: '#FFFFFF',
-    textAlign: 'left',
+    color: "#FFFFFF",
+    textAlign: "left",
     marginBottom: 24,
   },
   addFundsSection: {
@@ -329,34 +395,34 @@ const styles = StyleSheet.create({
   },
   addFundsTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    fontWeight: "500",
+    color: "#FFFFFF",
     marginBottom: 16,
   },
   // Amount Card - Same styles as SendScreen
   amountCard: {
-    backgroundColor: '#072B31',
+    backgroundColor: "#072B31",
     borderRadius: 16,
     padding: 16,
-    overflow: 'visible',
+    overflow: "visible",
   },
   amountCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 12,
     gap: 12,
   },
   tokenSelectorContainer: {
-    position: 'relative',
-    width: '40%',
-    backgroundColor: '#106471',
+    position: "relative",
+    width: "40%",
+    backgroundColor: "#106471",
     borderRadius: 12,
-    overflow: 'visible',
+    overflow: "visible",
   },
   tokenSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -364,8 +430,8 @@ const styles = StyleSheet.create({
   tokenIconWrapper: {
     width: 24,
     height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   tokenImage: {
     width: 24,
@@ -373,99 +439,98 @@ const styles = StyleSheet.create({
   },
   tokenText: {
     flex: 1,
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   amountInput: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 32,
-    fontWeight: '600',
-    textAlign: 'right',
+    fontWeight: "600",
+    textAlign: "right",
     marginBottom: 8,
     flex: 1,
   },
   balanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   balanceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   balanceLabel: {
-    color: '#9CA3AF',
+    color: "#9CA3AF",
     fontSize: 14,
   },
   balanceAmount: {
-    color: '#9CA3AF',
+    color: "#9CA3AF",
     fontSize: 14,
   },
   maxLabel: {
-    color: '#9CA3AF',
+    color: "#9CA3AF",
     fontSize: 14,
   },
   usdValue: {
-    color: '#9CA3AF',
+    color: "#9CA3AF",
     fontSize: 14,
   },
   // Token Dropdown
   tokenDropdown: {
-    position: 'absolute',
-    top: '100%',
+    position: "absolute",
+    top: "100%",
     left: 0,
     right: 0,
-    backgroundColor: '#106471',
+    backgroundColor: "#106471",
     borderRadius: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(34, 211, 238, 0.3)',
+    borderTopColor: "rgba(34, 211, 238, 0.3)",
     marginTop: 4,
     zIndex: 100,
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
   tokenOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(34, 211, 238, 0.2)',
+    borderTopColor: "rgba(34, 211, 238, 0.2)",
   },
   tokenOptionFirst: {
     borderTopWidth: 0,
   },
   tokenOptionText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   actions: {
     marginTop: 8,
   },
   createButton: {
-    width: '100%',
-    backgroundColor: '#09454E',
+    width: "100%",
+    backgroundColor: "#09454E",
     borderRadius: 12,
     paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   createButtonDisabled: {
     opacity: 0.6,
   },
   createButtonText: {
     fontSize: 20,
-    fontWeight: '500',
-    color: '#fff',
+    fontWeight: "500",
+    color: "#fff",
   },
 });
 
 export default CreateDisposableAddressModal;
-

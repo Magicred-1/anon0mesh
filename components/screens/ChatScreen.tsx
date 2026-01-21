@@ -626,6 +626,15 @@ export default function ChatScreen({
     updateInterval: 5000,
   });
 
+  // Get the display name for the selected peer
+  const selectedPeerNickname = React.useMemo(() => {
+    if (!selectedPeer || selectedPeer === "broadcast") {
+      return null;
+    }
+    const peer = peers.find((p) => p.id === selectedPeer);
+    return peer?.nickname || selectedPeer.slice(0, 8);
+  }, [selectedPeer, peers]);
+
   return (
     <LinearGradient
       colors={["#0D0D0D", "#06181B", "#072B31"]}
@@ -642,7 +651,7 @@ export default function ChatScreen({
         >
           <View style={styles.container}>
             <ChatHeader
-              nickname={selectedPeer || nickname}
+              nickname={selectedPeerNickname || nickname}
               selectedPeer={selectedPeer}
               onlinePeersCount={connectedPeersCount}
               bleConnected={bleConnected}
@@ -683,7 +692,9 @@ export default function ChatScreen({
               onChangeText={setInputText}
               onSend={handleSend}
               placeholder={
-                selectedPeer ? `Message ${selectedPeer}` : "Type message..."
+                selectedPeerNickname
+                  ? `Message ${selectedPeerNickname}`
+                  : "Type message..."
               }
             />
           </View>

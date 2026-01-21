@@ -254,6 +254,11 @@ export class LocalWalletAdapter implements IWalletAdapter {
   }
 
   async disconnect(): Promise<void> {
+    // Security: Zero out secret key before clearing reference
+    // This prevents key material from lingering in memory
+    if (this.keypair?.secretKey) {
+      this.keypair.secretKey.fill(0);
+    }
     this.keypair = null;
     this.initialized = false;
   }
