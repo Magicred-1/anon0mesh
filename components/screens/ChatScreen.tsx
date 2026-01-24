@@ -234,17 +234,14 @@ export default function ChatScreen({
     }
   }, [isInitialized]);
 
-  // Monitor BLE connection - check if we have any active encrypted sessions
+  // Monitor BLE status - show banner when BLE is advertising (initialized)
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Count sessions with completed handshakes
-      const activeSessions = Array.from(sessions.values()).filter(
-        (s) => s.isHandshakeComplete,
-      ).length;
-      setBleConnected(activeSessions > 0);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [sessions]);
+    setBleConnected(isInitialized);
+  }, [isInitialized]);
+
+  useEffect(() => {
+    console.log("[Chat] BLE connected status:", bleConnected);
+  }, [bleConnected]);
 
   // Update selectedPeer when initialSelectedPeer prop changes
   useEffect(() => {
@@ -672,6 +669,7 @@ export default function ChatScreen({
                 scrollViewRef={scrollViewRef}
                 nostrConnected={nostrConnected}
                 relayCount={relayCount}
+                bleConnected={bleConnected}
               />
             </View>
 

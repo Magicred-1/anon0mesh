@@ -1,43 +1,43 @@
 /**
- * useDisposableWallets Hook
+ * useOfflineWallets Hook
  *
- * React hook for managing disposable wallets with durable nonce accounts
+ * React hook for managing offline wallets with durable nonce accounts
  */
 
 import { Connection, Keypair } from "@solana/web3.js";
 import { useCallback, useEffect, useState } from "react";
 import {
-    DisposableWalletData,
-    DisposableWalletManager,
-    DisposableWalletState,
-} from "../src/infrastructure/wallet/DisposableWallet";
+  OfflineWalletData,
+  OfflineWalletManager,
+  OfflineWalletState,
+} from "../src/infrastructure/wallet/OfflineWallet";
 
-export interface UseDisposableWalletsConfig {
+export interface UseOfflineWalletsConfig {
   connection: Connection;
   authority: Keypair | null;
 }
 
-export interface CreateDisposableWalletParams {
+export interface CreateOfflineWalletParams {
   label?: string;
   initialFundingSOL?: number;
   createNonceAccount?: boolean;
 }
 
-export interface UseDisposableWalletsReturn {
+export interface UseOfflineWalletsReturn {
   // State
-  wallets: DisposableWalletData[];
+  wallets: OfflineWalletData[];
   isLoading: boolean;
   error: string | null;
 
   // Methods
   createWallet: (
-    params?: CreateDisposableWalletParams,
-  ) => Promise<DisposableWalletState | null>;
+    params?: CreateOfflineWalletParams,
+  ) => Promise<OfflineWalletState | null>;
   deleteWallet: (
     walletId: string,
     closeNonceAccount?: boolean,
   ) => Promise<void>;
-  loadWallet: (walletId: string) => Promise<DisposableWalletState | null>;
+  loadWallet: (walletId: string) => Promise<OfflineWalletState | null>;
   refreshBalances: (walletId?: string) => Promise<void>;
   sweepFunds: (walletId: string) => Promise<string>;
 
@@ -56,22 +56,22 @@ export interface UseDisposableWalletsReturn {
 /**
  * Hook for managing disposable wallets
  */
-export function useDisposableWallets(
-  config: UseDisposableWalletsConfig,
-): UseDisposableWalletsReturn {
+export function useOfflineWallets(
+  config: UseOfflineWalletsConfig,
+): UseOfflineWalletsReturn {
   const { connection, authority } = config;
 
-  const [wallets, setWallets] = useState<DisposableWalletData[]>([]);
+  const [wallets, setWallets] = useState<OfflineWalletData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Create manager instance
   const manager = authority
-    ? new DisposableWalletManager(connection, authority)
+    ? new OfflineWalletManager(connection, authority)
     : null;
 
   /**
-   * Load all disposable wallets on mount
+   * Load all offline wallets on mount
    */
   useEffect(() => {
     const loadWallets = async () => {
@@ -79,11 +79,11 @@ export function useDisposableWallets(
 
       setIsLoading(true);
       try {
-        const loaded = await manager.loadAllDisposableWallets();
+        const loaded = await manager.loadAllOfflineWallets();
         setWallets(loaded);
         setError(null);
       } catch (err) {
-        console.error("[useDisposableWallets] Failed to load wallets:", err);
+        console.error("[useOfflineWallets] Failed to load wallets:", err);
         setError(err instanceof Error ? err.message : "Failed to load wallets");
       } finally {
         setIsLoading(false);
@@ -94,12 +94,12 @@ export function useDisposableWallets(
   }, [authority]); // Re-load when authority changes
 
   /**
-   * Create a new disposable wallet
+   * Create a new offline wallet
    */
   const createWallet = useCallback(
     async (
-      params?: CreateDisposableWalletParams,
-    ): Promise<DisposableWalletState | null> => {
+      params?: CreateOfflineWalletParams,
+    ): Promise<OfflineWalletState | null> => {
       if (!manager || !authority) {
         setError("Wallet manager not initialized");
         return null;
@@ -109,7 +109,7 @@ export function useDisposableWallets(
       setError(null);
 
       try {
-        const wallet = await manager.createDisposableWallet({
+        const wallet = await manager.createOfflineWallet({
           connection,
           authority,
           label: params?.label,
@@ -118,12 +118,12 @@ export function useDisposableWallets(
         });
 
         // Refresh wallet list
-        const updated = await manager.loadAllDisposableWallets();
+        const updated = await manager.loadAllOfflineWallets();
         setWallets(updated);
 
         return wallet;
       } catch (err) {
-        console.error("[useDisposableWallets] Failed to create wallet:", err);
+        console.error("[useOfflineWallets] Failed to create wallet:", err);
         setError(
           err instanceof Error ? err.message : "Failed to create wallet",
         );
@@ -152,13 +152,13 @@ export function useDisposableWallets(
       setError(null);
 
       try {
-        await manager.deleteDisposableWallet(walletId, closeNonceAccount);
+        await manager.deleteOfflineWallet(walletId, closeNonceAccount);
 
         // Refresh wallet list
-        const updated = await manager.loadAllDisposableWallets();
+        const updated = await manager.loadAllOfflineWallets();
         setWallets(updated);
       } catch (err) {
-        console.error("[useDisposableWallets] Failed to delete wallet:", err);
+        console.error("[useOfflineWallets] Failed to delete wallet:", err);
         setError(
           err instanceof Error ? err.message : "Failed to delete wallet",
         );
@@ -173,16 +173,16 @@ export function useDisposableWallets(
    * Load a specific wallet with its keypair
    */
   const loadWallet = useCallback(
-    async (walletId: string): Promise<DisposableWalletState | null> => {
+    async (walletId: string): Promise<OfflineWalletState | null> => {
       if (!manager) {
         setError("Wallet manager not initialized");
         return null;
       }
 
       try {
-        return await manager.loadDisposableWallet(walletId);
+        return await manager.loadOfflineWallet(walletId);
       } catch (err) {
-        console.error("[useDisposableWallets] Failed to load wallet:", err);
+        console.error("[useOfflineWallets] Failed to load wallet:", err);
         setError(err instanceof Error ? err.message : "Failed to load wallet");
         return null;
       }
@@ -215,13 +215,10 @@ export function useDisposableWallets(
         }
 
         // Refresh wallet list
-        const updated = await manager.loadAllDisposableWallets();
+        const updated = await manager.loadAllOfflineWallets();
         setWallets(updated);
       } catch (err) {
-        console.error(
-          "[useDisposableWallets] Failed to refresh balances:",
-          err,
-        );
+        console.error("[useOfflineWallets] Failed to refresh balances:", err);
         setError(
           err instanceof Error ? err.message : "Failed to refresh balances",
         );
@@ -252,7 +249,7 @@ export function useDisposableWallets(
 
         return signature;
       } catch (err) {
-        console.error("[useDisposableWallets] Failed to sweep funds:", err);
+        console.error("[useOfflineWallets] Failed to sweep funds:", err);
         const errorMsg =
           err instanceof Error ? err.message : "Failed to sweep funds";
         setError(errorMsg);
@@ -280,7 +277,7 @@ export function useDisposableWallets(
         return await manager.createNonceTransaction(walletId, instructions);
       } catch (err) {
         console.error(
-          "[useDisposableWallets] Failed to create nonce transaction:",
+          "[useOfflineWallets] Failed to create nonce transaction:",
           err,
         );
         const errorMsg =
@@ -312,7 +309,7 @@ export function useDisposableWallets(
         return await manager.submitNonceTransaction(transaction);
       } catch (err) {
         console.error(
-          "[useDisposableWallets] Failed to submit nonce transaction:",
+          "[useOfflineWallets] Failed to submit nonce transaction:",
           err,
         );
         const errorMsg =
@@ -343,7 +340,7 @@ export function useDisposableWallets(
       try {
         return await manager.advanceNonce(walletId);
       } catch (err) {
-        console.error("[useDisposableWallets] Failed to advance nonce:", err);
+        console.error("[useOfflineWallets] Failed to advance nonce:", err);
         const errorMsg =
           err instanceof Error ? err.message : "Failed to advance nonce";
         setError(errorMsg);
@@ -367,7 +364,7 @@ export function useDisposableWallets(
       try {
         return await manager.getNonceValue(walletId);
       } catch (err) {
-        console.error("[useDisposableWallets] Failed to get nonce value:", err);
+        console.error("[useOfflineWallets] Failed to get nonce value:", err);
         return null;
       }
     },

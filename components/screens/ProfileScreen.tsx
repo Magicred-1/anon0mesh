@@ -5,14 +5,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useState } from "react";
 import {
-    Alert,
-    Keyboard,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Keyboard,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import OctagonTimesIcon from "../icons/OctagonTimesIcon";
+import SeedlingIcon from "../icons/SeedlingIcon";
 import BottomNavWithMenu from "../ui/BottomNavWithMenu";
 
 interface ProfileScreenProps {
@@ -156,6 +158,48 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
   };
 
+  const handleExportPrivateKey = () => {
+    Alert.alert(
+      "Export Private Key",
+      "This will export your private key. Make sure you're in a secure environment. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Export",
+          style: "destructive",
+          onPress: () => {
+            // TODO: Implement private key export functionality
+            Alert.alert(
+              "Not Implemented",
+              "Private key export functionality will be implemented.",
+            );
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDestroyWallet = () => {
+    Alert.alert(
+      "Destroy Wallet",
+      "This will permanently delete your wallet and all associated data. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Destroy",
+          style: "destructive",
+          onPress: () => {
+            // TODO: Implement wallet destruction functionality
+            Alert.alert(
+              "Not Implemented",
+              "Wallet destruction functionality will be implemented.",
+            );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <LinearGradient
       colors={["#0D0D0D", "#06181B", "#072B31"]}
@@ -255,7 +299,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             />
           </View>
 
-          {/* Guidelines */}
           <View style={{ marginBottom: 32 }}>
             <Text style={{ color: "#9CA3AF", fontSize: 14, marginBottom: 6 }}>
               • Letters, numbers and basic punctuation only
@@ -269,6 +312,68 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={{ color: "#9CA3AF", fontSize: 14, marginTop: 12 }}>
               💡 Your nickname is synced with your mesh identity
             </Text>
+          </View>
+
+          {/* Danger Zone Buttons */}
+          <View style={{ marginBottom: 32 }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#0c2425",
+                borderWidth: 1,
+                borderColor: "#22D3EE",
+                borderRadius: 10,
+                paddingHorizontal: 15,
+                paddingVertical: 10,
+                marginBottom: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+              }}
+              onPress={handleExportPrivateKey}
+              activeOpacity={0.7}
+            >
+              <SeedlingIcon size={20} />
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 16,
+                  fontFamily: "SpaceGrotesk-Regular",
+                  fontWeight: "400",
+                  letterSpacing: 0.8,
+                }}
+              >
+                Export Private Key
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#072B31",
+                borderWidth: 1,
+                borderColor: "#22D3EE",
+                borderRadius: 10,
+                paddingHorizontal: 15,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+              }}
+              onPress={handleDestroyWallet}
+              activeOpacity={0.7}
+            >
+              <OctagonTimesIcon size={24} />
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 16,
+                  fontFamily: "SpaceGrotesk-Regular",
+                  fontWeight: "400",
+                  letterSpacing: 0.8,
+                }}
+              >
+                Destroy Wallet
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 

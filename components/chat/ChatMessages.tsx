@@ -1,5 +1,10 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import BirdIcon from "../icons/BirdIcon";
+import ConnectedBLEIcon from "../icons/ConnectedBLEIcon";
+import HandIcon from "../icons/HandIcon";
+import HourglassMediumIcon from "../icons/HourglassMediumIcon";
+import PaperPlaneIcon from "../icons/PaperPlaneIcon";
 
 export interface Message {
   id: string;
@@ -18,6 +23,8 @@ interface ChatMessagesProps {
   scrollViewRef: React.RefObject<ScrollView | null>;
   nostrConnected?: boolean; // Show Nostr connection status
   relayCount?: number; // Number of connected relays
+  showConnectedMessage?: boolean; // Show BLE connected message
+  bleConnected?: boolean;
 }
 
 export default function ChatMessages({
@@ -26,58 +33,83 @@ export default function ChatMessages({
   scrollViewRef,
   nostrConnected = false,
   relayCount = 0,
-}: ChatMessagesProps) {
+  bleConnected = false,
+}: Readonly<ChatMessagesProps>) {
   return (
     <ScrollView
       ref={scrollViewRef}
       style={styles.container}
       contentContainerStyle={styles.content}
-      onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+      onContentSizeChange={() =>
+        scrollViewRef.current?.scrollToEnd({ animated: true })
+      }
     >
-      {messages.length === 0 && (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>💬</Text>
-          <Text style={styles.emptyText}>No messages yet</Text>
-          <Text style={styles.emptySubtext}>
-            {nostrConnected 
-              ? 'Messages via Nostr + BLE mesh network'
-              : 'Messages via BLE mesh network'
-            }
+      {/* BLE Connection Banner */}
+      {bleConnected && (
+        <View style={styles.bannerRow}>
+          <ConnectedBLEIcon size={24} />
+          <Text style={styles.bannerText}>
+            You can now send messages & transactions to nearby devices...
           </Text>
         </View>
       )}
 
-      {messages.map((message) => {
-        const timestamp = new Date(message.ts).toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        });
+      {messages.map((message, idx) => {
+        const timestamp = "7:58 PM"; // Fixed for demo
+
+        const isCommand =
+          (message as any).isCommand ||
+          message.msg.startsWith("/") ||
+          message.msg.toLowerCase().includes("pending") ||
+          message.msg.toLowerCase().includes("confirmed") ||
+          message.msg.toLowerCase().includes("slapped");
+
+        // Determine which icon to use based on message content
+        let CommandIcon = PaperPlaneIcon;
+        let iconSize = 16;
+
+        if (message.msg.toLowerCase().includes("pending")) {
+          CommandIcon = HourglassMediumIcon;
+        } else if (message.msg.toLowerCase().includes("confirmed")) {
+          CommandIcon = BirdIcon;
+          iconSize = 24;
+        } else if (message.msg.toLowerCase().includes("slapped")) {
+          CommandIcon = HandIcon;
+        }
 
         return (
           <View
-            key={message.id}
-            style={[
-              styles.messageRow,
-              message.isMine ? styles.myMessageRow : styles.theirMessageRow,
-            ]}
+            key={message.id || idx}
+            style={[styles.messageRow, isCommand && styles.commandRow]}
           >
-            {/* Left-aligned messages (others) */}
-            {!message.isMine && (
-              <>
-                <Text style={styles.senderName}>{message.from}:</Text>
-                <Text style={styles.messageText}>{message.msg}</Text>
-                <Text style={styles.timestamp}>{timestamp}</Text>
-              </>
-            )}
-
-            {/* Right-aligned messages (mine) */}
-            {message.isMine && (
-              <>
-                <Text style={styles.currentUserName}>{message.from}:</Text>
-                <Text style={[styles.messageText, styles.myMessageText]}>{message.msg}</Text>
-                <Text style={styles.timestamp}>{timestamp}</Text>
-              </>
-            )}
+            {isCommand && <CommandIcon size={iconSize} />}
+            <Text
+              style={[
+                styles.messageContent,
+                isCommand && styles.commandContent,
+              ]}
+            >
+              {!!message.from && !isCommand && (
+                <Text
+                  style={[
+                    message.isMine ? styles.senderNameMine : styles.senderName,
+                    message.from === "ShadowNode82#2134" &&
+                      styles.specialSender,
+                  ]}
+                >
+                  {message.from}:{" "}
+                </Text>
+              )}
+              <Text
+                style={[
+                  message.isMine ? styles.messageTextMine : styles.messageText,
+                  isCommand && styles.commandText,
+                ]}
+              >
+                {message.msg}
+              </Text>
+            </Text>
+            <Text style={styles.timestamp}>{timestamp}</Text>
           </View>
         );
       })}
@@ -88,70 +120,116 @@ export default function ChatMessages({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   content: {
-    padding: 16,
+    padding: 0,
     paddingBottom: 8,
   },
-  emptyState: {
+  bannerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 15,
+    paddingVertical: 8,
+    gap: 5,
+  },
+  bannerIcon: {
+    width: 24,
+    height: 24,
+  },
+  bannerText: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
+    fontSize: 12,
+    color: "#9ca3af",
+    fontFamily: "SpaceGrotesk-Regular",
+    fontWeight: "400",
+    lineHeight: 24,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#444',
-    textAlign: 'center',
+  bannerTime: {
+    width: 45,
+    textAlign: "right",
+    color: "#9ca3af",
+    fontSize: 10,
+    fontWeight: "500",
+    fontFamily: "SpaceGrotesk-Medium",
   },
   messageRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "transparent",
+    marginBottom: 15,
+    marginHorizontal: 20,
+    borderRadius: 8,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    gap: 15,
   },
-  myMessageRow: {
-    // Right-aligned messages (mine)
+  commandRow: {
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    gap: 5,
   },
-  theirMessageRow: {
-    // Left-aligned messages (others)
+  commandIcon: {
+    width: 16,
+    height: 16,
+  },
+  messageContent: {
+    flex: 1,
+    fontSize: 14,
+    color: "#fff",
+    lineHeight: 24,
+    fontFamily: "SpaceGrotesk-Medium",
+  },
+  commandContent: {
+    color: "#9ca3af",
+    fontSize: 12,
+    fontWeight: "400",
   },
   senderName: {
     fontSize: 14,
-    fontWeight: '400',
-    color: '#888',
-    marginRight: 8,
+    fontWeight: "400",
+    color: "#9ca3af",
+    fontFamily: "SpaceGrotesk-Regular",
   },
-  currentUserName: {
+  senderNameMine: {
     fontSize: 14,
-    fontWeight: '400',
-    color: '#00CED1',
-    marginRight: 8,
+    fontWeight: "400",
+    color: "#22d3ee",
+    fontFamily: "SpaceGrotesk-Regular",
+  },
+  specialSender: {
+    color: "#22d3ee",
+    fontWeight: "500",
   },
   messageText: {
     fontSize: 14,
-    color: '#fff',
-    lineHeight: 20,
+    color: "#fff",
+    lineHeight: 24,
     flex: 1,
-    marginRight: 8,
+    fontFamily: "SpaceGrotesk-Regular",
   },
-  myMessageText: {
-    color: '#fff',
+  messageTextMine: {
+    fontSize: 14,
+    color: "#fff",
+    lineHeight: 24,
+    flex: 1,
+    fontFamily: "SpaceGrotesk-Regular",
+  },
+  commandText: {
+    color: "#9ca3af",
+    fontSize: 12,
+    fontWeight: "400",
+    fontFamily: "SpaceGrotesk-Regular",
   },
   timestamp: {
-    fontSize: 12,
-    color: '#555',
-    marginLeft: 'auto',
+    fontSize: 10,
+    color: "#9ca3af",
+    width: 45,
+    textAlign: "right",
+    fontFamily: "SpaceGrotesk-Medium",
   },
 });

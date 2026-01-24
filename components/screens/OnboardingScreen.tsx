@@ -11,6 +11,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Image,
+  ImageBackground,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -86,6 +87,9 @@ const generateRandomNickname = (): string => {
 };
 
 export default function OnboardingScreen({ onComplete }: Props) {
+  // Background image used for the primary button (from Figma)
+  const BUTTON_BG =
+    "https://www.figma.com/api/mcp/asset/d5d1494b-7901-4a39-84b4-71060d3ce608";
   // State
   const [nickname, setNickname] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -132,7 +136,6 @@ export default function OnboardingScreen({ onComplete }: Props) {
   const loadingRotation = useRef(new Animated.Value(0)).current;
   const loadingScale = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const loadingDotAnim = useRef(new Animated.Value(0)).current;
 
   // Loading overlay animation states
   const loadingOverlayOpacity = useRef(new Animated.Value(0)).current;
@@ -461,8 +464,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
 
   return (
     <LinearGradient
-      colors={["#0a1a1a", "#0d2626", "#0a1a1a"]}
-      locations={[0, 0.5, 1]}
+      colors={["#0D0D0D", "#06181B", "#072B31"]}
+      locations={[0, 0.9383, 1.0029]}
+      start={{ x: 0.2125, y: 0 }}
+      end={{ x: 0.7875, y: 1 }}
       style={styles.container}
     >
       {/* Subtle radial glow effect */}
@@ -508,45 +513,29 @@ export default function OnboardingScreen({ onComplete }: Props) {
         </View>
 
         {/* Create Wallet Button */}
-        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          <TouchableOpacity
-            onPress={handleOnboard}
-            disabled={loading}
-            style={[styles.button, loading && styles.buttonDisabled]}
-            activeOpacity={0.8}
+        <TouchableOpacity
+          onPress={handleOnboard}
+          disabled={loading}
+          style={[styles.button, loading && styles.buttonDisabled]}
+          activeOpacity={0.8}
+        >
+          <ImageBackground
+            source={{ uri: BUTTON_BG }}
+            style={styles.buttonImage}
+            imageStyle={{ borderRadius: 12 }}
+            resizeMode="stretch"
           >
-            <LinearGradient
-              colors={
-                loading
-                  ? ["rgba(100, 100, 100, 0.1)", "rgba(100, 100, 100, 0.05)"]
-                  : ["rgba(0, 212, 212, 0.1)", "rgba(0, 212, 212, 0.05)"]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.buttonGradient}
+            <Text
+              style={[styles.buttonText, loading && styles.buttonTextDisabled]}
             >
-              <Text
-                style={[
-                  styles.buttonText,
-                  loading && styles.buttonTextDisabled,
-                ]}
-              >
-                {(() => {
-                  if (loading) return "LOADING...";
-                  if (isSeeker) return "CONNECT_WALLET";
-                  return "CREATE_WALLET";
-                })()}
-              </Text>
-              {!loading && (
-                <View style={styles.buttonIcon}>
-                  <View style={styles.iconBar} />
-                  <View style={styles.iconBar} />
-                  <View style={styles.iconBar} />
-                </View>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
+              {(() => {
+                if (loading) return "LOADING...";
+                if (isSeeker) return "CONNECT_WALLET";
+                return "CREATE_WALLET";
+              })()}
+            </Text>
+          </ImageBackground>
+        </TouchableOpacity>
       </Animated.View>
 
       {/* Loading Overlay */}
@@ -559,8 +548,10 @@ export default function OnboardingScreen({ onComplete }: Props) {
             ]}
           >
             <LinearGradient
-              colors={["#0a1a1a", "#0d2626", "#0a1a1a"]}
-              locations={[0, 0.5, 1]}
+              colors={["#0D0D0D", "#06181B", "#072B31"]}
+              locations={[0, 0.9383, 1.0029]}
+              start={{ x: 0.2125, y: 0 }}
+              end={{ x: 0.7875, y: 1 }}
               style={styles.loadingOverlay}
             >
               {/* Entering Text */}
@@ -578,7 +569,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
                   [ {isSeeker ? "WALLET_CONNECTED" : "WALLET_CREATED"} ]
                 </Animated.Text>
 
-                {nickname && (
+                {nickname ? (
                   <Animated.Text
                     style={[
                       styles.loadingNickname,
@@ -588,7 +579,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
                     {"( "}@{nickname}
                     {" )"}
                   </Animated.Text>
-                )}
+                ) : null}
               </View>
 
               {/* Loading Animation */}
@@ -599,17 +590,14 @@ export default function OnboardingScreen({ onComplete }: Props) {
                 ]}
               >
                 <View style={styles.loadingButton}>
-                  <LinearGradient
-                    colors={[
-                      "rgba(0, 212, 212, 0.15)",
-                      "rgba(0, 212, 212, 0.08)",
-                    ]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.loadingButtonGradient}
+                  <ImageBackground
+                    source={{ uri: BUTTON_BG }}
+                    style={styles.loadingButtonImage}
+                    imageStyle={{ borderRadius: 12 }}
+                    resizeMode="stretch"
                   >
                     <Text style={styles.loadingButtonText}>LOADING...</Text>
-                  </LinearGradient>
+                  </ImageBackground>
                 </View>
 
                 <Text style={styles.loadingDetails}>
@@ -728,47 +716,43 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
   },
   button: {
-    width: 360,
-    height: 60,
-    borderRadius: 8,
+    width: 388,
+    height: 64,
+    borderRadius: 12,
     overflow: "hidden",
-  },
-  buttonGradient: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: "#00d4d4",
-    borderRadius: 8,
-    flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    shadowColor: "#22D3EE",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 4,
     justifyContent: "center",
-    backgroundColor: "#041A1D",
+    alignItems: "center",
+    borderColor: "#22D3EE",
+    borderWidth: 1,
+    backgroundColor: "rgba(4, 26, 29, 1)",
+  },
+  buttonImage: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 36,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
-    color: "#00d4d4",
-    letterSpacing: 2,
-    fontFamily: "monospace",
-    marginRight: 15,
+    color: "#22D3EE",
+    letterSpacing: 4,
+    fontFamily: "SpaceGrotesk_700Bold",
+    textTransform: "uppercase",
   },
   buttonTextDisabled: {
     color: "#6a7a7a",
-  },
-  buttonIcon: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  iconBar: {
-    width: 30,
-    height: 3,
-    backgroundColor: "#00d4d4",
-    shadowColor: "#00d4d4",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 5,
   },
   deviceInfo: {
     marginTop: 30,
@@ -824,33 +808,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   loadingButton: {
-    width: 360,
-    height: 60,
-    borderRadius: 8,
+    width: 388,
+    height: 64,
+    borderRadius: 12,
     overflow: "hidden",
     marginBottom: 16,
+    borderColor: "#22D3EE",
+    borderWidth: 1,
+    backgroundColor: "rgba(4, 26, 29, 1)",
   },
   loadingButtonGradient: {
     flex: 1,
-    borderWidth: 2,
-    borderColor: "#00d4d4",
-    borderRadius: 8,
+    borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    paddingLeft: 36,
+    paddingRight: 36,
+    paddingVertical: 22,
     shadowColor: "#00d4d4",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 8,
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  loadingButtonImage: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: 36,
+    paddingRight: 36,
   },
   loadingButtonText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
-    color: "#00d4d4",
-    letterSpacing: 2,
-    fontFamily: "monospace",
-    textShadowColor: "rgba(0, 212, 212, 0.5)",
+    color: "#22D3EE",
+    letterSpacing: 4,
+    fontFamily: "SpaceGrotesk_700Bold",
+    textTransform: "uppercase",
+    textShadowColor: "rgba(34, 211, 238, 0.5)",
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
   },

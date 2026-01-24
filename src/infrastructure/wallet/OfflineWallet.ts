@@ -1,5 +1,5 @@
 /**
- * Disposable Wallet with Durable Nonce Account
+ * Offline Wallet with Durable Nonce Account
  *
  * Creates temporary wallets with their own nonce accounts for:
  * - Privacy-preserving transactions
@@ -9,12 +9,12 @@
  */
 
 import {
-    Connection,
-    Keypair,
-    LAMPORTS_PER_SOL,
-    PublicKey,
-    SystemProgram,
-    Transaction,
+  Connection,
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SystemProgram,
+  Transaction,
 } from "@solana/web3.js";
 import * as SecureStore from "expo-secure-store";
 import { DurableNonceManager } from "./transaction/SolanaDurableNonce";
@@ -23,7 +23,7 @@ import { DurableNonceManager } from "./transaction/SolanaDurableNonce";
 // TYPES
 // ============================================
 
-export interface DisposableWalletData {
+export interface OfflineWalletData {
   id: string;
   publicKey: string;
   label?: string;
@@ -36,31 +36,31 @@ export interface DisposableWalletData {
   };
 }
 
-export interface CreateDisposableWalletParams {
+export interface CreateOfflineWalletParams {
   connection: Connection;
-  authority: Keypair; // The primary wallet that funds the disposable wallet
+  authority: Keypair; // The primary wallet that funds the offline wallet
   label?: string;
   initialFundingSOL?: number;
   createNonceAccount?: boolean;
 }
 
-export interface DisposableWalletState {
+export interface OfflineWalletState {
   keypair: Keypair;
   nonceAccount: PublicKey | null;
-  data: DisposableWalletData;
+  data: OfflineWalletData;
 }
 
 // ============================================
 // STORAGE KEYS
 // ============================================
 
-const DISPOSABLE_WALLETS_KEY = "disposable_wallets";
+const OFFLINE_WALLETS_KEY = "disposable_wallets";
 
 // ============================================
 // DISPOSABLE WALLET MANAGER
 // ============================================
 
-export class DisposableWalletManager {
+export class OfflineWalletManager {
   private connection: Connection;
   private authority: Keypair;
 
@@ -72,9 +72,9 @@ export class DisposableWalletManager {
   /**
    * Create a new disposable wallet with optional nonce account
    */
-  async createDisposableWallet(
-    params: CreateDisposableWalletParams,
-  ): Promise<DisposableWalletState> {
+  async createOfflineWallet(
+    params: CreateOfflineWalletParams,
+  ): Promise<OfflineWalletState> {
     const {
       connection,
       authority,
@@ -83,13 +83,13 @@ export class DisposableWalletManager {
       createNonceAccount = true,
     } = params;
 
-    console.log("[DisposableWallet] Creating new disposable wallet...");
+    console.log("[OfflineWallet] Creating new offline wallet...");
 
     // Generate new keypair for the disposable wallet
     const keypair = Keypair.generate();
     const publicKey = keypair.publicKey;
 
-    console.log("[DisposableWallet] Address:", publicKey.toBase58());
+    console.log("[OfflineWallet] Address:", publicKey.toBase58());
 
     // Create nonce account if requested
     let nonceAccountPubkey: PublicKey | null = null;
@@ -107,18 +107,14 @@ export class DisposableWalletManager {
       nonceKeypair = result.nonceKeypair;
 
       console.log(
-        "[DisposableWallet] Nonce account created:",
+        "[OfflineWallet] Nonce account created:",
         nonceAccountPubkey.toBase58(),
       );
     }
 
     // Fund the disposable wallet if requested
     if (initialFundingSOL > 0) {
-      console.log(
-        "[DisposableWallet] Funding with",
-        initialFundingSOL,
-        "SOL...",
-      );
+      console.log("[OfflineWallet] Funding with", initialFundingSOL, "SOL...");
 
       const transaction = new Transaction().add(
         SystemProgram.transfer({
@@ -143,14 +139,14 @@ export class DisposableWalletManager {
         lastValidBlockHeight,
       });
 
-      console.log("[DisposableWallet] Funded:", signature);
+      console.log("[OfflineWallet] Funded:", signature);
     }
 
     // Get initial balance
     const balance = await connection.getBalance(publicKey);
 
     // Create wallet data
-    const walletData: DisposableWalletData = {
+    const walletData: OfflineWalletData = {
       id: Date.now().toString(),
       publicKey: publicKey.toBase58(),
       label,
@@ -164,16 +160,16 @@ export class DisposableWalletManager {
     };
 
     // Create state object
-    const state: DisposableWalletState = {
+    const state: OfflineWalletState = {
       keypair,
       nonceAccount: nonceAccountPubkey,
       data: walletData,
     };
 
     // Save to secure storage
-    await this.saveDisposableWallet(state, nonceKeypair);
+    await this.saveOfflineWallet(state, nonceKeypair);
 
-    console.log("[DisposableWallet] ✅ Created successfully");
+    console.log("[OfflineWallet] ✅ Created successfully");
 
     return state;
   }
@@ -181,19 +177,19 @@ export class DisposableWalletManager {
   /**
    * Save disposable wallet to secure storage
    */
-  private async saveDisposableWallet(
-    wallet: DisposableWalletState,
+  private async saveOfflineWallet(
+    wallet: OfflineWalletState,
     nonceKeypair: Keypair | null,
   ): Promise<void> {
     // Load existing wallets
-    const existing = await this.loadAllDisposableWallets();
+    const existing = await this.loadAllOfflineWallets();
 
     // Add new wallet data
     existing.push(wallet.data);
 
     // Save wallet list
     await SecureStore.setItemAsync(
-      DISPOSABLE_WALLETS_KEY,
+      OFFLINE_WALLETS_KEY,
       JSON.stringify(existing),
     );
 
@@ -219,15 +215,15 @@ export class DisposableWalletManager {
   /**
    * Load all disposable wallets (metadata only)
    */
-  async loadAllDisposableWallets(): Promise<DisposableWalletData[]> {
+  async loadAllOfflineWallets(): Promise<OfflineWalletData[]> {
     try {
-      const stored = await SecureStore.getItemAsync(DISPOSABLE_WALLETS_KEY);
+      const stored = await SecureStore.getItemAsync(OFFLINE_WALLETS_KEY);
       if (!stored) {
         return [];
       }
       return JSON.parse(stored);
     } catch (error) {
-      console.error("[DisposableWallet] Failed to load wallets:", error);
+      console.error("[OfflineWallet] Failed to load wallets:", error);
       return [];
     }
   }
@@ -235,16 +231,16 @@ export class DisposableWalletManager {
   /**
    * Load a specific disposable wallet with its keypair
    */
-  async loadDisposableWallet(
+  async loadOfflineWallet(
     walletId: string,
-  ): Promise<DisposableWalletState | null> {
+  ): Promise<OfflineWalletState | null> {
     try {
       // Load metadata
-      const allWallets = await this.loadAllDisposableWallets();
+      const allWallets = await this.loadAllOfflineWallets();
       const walletData = allWallets.find((w) => w.id === walletId);
 
       if (!walletData) {
-        console.log("[DisposableWallet] Wallet not found:", walletId);
+        console.log("[OfflineWallet] Wallet not found:", walletId);
         return null;
       }
 
@@ -254,7 +250,7 @@ export class DisposableWalletManager {
 
       if (!secretKeyJson) {
         console.error(
-          "[DisposableWallet] Keypair not found for wallet:",
+          "[OfflineWallet] Keypair not found for wallet:",
           walletId,
         );
         return null;
@@ -275,7 +271,7 @@ export class DisposableWalletManager {
         data: walletData,
       };
     } catch (error) {
-      console.error("[DisposableWallet] Failed to load wallet:", error);
+      console.error("[OfflineWallet] Failed to load wallet:", error);
       return null;
     }
   }
@@ -283,8 +279,8 @@ export class DisposableWalletManager {
   /**
    * Update wallet balances
    */
-  async updateBalances(walletId: string): Promise<DisposableWalletData | null> {
-    const wallet = await this.loadDisposableWallet(walletId);
+  async updateBalances(walletId: string): Promise<OfflineWalletData | null> {
+    const wallet = await this.loadOfflineWallet(walletId);
     if (!wallet) return null;
 
     const balance = await this.connection.getBalance(wallet.keypair.publicKey);
@@ -293,12 +289,12 @@ export class DisposableWalletManager {
     // TODO: Fetch USDC and ZEC balances from token accounts
 
     // Update stored data
-    const allWallets = await this.loadAllDisposableWallets();
+    const allWallets = await this.loadAllOfflineWallets();
     const index = allWallets.findIndex((w) => w.id === walletId);
     if (index >= 0) {
       allWallets[index] = wallet.data;
       await SecureStore.setItemAsync(
-        DISPOSABLE_WALLETS_KEY,
+        OFFLINE_WALLETS_KEY,
         JSON.stringify(allWallets),
       );
     }
@@ -309,13 +305,13 @@ export class DisposableWalletManager {
   /**
    * Delete a disposable wallet and optionally close its nonce account
    */
-  async deleteDisposableWallet(
+  async deleteOfflineWallet(
     walletId: string,
     closeNonceAccount: boolean = true,
   ): Promise<void> {
-    console.log("[DisposableWallet] Deleting wallet:", walletId);
+    console.log("[OfflineWallet] Deleting wallet:", walletId);
 
-    const wallet = await this.loadDisposableWallet(walletId);
+    const wallet = await this.loadOfflineWallet(walletId);
 
     // Close nonce account to recover rent
     if (closeNonceAccount && wallet?.nonceAccount) {
@@ -328,20 +324,17 @@ export class DisposableWalletManager {
           wallet.nonceAccount,
           this.authority.publicKey,
         );
-        console.log("[DisposableWallet] Nonce account closed");
+        console.log("[OfflineWallet] Nonce account closed");
       } catch (error) {
-        console.error(
-          "[DisposableWallet] Failed to close nonce account:",
-          error,
-        );
+        console.warn("[OfflineWallet] Failed to close nonce account:", error);
       }
     }
 
     // Remove from storage
-    const allWallets = await this.loadAllDisposableWallets();
+    const allWallets = await this.loadAllOfflineWallets();
     const filtered = allWallets.filter((w) => w.id !== walletId);
     await SecureStore.setItemAsync(
-      DISPOSABLE_WALLETS_KEY,
+      OFFLINE_WALLETS_KEY,
       JSON.stringify(filtered),
     );
 
@@ -349,14 +342,14 @@ export class DisposableWalletManager {
     await SecureStore.deleteItemAsync(`disposable_wallet_key_${walletId}`);
     await SecureStore.deleteItemAsync(`disposable_nonce_key_${walletId}`);
 
-    console.log("[DisposableWallet] ✅ Deleted");
+    console.log("[OfflineWallet] ✅ Deleted");
   }
 
   /**
    * Sweep funds from disposable wallet to primary wallet
    */
   async sweepFunds(walletId: string): Promise<string> {
-    const wallet = await this.loadDisposableWallet(walletId);
+    const wallet = await this.loadOfflineWallet(walletId);
     if (!wallet) {
       throw new Error("Wallet not found");
     }
@@ -372,7 +365,7 @@ export class DisposableWalletManager {
     }
 
     console.log(
-      "[DisposableWallet] Sweeping",
+      "[OfflineWallet] Sweeping",
       transferAmount / LAMPORTS_PER_SOL,
       "SOL to primary wallet",
     );
@@ -400,7 +393,7 @@ export class DisposableWalletManager {
       lastValidBlockHeight,
     });
 
-    console.log("[DisposableWallet] ✅ Swept funds:", signature);
+    console.log("[OfflineWallet] ✅ Swept funds:", signature);
 
     return signature;
   }
@@ -417,7 +410,7 @@ export class DisposableWalletManager {
     serialized: string;
     nonceValue: string;
   }> {
-    const wallet = await this.loadDisposableWallet(walletId);
+    const wallet = await this.loadOfflineWallet(walletId);
     if (!wallet) {
       throw new Error("Wallet not found");
     }
@@ -426,7 +419,7 @@ export class DisposableWalletManager {
       throw new Error("This wallet does not have a nonce account");
     }
 
-    console.log("[DisposableWallet] Creating nonce transaction...");
+    console.log("[OfflineWallet] Creating nonce transaction...");
 
     const nonceManager = new DurableNonceManager({
       connection: this.connection,
@@ -439,7 +432,7 @@ export class DisposableWalletManager {
       throw new Error("Nonce account not found or invalid");
     }
 
-    console.log("[DisposableWallet] Current nonce:", nonceInfo.nonce);
+    console.log("[OfflineWallet] Current nonce:", nonceInfo.nonce);
 
     // Create transaction with nonce
     const transaction = await nonceManager.createNonceTransaction({
@@ -461,8 +454,8 @@ export class DisposableWalletManager {
       })
       .toString("base64");
 
-    console.log("[DisposableWallet] ✅ Nonce transaction created");
-    console.log("[DisposableWallet] Size:", serialized.length, "bytes");
+    console.log("[OfflineWallet] ✅ Nonce transaction created");
+    console.log("[OfflineWallet] Size:", serialized.length, "bytes");
 
     return {
       transaction,
@@ -478,23 +471,23 @@ export class DisposableWalletManager {
   async submitNonceTransaction(
     transaction: Transaction,
   ): Promise<{ signature: string; nonceAdvanced: boolean }> {
-    console.log("[DisposableWallet] Submitting nonce transaction...");
+    console.log("[OfflineWallet] Submitting nonce transaction...");
 
     const signature = await this.connection.sendRawTransaction(
       transaction.serialize(),
     );
 
-    console.log("[DisposableWallet] Transaction sent:", signature);
+    console.log("[OfflineWallet] Transaction sent:", signature);
     console.log(
-      "[DisposableWallet] Waiting for confirmation (nonce will advance automatically)...",
+      "[OfflineWallet] Waiting for confirmation (nonce will advance automatically)...",
     );
 
     // Wait for confirmation
     const { blockhash } = await this.connection.getLatestBlockhash();
     await this.connection.confirmTransaction(signature);
 
-    console.log("[DisposableWallet] ✅ Transaction confirmed");
-    console.log("[DisposableWallet] ✅ Nonce automatically advanced");
+    console.log("[OfflineWallet] ✅ Transaction confirmed");
+    console.log("[OfflineWallet] ✅ Nonce automatically advanced");
 
     return {
       signature,
@@ -506,7 +499,7 @@ export class DisposableWalletManager {
    * Manually advance a nonce (useful if transaction failed or for testing)
    */
   async advanceNonce(walletId: string): Promise<string> {
-    const wallet = await this.loadDisposableWallet(walletId);
+    const wallet = await this.loadOfflineWallet(walletId);
     if (!wallet) {
       throw new Error("Wallet not found");
     }
@@ -515,7 +508,7 @@ export class DisposableWalletManager {
       throw new Error("This wallet does not have a nonce account");
     }
 
-    console.log("[DisposableWallet] Manually advancing nonce...");
+    console.log("[OfflineWallet] Manually advancing nonce...");
 
     const nonceManager = new DurableNonceManager({
       connection: this.connection,
@@ -524,7 +517,7 @@ export class DisposableWalletManager {
 
     const signature = await nonceManager.advanceNonce(wallet.nonceAccount);
 
-    console.log("[DisposableWallet] ✅ Nonce advanced:", signature);
+    console.log("[OfflineWallet] ✅ Nonce advanced:", signature);
 
     return signature;
   }
@@ -533,7 +526,7 @@ export class DisposableWalletManager {
    * Get the current nonce value for a wallet
    */
   async getNonceValue(walletId: string): Promise<string | null> {
-    const wallet = await this.loadDisposableWallet(walletId);
+    const wallet = await this.loadOfflineWallet(walletId);
     if (!wallet || !wallet.nonceAccount) {
       return null;
     }

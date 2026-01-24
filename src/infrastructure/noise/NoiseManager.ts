@@ -504,29 +504,68 @@ export class NoiseManager {
           entry.session,
           entry.initiator,
         );
-
         if (response) {
           console.log(
             `[NOISE] Sending handshake response (${response.length} bytes) to ${senderDeviceId}`,
           );
           const identity = this.identityStateManager.getIdentity();
-          // Send response back
+
+          console.log("[NOISE] Response from processHandshakeMessage:", {
+            length: response.length,
+            isBuffer: Buffer.isBuffer(response),
+            type: typeof response,
+            first32bytes: Buffer.from(response.slice(0, 32)).toString("hex"),
+          });
+
+          // ADD THIS BLOCK:
+          console.log("[NOISE] 🔍 Packet type decision:", {
+            isInitiator: entry.initiator,
+            calculatedType: entry.initiator
+              ? "NOISE_HANDSHAKE_FINAL (7)"
+              : "NOISE_HANDSHAKE_RESPONSE (6)",
+            actualPacketTypeValue: entry.initiator
+              ? PacketType.NOISE_HANDSHAKE_FINAL
+              : PacketType.NOISE_HANDSHAKE_RESPONSE,
+            PacketType_FINAL: PacketType.NOISE_HANDSHAKE_FINAL,
+            PacketType_RESPONSE: PacketType.NOISE_HANDSHAKE_RESPONSE,
+            PacketType_INIT: PacketType.NOISE_HANDSHAKE_INIT,
+          });
+
+          const packetType = entry.initiator
+            ? PacketType.NOISE_HANDSHAKE_FINAL
+            : PacketType.NOISE_HANDSHAKE_RESPONSE;
+
+          console.log("[NOISE] 🔍 Selected packet type:", {
+            packetType,
+            packetTypeName: PacketType[packetType],
+            packetTypeNumber: packetType,
+          });
+
+          const payload = new Uint8Array(response);
+
+          // ADD THIS LOGGING:
+          console.log("[NOISE] Created payload for packet:", {
+            payloadLength: payload.length,
+            responseLength: response.length,
+            packetType: PacketType[packetType],
+          });
+
           const respPacket = new Packet({
-            type: PacketType.NOISE_HANDSHAKE_RESPONSE,
+            type: packetType,
             senderId: identity!.peerId,
             timestamp: BigInt(Date.now()),
-            payload: new Uint8Array(response),
+            payload: payload,
             ttl: 5,
           });
 
+          // ADD THIS LOGGING:
+          console.log("[NOISE] Created packet:", {
+            type: PacketType[respPacket.type],
+            payloadLength: respPacket.payload.length,
+            expectedLength: entry.initiator ? 64 : 80,
+          });
+
           await this.sendPacket(senderDeviceId, respPacket);
-          console.log(
-            `[NOISE] ✅ Handshake response sent to ${senderDeviceId}`,
-          );
-        } else {
-          console.log(
-            `[NOISE] No response needed for ${PacketType[packet.type]}`,
-          );
         }
 
         return;

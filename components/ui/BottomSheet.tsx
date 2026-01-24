@@ -104,7 +104,7 @@ export default class BottomSheet extends Component<BottomSheetProps, BottomSheet
 
 const styles = StyleSheet.create({
   overlay: {
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     flex: 1,
     justifyContent: 'flex-end',
   },
@@ -112,14 +112,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
-    backgroundColor: '#0d1a1a',
+    backgroundColor: '#041A1D',
     paddingTop: 8,
     borderTopRightRadius: 20,
     borderTopLeftRadius: 20,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: '#00d4d4',
+    borderColor: '#22D3EE',
     minHeight: 200,
     maxHeight: Dimensions.get('screen').height * 0.9,
   },
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: '#00d4d4',
+    backgroundColor: '#22D3EE',
     borderRadius: 2,
   },
 });

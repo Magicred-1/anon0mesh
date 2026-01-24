@@ -55,10 +55,9 @@ export default function ChatHeader({
   };
 
   // Display name based on selection
+  // TODO: Add zone support
   const displayName =
-    selectedPeer === "broadcast"
-      ? "📡 Broadcast Mode"
-      : selectedPeer || nickname;
+    selectedPeer === "broadcast" ? "Local Chat" : nickname || "Mesh Chat";
 
   return (
     <View style={styles.header}>

@@ -152,39 +152,129 @@ export class NoiseProtocol {
 
   // <- e, ee, s, es
   public readMessageB(message: Uint8Array): Uint8Array {
+    console.log(
+      "[NOISE] [Initiator] readMessageB: received e, ee, s, es, length:",
+      message.length,
+    );
+
     // e
     this.re = message.slice(0, 32);
+    console.log(
+      "[NOISE] [Initiator] Received ephemeral key:",
+      Buffer.from(this.re).toString("hex"),
+    );
     this.mixHash(this.re);
 
     // ee
     if (!this.e || !this.re) throw new Error("Invalid state");
-    this.mixKey(nacl.scalarMult(this.e.privateKey, this.re));
+    const dh_ee = nacl.scalarMult(this.e.privateKey, this.re);
+    console.log(
+      "[NOISE] [Initiator] DH(e, re):",
+      Buffer.from(dh_ee).toString("hex"),
+    );
+    this.mixKey(dh_ee);
 
-    // s
+    console.log(
+      "[NOISE] [Initiator] After ee, key:",
+      this.k ? Buffer.from(this.k).toString("hex") : "null",
+    );
+
+    // s - decrypt with key from ee
     const encryptedS = message.slice(32, 32 + 32 + MACLEN);
+    console.log(
+      "[NOISE] [Initiator] Encrypted static key:",
+      Buffer.from(encryptedS).toString("hex"),
+    );
     this.rs = this.decryptAndHash(encryptedS);
+    console.log(
+      "[NOISE] [Initiator] Decrypted static key:",
+      Buffer.from(this.rs).toString("hex"),
+    );
 
-    // es
+    // es - mix key AFTER decrypting s
     if (!this.e || !this.rs) throw new Error("Invalid state");
-    this.mixKey(nacl.scalarMult(this.e.privateKey, this.rs));
+    const dh_es = nacl.scalarMult(this.e.privateKey, this.rs);
+    console.log(
+      "[NOISE] [Initiator] DH(e, rs):",
+      Buffer.from(dh_es).toString("hex"),
+    );
+    this.mixKey(dh_es);
 
     return new Uint8Array(0); // No payload for now
   }
 
   // -> s, se
   public writeMessageC(): Uint8Array {
+    console.log("[NOISE] [Initiator] writeMessageC: sending s, se");
+
     // s
+    console.log("[NOISE] [Initiator] Encrypting static key (32 bytes)");
+    console.log(
+      "[NOISE] [Initiator] Current key before encrypting s:",
+      this.k ? Buffer.from(this.k).toString("hex") : "null",
+    );
+    console.log(
+      "[NOISE] [Initiator] Current nonce before encrypting s:",
+      this.n,
+    );
     const encryptedS = this.encryptAndHash(this.s.publicKey);
+    console.log(
+      "[NOISE] [Initiator] ✅ Encrypted static key length:",
+      encryptedS.length,
+      "(should be 48)",
+    );
+    console.log(
+      "[NOISE] [Initiator] Encrypted static key hex:",
+      Buffer.from(encryptedS).toString("hex"),
+    );
 
     // se
     if (!this.re) throw new Error("Invalid state");
-    this.mixKey(nacl.scalarMult(this.s.privateKey, this.re));
+    const dh_se = nacl.scalarMult(this.s.privateKey, this.re);
+    console.log(
+      "[NOISE] [Initiator] DH(s, re):",
+      Buffer.from(dh_se).toString("hex"),
+    );
+    this.mixKey(dh_se);
+    console.log(
+      "[NOISE] [Initiator] After se mixKey, new key:",
+      this.k ? Buffer.from(this.k).toString("hex") : "null",
+    );
+    console.log("[NOISE] [Initiator] After se mixKey, nonce reset to:", this.n);
 
+    console.log("[NOISE] [Initiator] Encrypting empty payload");
     const payload = this.encryptAndHash(new Uint8Array(0));
+    console.log(
+      "[NOISE] [Initiator] ✅ Encrypted payload length:",
+      payload.length,
+      "(should be 16)",
+    );
+    console.log(
+      "[NOISE] [Initiator] Encrypted payload hex:",
+      Buffer.from(payload).toString("hex"),
+    );
 
     const msg = new Uint8Array(encryptedS.length + payload.length);
     msg.set(encryptedS);
     msg.set(payload, encryptedS.length);
+
+    console.log(
+      "[NOISE] [Initiator] ✅ Final message C length:",
+      msg.length,
+      "(should be 64)",
+    );
+    console.log(
+      "[NOISE] [Initiator] Final message C hex:",
+      Buffer.from(msg).toString("hex"),
+    );
+
+    if (msg.length !== 64) {
+      console.error(
+        "[NOISE] [Initiator] ❌ ERROR: Message C has wrong length! Expected 64, got",
+        msg.length,
+      );
+    }
+
     return msg;
   }
 
@@ -205,19 +295,44 @@ export class NoiseProtocol {
     console.log("[NOISE] [Responder] writeMessageB: sending e, ee, s, es");
     const kp = nacl.box.keyPair();
     this.e = { publicKey: kp.publicKey, privateKey: kp.secretKey };
+
+    console.log("[NOISE] [Responder] Generated ephemeral key:", {
+      publicKey: Buffer.from(this.e.publicKey).toString("hex"),
+    });
+
     // e
     this.mixHash(this.e.publicKey);
 
     // ee
     if (!this.e || !this.re) throw new Error("Invalid state");
-    this.mixKey(nacl.scalarMult(this.e.privateKey, this.re));
+    const dh_ee = nacl.scalarMult(this.e.privateKey, this.re);
+    console.log(
+      "[NOISE] [Responder] DH(e, re):",
+      Buffer.from(dh_ee).toString("hex"),
+    );
+    this.mixKey(dh_ee);
 
-    // s
+    console.log(
+      "[NOISE] [Responder] After ee, key:",
+      this.k ? Buffer.from(this.k).toString("hex") : "null",
+    );
+
+    // s - encrypt with key from ee
     const encryptedS = this.encryptAndHash(this.s.publicKey);
+    console.log(
+      "[NOISE] [Responder] Encrypted static key:",
+      Buffer.from(encryptedS).toString("hex"),
+    );
 
-    // es
-    this.mixKey(nacl.scalarMult(this.s.privateKey, this.re));
+    // es - mix key AFTER encrypting s
+    const dh_es = nacl.scalarMult(this.s.privateKey, this.re);
+    console.log(
+      "[NOISE] [Responder] DH(s, re):",
+      Buffer.from(dh_es).toString("hex"),
+    );
+    this.mixKey(dh_es);
 
+    // Message is just e || encrypted_s (no payload in message B)
     const msg = new Uint8Array(32 + encryptedS.length);
     msg.set(this.e.publicKey);
     msg.set(encryptedS, 32);
@@ -234,11 +349,27 @@ export class NoiseProtocol {
       "[NOISE] [Responder] readMessageC: received s, se, length:",
       message.length,
     );
+    console.log(
+      "[NOISE] [Responder] readMessageC: full message hex:",
+      Buffer.from(message).toString("hex"),
+    );
+
+    // Expected: 48 bytes encrypted static + 16 bytes encrypted payload = 64 bytes total
+    if (message.length < 32 + MACLEN) {
+      throw new Error(
+        `Message C too short: expected at least ${32 + MACLEN} bytes, got ${message.length}`,
+      );
+    }
+
     // s
     const encryptedS = message.slice(0, 32 + MACLEN);
+    console.log(
+      "[NOISE] [Responder] readMessageC: encrypted static key (should be 48 bytes):",
+      Buffer.from(encryptedS).toString("hex"),
+    );
     this.rs = this.decryptAndHash(encryptedS);
 
-    // se
+    // se - must call mixKey BEFORE decrypting payload
     if (!this.e || !this.rs) {
       console.error("[NOISE] [Responder] readMessageC: Invalid state!", {
         has_e: !!this.e,
@@ -255,6 +386,7 @@ export class NoiseProtocol {
     }
     this.mixKey(nacl.scalarMult(this.e.privateKey, this.rs));
 
+    // Decrypt payload AFTER mixKey (which updates k and resets n to 0)
     const payload = message.slice(32 + MACLEN);
     this.decryptAndHash(payload);
     console.log("[NOISE] [Responder] readMessageC: handshake complete");

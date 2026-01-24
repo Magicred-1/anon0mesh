@@ -1,7 +1,7 @@
 import { useBLE } from "@/src/contexts/BLEContext";
 import { useNoiseChat } from "@/src/hooks/useNoiseChat";
 import { LinearGradient } from "expo-linear-gradient";
-import { CaretRight } from "phosphor-react-native";
+import { Broadcast, CaretRight } from "phosphor-react-native";
 import React, { useState } from "react";
 import {
   FlatList,
@@ -120,7 +120,8 @@ export default function ChatSelectionScreen({
   // Convert BLE devices to Peer format
   const peers: Peer[] = React.useMemo(() => {
     console.log("[ChatSelection] Converting devices to peers...");
-    return discoveredDevices.map((device) => {
+
+    const realPeers = discoveredDevices.map((device) => {
       // In BLE peripheral mode, "connected" means we have an active session
       const hasSession = sessions.has(device.id);
       const isConnected = hasSession; // A peer is "online" if we have a secure session
@@ -142,6 +143,8 @@ export default function ChatSelectionScreen({
         hasSession,
       };
     });
+
+    return realPeers;
   }, [discoveredDevices, sessions]);
 
   const connectedPeers = peers.filter((p) => p.online).length;
@@ -163,7 +166,7 @@ export default function ChatSelectionScreen({
         <View style={styles.peerLeft}>
           <View style={styles.peerInfo}>
             <View style={styles.broadcastIndicator}>
-              <Text style={styles.broadcastIcon}>📡</Text>
+              <Broadcast size={16} color="#22D3EE" weight="regular" />
             </View>
             <Text style={styles.broadcastName}>Broadcast to All</Text>
           </View>
@@ -179,14 +182,19 @@ export default function ChatSelectionScreen({
     </TouchableOpacity>
   );
 
-  const renderPeerItem = ({ item }: { item: Peer }) => {
+  const renderPeerItem = ({ item, index }: { item: Peer; index: number }) => {
     const isPressed = pressedItemId === item.id;
     const isOnline = item.online;
     const hasSecureSession = item.hasSession;
+    const isFirstItem = index === 0;
 
     return (
       <TouchableOpacity
-        style={[styles.peerItem, isPressed && styles.peerItemPressed]}
+        style={[
+          styles.peerItem,
+          isPressed && styles.peerItemPressed,
+          isFirstItem && styles.firstPeerItem,
+        ]}
         onPress={() => onSelectPeer(item.id)}
         onPressIn={() => setPressedItemId(item.id)}
         onPressOut={() => setPressedItemId(null)}
@@ -204,9 +212,7 @@ export default function ChatSelectionScreen({
               <Text style={styles.peerName}>{item.name}</Text>
               {hasSecureSession && <Text style={styles.secureIcon}>🔒</Text>}
             </View>
-            <Text style={styles.lastActive}>
-              {isOnline ? "● Online" : "Offline"} · {item.lastActive}
-            </Text>
+            <Text style={styles.lastActive}>{item.lastActive}</Text>
           </View>
           <View style={styles.chevronIcon}>
             <CaretRight size={24} color="#22D3EE" weight="regular" />
@@ -322,7 +328,7 @@ const styles = StyleSheet.create({
   peerItem: {
     backgroundColor: "transparent",
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 6,
     marginHorizontal: 8,
   },
   peerItemPressed: {
@@ -331,7 +337,6 @@ const styles = StyleSheet.create({
   peerContent: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
@@ -345,7 +350,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: "#22D3EE",
-    marginRight: 8,
+    marginRight: 12,
   },
   onlineIndicatorOffline: {
     backgroundColor: "#4B5563",
@@ -359,6 +364,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
+    fontFamily: "SpaceGrotesk_600SemiBold",
   },
   secureIcon: {
     fontSize: 14,
@@ -368,36 +374,42 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     fontSize: 14,
     fontWeight: "500",
+    fontFamily: "SpaceGrotesk_500Medium",
+    marginRight: 16,
   },
   chevronIcon: {
-    marginLeft: 16,
+    marginLeft: 0,
+  },
+  firstPeerItem: {
+    backgroundColor: "#1e3a5f",
   },
   broadcastItem: {
-    backgroundColor: "rgba(34, 211, 238, 0.1)",
+    backgroundColor: "rgba(34, 211, 238, 0.08)",
     borderWidth: 1,
-    borderColor: "#22D3EE",
+    borderColor: "rgba(34, 211, 238, 0.3)",
   },
   broadcastIndicator: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#22D3EE",
+    backgroundColor: "rgba(34, 211, 238, 0.2)",
+    borderWidth: 1,
+    borderColor: "#22D3EE",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  broadcastIcon: {
-    fontSize: 18,
-  },
   broadcastName: {
     color: "#22D3EE",
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "600",
+    fontFamily: "SpaceGrotesk_600SemiBold",
   },
   broadcastSubtext: {
     color: "#94A3B8",
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "400",
+    fontFamily: "SpaceGrotesk_400Regular",
     marginTop: 4,
   },
   emptyContainer: {
