@@ -21,7 +21,7 @@ import {
 type TokenType = "SOL" | "USDC" | "ZEC";
 
 const SOL_USD_RATE = 141.457; // Approximate SOL/USD exchange rate
-const MIN_BALANCE_REQUIRED = 0.00144768; // Minimum SOL required for disposable address creation
+const MIN_BALANCE_REQUIRED = 0.00144768; // Minimum SOL required for offline address creation
 
 type Props = {
   visible: boolean;
@@ -33,11 +33,7 @@ type Props = {
   ) => Promise<void>;
 };
 
-const CreateDisposableAddressModal = ({
-  visible,
-  onClose,
-  onCreate,
-}: Props) => {
+const CreateOfflineAddressModal = ({ visible, onClose, onCreate }: Props) => {
   const { publicKey } = useWallet();
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
 
@@ -88,7 +84,7 @@ const CreateDisposableAddressModal = ({
       onClose();
     } catch (error) {
       console.error(
-        "[CreateDisposableAddressModal] Error creating address:",
+        "[CreateOfflineAddressModal] Error creating address:",
         error,
       );
     } finally {
@@ -127,7 +123,7 @@ const CreateDisposableAddressModal = ({
           >
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.title}>Create New Disposable Address</Text>
+              <Text style={styles.title}>Create New Offline Address</Text>
             </View>
 
             {/* Content */}
@@ -143,8 +139,8 @@ const CreateDisposableAddressModal = ({
 
               {/* Minimum Balance Required */}
               <Text style={styles.minBalanceText}>
-                Minimum Balance Required: {MIN_BALANCE_REQUIRED} SOL for
-                Disposable Address creation
+                Minimum Balance Required: {MIN_BALANCE_REQUIRED} SOL for Offline
+                address creation
               </Text>
 
               {/* Add Funds Section */}
@@ -533,4 +529,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreateDisposableAddressModal;
+export default CreateOfflineAddressModal;

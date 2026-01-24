@@ -1,6 +1,6 @@
 import SolanaIcon from "@/components/icons/SolanaIcon";
-import CreateDisposableAddressModal from "@/components/modals/CreateDisposableAddressModal";
-import { useDisposableWallets } from "@/hooks/useDisposableWallets";
+import CreateOffline from "@/components/modals/CreateOfflineAddressModal";
+import { useOfflineWallets } from "@/hooks/useOfflineWallets";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { createSolanaConnection } from "@/src/utils/solana";
 import { Keypair } from "@solana/web3.js";
@@ -53,7 +53,7 @@ export default function WalletSettingsScreen() {
             const keypair = Keypair.fromSecretKey(secretKey);
             setAuthority(keypair);
             console.log(
-              "[WalletSettings] Authority loaded for disposable wallets",
+              "[WalletSettings] Authority loaded for offline wallets",
             );
           }
         } catch (err) {
@@ -63,7 +63,7 @@ export default function WalletSettingsScreen() {
         // For MWA - we'll use the wallet's signTransaction method instead
         // No need for keypair export!
         console.log(
-          "[WalletSettings] MWA wallet ready - disposable wallets supported via transaction signing! 🔥",
+          "[WalletSettings] MWA wallet ready - offline wallets supported via transaction signing! 🔥",
         );
         // Create a pseudo-keypair with just the publicKey for compatibility
         // The actual signing will be done by MWA wallet
@@ -73,22 +73,22 @@ export default function WalletSettingsScreen() {
     loadAuthority();
   }, [wallet, isConnected, walletMode, publicKey]);
 
-  // Use disposable wallets hook
+  // Use offline wallets hook
   const {
-    wallets: disposableWallets,
-    isLoading: disposableLoading,
-    error: disposableError,
+    wallets: offlineWallets,
+    isLoading: offlineLoading,
+    error: offlineError,
     createWallet,
     deleteWallet,
     refreshBalances,
     sweepFunds,
-  } = useDisposableWallets({
+  } = useOfflineWallets({
     connection,
     authority,
   });
 
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
-  const isLoading = walletLoading || disposableLoading;
+  const isLoading = walletLoading || offlineLoading;
 
   // Format wallet address for display
   const primaryWallet = publicKey
@@ -115,7 +115,7 @@ export default function WalletSettingsScreen() {
     }
   };
 
-  const handleCopyDisposable = async (address: string) => {
+  const handleCopyAddress = async (address: string) => {
     // TODO: Use Clipboard.setStringAsync when expo-clipboard is installed
     Alert.alert("Copied", `Address ${address} copied to clipboard`);
   };
@@ -140,7 +140,7 @@ export default function WalletSettingsScreen() {
   const handleSweepFunds = async (walletId: string) => {
     Alert.alert(
       "Sweep Funds",
-      "Transfer all funds from this disposable wallet to your primary wallet?",
+      "Transfer all funds from this offline wallet to your primary wallet?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -167,7 +167,8 @@ export default function WalletSettingsScreen() {
   const handleDeleteAddress = (addressId: string) => {
     Alert.alert(
       "Delete Address",
-      "Are you sure you want to delete this disposable address? The nonce account will be closed and rent recovered.",
+      "Are you sure you want to delete this offline address? The nonce account will be closed and rent recovered.",
+      
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -176,7 +177,7 @@ export default function WalletSettingsScreen() {
           onPress: async () => {
             try {
               await deleteWallet(addressId, true);
-              Alert.alert("Success", "Disposable wallet deleted");
+              Alert.alert("Success", "Offline wallet deleted");
             } catch (err) {
               Alert.alert("Error", "Failed to delete wallet");
             }
@@ -215,7 +216,7 @@ export default function WalletSettingsScreen() {
       if (walletMode === "mwa") {
         Alert.alert(
           "Coming Soon",
-          "Disposable wallets with MWA support is being implemented! For now, use a local wallet.",
+          "Offline wallets with MWA support is being implemented! For now, use a local wallet.",
         );
         return;
       }
@@ -234,7 +235,7 @@ export default function WalletSettingsScreen() {
       if (wallet) {
         Alert.alert(
           "Success",
-          `Disposable wallet created!\n\n` +
+          `Offline wallet created!\n\n` +
             `Address: ${wallet.data.publicKey.slice(0, 8)}...${wallet.data.publicKey.slice(-8)}\n` +
             `Nonce Account: ${wallet.data.nonceAccount ? "Yes ✅" : "No"}\n` +
             `${initialFunding ? `Funded with ${initialFunding} SOL` : "No initial funding"}`,
@@ -330,13 +331,13 @@ export default function WalletSettingsScreen() {
             )}
           </View>
 
-          {/* Disposable Wallets Section */}
+          {/* Offline Wallets Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
-                Disposable Wallets (Nonce Accounts)
+                Offline Wallets (Nonce Accounts)
               </Text>
-              {disposableWallets.length > 0 && (
+              {offlineWallets.length > 0 && (
                 <TouchableOpacity
                   onPress={handleRefreshBalances}
                   style={styles.refreshButton}
@@ -361,22 +362,22 @@ export default function WalletSettingsScreen() {
                   support coming in the next update! 🚀
                 </Text>
               </View>
-            ) : disposableWallets.length === 0 ? (
+            ) : offlineWallets.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No disposable wallets yet</Text>
+                <Text style={styles.emptyText}>No offline wallets yet</Text>
                 <Text style={styles.emptySubtext}>
                   Create one for offline transactions
                 </Text>
               </View>
             ) : (
-              disposableWallets.map((wallet) => {
+              offlineWallets.map((wallet) => {
                 const shortAddress = `${wallet.publicKey.slice(0, 4)}...${wallet.publicKey.slice(-4)}`;
                 return (
                   <View key={wallet.id} style={styles.disposableCard}>
                     {/* Address Header */}
                     <View style={styles.addressHeader}>
                       <TouchableOpacity
-                        onPress={() => handleCopyDisposable(wallet.publicKey)}
+                        onPress={() => handleCopyAddress(wallet.publicKey)}
                         style={styles.addressAddressContainer}
                       >
                         <View>
@@ -452,15 +453,15 @@ export default function WalletSettingsScreen() {
             >
               <Text style={styles.createNewIcon}>+</Text>
               <Text style={styles.createNewText}>
-                Create new disposable wallet
+                Create new offline wallet
               </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </SafeAreaView>
 
-      {/* Create Disposable Address Modal */}
-      <CreateDisposableAddressModal
+      {/* Create Offline Address Modal */}
+      <CreateOffline
         visible={isCreateModalVisible}
         onClose={() => setIsCreateModalVisible(false)}
         onCreate={handleCreateAddress}
