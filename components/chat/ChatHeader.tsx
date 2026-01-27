@@ -18,12 +18,14 @@ interface ChatHeaderProps {
   onTripleTap?: () => void;
 }
 
-export default function ChatHeader({
-  nickname,
-  selectedPeer,
-  onlinePeersCount,
-  onNavigateToSelection,
-}: ChatHeaderProps) {
+export default function ChatHeader(props: ChatHeaderProps) {
+  const { nickname, selectedPeer, onlinePeersCount, onNavigateToSelection } = props;
+
+  const handleBackPress = () => {
+    if (onNavigateToSelection) {
+      onNavigateToSelection();
+    }
+  };
   // Connectivity state
   const [isInternetConnected, setIsInternetConnected] = useState(false);
   const [isBluetoothAvailable, setIsBluetoothAvailable] = useState(false);
@@ -48,9 +50,23 @@ export default function ChatHeader({
     };
   }, []);
 
-  const handleBackPress = () => {
-    if (onNavigateToSelection) {
-      onNavigateToSelection();
+  const handleTitlePress = () => {
+    tapCountRef.current += 1;
+
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current);
+    }
+
+    if (tapCountRef.current === 3) {
+      console.log("[ChatHeader] Triple tap detected");
+      if (props.onTripleTap) {
+        props.onTripleTap();
+      }
+      tapCountRef.current = 0;
+    } else {
+      tapTimerRef.current = setTimeout(() => {
+        tapCountRef.current = 0;
+      }, 500); // Reset count after 500ms
     }
   };
 
@@ -69,9 +85,13 @@ export default function ChatHeader({
         >
           <CaretLeft size={24} color="#00CED1" weight="regular" />
         </TouchableOpacity>
-        <View style={styles.titleTouch}>
+        <TouchableOpacity
+          style={styles.titleTouch}
+          onPress={handleTitlePress}
+          activeOpacity={0.7}
+        >
           <Text style={styles.headerTitle}>{displayName}</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Right side icons */}

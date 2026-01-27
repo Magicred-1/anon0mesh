@@ -1,3 +1,5 @@
+import { IdentityManager } from "@/src/infrastructure/crypto/IdentityManager";
+import { identityStateManager } from "@/src/infrastructure/identity";
 import {
   DeviceDetector,
   LocalWalletAdapter,
@@ -27,64 +29,6 @@ interface Props {
   // Optional props for external control (if needed)
   onComplete?: () => void;
 }
-
-// Generate random nickname
-const generateRandomNickname = (): string => {
-  const adjectives = [
-    "Anonymous",
-    "Phantom",
-    "Shadow",
-    "Cyber",
-    "Digital",
-    "Virtual",
-    "Silent",
-    "Stealth",
-    "Mystic",
-    "Hidden",
-    "Encrypted",
-    "Secure",
-    "Ghost",
-    "Ninja",
-    "Elite",
-    "Alpha",
-    "Beta",
-    "Quantum",
-    "Matrix",
-    "Node",
-  ];
-
-  const nouns = [
-    "Mesh",
-    "Node",
-    "Peer",
-    "Link",
-    "Chain",
-    "Bridge",
-    "Hub",
-    "Socket",
-    "Relay",
-    "Router",
-    "Gateway",
-    "Beacon",
-    "Signal",
-    "Network",
-    "Protocol",
-    "Cipher",
-    "Key",
-    "Token",
-    "Block",
-    "Hash",
-    "Sync",
-    "Stream",
-  ];
-
-  const randomAdjective =
-    adjectives[Math.floor(Math.random() * adjectives.length)];
-  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-  const randomNumber = Math.floor(Math.random() * 999) + 1;
-
-  return `${randomAdjective}${randomNoun}${randomNumber}`;
-};
 
 export default function OnboardingScreen({ onComplete }: Props) {
   // Background image used for the primary button (from Figma)
@@ -160,7 +104,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
   useEffect(() => {
     // Generate random nickname if none exists
     if (!nickname) {
-      setNickname(generateRandomNickname());
+      setNickname(IdentityManager.generateRandomNickname());
     }
 
     // Animate the content entrance
@@ -312,7 +256,13 @@ export default function OnboardingScreen({ onComplete }: Props) {
         publicKey.toBase58(),
       );
 
-      // Save nickname
+      // 1. Generate and save identity (CRITICAL for skip logic)
+      console.log("[Onboarding] Generating persistent mesh identity...");
+      const identity = await IdentityManager.generateIdentity(nickname || "Anonymous");
+      await identityStateManager.saveIdentity(identity);
+      console.log("[Onboarding] ✅ Identity saved");
+
+      // Save nickname separately for UI (legacy)
       if (nickname) {
         await SecureStore.setItemAsync("nickname", nickname);
       }
@@ -334,7 +284,7 @@ export default function OnboardingScreen({ onComplete }: Props) {
       console.error("[Onboarding] MWA error:", error);
       alert(
         error?.message ||
-          "Failed to connect to mobile wallet. Make sure you have a Solana wallet installed.",
+        "Failed to connect to mobile wallet. Make sure you have a Solana wallet installed.",
       );
     } finally {
       setLoading(false);
@@ -363,7 +313,13 @@ export default function OnboardingScreen({ onComplete }: Props) {
         publicKey.toBase58(),
       );
 
-      // Save nickname
+      // 1. Generate and save identity (CRITICAL for skip logic)
+      console.log("[Onboarding] Generating persistent mesh identity...");
+      const identity = await IdentityManager.generateIdentity(nickname || "Anonymous");
+      await identityStateManager.saveIdentity(identity);
+      console.log("[Onboarding] ✅ Identity saved");
+
+      // Save nickname separately for UI (legacy)
       if (nickname) {
         await SecureStore.setItemAsync("nickname", nickname);
       }
@@ -398,6 +354,12 @@ export default function OnboardingScreen({ onComplete }: Props) {
     console.log("[Onboarding] 📡 Setting up BLE-only mode...");
 
     try {
+      // 1. Generate and save identity (CRITICAL for skip logic)
+      console.log("[Onboarding] Generating persistent mesh identity...");
+      const identity = await IdentityManager.generateIdentity(nickname || "Anonymous");
+      await identityStateManager.saveIdentity(identity);
+      console.log("[Onboarding] ✅ Identity saved");
+
       // Save nickname first (fast operation)
       if (nickname) {
         await SecureStore.setItemAsync("nickname", nickname);

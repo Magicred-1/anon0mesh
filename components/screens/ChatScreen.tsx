@@ -11,6 +11,7 @@ import { useWallet } from "@/src/contexts/WalletContext";
 import { useBLENotificationUpdater } from "@/src/hooks/useBLENotificationUpdater";
 import { useMessageQueue } from "@/src/hooks/useMessageQueue";
 import { useNoiseChat } from "@/src/hooks/useNoiseChat";
+import { identityStateManager } from "@/src/infrastructure/identity";
 import { checkInternetConnectivity } from "@/src/infrastructure/wallet/utils/connectivity";
 import "@/src/polyfills";
 import { parseCommand, SendCommandResult } from "@/src/utils/chatCommands";
@@ -31,6 +32,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 interface Peer {
   id: string;
+  transportId: string;
   nickname: string;
   online: boolean;
 }
@@ -81,8 +83,8 @@ export default function ChatScreen({
   //   autoConnect: true,
   //   lookbackHours: 24,
   // });
-  const sendNostrMessage = async (_msg?: string, _to?: string) => {};
-  const clearNostrMessages = () => {};
+  const sendNostrMessage = async (_msg?: string, _to?: string) => { };
+  const clearNostrMessages = () => { };
   const nostrConnected = false;
   const relayCount = 0;
 
@@ -100,7 +102,9 @@ export default function ChatScreen({
     messages: noiseMessages,
     broadcastMessage: broadcastBLE,
     initiateHandshake,
+    clearMessages: clearNoiseMessages,
     isReady: noiseReady,
+    knownNicknames,
   } = useNoiseChat();
 
   // Message queue for offline messages
@@ -117,22 +121,47 @@ export default function ChatScreen({
   // Combine Nostr and BLE messages
   const allMessages = React.useMemo(() => {
     // Convert Noise messages to UI format
-    const bleMessages: Message[] = noiseMessages.map((msg, idx) => ({
-      id: `ble-${msg.timestamp}-${idx}`,
-      from: msg.isMine ? nickname : msg.deviceId.slice(0, 8),
-      to: msg.to,
-      msg: msg.message,
-      ts: msg.timestamp,
-      isMine: msg.isMine,
-      isEncrypted: true,
-    }));
+    const bleMessages: Message[] = noiseMessages.map((msg: any, idx: number) => {
+      // 1. Try to find peer in current discovery list for the latest nickname
+      const peer = peers.find((p) => p.id === msg.deviceId || p.transportId === msg.deviceId);
 
-    // DISABLED: Nostr messages integration
-    // const markedNostrMessages = (nostrMessages as any[]).map((msg) => ({
-    //   ...msg,
-    //   isNostr: true,
-    //   isEncrypted: true,
-    // }));
+      // 2. Prioritize: 
+      //    a) Local nickname for our messages
+      //    b) Currently discovered peer's nickname
+      //    c) Originally cached nickname from NoiseContext
+      //    d) Fallback ID/Placeholder
+
+      let senderName = "Anonymous";
+
+      if (msg.isMine) {
+        senderName = nickname || msg.nickname || "Me";
+      } else {
+        // Use latest known nickname from global registry, 
+        // else the currently discovered peer object, 
+        // else what was cached on arrival
+        senderName = knownNicknames.get(msg.deviceId) || peer?.nickname || msg.nickname || "";
+
+        // Final fallback cases
+        if (!senderName) {
+          if (msg.deviceId === "broadcast") {
+            senderName = "LocalBroadcast";
+          } else {
+            senderName = msg.deviceId === "unknown" ? "MeshNode" : msg.deviceId.slice(0, 8);
+          }
+        }
+      }
+
+      return {
+        id: `ble-${msg.timestamp}-${idx}`,
+        from: senderName,
+        senderId: msg.deviceId,
+        to: msg.to,
+        msg: msg.message,
+        ts: msg.timestamp,
+        isMine: msg.isMine,
+        isEncrypted: msg.deviceId !== "broadcast",
+      };
+    });
 
     // BLE messages only (Nostr disabled)
     const sorted = [...bleMessages].sort((a, b) => a.ts - b.ts);
@@ -141,12 +170,9 @@ export default function ChatScreen({
     console.log(
       `[ChatScreen] 📊 allMessages count: ${sorted.length}, noiseMessages count: ${noiseMessages.length}`,
     );
-    if (sorted.length > 0) {
-      console.log(`[ChatScreen] Latest message:`, sorted[sorted.length - 1]);
-    }
 
     return sorted;
-  }, [noiseMessages, nickname]);
+  }, [noiseMessages, nickname, peers]);
 
   // Initialize wallet and user data
   useEffect(() => {
@@ -173,8 +199,14 @@ export default function ChatScreen({
           setPubKey(walletPublicKey.toBase58());
         }
 
-        const storedNickname = await SecureStore.getItemAsync("nickname");
-        if (mounted) {
+        // 2. Load nickname from Identity (source of truth)
+        const identity = identityStateManager.getIdentity() || await identityStateManager.initialize();
+        if (mounted && identity) {
+          console.log("[ChatScreen] Nickname loaded from identity:", identity.nickname);
+          setNickname(identity.nickname);
+        } else if (mounted) {
+          // Fallback to legacy nickname if identity not migrated
+          const storedNickname = await SecureStore.getItemAsync("nickname");
           setNickname(storedNickname || "Anonymous");
         }
 
@@ -203,11 +235,28 @@ export default function ChatScreen({
 
   // Map discovered devices to peers
   useEffect(() => {
-    const mappedPeers: Peer[] = discoveredDevices.map((device) => ({
-      id: device.id,
-      nickname: device.name || device.id.slice(0, 8),
-      online: connectedDeviceIds.includes(device.id),
-    }));
+    const mappedPeers: Peer[] = discoveredDevices.map((device) => {
+      let peerNickname = device.name || device.id.slice(0, 8);
+
+      // Parse mesh advertisement name format: AM-[truncatedId]-[nickname]
+      if (device.name?.startsWith("AM-")) {
+        const parts = device.name.split("-");
+        if (parts.length >= 3) {
+          // The third part (and onwards) is the nickname
+          peerNickname = parts.slice(2).join("-");
+        } else if (parts.length === 2) {
+          // Legacy or short format: AM-[id]
+          peerNickname = "Peer-" + parts[1];
+        }
+      }
+
+      return {
+        id: device.peerId || device.id,
+        transportId: device.id, // Keep trace of transport ID
+        nickname: peerNickname,
+        online: connectedDeviceIds.includes(device.id),
+      };
+    });
     setPeers(mappedPeers);
   }, [discoveredDevices, connectedDeviceIds]);
 
@@ -413,7 +462,7 @@ export default function ChatScreen({
           "[Chat] Sending unencrypted targeted message to:",
           selectedPeer,
         );
-        await broadcastBLE(messageContent); // Will be filtered by recipient on UI
+        await broadcastBLE(messageContent, selectedPeer); // Pass selectedPeer for UI metadata
         // Note: For now this broadcasts to all, but recipient filtering happens in UI
       } else if (!selectedPeer && isInitialized) {
         // No peer selected - broadcast (works as soon as BLE is initialized)
@@ -562,6 +611,7 @@ export default function ChatScreen({
   const handleClearReceivedMessages = () => {
     // Clear Nostr messages (BLE messages are managed by hook state)
     clearNostrMessages();
+    clearNoiseMessages();
     console.log("[Chat] Cleared all received messages");
 
     // Navigate to landing page
@@ -582,6 +632,7 @@ export default function ChatScreen({
     );
     // Clear Nostr messages
     clearNostrMessages();
+    clearNoiseMessages();
     // Navigate to landing
     try {
       router.replace("/landing" as any);
@@ -596,11 +647,11 @@ export default function ChatScreen({
       ? allMessages // Show all messages in broadcast mode
       : selectedPeer
         ? allMessages.filter(
-            (m: Message) =>
-              (m.from === selectedPeer && m.to === nickname) ||
-              (m.from === nickname && m.to === selectedPeer) ||
-              (m.from === selectedPeer && m.isMine), // Should not happen with current logic but for safety
-          )
+          (m: Message) =>
+            (m.senderId === selectedPeer) || // Use full ID for matching
+            (m.isMine && m.to === selectedPeer) || // Our messages to this peer
+            (m.isMine && m.to === undefined && selectedPeer !== "broadcast") // Our global broadcasts
+        )
         : allMessages.filter((m: Message) => !m.to);
 
   // DEBUG: Log filtered messages
@@ -611,7 +662,7 @@ export default function ChatScreen({
   // Calculate connected peers count from Noise sessions with completed handshakes
   const connectedPeersCount = React.useMemo(() => {
     return Array.from(sessions.values()).filter(
-      (session) => session.isHandshakeComplete,
+      (session: any) => session.isHandshakeComplete,
     ).length;
   }, [sessions]);
 
@@ -626,11 +677,15 @@ export default function ChatScreen({
   // Get the display name for the selected peer
   const selectedPeerNickname = React.useMemo(() => {
     if (!selectedPeer || selectedPeer === "broadcast") {
-      return null;
+      return "Local Chat";
     }
-    const peer = peers.find((p) => p.id === selectedPeer);
+    // Try global nickname cache first, then dynamic peer list
+    const registryName = knownNicknames.get(selectedPeer);
+    if (registryName) return registryName;
+
+    const peer = peers.find((p) => p.id === selectedPeer || p.transportId === selectedPeer);
     return peer?.nickname || selectedPeer.slice(0, 8);
-  }, [selectedPeer, peers]);
+  }, [selectedPeer, peers, knownNicknames]);
 
   return (
     <LinearGradient
@@ -648,7 +703,7 @@ export default function ChatScreen({
         >
           <View style={styles.container}>
             <ChatHeader
-              nickname={selectedPeerNickname || nickname}
+              nickname={selectedPeerNickname}
               selectedPeer={selectedPeer}
               onlinePeersCount={connectedPeersCount}
               bleConnected={bleConnected}
@@ -703,6 +758,7 @@ export default function ChatScreen({
             selectedPeerId={selectedPeer}
             onPeerSelect={setSelectedPeer}
             onClose={() => setShowSidebar(false)}
+            onDisconnect={handleClearReceivedMessages}
           />
           <EditNicknameModal
             visible={editNickVisible}

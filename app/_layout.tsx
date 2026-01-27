@@ -15,6 +15,7 @@ import "react-native-reanimated";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import "@/global.css";
 import { BLEProvider } from "@/src/contexts/BLEContext";
+import { NoiseProvider } from "@/src/contexts/NoiseContext";
 import { WalletProvider } from "@/src/contexts/WalletContext";
 
 import { identityStateManager } from "@/src/infrastructure/identity";
@@ -36,22 +37,24 @@ export default function RootLayout() {
     <GluestackUIProvider mode="dark">
       <WalletProvider autoInitialize={true}>
         <BLEProvider>
-          <ThemeProvider
-            value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-          >
-            {/* Hide default stack header globally */}
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="onboarding" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="landing" />
-              <Stack.Screen name="chat" />
-              <Stack.Screen name="wallet" />
-              <Stack.Screen name="profile" />
-              <Stack.Screen name="zone" />
-              <Stack.Screen name="ble-test" />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
+          <NoiseProvider>
+            <ThemeProvider
+              value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+            >
+              {/* Hide default stack header globally */}
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="onboarding" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="landing" />
+                <Stack.Screen name="chat" />
+                <Stack.Screen name="wallet" />
+                <Stack.Screen name="profile" />
+                <Stack.Screen name="zone" />
+                <Stack.Screen name="ble-test" />
+              </Stack>
+              <StatusBar style="auto" />
+            </ThemeProvider>
+          </NoiseProvider>
         </BLEProvider>
       </WalletProvider>
     </GluestackUIProvider>

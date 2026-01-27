@@ -5,6 +5,29 @@ import { Identity, KeyPair } from '../../domain/entities/Identity';
 
 export class IdentityManager {
     /**
+     * Generate a random nickname
+     */
+    static generateRandomNickname(): string {
+        const adjectives = [
+            "Anonymous", "Phantom", "Shadow", "Cyber", "Digital", "Virtual",
+            "Silent", "Stealth", "Mystic", "Hidden", "Encrypted", "Secure",
+            "Ghost", "Ninja", "Elite", "Alpha", "Beta", "Quantum", "Matrix", "Node",
+        ];
+
+        const nouns = [
+            "Mesh", "Node", "Peer", "Link", "Chain", "Bridge", "Hub", "Socket",
+            "Relay", "Router", "Gateway", "Beacon", "Signal", "Network",
+            "Protocol", "Cipher", "Key", "Token", "Block", "Hash", "Sync", "Stream",
+        ];
+
+        const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+        const randomNumber = Math.floor(Math.random() * 999) + 1;
+
+        return `${randomAdjective}${randomNoun}${randomNumber}`;
+    }
+
+    /**
      * Generate a new identity
      */
     static async generateIdentity(nickname: string): Promise<Identity> {

@@ -31,6 +31,8 @@ export class NoiseManager {
     new Map();
   // Secondary index: remote public key -> device ID mapping
   private publicKeyToDeviceId: Map<string, string> = new Map();
+  // Tertiary index: truncated PeerId (6 chars) -> device ID mapping
+  private peerIdToDeviceId: Map<string, string> = new Map();
   private listeners: Set<(deviceId: string, plaintext: Uint8Array) => void> =
     new Set();
   private sessionListeners: Set<
@@ -46,7 +48,7 @@ export class NoiseManager {
 
   constructor(
     private readonly identityStateManager: SecureIdentityStateManager,
-  ) {}
+  ) { }
 
   attachAdapter(adapter: IBLEAdapter) {
     if (this.adapter === adapter) return;
@@ -135,6 +137,7 @@ export class NoiseManager {
     });
     this.sessions.clear();
     this.publicKeyToDeviceId.clear();
+    this.peerIdToDeviceId.clear();
   }
 
   private notifySessionUpdate(
@@ -157,8 +160,12 @@ export class NoiseManager {
         "hex",
       );
       this.publicKeyToDeviceId.set(pubKeyHex, deviceId);
+
+      const peerId = pubKeyHex.substring(0, 6);
+      this.peerIdToDeviceId.set(peerId, deviceId);
+
       console.log(
-        `[NOISE] 🔗 Mapped public key ${pubKeyHex.slice(0, 8)}... to device ${deviceId}`,
+        `[NOISE] 🔗 Mapped public key ${pubKeyHex.slice(0, 8)}... (peerId: ${peerId}) to device ${deviceId}`,
       );
     }
 
@@ -182,57 +189,137 @@ export class NoiseManager {
   }
 
   /**
+   * Helper to resolve session by either transport ID or logical PeerId
+   */
+  private getSessionEntry(id: string): { session: NoiseSession; initiator: boolean } | undefined {
+    // 1. Try exact transport ID match
+    let entry = this.sessions.get(id);
+    if (entry) return entry;
+
+    // 2. Try truncated PeerId lookup
+    const transportId = this.peerIdToDeviceId.get(id);
+    if (transportId) {
+      entry = this.sessions.get(transportId);
+      if (entry) {
+        console.log(`[NOISE] 🔍 Resolved logical ID ${id} to transport ID ${transportId}`);
+        return entry;
+      }
+    }
+
+    // 3. Try full public key lookup
+    const mappedTransportId = this.publicKeyToDeviceId.get(id);
+    if (mappedTransportId) {
+      entry = this.sessions.get(mappedTransportId);
+      if (entry) {
+        console.log(`[NOISE] 🔍 Resolved public key ${id.slice(0, 8)} to transport ID ${mappedTransportId}`);
+        return entry;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Resolve a stable, unique identifier for the sender of a packet
+   */
+  private getEffectiveSenderId(senderDeviceId: string, packet: Packet, session?: NoiseSession): string {
+    // 1. If packet has a senderId, use its truncated form (most stable)
+    if (packet.senderId) {
+      return packet.senderId.toString().substring(0, 6);
+    }
+
+    // 2. If we have a session with a known remote key, use it
+    if (session?.getRemoteStaticKey()) {
+      return Buffer.from(session.getRemoteStaticKey()!).toString('hex').substring(0, 6);
+    }
+
+    // 3. Fallback to existing transport ID mapping
+    // Check if this transport is already known to belong to a Peer
+    for (const [peerId, transportId] of this.peerIdToDeviceId.entries()) {
+      if (transportId === senderDeviceId) return peerId;
+    }
+
+    // 4. Ultimate fallback (usually the temporary device UUID)
+    if (!senderDeviceId || senderDeviceId === "unknown") {
+      return "Node-" + Math.random().toString(36).substring(7);
+    }
+    return senderDeviceId;
+  }
+
+  /**
    * Initiate handshake to a remote device (as initiator)
    */
+  // Add at class level in NoiseManager
+  private handshakesInProgress: Set<string> = new Set();
+
   async initiateHandshakeTo(deviceId: string): Promise<void> {
     if (!this.adapter) throw new Error("Adapter not attached");
 
-    const identity = this.identityStateManager.getIdentity();
-    if (!identity) throw new Error("Identity not initialized");
+    // Prevent duplicate handshake attempts
+    if (this.handshakesInProgress.has(deviceId)) {
+      console.log(`[NOISE] ⏭️ Handshake already in progress with ${deviceId}`);
+      return;
+    }
 
-    console.log(`[NOISE] 🤝 Initiating handshake to ${deviceId} as initiator`);
+    // Check if session already complete
+    const existing = this.sessions.get(deviceId);
+    if (existing?.session.isHandshakeComplete()) {
+      console.log(`[NOISE] ⏭️ Session already complete with ${deviceId}`);
+      return;
+    }
 
-    const session = this.getOrCreateSession(
-      deviceId,
-      identity.noiseStaticKeyPair,
-      true,
-    );
-    await session.initialize();
+    this.handshakesInProgress.add(deviceId);
 
-    this.notifySessionUpdate(deviceId, session, true);
+    try {
+      const identity = this.identityStateManager.getIdentity();
+      if (!identity) throw new Error("Identity not initialized");
 
-    const msg = await session.initiateHandshake();
+      console.log(
+        `[NOISE] 🤝 Initiating handshake to ${deviceId} as initiator`,
+      );
 
-    console.log(
-      `[NOISE] Generated handshake init message (${msg.length} bytes)`,
-    );
+      const session = this.getOrCreateSession(
+        deviceId,
+        identity.noiseStaticKeyPair,
+        true,
+      );
+      await session.initialize();
 
-    // Note: In peripheral mode, deviceId is the BLE device address
-    // We broadcast the packet and include it in the payload so the recipient can identify it
-    const packet = new Packet({
-      type: PacketType.NOISE_HANDSHAKE_INIT,
-      senderId: identity.peerId,
-      timestamp: BigInt(Date.now()),
-      payload: new Uint8Array(msg),
-      ttl: 5,
-      // recipientId: We don't set this because we're broadcasting in peripheral mode
-      // The handshake message itself contains the session ID
-    });
+      this.notifySessionUpdate(deviceId, session, true);
 
-    console.log(
-      `[NOISE] 📤 Sending HANDSHAKE_INIT to ${deviceId} (payload: ${packet.payload.length} bytes)`,
-    );
+      const msg = await session.initiateHandshake();
 
-    // Send packet via available transport
-    await this.sendPacket(deviceId, packet);
+      console.log(
+        `[NOISE] Generated handshake init message (${msg.length} bytes)`,
+      );
 
-    console.log(`[NOISE] ✅ Handshake init sent successfully to ${deviceId}`);
+      const packet = new Packet({
+        type: PacketType.NOISE_HANDSHAKE_INIT,
+        senderId: identity.peerId,
+        timestamp: BigInt(Date.now()),
+        payload: new Uint8Array(msg),
+        ttl: 5,
+      });
+
+      console.log(
+        `[NOISE] 📤 Sending HANDSHAKE_INIT to ${deviceId} (payload: ${packet.payload.length} bytes)`,
+      );
+
+      await this.sendPacket(deviceId, packet);
+
+      console.log(`[NOISE] ✅ Handshake init sent successfully to ${deviceId}`);
+    } finally {
+      // Remove from in-progress after a delay
+      setTimeout(() => {
+        this.handshakesInProgress.delete(deviceId);
+      }, 2000); // 2 second cooldown
+    }
   }
 
   /**
    * Internal helper to send packet via MeshManager or BLEAdapter
    */
-  private async sendPacket(deviceId: string, packet: Packet): Promise<void> {
+  public async sendPacket(deviceId: string, packet: Packet): Promise<void> {
     if (this.meshManager) {
       await this.meshManager.sendPacket(packet);
       return;
@@ -240,11 +327,14 @@ export class NoiseManager {
 
     if (!this.adapter) throw new Error("No transport attached");
 
+    const resolvedDeviceId = this.peerIdToDeviceId.get(deviceId) || deviceId;
+    const isLinkLogical = resolvedDeviceId !== deviceId;
+
     // Choose send method based on connection direction
-    const isConnected = await this.adapter.isConnected(deviceId);
+    const isConnected = await this.adapter.isConnected(resolvedDeviceId);
 
     console.log(
-      `[NOISE] Sending packet type ${packet.type} to ${deviceId} (connected: ${isConnected})`,
+      `[NOISE] Sending packet type ${PacketType[packet.type]} to ${resolvedDeviceId}${isLinkLogical ? ` (via logical ID ${deviceId})` : ""} (connected: ${isConnected})`,
     );
 
     // Retry logic for "Not advertising" errors (advertising may be restarting)
@@ -253,25 +343,46 @@ export class NoiseManager {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        if (isConnected) {
-          const result = await this.adapter.writePacket(deviceId, packet);
+        if (!isConnected) {
+          // Check if device is already connected to us (as Peripheral)
+          // If it is, we don't need to connect as Central, we can just notify
+          const incoming = await this.adapter.getIncomingConnections();
+          const isIncoming = incoming.some(c => c.deviceId === resolvedDeviceId);
+
+          if (isIncoming) {
+            console.log(`[NOISE] Device ${resolvedDeviceId} already connected to us (Peripheral role). Using notify.`);
+          } else {
+            console.log(`[NOISE] 🔗 Connecting and subscribing to ${resolvedDeviceId}...`);
+            await this.adapter.connectAndSubscribe(resolvedDeviceId);
+          }
+        }
+
+        // Now re-check if we are connected (as Central)
+        const currentlyConnected = await this.adapter.isConnected(resolvedDeviceId);
+
+        if (currentlyConnected) {
+          const result = await this.adapter.writePacket(resolvedDeviceId, packet);
           if (!result.success) {
             console.warn(`[NOISE] Write failed: ${result.error}`);
             // Fall back to notify if write failed
             const notifyResult = await this.adapter.notifyPacket(
-              deviceId,
+              resolvedDeviceId,
               packet,
             );
             if (!notifyResult.success) {
-              // Check if it's a temporary advertising issue
+              const error = notifyResult.error || "";
+              // Check if it's a temporary issue: Not advertising, No subscribers, or Busy
               if (
-                notifyResult.error?.includes("Not advertising") &&
+                (error.includes("Not advertising") ||
+                  error.includes("No subscribers") ||
+                  error.includes("busy") ||
+                  error.includes("Resource busy")) &&
                 attempt < maxRetries - 1
               ) {
                 console.log(
-                  `[NOISE] Advertising not ready, retrying in ${retryDelay}ms (attempt ${attempt + 1}/${maxRetries})...`,
+                  `[NOISE] Transport not ready (${error}), retrying in ${retryDelay}ms (attempt ${attempt + 1}/${maxRetries})...`,
                 );
-                await new Promise((resolve) => setTimeout(resolve, retryDelay));
+                await new Promise((resolve) => setTimeout(resolve, retryDelay * (attempt + 1))); // Incremental backoff
                 continue;
               }
               throw new Error(
@@ -282,7 +393,7 @@ export class NoiseManager {
           return; // Success
         } else {
           // Try notify (device may be connected to us, or we're in peripheral mode broadcasting)
-          const result = await this.adapter.notifyPacket(deviceId, packet);
+          const result = await this.adapter.notifyPacket(resolvedDeviceId, packet);
           if (!result.success) {
             // Check if it's a temporary advertising issue
             if (
@@ -307,7 +418,7 @@ export class NoiseManager {
         ) {
           const errMsg = error instanceof Error ? error.message : String(error);
           console.error(
-            `[NOISE] Failed to send packet to ${deviceId} after ${attempt + 1} attempts:`,
+            `[NOISE] Failed to send packet to ${resolvedDeviceId} after ${attempt + 1} attempts:`,
             errMsg,
           );
           throw error;
@@ -326,8 +437,11 @@ export class NoiseManager {
    */
   async encryptAndSend(deviceId: string, plaintext: Uint8Array): Promise<void> {
     if (!this.adapter) throw new Error("Adapter not attached");
-    const entry = this.sessions.get(deviceId);
-    if (!entry) throw new Error("No session for device");
+    const entry = this.getSessionEntry(deviceId);
+    if (!entry) {
+      console.error(`[NOISE] No session for ID: ${deviceId}. Map size: ${this.sessions.size}, PeerMap size: ${this.peerIdToDeviceId.size}`);
+      throw new Error(`No session for device ${deviceId}`);
+    }
     const { session } = entry;
     if (!session.isHandshakeComplete())
       throw new Error("Handshake not complete");
@@ -391,6 +505,10 @@ export class NoiseManager {
           await session.initialize();
           entry = { session, initiator: false };
           this.sessions.set(senderDeviceId, entry);
+
+          // Note: Remote public key is not yet known at Handshake Init (XX pattern)
+          // It will be known after Handshake Response or Final
+
           this.notifySessionUpdate(
             senderDeviceId,
             entry.session,
@@ -488,6 +606,9 @@ export class NoiseManager {
           }
         }
 
+        // Capture state BEFORE processing - processHandshakeMessage may transition to TRANSPORT
+        const stateBeforeProcessing = entry.session.getState();
+
         const response = await entry.session.processHandshakeMessage(
           Buffer.from(packet.payload),
         );
@@ -496,6 +617,9 @@ export class NoiseManager {
           hasResponse: !!response,
           isHandshakeComplete: entry.session.isHandshakeComplete(),
           responseSize: response?.length || 0,
+          stateBeforeProcessing,
+          stateAfterProcessing: entry.session.getState(),
+          isInitiator: entry.initiator,
         });
 
         // Notify after processing message (state might have changed to TRANSPORT)
@@ -504,75 +628,94 @@ export class NoiseManager {
           entry.session,
           entry.initiator,
         );
+
         if (response) {
           console.log(
             `[NOISE] Sending handshake response (${response.length} bytes) to ${senderDeviceId}`,
           );
           const identity = this.identityStateManager.getIdentity();
 
-          console.log("[NOISE] Response from processHandshakeMessage:", {
-            length: response.length,
-            isBuffer: Buffer.isBuffer(response),
-            type: typeof response,
-            first32bytes: Buffer.from(response.slice(0, 32)).toString("hex"),
-          });
+          // Determine packet type based on state BEFORE processing (not after)
+          let packetType: PacketType;
 
-          // ADD THIS BLOCK:
-          console.log("[NOISE] 🔍 Packet type decision:", {
-            isInitiator: entry.initiator,
-            calculatedType: entry.initiator
-              ? "NOISE_HANDSHAKE_FINAL (7)"
-              : "NOISE_HANDSHAKE_RESPONSE (6)",
-            actualPacketTypeValue: entry.initiator
-              ? PacketType.NOISE_HANDSHAKE_FINAL
-              : PacketType.NOISE_HANDSHAKE_RESPONSE,
-            PacketType_FINAL: PacketType.NOISE_HANDSHAKE_FINAL,
-            PacketType_RESPONSE: PacketType.NOISE_HANDSHAKE_RESPONSE,
-            PacketType_INIT: PacketType.NOISE_HANDSHAKE_INIT,
-          });
+          if (entry.initiator) {
+            // Initiator was in HANDSHAKE_IN_PROGRESS, received Message B, now sending Message C
+            // State transitions to TRANSPORT after processing, but we still need to send HANDSHAKE_FINAL
+            if (stateBeforeProcessing === NoiseState.HANDSHAKE_IN_PROGRESS) {
+              packetType = PacketType.NOISE_HANDSHAKE_FINAL;
+              console.log(
+                `[NOISE] 📤 INITIATOR sending Message C (HANDSHAKE_FINAL) - ${response.length} bytes`,
+              );
+            } else {
+              // This shouldn't happen - initiator shouldn't receive messages in INIT state
+              console.error(
+                `[NOISE] ⚠️ Unexpected state ${stateBeforeProcessing} for initiator response`,
+              );
+              packetType = PacketType.NOISE_HANDSHAKE_INIT;
+            }
+          } else {
+            // Responder sends Message B (response to init)
+            packetType = PacketType.NOISE_HANDSHAKE_RESPONSE;
+            console.log(
+              `[NOISE] 📤 RESPONDER sending Message B (HANDSHAKE_RESPONSE) - ${response.length} bytes`,
+            );
+          }
 
-          const packetType = entry.initiator
-            ? PacketType.NOISE_HANDSHAKE_FINAL
-            : PacketType.NOISE_HANDSHAKE_RESPONSE;
-
-          console.log("[NOISE] 🔍 Selected packet type:", {
+          console.log("[NOISE] 🔍 Packet construction:", {
             packetType,
             packetTypeName: PacketType[packetType],
-            packetTypeNumber: packetType,
-          });
-
-          const payload = new Uint8Array(response);
-
-          // ADD THIS LOGGING:
-          console.log("[NOISE] Created payload for packet:", {
-            payloadLength: payload.length,
-            responseLength: response.length,
-            packetType: PacketType[packetType],
+            payloadLength: response.length,
+            expectedLength:
+              packetType === PacketType.NOISE_HANDSHAKE_FINAL
+                ? "64"
+                : packetType === PacketType.NOISE_HANDSHAKE_RESPONSE
+                  ? "80"
+                  : "32",
           });
 
           const respPacket = new Packet({
             type: packetType,
             senderId: identity!.peerId,
             timestamp: BigInt(Date.now()),
-            payload: payload,
+            payload: new Uint8Array(response),
             ttl: 5,
           });
 
-          // ADD THIS LOGGING:
-          console.log("[NOISE] Created packet:", {
+          console.log("[NOISE] 📦 Packet created:", {
             type: PacketType[respPacket.type],
             payloadLength: respPacket.payload.length,
-            expectedLength: entry.initiator ? 64 : 80,
           });
 
           await this.sendPacket(senderDeviceId, respPacket);
         }
+      } // <-- Close the handshake message block
 
-        return;
-      }
-
-      // Transport messages (encrypted payload or unencrypted broadcast)
+      // Transport messages (encrypted private messages or unencrypted broadcasts)
       if (packet.type === PacketType.MESSAGE) {
+        // Distinguish between broadcast and private messages
+        // Private messages MUST have a recipientId and are encrypted
+        // Broadcast messages have NO recipientId and are unencrypted/plain
+        const isBroadcast = !packet.recipientId;
+
+        if (isBroadcast) {
+          console.log(
+            `[NOISE] Received unencrypted broadcast from ${senderDeviceId}`,
+          );
+          const plaintext = packet.payload;
+          const senderId = this.getEffectiveSenderId(senderDeviceId, packet);
+
+          // Notify listeners
+          this.listeners.forEach((listener) => {
+            try {
+              listener(senderId, plaintext);
+            } catch (err) {
+              console.error("[NOISE] Error in message listener (broadcast):", err);
+            }
+          });
+          return;
+        }
+
+        // Private message - requires decryption
         let entry = this.sessions.get(senderDeviceId);
 
         // If session not found by device ID, try looking up by sender's public key (PeerId)
@@ -588,34 +731,15 @@ export class NoiseManager {
         }
 
         if (!entry) {
-          // Check if it's a broadcast (unencrypted)
-          if (!packet.recipientId) {
-            const plaintext = packet.payload;
-            console.log(
-              "[NOISE] Received unencrypted broadcast from",
-              senderDeviceId,
-            );
-
-            // Notify listeners
-            this.listeners.forEach((listener) => {
-              try {
-                listener(senderDeviceId, plaintext);
-              } catch (err) {
-                console.error("[NOISE] Error in message listener:", err);
-              }
-            });
-            return;
-          }
-
           console.warn(
-            "[NOISE] Received encrypted message but no session exists",
+            `[NOISE] Received encrypted message from ${senderDeviceId} but no session exists`,
           );
           return;
         }
 
         if (!entry.session.isHandshakeComplete()) {
           console.warn(
-            "[NOISE] Received transport message but handshake not complete",
+            `[NOISE] Received encrypted message from ${senderDeviceId} but handshake not complete`,
           );
           return;
         }
@@ -625,10 +749,12 @@ export class NoiseManager {
             Buffer.from(packet.payload),
           );
 
+          const senderId = this.getEffectiveSenderId(senderDeviceId, packet, entry.session);
+
           // Notify listeners
           this.listeners.forEach((listener) => {
             try {
-              listener(senderDeviceId, plaintext);
+              listener(senderId, plaintext);
             } catch (err) {
               console.error("[NOISE] Error in message listener:", err);
             }
@@ -761,23 +887,41 @@ export class NoiseSession {
     return Buffer.from(msg);
   }
 
+  // In NoiseSession class, update processHandshakeMessage:
+
   async processHandshakeMessage(message: Buffer): Promise<Buffer | null> {
     if (!this.protocol) throw new Error("Protocol not initialized");
+
+    console.log(`[NOISE] Processing handshake message:`, {
+      isInitiator: this.isInitiator,
+      currentState: this.state,
+      messageLength: message.length,
+    });
 
     if (this.isInitiator) {
       if (this.state === NoiseState.HANDSHAKE_IN_PROGRESS) {
         // Initiator receives Message B (<- e, ee, s, es)
+        if (message.length < 48) {
+          throw new Error(
+            `Message B too short: expected at least 48 bytes, got ${message.length}`,
+          );
+        }
+
+        console.log(
+          `[NOISE] INITIATOR reading Message B (${message.length} bytes)`,
+        );
         this.protocol.readMessageB(message);
 
         // Initiator sends Message C (-> s, se)
         const response = this.protocol.writeMessageC();
+        console.log(
+          `[NOISE] INITIATOR writing Message C (${response.length} bytes)`,
+        );
 
         // Handshake complete for initiator
-        // split() returns [cipher_state_1, cipher_state_2]
-        // Initiator uses: cipher_state_1 for TX, cipher_state_2 for RX
         const [cipher1, cipher2] = this.protocol.split();
-        this.tx = cipher1; // Initiator sends with first cipher
-        this.rx = cipher2; // Initiator receives with second cipher
+        this.tx = cipher1;
+        this.rx = cipher2;
         this.remoteStaticKey = this.protocol.getRemotePublicKey() || undefined;
         this.state = NoiseState.TRANSPORT;
 
@@ -786,27 +930,51 @@ export class NoiseSession {
         );
 
         return Buffer.from(response);
+      } else {
+        throw new Error(
+          `Invalid state for initiator: ${this.state} (expected HANDSHAKE_IN_PROGRESS)`,
+        );
       }
     } else {
       // Responder side
       if (this.state === NoiseState.INIT) {
         // Responder receives Message A (-> e)
+        if (message.length !== 32) {
+          throw new Error(
+            `Message A wrong size: expected 32 bytes, got ${message.length}`,
+          );
+        }
+
+        console.log(
+          `[NOISE] RESPONDER reading Message A (${message.length} bytes)`,
+        );
         this.protocol.readMessageA(message);
 
         // Responder sends Message B (<- e, ee, s, es)
         const response = this.protocol.writeMessageB();
+        console.log(
+          `[NOISE] RESPONDER writing Message B (${response.length} bytes)`,
+        );
+
         this.state = NoiseState.HANDSHAKE_IN_PROGRESS;
         return Buffer.from(response);
       } else if (this.state === NoiseState.HANDSHAKE_IN_PROGRESS) {
         // Responder receives Message C (-> s, se)
+        if (message.length < 48) {
+          throw new Error(
+            `Message C too short: expected at least 48 bytes, got ${message.length}`,
+          );
+        }
+
+        console.log(
+          `[NOISE] RESPONDER reading Message C (${message.length} bytes)`,
+        );
         this.protocol.readMessageC(message);
 
         // Handshake complete for responder
-        // split() returns [cipher_state_1, cipher_state_2]
-        // Responder uses: cipher_state_1 for RX, cipher_state_2 for TX
         const [cipher1, cipher2] = this.protocol.split();
-        this.rx = cipher1; // Responder receives with first cipher
-        this.tx = cipher2; // Responder sends with second cipher
+        this.rx = cipher1;
+        this.tx = cipher2;
         this.remoteStaticKey = this.protocol.getRemotePublicKey() || undefined;
         this.state = NoiseState.TRANSPORT;
 
@@ -814,11 +982,13 @@ export class NoiseSession {
           "[NOISE] ✅ RESPONDER handshake complete - RX=cipher1, TX=cipher2",
         );
 
-        return null;
+        return null; // No response message
+      } else {
+        throw new Error(
+          `Invalid state for responder: ${this.state} (expected INIT or HANDSHAKE_IN_PROGRESS)`,
+        );
       }
     }
-
-    return null;
   }
 
   async encryptMessage(plaintext: Buffer): Promise<Buffer> {

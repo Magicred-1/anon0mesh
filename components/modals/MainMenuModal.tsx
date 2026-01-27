@@ -1,3 +1,4 @@
+import { useNoiseChat } from "@/src/hooks/useNoiseChat";
 import { useSegments } from "expo-router";
 import {
   ChatCircle,
@@ -124,6 +125,8 @@ export default function MainMenuModal(props: Props) {
     return false;
   };
 
+  const { clearMessages } = useNoiseChat();
+
   const menuOptions: MenuOption[] = [
     {
       id: "messages",
@@ -165,7 +168,11 @@ export default function MainMenuModal(props: Props) {
       label: "Disconnect",
       route: "",
       icon: Plugs,
-      onPress: props.onDisconnect,
+      onPress: () => {
+        console.log("[MainMenuModal] Disconnecting and clearing messages...");
+        clearMessages();
+        props.onDisconnect();
+      },
     },
   ];
 

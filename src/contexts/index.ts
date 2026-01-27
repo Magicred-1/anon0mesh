@@ -5,5 +5,6 @@
  */
 
 export * from './BLEContext';
+export * from './NoiseContext';
 export * from './WalletContext';
 

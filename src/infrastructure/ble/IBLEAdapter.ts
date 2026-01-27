@@ -25,7 +25,7 @@ import { PeerId } from '../../domain/value-objects/PeerId';
 export const BLE_UUIDS = {
   // Main mesh service UUID
   SERVICE_UUID: process.env.EXPO_PUBLIC_BLE_SERVICE_UUID || '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
-  
+
   // Characteristics
   TX_CHARACTERISTIC_UUID: process.env.EXPO_PUBLIC_BLE_TX_CHARACTERISTIC_UUID || '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // Write (receive packets)
   RX_CHARACTERISTIC_UUID: process.env.EXPO_PUBLIC_BLE_RX_CHARACTERISTIC_UUID || '6e400003-b5a3-f393-e0a9-e50e24dcca9e', // Notify (send packets)
@@ -39,6 +39,7 @@ export const BLE_UUIDS = {
 export interface BLEDeviceInfo {
   id: string; // Device UUID
   name?: string;
+  peerId?: string; // Mesh PeerId (if parsed from advertisement)
   rssi: number; // Signal strength
   serviceUUIDs?: string[];
   manufacturerData?: Uint8Array;
@@ -93,36 +94,36 @@ export interface IBLEAdapter {
   // ============================================
   // INITIALIZATION & STATE
   // ============================================
-  
+
   /**
    * Initialize BLE adapter (both Central and Peripheral)
    */
   initialize(): Promise<void>;
-  
+
   /**
    * Shutdown BLE adapter and cleanup resources
    */
   shutdown(): Promise<void>;
-  
+
   /**
    * Check if BLE is available and enabled
    */
   isEnabled(): Promise<boolean>;
-  
+
   /**
    * Request BLE permissions (iOS/Android)
    */
   requestPermissions(): Promise<boolean>;
-  
+
   /**
    * Get current BLE state
    */
   getState(): Promise<'PoweredOn' | 'PoweredOff' | 'Unauthorized' | 'Unsupported'>;
-  
+
   // ============================================
   // CENTRAL MODE (Scanning & Connecting)
   // ============================================
-  
+
   /**
    * Start scanning for nearby mesh devices
    * @param onDeviceFound - Callback when device is discovered
@@ -132,55 +133,62 @@ export interface IBLEAdapter {
     onDeviceFound: (device: BLEDeviceInfo) => void,
     options?: BLEScanOptions
   ): Promise<void>;
-  
+
   /**
    * Stop scanning for devices
    */
   stopScanning(): Promise<void>;
-  
+
   /**
    * Check if currently scanning
    */
   isScanning(): boolean;
-  
+
   /**
    * Connect to a discovered device
    * @param deviceId - Device UUID
    * @returns Connection successful
    */
   connect(deviceId: string): Promise<boolean>;
-  
+
   /**
    * Disconnect from a device
    * @param deviceId - Device UUID
    */
   disconnect(deviceId: string): Promise<void>;
-  
+
   /**
    * Check if connected to a device
    * @param deviceId - Device UUID
    */
   isConnected(deviceId: string): Promise<boolean>;
-  
+
   /**
    * Get all connected devices
    */
   getConnectedDevices(): Promise<BLEConnectionState[]>;
-  
+
+  /**
+   * Connect to a device AND subscribe to its RX characteristic for packet reception.
+   * This is CRITICAL for bidirectional communication.
+   * @param deviceId - Device UUID
+   */
+  connectAndSubscribe(deviceId: string): Promise<void>;
+
   /**
    * Read peer information from connected device
    * @param deviceId - Device UUID
    * @returns Peer object
    */
   readPeerInfo(deviceId: string): Promise<Peer | null>;
-  
+
   /**
    * Write packet to connected device (TX characteristic)
    * @param deviceId - Device UUID
    * @param packet - Packet to send
    */
   writePacket(deviceId: string, packet: Packet): Promise<BLETransmissionResult>;
-  
+
   /**
    * Subscribe to packet notifications from device (RX characteristic)
    * @param deviceId - Device UUID
@@ -190,17 +198,17 @@ export interface IBLEAdapter {
     deviceId: string,
     onPacketReceived: (packet: Packet) => void
   ): Promise<void>;
-  
+
   /**
    * Unsubscribe from packet notifications
    * @param deviceId - Device UUID
    */
   unsubscribeFromPackets(deviceId: string): Promise<void>;
-  
+
   // ============================================
   // PERIPHERAL MODE (Advertising & Serving)
   // ============================================
-  
+
   /**
    * Start advertising as a mesh peripheral
    * Allows other devices to discover and connect to this device
@@ -211,46 +219,56 @@ export interface IBLEAdapter {
     localPeer: Peer,
     options?: BLEAdvertisingOptions
   ): Promise<void>;
-  
+
   /**
    * Stop advertising
    */
   stopAdvertising(): Promise<void>;
-  
+
   /**
    * Check if currently advertising
    */
   isAdvertising(): boolean;
-  
+
   /**
    * Update advertised peer information
    * @param localPeer - Updated peer information
    */
   updateAdvertisedPeer(localPeer: Peer): Promise<void>;
-  
+
   /**
    * Set packet handler for incoming packets from Central devices
    * When a Central device writes to our TX characteristic, this handler is called
    * @param handler - Callback to handle received packets
    */
   setPacketHandler(handler: (packet: Packet, senderDeviceId: string) => void): void;
-  
+
   /**
    * Send packet to connected Central device (via RX characteristic notification)
    * @param deviceId - Central device UUID that connected to us
    * @param packet - Packet to send
    */
   notifyPacket(deviceId: string, packet: Packet): Promise<BLETransmissionResult>;
-  
+
   /**
    * Get list of Central devices currently connected to us (as Peripheral)
    */
   getIncomingConnections(): Promise<BLEConnectionState[]>;
-  
+
+  /**
+   * Set callback for when a Central device connects to us (Peripheral mode)
+   */
+  onIncomingConnection(callback: (deviceId: string, connected: boolean) => void): void;
+
+  /**
+   * Remove incoming connection listener
+   */
+  removeIncomingConnectionListener(callback: (deviceId: string, connected: boolean) => void): void;
+
   // ============================================
   // UTILITIES
   // ============================================
-  
+
   /**
    * Broadcast packet to all connected devices (both directions)
    * - As Central: Write to all devices we're connected to
@@ -258,18 +276,18 @@ export interface IBLEAdapter {
    * @param packet - Packet to broadcast
    */
   broadcastPacket(packet: Packet): Promise<BLETransmissionResult[]>;
-  
+
   /**
    * Get RSSI (signal strength) for a device
    * @param deviceId - Device UUID
    */
   getRSSI(deviceId: string): Promise<number | null>;
-  
+
   /**
    * Get total number of active connections (incoming + outgoing)
    */
   getConnectionCount(): Promise<number>;
-  
+
   /**
    * Get BLE adapter statistics
    */

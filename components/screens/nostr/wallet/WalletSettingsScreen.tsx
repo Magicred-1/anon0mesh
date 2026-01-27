@@ -4,6 +4,7 @@ import { useOfflineWallets } from "@/hooks/useOfflineWallets";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { createSolanaConnection } from "@/src/utils/solana";
 import { Keypair } from "@solana/web3.js";
+import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { CaretLeft, Copy, Trash } from "phosphor-react-native";
@@ -88,6 +89,12 @@ export default function WalletSettingsScreen() {
   });
 
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [isDepositModalVisible, setIsDepositModalVisible] = useState(false);
+  const [selectedWalletForDeposit, setSelectedWalletForDeposit] = useState<{
+    id: string;
+    publicKey: string;
+    label?: string;
+  } | null>(null);
   const isLoading = walletLoading || offlineLoading;
 
   // Format wallet address for display
@@ -111,13 +118,15 @@ export default function WalletSettingsScreen() {
   const handleCopyPrimary = async () => {
     if (publicKey) {
       // TODO: Use Clipboard.setStringAsync when expo-clipboard is installed
+      Clipboard.setStringAsync(publicKey.toBase58());
       Alert.alert("Copied", "Primary wallet address copied to clipboard");
     }
   };
 
   const handleCopyAddress = async (address: string) => {
     // TODO: Use Clipboard.setStringAsync when expo-clipboard is installed
-    Alert.alert("Copied", `Address ${address} copied to clipboard`);
+    Clipboard.setStringAsync(address);
+    Alert.alert("Copied", "Address copied to clipboard");
   };
 
   const handleRefreshBalances = async () => {
@@ -168,7 +177,7 @@ export default function WalletSettingsScreen() {
     Alert.alert(
       "Delete Address",
       "Are you sure you want to delete this offline address? The nonce account will be closed and rent recovered.",
-      
+
       [
         { text: "Cancel", style: "cancel" },
         {

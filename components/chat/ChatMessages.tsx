@@ -15,6 +15,7 @@ export interface Message {
   isMine: boolean;
   isNostr?: boolean; // Flag for Nostr messages
   isEncrypted?: boolean; // Flag for encrypted messages
+  senderId?: string; // Original device ID or public key
 }
 
 interface ChatMessagesProps {
@@ -94,7 +95,7 @@ export default function ChatMessages({
                   style={[
                     message.isMine ? styles.senderNameMine : styles.senderName,
                     message.from === "ShadowNode82#2134" &&
-                      styles.specialSender,
+                    styles.specialSender,
                   ]}
                 >
                   {message.from}:{" "}

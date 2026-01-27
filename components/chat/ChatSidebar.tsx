@@ -13,6 +13,7 @@ interface ChatSidebarProps {
   selectedPeerId: string | null;
   onPeerSelect: (peerId: string | null) => void;
   onClose: () => void;
+  onDisconnect?: () => void;
 }
 
 export default function ChatSidebar({
@@ -21,6 +22,7 @@ export default function ChatSidebar({
   selectedPeerId,
   onPeerSelect,
   onClose,
+  onDisconnect,
 }: ChatSidebarProps) {
   if (!visible) return null;
 
@@ -111,6 +113,19 @@ export default function ChatSidebar({
               <Text style={styles.emptySubtext}>Make sure Bluetooth is enabled</Text>
             </View>
           )}
+
+          {/* Disconnect Button at bottom */}
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.disconnectButton}
+              onPress={() => {
+                onDisconnect?.();
+                onClose();
+              }}
+            >
+              <Text style={styles.disconnectButtonText}>Disconnect & Clear Chat</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </View>
     </View>
@@ -229,5 +244,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#444',
     textAlign: 'center',
+  },
+  footer: {
+    padding: 20,
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+  },
+  disconnectButton: {
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: '#ff4444',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  disconnectButtonText: {
+    color: '#ff4444',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });

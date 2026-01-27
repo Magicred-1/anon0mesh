@@ -43,6 +43,7 @@ export class BLEAdapter implements IBLEAdapter {
   private outgoingConnections = new Map<string, Device>(); // Devices we connected to (Central)
   private incomingConnections = new Set<string>(); // Devices connected to us (Peripheral)
   private packetSubscriptions = new Map<string, string>(); // deviceId -> subscriptionId
+  private connectionQueue = new Map<string, Promise<boolean>>(); // deviceId -> connection promise
 
   // Local peer info (for advertising)
   private localPeer: Peer | null = null;
@@ -51,6 +52,7 @@ export class BLEAdapter implements IBLEAdapter {
   private peripheralPacketHandler:
     | ((packet: Packet, senderDeviceId: string) => void)
     | null = null;
+  private incomingConnectionListeners: Set<(deviceId: string, connected: boolean) => void> = new Set();
 
   // Statistics
   private stats = {
@@ -179,10 +181,10 @@ export class BLEAdapter implements IBLEAdapter {
         const permissions =
           androidVersion >= 31
             ? [
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
-                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
-              ]
+              PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
+              PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
+              PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
+            ]
             : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!];
 
         console.log("[BLE Peripheral] Requesting permissions:", permissions);
@@ -414,7 +416,7 @@ export class BLEAdapter implements IBLEAdapter {
 
     try {
       this.bleManager.startDeviceScan(
-        null, // Scan for ALL devices (not filtering by service UUID)
+        [BLE_UUIDS.SERVICE_UUID], // CRITICAL for iOS: Filter by Service UUID to ensure discovery
         {
           allowDuplicates: options?.allowDuplicates ?? false,
           scanMode: this.mapScanMode(options?.scanMode),
@@ -437,39 +439,45 @@ export class BLEAdapter implements IBLEAdapter {
 
           if (!device) return;
 
-          // Log ALL discovered devices for debugging
-          console.log("[BLE Central] Raw device found:", {
+          // On iOS, filtering by service UUID in startDeviceScan guarantees the service 
+          // metadata is present if the device is found.
+
+          console.log("[BLE Central] Device discovered via service filter:", {
             id: device.id,
             name: device.name,
             rssi: device.rssi,
-            serviceUUIDs: device.serviceUUIDs,
           });
 
           // Filter for our mesh service - but be lenient about how it's advertised
           // Some devices might not include service UUID in advertisement data
-          const hasServiceUUID = device.serviceUUIDs?.includes(
-            BLE_UUIDS.SERVICE_UUID,
+          // Normalize UUID for robust comparison (handles casing and hyphens)
+          const normalizeUUID = (uuid: string) => uuid.toLowerCase().replace(/-/g, "");
+          const targetServiceUUID = normalizeUUID(BLE_UUIDS.SERVICE_UUID);
+
+          const hasServiceUUID = device.serviceUUIDs?.some(
+            (uuid: string) => normalizeUUID(uuid) === targetServiceUUID
           );
+
           const hasAnon0meshName = device.name
             ?.toLowerCase()
             .includes("anon0mesh");
-          const hasDeviceName = device.name?.toLowerCase().includes("device");
 
-          // Accept device if it has our service UUID OR has anon0mesh in the name
-          if (!hasServiceUUID && !hasAnon0meshName && !hasDeviceName) {
+          // TRUST NATIVE FILTER: If we filter by service UUID natively (which we now do), 
+          // any discovered device is guaranteed to be a mesh node. 
+          // On iOS, serviceUUIDs might not be present in the initial advertisement object.
+          const isRecognized = hasServiceUUID || hasAnon0meshName || (!device.serviceUUIDs || device.serviceUUIDs.length === 0);
+
+          if (!isRecognized) {
             console.log(
-              "[BLE Central] ⏭️ Skipping device (no service UUID or anon0mesh name):",
-              device.name || device.id,
+              `[BLE Central] ⏭️ Skipping device (no match evidence): ${device.name || device.id}`,
             );
             return;
           }
 
-          console.log("[BLE Central] ✅ Device matches filter:", {
+          console.log("[BLE Central] ✅ Peer recognized (mesh node found):", {
             id: device.id,
             name: device.name,
-            rssi: device.rssi,
-            hasServiceUUID,
-            hasAnon0meshName,
+            serviceUUIDs: device.serviceUUIDs,
           });
 
           // DUAL-ROLE ARCHITECTURE:
@@ -485,9 +493,19 @@ export class BLEAdapter implements IBLEAdapter {
           // We track discovered devices but DON'T pre-connect. Connections happen
           // on-demand when sendPacket() is called.
 
+          // Parse peer ID and nickname from advertisement name
+          let parsedPeerId: string | undefined;
+          if (device.name?.startsWith("AM-")) {
+            const parts = device.name.split("-");
+            if (parts.length >= 2) {
+              parsedPeerId = parts[1];
+            }
+          }
+
           onDeviceFound({
             id: device.id,
             name: device.name ?? undefined,
+            peerId: parsedPeerId,
             rssi: device.rssi ?? -100,
             serviceUUIDs: device.serviceUUIDs ?? undefined,
             manufacturerData: device.manufacturerData
@@ -536,40 +554,56 @@ export class BLEAdapter implements IBLEAdapter {
     }
 
     if (this.outgoingConnections.has(deviceId)) {
-      console.warn(`[BLE Central] Already connected to ${deviceId}`);
       return true;
     }
 
-    console.log(`[BLE Central] Connecting to ${deviceId}...`);
-
-    try {
-      const device = await this.bleManager.connectToDevice(deviceId, {
-        autoConnect: true,
-        requestMTU: 512, // Request larger MTU for bigger packets
-      });
-
-      console.log(`[BLE Central] Connected to ${deviceId}`);
-
-      // Discover services and characteristics
-      await device.discoverAllServicesAndCharacteristics();
-      console.log(`[BLE Central] Services discovered for ${deviceId}`);
-
-      this.outgoingConnections.set(deviceId, device);
-
-      // Monitor disconnection
-      device.onDisconnected((error: any, disconnectedDevice: any) => {
-        console.log(
-          `[BLE Central] Disconnected from ${disconnectedDevice?.id}`,
-          error,
-        );
-        this.outgoingConnections.delete(disconnectedDevice?.id ?? deviceId);
-      });
-
-      return true;
-    } catch (error) {
-      console.error(`[BLE Central] Connection failed to ${deviceId}:`, error);
-      return false;
+    // Check if a connection is already in progress
+    const inProgress = this.connectionQueue.get(deviceId);
+    if (inProgress) {
+      console.log(`[BLE Central] ⏳ Connection to ${deviceId} already in progress, waiting...`);
+      return inProgress;
     }
+
+    // Create a new connection promise
+    const connectionPromise = (async () => {
+      console.log(`[BLE Central] Connecting to ${deviceId}...`);
+
+      try {
+        const device = await this.bleManager.connectToDevice(deviceId, {
+          autoConnect: true,
+          requestMTU: 512, // Request larger MTU for bigger packets
+        });
+
+        console.log(`[BLE Central] Connected to ${deviceId}`);
+
+        // Discover services and characteristics
+        await device.discoverAllServicesAndCharacteristics();
+        console.log(`[BLE Central] Services discovered for ${deviceId}`);
+
+        this.outgoingConnections.set(deviceId, device);
+
+        // Monitor disconnection
+        device.onDisconnected((error: any, disconnectedDevice: any) => {
+          console.log(
+            `[BLE Central] Disconnected from ${disconnectedDevice?.id}`,
+            error,
+          );
+          this.outgoingConnections.delete(disconnectedDevice?.id ?? deviceId);
+          this.packetSubscriptions.delete(disconnectedDevice?.id ?? deviceId);
+        });
+
+        return true;
+      } catch (error) {
+        console.error(`[BLE Central] Connection failed to ${deviceId}:`, error);
+        return false;
+      } finally {
+        // Remove from queue when done
+        this.connectionQueue.delete(deviceId);
+      }
+    })();
+
+    this.connectionQueue.set(deviceId, connectionPromise);
+    return connectionPromise;
   }
 
   /**
@@ -708,70 +742,200 @@ export class BLEAdapter implements IBLEAdapter {
     }
   }
 
+  // Add a write queue at the class level
+  private writeQueue: Map<string, Promise<any>> = new Map();
+
   async writePacket(
     deviceId: string,
     packet: Packet,
   ): Promise<BLETransmissionResult> {
     try {
-      // In dual-role mode, connect on-demand for packet transmission
-      let device = this.outgoingConnections.get(deviceId);
-
-      if (!device) {
+      // Wait for any pending write to this device
+      const pendingWrite = this.writeQueue.get(deviceId);
+      if (pendingWrite) {
         console.log(
-          `[BLE Central] 🔗 On-demand connect to ${deviceId} for packet write...`,
+          `[BLE Central] ⏳ Waiting for pending write to ${deviceId}...`,
         );
-        const connected = await this.connect(deviceId);
-        if (!connected) {
-          return {
-            success: false,
-            deviceId,
-            error: "Connection failed",
-          };
+        try {
+          await pendingWrite;
+        } catch {
+          // Ignore errors from previous write
         }
-        device = this.outgoingConnections.get(deviceId);
-        if (!device) {
-          return {
-            success: false,
-            deviceId,
-            error: "Device not found after connection",
-          };
-        }
+        // Small delay to prevent rapid writes
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
-      const packetData = this.serializePacket(packet);
-      const base64Data = this.uint8ArrayToBase64(packetData);
+      // Create new write promise
+      const writePromise = (async () => {
+        let device = this.outgoingConnections.get(deviceId);
+        if (!device) {
+          console.log(
+            `[BLE Central] 🔗 On-demand connect/subscribe to ${deviceId}...`,
+          );
+          await this.connectAndSubscribe(deviceId);
+          const connected = await this.isConnected(deviceId);
+          if (!connected) {
+            return {
+              success: false,
+              deviceId,
+              error: "Connection failed",
+            };
+          }
+          device = this.outgoingConnections.get(deviceId);
+          if (!device) {
+            return {
+              success: false,
+              deviceId,
+              error: "Device not found after connection",
+            };
+          }
+        }
 
-      console.log(
-        `[BLE Central] 📤 Writing packet to ${deviceId} TX characteristic (${packetData.length} bytes)...`,
-      );
+        // Verify the device is still connected
+        const isConnected = await device.isConnected();
+        if (!isConnected) {
+          console.log(`[BLE Central] Device ${deviceId} disconnected, reconnecting...`);
+          this.outgoingConnections.delete(deviceId);
+          await this.connectAndSubscribe(deviceId);
+          const reconnected = await this.isConnected(deviceId);
+          if (!reconnected) {
+            return {
+              success: false,
+              deviceId,
+              error: "Reconnection failed",
+            };
+          }
+          device = this.outgoingConnections.get(deviceId);
+          if (!device) {
+            return {
+              success: false,
+              deviceId,
+              error: "Device not found after reconnection",
+            };
+          }
+        }
 
-      await device.writeCharacteristicWithResponseForService(
-        BLE_UUIDS.SERVICE_UUID,
-        BLE_UUIDS.TX_CHARACTERISTIC_UUID,
-        base64Data,
-      );
+        // Normalize UUID for robust comparison
+        const normalizeUUID = (uuid: string) => uuid.toLowerCase().replace(/-/g, "");
+        const targetServiceUUID = normalizeUUID(BLE_UUIDS.SERVICE_UUID);
 
-      this.stats.totalPacketsSent++;
-      this.stats.totalBytesSent += packetData.length;
+        try {
+          const services = await device.services();
+          const targetService = services.find(
+            s => normalizeUUID(s.uuid) === targetServiceUUID
+          );
 
-      console.log(
-        `[BLE Central] ✅ Packet written to ${deviceId} (${packetData.length} bytes) - waiting for write event on peer...`,
-      );
+          if (!targetService) {
+            console.error(`[BLE Central] ❌ Service ${BLE_UUIDS.SERVICE_UUID} not found on ${deviceId}`);
+            console.log(`[BLE Central] Available services:`, services.map(s => s.uuid));
 
-      return {
-        success: true,
-        deviceId,
-        bytesTransferred: packetData.length,
-      };
+            // Try rediscovering services
+            console.log(`[BLE Central] 🔄 Rediscovering services on ${deviceId}...`);
+            await device.discoverAllServicesAndCharacteristics();
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Check again
+            const servicesRetry = await device.services();
+            const targetServiceRetry = servicesRetry.find(
+              s => normalizeUUID(s.uuid) === targetServiceUUID
+            );
+
+            if (!targetServiceRetry) {
+              return {
+                success: false,
+                deviceId,
+                error: `Service ${BLE_UUIDS.SERVICE_UUID} not found on device`,
+              };
+            }
+          }
+
+          const characteristics = await device.characteristicsForService(BLE_UUIDS.SERVICE_UUID);
+          const targetTxUUID = normalizeUUID(BLE_UUIDS.TX_CHARACTERISTIC_UUID);
+          const txChar = characteristics.find(
+            c => normalizeUUID(c.uuid) === targetTxUUID
+          );
+
+          if (!txChar) {
+            console.error(`[BLE Central] ❌ TX characteristic not found on ${deviceId}`);
+            console.log(`[BLE Central] Available characteristics:`, characteristics.map(c => ({
+              uuid: c.uuid,
+              isWritable: c.isWritableWithResponse || c.isWritableWithoutResponse,
+            })));
+
+            return {
+              success: false,
+              deviceId,
+              error: `TX characteristic ${BLE_UUIDS.TX_CHARACTERISTIC_UUID} not found`,
+            };
+          }
+
+          console.log(`[BLE Central] ✅ TX characteristic verified on ${deviceId}`);
+        } catch (verifyError) {
+          console.warn(`[BLE Central] ⚠️ Could not verify characteristic (proceeding anyway):`, verifyError);
+          // Proceed anyway - the write will fail if characteristic doesn't exist
+        }
+
+        const packetData = this.serializePacket(packet);
+        const base64Data = this.uint8ArrayToBase64(packetData);
+
+        console.log(
+          `[BLE Central] 📤 Writing packet to ${deviceId} TX characteristic (${packetData.length} bytes)...`,
+        );
+
+        await device.writeCharacteristicWithResponseForService(
+          BLE_UUIDS.SERVICE_UUID,
+          BLE_UUIDS.TX_CHARACTERISTIC_UUID,
+          base64Data,
+        );
+
+        this.stats.totalPacketsSent++;
+        this.stats.totalBytesSent += packetData.length;
+
+        console.log(
+          `[BLE Central] ✅ Packet written to ${deviceId} (${packetData.length} bytes)`,
+        );
+
+        return {
+          success: true,
+          deviceId,
+          bytesTransferred: packetData.length,
+        };
+      })();
+
+      // Store the promise
+      this.writeQueue.set(deviceId, writePromise);
+
+      // Execute and cleanup
+      try {
+        const result = await writePromise;
+        return result;
+      } finally {
+        // Clean up after a delay
+        setTimeout(() => {
+          if (this.writeQueue.get(deviceId) === writePromise) {
+            this.writeQueue.delete(deviceId);
+          }
+        }, 100);
+      }
     } catch (error) {
-      console.error(
-        `[BLE Central] Failed to write packet to ${deviceId}:`,
-        error,
-      );
+      // Enhanced error logging for debugging
+      const errorObj = error as any;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorReason = errorObj?.reason ?? 'none';
+      const errorCode = errorObj?.errorCode ?? errorObj?.code ?? 'none';
+
+      console.error(`[BLE Central] ❌ Failed to write packet to ${deviceId}:`, {
+        message: errorMessage,
+        reason: errorReason,
+        code: errorCode,
+        deviceId,
+        errorType: error?.constructor?.name,
+      });
+
       return {
         success: false,
         deviceId,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
       };
     }
   }
@@ -780,12 +944,20 @@ export class BLEAdapter implements IBLEAdapter {
     deviceId: string,
     onPacketReceived: (packet: Packet) => void,
   ): Promise<void> {
+    if (this.packetSubscriptions.has(deviceId)) {
+      console.log(`[BLE Central] 📡 Already subscribed to packets from ${deviceId}`);
+      return;
+    }
+
     const device = this.outgoingConnections.get(deviceId);
     if (!device) {
       throw new Error(`Not connected to ${deviceId}`);
     }
 
     console.log(`[BLE Central] Subscribing to packets from ${deviceId}...`);
+
+    // Mark as subscribed immediately to prevent parallel calls
+    this.packetSubscriptions.set(deviceId, "active");
 
     device.monitorCharacteristicForService(
       BLE_UUIDS.SERVICE_UUID,
@@ -795,34 +967,66 @@ export class BLEAdapter implements IBLEAdapter {
           const errorMsg = error?.message || String(error);
           const errorReason = error?.reason || "unknown";
 
-          // Categorize errors
+          // Categorize errors for appropriate handling
           if (
+            errorMsg.includes("cancelled") ||
+            errorMsg.includes("operation was cancelled") ||
+            errorReason === "OperationCancelled"
+          ) {
+            // NORMAL: Subscription was cancelled (device disconnected or went out of range)
+            console.log(
+              `[BLE Central] 📴 Monitoring cancelled for ${deviceId} (device likely disconnected)`,
+            );
+
+            // Clean up gracefully
+            this.outgoingConnections.delete(deviceId);
+            this.packetSubscriptions.delete(deviceId);
+            return; // Don't log as error
+          } else if (
             errorMsg.includes("disconnected") ||
             errorMsg.includes("Device disconnected") ||
             errorReason === "DeviceDisconnected"
           ) {
-            console.warn(
-              `[BLE Central] ⚠️ Device ${deviceId} disconnected during monitoring`,
-            );
+            // NORMAL: Device disconnected
+            console.log(`[BLE Central] 📴 Device ${deviceId} disconnected`);
+
             // Clean up connection
             this.outgoingConnections.delete(deviceId);
             this.packetSubscriptions.delete(deviceId);
+            return; // Don't log as error
           } else if (
             errorMsg.includes("Unknown error") ||
             errorReason === "UnknownError"
           ) {
-            // This is often a BLE stack issue, ignore and continue
+            // BLE stack transient error - often recoverable
             console.warn(
               `[BLE Central] ⚠️ BLE stack error for ${deviceId} (continuing...):`,
               errorReason,
             );
-          } else {
-            console.error(
-              `[BLE Central] Monitor error for ${deviceId}:`,
-              error,
+            return; // Don't clean up - might recover
+          } else if (
+            errorMsg.includes("not found") ||
+            errorMsg.includes("characteristic") ||
+            errorReason === "CharacteristicNotFound"
+          ) {
+            // Characteristic unavailable
+            console.warn(
+              `[BLE Central] ⚠️ Characteristic not found for ${deviceId}`,
             );
+
+            // Clean up and allow reconnection
+            this.outgoingConnections.delete(deviceId);
+            this.packetSubscriptions.delete(deviceId);
+            return;
+          } else {
+            // Unexpected error - log for debugging
+            console.error(`[BLE Central] ❌ Monitor error for ${deviceId}:`, {
+              message: errorMsg,
+              reason: errorReason,
+              errorType: error?.constructor?.name,
+            });
+            return;
           }
-          return;
         }
 
         if (!characteristic?.value) {
@@ -915,10 +1119,10 @@ export class BLEAdapter implements IBLEAdapter {
       const permissions =
         androidVersion >= 31
           ? [
-              PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
-              PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
-              PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
-            ]
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
+          ]
           : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!];
 
       const results = await PermissionsAndroid.requestMultiple(permissions);
@@ -1169,10 +1373,12 @@ export class BLEAdapter implements IBLEAdapter {
           return;
         }
 
-        if (
-          characteristicUUID.toLowerCase() ===
-          BLE_UUIDS.TX_CHARACTERISTIC_UUID.toLowerCase()
-        ) {
+        // Normalize both to handle differences in hyphens or casing across platforms
+        const normalize = (u: string) => u.toLowerCase().replace(/-/g, "");
+        const normCharUUID = normalize(characteristicUUID);
+        const normTxUUID = normalize(BLE_UUIDS.TX_CHARACTERISTIC_UUID);
+
+        if (normCharUUID === normTxUUID) {
           console.log(
             "[BLE Peripheral] ✅ Write to TX characteristic - processing packet...",
           );
@@ -1195,6 +1401,11 @@ export class BLEAdapter implements IBLEAdapter {
         } else {
           console.warn("[BLE Peripheral] Subscribe event missing device ID");
         }
+
+        // Notify listeners
+        if (event.device) {
+          this.incomingConnectionListeners.forEach(l => l(event.device, true));
+        }
       });
 
       // Add unsubscribe handler
@@ -1207,6 +1418,11 @@ export class BLEAdapter implements IBLEAdapter {
           );
         } else {
           console.warn("[BLE Peripheral] Unsubscribe event missing device ID");
+        }
+
+        // Notify listeners
+        if (event.device) {
+          this.incomingConnectionListeners.forEach(l => l(event.device, false));
         }
       });
 
@@ -1369,9 +1585,9 @@ export class BLEAdapter implements IBLEAdapter {
       ],
       localPeer: this.localPeer
         ? {
-            peerId: this.localPeer.id.toShortString(),
-            nickname: this.localPeer.nickname.toString(),
-          }
+          peerId: this.localPeer.id.toShortString(),
+          nickname: this.localPeer.nickname.toString(),
+        }
         : null,
     };
 
@@ -1521,10 +1737,15 @@ export class BLEAdapter implements IBLEAdapter {
     deviceId: string,
     packet: Packet,
   ): Promise<BLETransmissionResult> {
-    if (!this.advertising || !this.peripheralManager) {
-      console.warn(
-        `[BLE Peripheral] Cannot notify - not advertising (deviceId: ${deviceId || "unknown"})`,
-      );
+    if (!this.initialized || !this.peripheralManager) {
+      return {
+        success: false,
+        deviceId: deviceId || "unknown",
+        error: "BLE adapter not initialized",
+      };
+    }
+
+    if (!this.advertising) {
       return {
         success: false,
         deviceId: deviceId || "unknown",
@@ -1535,20 +1756,20 @@ export class BLEAdapter implements IBLEAdapter {
     // Check if any devices are subscribed
     if (this.incomingConnections.size === 0) {
       console.warn(
-        "[BLE Peripheral] ⚠️ No subscribers - cannot broadcast (need at least one central to subscribe)",
+        `[BLE Peripheral] ⚠️ No subscribers reported - attempting notify anyway to ${deviceId || "broadcast"} (some devices don't report subscribers correctly)`,
       );
-      return {
-        success: false,
-        deviceId: deviceId || "unknown",
-        error: "No subscribers",
-      };
+      // We don't return error here anymore, we let updateValue try.
+      // Many BLE stacks still deliver the notification if there's a listener even if size is 0.
     }
 
     try {
       const packetData = this.serializePacket(packet);
 
+      // Determine if we should target a specific device
+      const targetId = deviceId === "broadcast" ? undefined : deviceId;
+
       console.log(
-        `[BLE Peripheral] Broadcasting to ${this.incomingConnections.size} subscriber(s) (${packetData.length} bytes) - intended for ${deviceId || "all"}`,
+        `[BLE Peripheral] Sending notification to ${targetId || "all subscribers"} (${packetData.length} bytes)`,
       );
 
       await this.peripheralManager.sendNotification(
@@ -1560,10 +1781,6 @@ export class BLEAdapter implements IBLEAdapter {
 
       this.stats.totalPacketsSent++;
       this.stats.totalBytesSent += packetData.length;
-
-      console.log(
-        `[BLE Peripheral] ✅ Packet broadcast complete to ${this.incomingConnections.size} subscriber(s) (intended for ${deviceId || "all"})`,
-      );
 
       return {
         success: true,
@@ -1633,34 +1850,47 @@ export class BLEAdapter implements IBLEAdapter {
     return states;
   }
 
+  onIncomingConnection(callback: (deviceId: string, connected: boolean) => void): void {
+    this.incomingConnectionListeners.add(callback);
+  }
+
+  removeIncomingConnectionListener(callback: (deviceId: string, connected: boolean) => void): void {
+    this.incomingConnectionListeners.delete(callback);
+  }
+
   // ============================================
   // UTILITIES
   // ============================================
 
   async broadcastPacket(packet: Packet): Promise<BLETransmissionResult[]> {
-    const results: BLETransmissionResult[] = [];
-
     console.log(
-      "[BLE] Broadcasting packet to all connections and peripheral subscribers...",
+      `[BLE] Broadcasting packet type ${packet.type} to all available channels...`,
     );
 
-    // Broadcast to outgoing connections (Central mode - write to devices we scanned)
+    const tasks: Promise<BLETransmissionResult>[] = [];
+
+    // 1. Broadcast to outgoing connections (Central mode - write to devices we scanned)
     for (const [deviceId] of this.outgoingConnections) {
-      const result = await this.writePacket(deviceId, packet);
-      results.push(result);
+      tasks.push(this.writePacket(deviceId, packet));
     }
 
-    // Broadcast via Peripheral mode notifications (to all subscribed centrals)
-    // Note: This broadcasts to ALL centrals that subscribed to our RX characteristic
+    // 2. Broadcast via Peripheral mode notifications (to all subscribed centrals)
     if (this.advertising) {
-      const result = await this.notifyPacket("broadcast", packet);
-      results.push(result);
+      // Note: notifyPacket with "broadcast" notifies ALL subscribers to our RX char
+      tasks.push(this.notifyPacket("broadcast", packet));
     }
+
+    // Run all transmissions in parallel
+    const results = await Promise.all(tasks);
 
     const successCount = results.filter((r) => r.success).length;
     console.log(
-      `[BLE] ✅ Broadcast complete: ${successCount}/${results.length} successful`,
+      `[BLE] ✅ Broadcast complete: ${successCount}/${results.length} channels succeeded`,
     );
+
+    if (results.length > 0 && successCount === 0) {
+      console.warn("[BLE] ⚠️ Broadcast failed on ALL channels:", results.map(r => r.error).join(", "));
+    }
 
     return results;
   }
@@ -1721,7 +1951,12 @@ export class BLEAdapter implements IBLEAdapter {
 
       // Track incoming connection
       if (deviceId) {
+        const isNew = !this.incomingConnections.has(deviceId);
         this.incomingConnections.add(deviceId);
+
+        if (isNew) {
+          this.incomingConnectionListeners.forEach(l => l(deviceId, true));
+        }
       }
 
       console.log(

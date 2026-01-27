@@ -1,4 +1,5 @@
-import { DeviceDetector, LocalWalletAdapter } from '@/src/infrastructure/wallet';
+import { identityStateManager } from '@/src/infrastructure/identity';
+import { DeviceDetector } from '@/src/infrastructure/wallet';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useEffect } from 'react';
@@ -20,31 +21,32 @@ export default function Index() {
                 isSolanaMobile: deviceInfo.isSolanaMobile,
             });
 
-            // // 🔧 UNCOMMENT THIS LINE TO RESET AND TEST FIRST-TIME USER EXPERIENCE
-            // await SecureStore.deleteItemAsync('hasSeenIndex');
+            // 1. Initialize identity state (loads from SecureStore)
+            console.log('[Index] Initializing identity state...');
+            const identity = await identityStateManager.initialize();
+            const hasIdentity = !!identity;
+            console.log('[Index] Identity exists:', hasIdentity);
 
-            // Check if user has seen index (UI state)
+            // 2. Check if user has seen index (UI state)
             const hasSeenIndex = await SecureStore.getItemAsync('hasSeenIndex');
             console.log('[Index] hasSeenIndex flag:', hasSeenIndex);
 
-            // Check if local wallet exists or MWA is available
-            const hasLocalWallet = await LocalWalletAdapter.hasStoredWallet();
-
-            if (!hasLocalWallet) {
-                // No wallet found - ALWAYS go to onboarding first
-                console.log('[Index] No wallet found - redirecting to onboarding');
+            // 3. Redirection Logic
+            if (!hasIdentity) {
+                // NO IDENTITY: Always start with onboarding
+                console.log('[Index] No identity found - redirecting to onboarding');
                 router.replace('/onboarding');
                 return;
             }
 
-            // Has wallet - check if they've completed the flow
+            // HAS IDENTITY: Check if landing flow complete
             if (hasSeenIndex === 'true') {
-                // Already completed onboarding and landing - go to chat
-                console.log('[Index] Returning user with wallet - redirecting to chat');
+                // Returning user: go straight to chat
+                console.log('[Index] Returning user with identity - redirecting to chat');
                 router.replace('/chat');
             } else {
-                // Has wallet but hasn't seen landing page yet - show landing
-                console.log('[Index] User has wallet but needs to see landing - showing landing page');
+                // First time with identity (just finished onboarding): show landing
+                console.log('[Index] Identity exists but landing not seen - showing landing page');
                 router.replace('/landing');
             }
         })();

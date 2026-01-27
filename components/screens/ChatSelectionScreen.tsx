@@ -15,6 +15,7 @@ import BottomNavWithMenu from "../ui/BottomNavWithMenu";
 
 interface Peer {
   id: string;
+  transportId: string;
   name: string;
   lastActive: string;
   online: boolean;
@@ -127,16 +128,28 @@ export default function ChatSelectionScreen({
       const isConnected = hasSession; // A peer is "online" if we have a secure session
 
       // Extract nickname from advertisement data or use device name
-      const name = device.name || device.id.substring(0, 8);
+      let name = device.name || device.id.substring(0, 8);
+
+      // Parse mesh advertisement name format: AM-[truncatedId]-[nickname]
+      if (device.name?.startsWith("AM-")) {
+        const parts = device.name.split("-");
+        if (parts.length >= 3) {
+          name = parts.slice(2).join("-");
+        } else if (parts.length === 2) {
+          name = "Peer-" + parts[1];
+        }
+      }
 
       console.log("[ChatSelection] Peer:", {
-        id: device.id,
+        id: device.peerId || device.id,
+        transportId: device.id,
         name,
         hasSession,
       });
 
       return {
-        id: device.id,
+        id: device.peerId || device.id,
+        transportId: device.id,
         name,
         lastActive: isConnected ? "now" : "discovered",
         online: isConnected,

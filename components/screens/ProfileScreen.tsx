@@ -1,6 +1,6 @@
 import { useWallet } from "@/src/contexts/WalletContext";
 import { Identity } from "@/src/domain/entities/Identity";
-import { SecureIdentityStateManager } from "@/src/infrastructure/identity/SecureIdentityStateManager";
+import { identityStateManager } from "@/src/infrastructure/identity";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useState } from "react";
@@ -43,7 +43,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [nickname, setNickname] = useState("");
   const [pubKey, setPubKey] = useState<string>("");
   const [isValidating, setIsValidating] = useState(false);
-  const [identityManager] = useState(() => new SecureIdentityStateManager());
 
   // Load wallet and nickname on mount
   useEffect(() => {
@@ -63,24 +62,20 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           setPubKey(pubKeyString);
         }
 
-        // Load identity from IdentityManager
-        console.log("[ProfileScreen] Loading identity from IdentityManager...");
-        const identity = await identityManager.initialize();
+        // Load identity from global state
+        console.log("[ProfileScreen] Loading identity from identityStateManager...");
+        const identity = identityStateManager.getIdentity() || await identityStateManager.initialize();
 
         if (identity && mounted) {
           console.log("[ProfileScreen] Identity loaded:", identity.nickname);
           setNickname(identity.nickname);
-        } else {
+        } else if (mounted) {
           // Fallback to SecureStore nickname if no identity exists
           console.log(
             "[ProfileScreen] No identity found, checking SecureStore...",
           );
           const storedNickname = await SecureStore.getItemAsync("nickname");
-          if (mounted && storedNickname) {
-            setNickname(storedNickname);
-          } else if (mounted) {
-            setNickname("Anonymous");
-          }
+          setNickname(storedNickname || "Anonymous");
         }
       } catch (e) {
         console.warn("[ProfileScreen] Failed to initialize", e);
@@ -92,7 +87,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     return () => {
       mounted = false;
     };
-  }, [isConnected, isWalletLoading, walletPublicKey, connect, identityManager]);
+  }, [isConnected, isWalletLoading, walletPublicKey, connect]);
 
   const validateAndSave = async () => {
     const trimmedNickname = nickname.trim();
@@ -129,11 +124,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       );
 
       // Get current identity
-      const currentIdentity = identityManager.getIdentity();
+      const currentIdentity = identityStateManager.getIdentity();
 
       if (currentIdentity) {
         // Create a new Identity object with updated nickname
-        // Identity class has readonly properties, so we need to create a new instance
         const updatedIdentity = new Identity({
           noiseStaticKeyPair: currentIdentity.noiseStaticKeyPair,
           signingKeyPair: currentIdentity.signingKeyPair,
@@ -141,8 +135,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           fingerprint: currentIdentity.fingerprint,
         });
 
-        await identityManager.saveIdentity(updatedIdentity);
-        console.log("[ProfileScreen] Identity updated with new nickname");
+        await identityStateManager.saveIdentity(updatedIdentity);
+        console.log("[ProfileScreen] Global identity updated with new nickname");
       }
 
       // Also save to SecureStore for compatibility
