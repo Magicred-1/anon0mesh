@@ -1,4 +1,4 @@
-import { useBLE } from "@/src/contexts/BLEContext";
+import { useBLE } from "@/src/contexts/BLEContextEnhanced";
 import { useNoiseChat } from "@/src/hooks/useNoiseChat";
 import { LinearGradient } from "expo-linear-gradient";
 import { Broadcast, CaretRight } from "phosphor-react-native";
@@ -47,61 +47,17 @@ export default function ChatSelectionScreen({
   const [pressedItemId, setPressedItemId] = useState<string | null>(null);
 
   // Get BLE context for peer discovery
+  // BLE is auto-initialized at app boot in BLEContextEnhanced
   const {
     discoveredDevices,
     isScanning,
     isAdvertising,
     isInitialized,
-    initialize,
-    startScanning,
-    startAdvertising: startBLEAdvertising,
+    sessions: bleSessions,
   } = useBLE();
 
   // Get Noise chat context for encrypted sessions
   const { sessions } = useNoiseChat();
-
-  // Note: Auto-handshake is handled by useNoiseChat hook
-  // Don't duplicate the logic here
-
-  // Initialize BLE if not already initialized
-  React.useEffect(() => {
-    const initBLE = async () => {
-      if (!isInitialized) {
-        console.log("[ChatSelection] Initializing BLE...");
-        try {
-          await initialize();
-          console.log("[ChatSelection] ✅ BLE initialized");
-        } catch (err) {
-          console.error("[ChatSelection] ❌ BLE initialization failed:", err);
-        }
-      }
-    };
-
-    initBLE();
-  }, [isInitialized, initialize]);
-
-  // Start scanning and advertising once initialized
-  React.useEffect(() => {
-    const startBLE = async () => {
-      if (isInitialized && !isScanning && !isAdvertising) {
-        console.log("[ChatSelection] Starting BLE scanning and advertising...");
-        try {
-          await Promise.all([startScanning(), startBLEAdvertising()]);
-          console.log("[ChatSelection] ✅ BLE active");
-        } catch (err) {
-          console.error("[ChatSelection] ❌ Failed to start BLE:", err);
-        }
-      }
-    };
-
-    startBLE();
-  }, [
-    isInitialized,
-    isScanning,
-    isAdvertising,
-    startScanning,
-    startBLEAdvertising,
-  ]);
 
   // Debug logging
   React.useEffect(() => {
@@ -110,10 +66,12 @@ export default function ChatSelectionScreen({
       isScanning,
       isAdvertising,
       discoveredCount: discoveredDevices.length,
-      sessionCount: sessions.size,
+      bleSessionCount: bleSessions.length,
+      noiseSessionCount: sessions.size,
     });
     console.log("[ChatSelection] Discovered devices:", discoveredDevices);
-  }, [discoveredDevices, sessions, isScanning, isAdvertising, isInitialized]);
+    console.log("[ChatSelection] BLE Sessions:", bleSessions.map(s => ({ deviceId: s.deviceId, nickname: s.nickname, state: s.state })));
+  }, [discoveredDevices, sessions, bleSessions, isScanning, isAdvertising, isInitialized]);
 
   // Note: Auto-handshake is handled by useNoiseChat hook
   // Don't duplicate the logic here
@@ -123,15 +81,19 @@ export default function ChatSelectionScreen({
     console.log("[ChatSelection] Converting devices to peers...");
 
     const realPeers = discoveredDevices.map((device) => {
+      // Find the BLE session for this device to get nickname
+      const bleSession = bleSessions.find(s => s.deviceId === device.id);
+      
       // In BLE peripheral mode, "connected" means we have an active session
-      const hasSession = sessions.has(device.id);
-      const isConnected = hasSession; // A peer is "online" if we have a secure session
+      const hasNoiseSession = sessions.has(device.id);
+      const hasBleSession = !!bleSession;
+      const isConnected = hasNoiseSession || (bleSession?.state === "connected");
 
-      // Extract nickname from advertisement data or use device name
-      let name = device.name || device.id.substring(0, 8);
-
-      // Parse mesh advertisement name format: AM-[truncatedId]-[nickname]
-      if (device.name?.startsWith("AM-")) {
+      // Priority for nickname: BLE session > parsed from device name > fallback
+      let name = bleSession?.nickname;
+      
+      // If no session nickname, parse from advertisement name format: AM-[truncatedId]-[nickname]
+      if (!name && device.name?.startsWith("AM-")) {
         const parts = device.name.split("-");
         if (parts.length >= 3) {
           name = parts.slice(2).join("-");
@@ -139,12 +101,19 @@ export default function ChatSelectionScreen({
           name = "Peer-" + parts[1];
         }
       }
+      
+      // Fallback to device name or truncated ID
+      if (!name) {
+        name = device.name || device.id.substring(0, 8);
+      }
 
       console.log("[ChatSelection] Peer:", {
         id: device.peerId || device.id,
         transportId: device.id,
         name,
-        hasSession,
+        hasNoiseSession,
+        hasBleSession,
+        bleSessionState: bleSession?.state,
       });
 
       return {
@@ -153,12 +122,12 @@ export default function ChatSelectionScreen({
         name,
         lastActive: isConnected ? "now" : "discovered",
         online: isConnected,
-        hasSession,
+        hasSession: hasNoiseSession,
       };
     });
 
     return realPeers;
-  }, [discoveredDevices, sessions]);
+  }, [discoveredDevices, sessions, bleSessions]);
 
   const connectedPeers = peers.filter((p) => p.online).length;
 

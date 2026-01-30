@@ -1,25 +1,36 @@
+/**
+ * NoiseContextEnhanced
+ *
+ * Enhanced Noise Protocol context with:
+ * - Integration with BLEContextEnhanced for persistent sessions
+ * - Automatic session creation on device discovery
+ * - Bidirectional connection establishment (Central + Peripheral)
+ * - Better dual-mode handling for iOS/Android
+ */
+
 import { Packet, PacketType } from "@/src/domain/entities/Packet";
+import { bleSessionsManager } from "@/src/infrastructure/ble/BLESessionsManager";
 import { IdentityManager } from "@/src/infrastructure/crypto/IdentityManager";
 import { identityStateManager } from "@/src/infrastructure/identity";
 import { MeshManager } from "@/src/infrastructure/mesh/MeshManager";
 import {
-    NoiseManager,
-    NoiseSessionInfo,
+  NoiseManager,
+  NoiseSessionInfo,
 } from "@/src/infrastructure/noise/NoiseManager";
 import { Buffer } from "buffer";
 import * as SecureStore from "expo-secure-store";
 import React, {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useRef,
-    useState,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
 } from "react";
-import { useBLE } from "./BLEContext";
+import { useBLE } from "./BLEContextEnhanced";
 
 export interface NoiseMessage {
-  deviceId: string; // The logical ID (PeerId) if known, else transport ID
+  deviceId: string;
   nickname?: string;
   message: string;
   timestamp: number;
@@ -28,7 +39,7 @@ export interface NoiseMessage {
 }
 
 interface NoiseContextType {
-  sessions: Map<string, NoiseSessionInfo>; // Keyed by either logical ID or transport ID
+  sessions: Map<string, NoiseSessionInfo>;
   messages: NoiseMessage[];
   isReady: boolean;
   error: string | null;
@@ -39,6 +50,10 @@ interface NoiseContextType {
   clearMessages: () => void;
   isHandshakeComplete: (deviceId: string) => boolean;
   knownNicknames: Map<string, string>;
+
+  // Enhanced features
+  connectedPeers: string[];
+  sessionHealth: Map<string, { isHealthy: boolean; rssi?: number }>;
 }
 
 const NoiseContext = createContext<NoiseContextType | null>(null);
@@ -56,8 +71,16 @@ interface NoiseProviderProps {
 }
 
 export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
-  const { bleAdapter, isInitialized, discoveredDevices, isAdvertising } =
-    useBLE();
+  const {
+    bleAdapter,
+    isInitialized,
+    discoveredDevices,
+    isAdvertising,
+    isScanning,
+    sessions: bleSessions,
+    connectToDevice,
+    getSessionHealth,
+  } = useBLE();
 
   const noiseManagerRef = useRef<NoiseManager | null>(null);
   const [sessions, setSessions] = useState<Map<string, NoiseSessionInfo>>(
@@ -73,12 +96,13 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
   const [currentRole, setCurrentRole] = useState<
     "central" | "peripheral" | null
   >(null);
+  const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
 
   // Track connection attempts
   const connectionAttemptsRef = useRef<Map<string, number>>(new Map());
-  const MAX_CONNECTIONS = 6; // Increased to be safer
-  const CONNECTION_RETRY_DELAY = 15000;
-  const RSSI_THRESHOLD = -90; // Be more lenient
+  const MAX_CONNECTIONS = 8;
+  const CONNECTION_RETRY_DELAY = 10000;
+  const RSSI_THRESHOLD = -85;
 
   // Initialize NoiseManager
   useEffect(() => {
@@ -88,7 +112,7 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
 
     const initNoiseManager = async () => {
       try {
-        console.log("[NoiseContext] Initializing NoiseManager...");
+        console.log("[NoiseContextEnhanced] Initializing NoiseManager...");
 
         // Initialize identity
         let identity =
@@ -102,27 +126,24 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
           await identityStateManager.saveIdentity(identity);
         }
 
+        // Create and attach mesh manager
         const mesh = new MeshManager();
         mesh.attachAdapter(bleAdapter);
 
+        // Create noise manager
         const manager = new NoiseManager(identityStateManager);
         manager.attachAdapter(bleAdapter);
         manager.attachMeshManager(mesh);
 
-        // Register listeners
+        // Register message listener
         const onMessage = (deviceId: string, plaintext: Uint8Array) => {
-          // deviceId here is the logical ID (PeerId prefix)
           const decoded = Buffer.from(plaintext).toString("utf-8");
-          const hex = Buffer.from(plaintext).toString("hex");
           console.log(
-            `[NoiseContext] 📬 New message from ${deviceId}: "${decoded}" (hex: ${hex})`,
+            `[NoiseContextEnhanced] 📬 New message from ${deviceId}: "${decoded}"`,
           );
 
           setMessages((prev) => {
             const nickname = knownNicknamesRef.current.get(deviceId);
-            console.log(
-              `[NoiseContext] 🏷️ Message from ${deviceId} assigned nickname: ${nickname || "none"}`,
-            );
             return [
               ...prev,
               {
@@ -137,38 +158,44 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
         };
         manager.addMessageListener(onMessage);
 
+        // Register session listener
         manager.addSessionListener((deviceId, sessionInfo) => {
           setSessions((prev) => {
             const next = new Map(prev);
-
-            // Use truncated PeerId (first 6 chars) as key if available to match UI
             const peerId = sessionInfo.remotePublicKey
               ? sessionInfo.remotePublicKey.substring(0, 6)
               : null;
-
             const key = peerId || deviceId;
             next.set(key, sessionInfo);
 
-            // CRITICAL FIX: If we just migrated from transport ID to logical ID,
-            // keep a legacy entry OR ensure the loop doesn't re-initiate.
             if (peerId && deviceId !== peerId) {
-              // We still want to mark the transport ID as "having a session"
-              // to avoid the auto-handshake loop re-triggering.
               next.set(deviceId, sessionInfo);
               console.log(
-                `[NoiseContext] 🔄 Migrated session: ${deviceId} -> ${peerId}`,
+                `[NoiseContextEnhanced] 🔄 Migrated session: ${deviceId} -> ${peerId}`,
               );
             }
 
             return next;
           });
+
+          // Update connected peers list
+          if (sessionInfo.isHandshakeComplete) {
+            setConnectedPeers((prev) => {
+              const peerId =
+                sessionInfo.remotePublicKey?.substring(0, 6) || deviceId;
+              if (!prev.includes(peerId)) {
+                return [...prev, peerId];
+              }
+              return prev;
+            });
+          }
         });
 
         noiseManagerRef.current = manager;
         setIsReady(true);
-        console.log("[NoiseContext] ✅ NoiseManager ready");
+        console.log("[NoiseContextEnhanced] ✅ NoiseManager ready");
       } catch (err) {
-        console.error("[NoiseContext] Init error:", err);
+        console.error("[NoiseContextEnhanced] Init error:", err);
         setError(err instanceof Error ? err.message : "Unknown error");
         setIsReady(false);
       }
@@ -181,12 +208,74 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
     };
   }, [bleAdapter, isInitialized]);
 
-  // Auto-handshake logic
+  // CRITICAL: Create BLE sessions when devices are discovered
+  // This establishes persistent connections for bidirectional comms
+  useEffect(() => {
+    if (!isReady || !isAdvertising) return;
+
+    discoveredDevices.forEach(async (device) => {
+      // Skip if already have a session
+      if (bleSessionsManager.getSession(device.id)) return;
+      if (device.peerId && bleSessionsManager.getSession(device.peerId)) return;
+
+      // Parse device info
+      // Format: AM-[truncatedId]-[nickname] (mesh format) or any other name
+      let peerId: string | undefined;
+      let nickname: string | undefined;
+
+      if (device.name) {
+        if (device.name.startsWith("AM-")) {
+          // Mesh format: AM-[truncatedId]-[nickname]
+          const parts = device.name.split("-");
+          if (parts.length >= 2) {
+            peerId = parts[1];
+            nickname = parts.slice(2).join("-");
+          }
+        } else {
+          // Non-mesh format: use the name directly as nickname
+          nickname = device.name;
+        }
+      }
+
+      console.log(
+        `[NoiseContextEnhanced] 🎯 Discovered device: ${device.name || device.id}`,
+        {
+          peerId,
+          nickname,
+          rssi: device.rssi,
+        },
+      );
+
+      // Create BLE session for this device
+      try {
+        await bleSessionsManager.createSession(device.id, {
+          peerId,
+          nickname,
+          rssi: device.rssi,
+        });
+
+        // Connect to device (this establishes the Central->Peripheral link)
+        console.log(`[NoiseContextEnhanced] 🔗 Connecting to ${device.id}...`);
+        await connectToDevice(device.id);
+
+        // The peripheral link will be established when they connect to us
+        console.log(
+          `[NoiseContextEnhanced] ✅ Session created for ${device.id}`,
+        );
+      } catch (err) {
+        console.warn(
+          `[NoiseContextEnhanced] Failed to create session for ${device.id}:`,
+          err,
+        );
+      }
+    });
+  }, [discoveredDevices, isReady, isAdvertising, connectToDevice]);
+
+  // Auto-handshake logic with enhanced session awareness
   useEffect(() => {
     if (!isReady || !isAdvertising) return;
 
     // Only try to handshake if we have budget
-    // Note: we count logical sessions here
     const activeSessions = Array.from(sessions.values()).filter(
       (s) => s.isHandshakeComplete,
     ).length;
@@ -197,53 +286,62 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
     const ourTruncatedId = identity.peerId.toString().substring(0, 6);
 
     const now = Date.now();
-    discoveredDevices.forEach(async (device) => {
-      // CRITICAL: Skip if we already have a session for THIS TRANSPORT ID
-      // or if we have a logical ID mapping already
-      if (sessions.has(device.id)) return;
 
-      if (device.peerId && sessions.has(device.peerId)) return;
+    // Get healthy BLE sessions that are actually CONNECTED (not connecting)
+    const connectedSessions = bleSessionsManager.getConnectedSessions()
+      .filter(s => s.state === "connected"); // Only fully connected sessions
 
-      // Check for deterministic tie-breaker in name
-      // Format: AM-[truncatedId]-nickname
-      if (device.name?.startsWith("AM-")) {
-        const parts = device.name.split("-");
+    connectedSessions.forEach(async (session) => {
+      const deviceId = session.deviceId;
+
+      // Skip if already have Noise session
+      if (sessions.has(deviceId)) return;
+      if (session.peerId && sessions.has(session.peerId)) return;
+
+      // Check for deterministic tie-breaker
+      if (session.nickname?.startsWith("AM-")) {
+        const parts = session.nickname.split("-");
         if (parts.length >= 2) {
           const remoteTruncatedId = parts[1];
-
           if (ourTruncatedId > remoteTruncatedId) {
-            // Larger ID stays Peripheral. Avoid simultaneous initiator race.
-            return;
+            return; // Larger ID stays Peripheral
           }
         }
       }
 
-      const lastAttempt = connectionAttemptsRef.current.get(device.id);
+      const lastAttempt = connectionAttemptsRef.current.get(deviceId);
       if (lastAttempt && now - lastAttempt < CONNECTION_RETRY_DELAY) return;
 
-      if (device.rssi && device.rssi < RSSI_THRESHOLD) return;
+      if (session.rssi && session.rssi < RSSI_THRESHOLD) return;
 
-      connectionAttemptsRef.current.set(device.id, now);
+      connectionAttemptsRef.current.set(deviceId, now);
 
       try {
-        // Large random jitter to further prevent simultaneous collisions
+        // Random jitter to prevent simultaneous collisions
         await new Promise((r) => setTimeout(r, 200 + Math.random() * 1000));
 
-        // Re-check sessions after jitter
-        if (sessions.has(device.id)) return;
+        // Re-check conditions after jitter
+        if (sessions.has(deviceId)) return;
+        
+        // Verify session is still connected before handshake
+        const currentSession = bleSessionsManager.getSession(deviceId);
+        if (!currentSession || currentSession.state !== "connected") {
+          console.log(`[NoiseContextEnhanced] Session ${deviceId} no longer connected, skipping handshake`);
+          return;
+        }
 
         console.log(
-          `[NoiseContext] 🤝 Initiating auto-handshake with ${device.name || device.id}`,
+          `[NoiseContextEnhanced] 🤝 Initiating auto-handshake with ${session.nickname || deviceId}`,
         );
-        await initiateHandshake(device.id);
+        await initiateHandshake(deviceId);
       } catch (err) {
         console.warn(
-          `[NoiseContext] Auto-handshake failed for ${device.id}:`,
+          `[NoiseContextEnhanced] Auto-handshake failed for ${deviceId}:`,
           err,
         );
       }
     });
-  }, [discoveredDevices, isReady, isAdvertising, sessions.size]); // sessions.size is enough to trigger retry on changes
+  }, [bleSessions, isReady, isAdvertising, sessions.size]);
 
   // Update known nicknames from discovery
   useEffect(() => {
@@ -251,25 +349,33 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
     const nextMap = new Map(knownNicknames);
 
     discoveredDevices.forEach((device) => {
-      if (device.name?.startsWith("AM-")) {
+      if (!device.name) return;
+      
+      let peerId: string | undefined;
+      let nick: string | undefined;
+      
+      if (device.name.startsWith("AM-")) {
+        // Mesh format: AM-[truncatedId]-[nickname]
         const parts = device.name.split("-");
         if (parts.length >= 2) {
-          const peerId = parts[1];
-          // Nickname is everything from the 3rd part onwards, or "MeshNode"
-          const nick =
-            parts.length >= 3 ? parts.slice(2).join("-") : "MeshNode";
-
-          if (nextMap.get(peerId) !== nick) {
-            nextMap.set(peerId, nick);
-            hasChanges = true;
-          }
+          peerId = parts[1];
+          nick = parts.length >= 3 ? parts.slice(2).join("-") : "MeshNode";
         }
+      } else {
+        // Non-mesh format: use device name as nickname, device ID as peerId
+        peerId = device.id;
+        nick = device.name;
+      }
+
+      if (peerId && nick && nextMap.get(peerId) !== nick) {
+        nextMap.set(peerId, nick);
+        hasChanges = true;
       }
     });
 
     if (hasChanges) {
       console.log(
-        `[NoiseContext] 📔 Updated nickname cache. Size: ${nextMap.size}`,
+        `[NoiseContextEnhanced] 📔 Updated nickname cache. Size: ${nextMap.size}`,
       );
       setKnownNicknames(nextMap);
       knownNicknamesRef.current = nextMap;
@@ -369,12 +475,23 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
 
   const isHandshakeComplete = useCallback(
     (deviceId: string) => {
-      // Check logical ID first, then transport ID
       const session = sessions.get(deviceId);
       return session?.isHandshakeComplete ?? false;
     },
     [sessions],
   );
+
+  // Build session health map
+  const sessionHealth = new Map<
+    string,
+    { isHealthy: boolean; rssi?: number }
+  >();
+  bleSessions.forEach((session) => {
+    sessionHealth.set(session.deviceId, {
+      isHealthy: session.quality?.isHealthy ?? false,
+      rssi: session.rssi,
+    });
+  });
 
   const value = {
     sessions,
@@ -388,6 +505,8 @@ export const NoiseProvider: React.FC<NoiseProviderProps> = ({ children }) => {
     clearMessages,
     isHandshakeComplete,
     knownNicknames,
+    connectedPeers,
+    sessionHealth,
   };
 
   return (

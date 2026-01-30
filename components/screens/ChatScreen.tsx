@@ -6,7 +6,9 @@ import ChatSidebar from "@/components/chat/ChatSidebar";
 import EditNicknameModal from "@/components/modals/EditNicknameModal";
 import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
 import QueueIndicator from "@/components/ui/QueueIndicator";
-import { useBLE } from "@/src/contexts/BLEContext";
+// ENHANCED: Using BLEContextEnhanced for persistent sessions with auto-reconnect
+import { useBLE } from "@/src/contexts/BLEContextEnhanced";
+import { BLESessionMonitor } from "@/src/components/ui/BLESessionMonitor";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { useBLENotificationUpdater } from "@/src/hooks/useBLENotificationUpdater";
 import { useMessageQueue } from "@/src/hooks/useMessageQueue";
@@ -59,7 +61,7 @@ export default function ChatScreen({
   const [inputText, setInputText] = useState("");
   const [peers, setPeers] = useState<Peer[]>([]);
   const [selectedPeer, setSelectedPeer] = useState<string | null>(
-    initialSelectedPeer === undefined ? "broadcast" : initialSelectedPeer,
+    initialSelectedPeer || "broadcast",
   );
   const [showSidebar, setShowSidebar] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);
@@ -94,6 +96,9 @@ export default function ChatScreen({
     initialize: initBLE,
     discoveredDevices,
     connectedDeviceIds,
+    // ENHANCED: Session health info for debugging
+    sessions: bleSessions,
+    healthySessions,
   } = useBLE();
 
   const {
@@ -260,26 +265,11 @@ export default function ChatScreen({
     setPeers(mappedPeers);
   }, [discoveredDevices, connectedDeviceIds]);
 
-  // 1. Initialize BLE when permissions granted
-  useEffect(() => {
-    if (permissionsGranted && !isInitialized) {
-      (async () => {
-        try {
-          console.log("[Chat] Permissions granted, initializing BLE...");
-          await initBLE();
-        } catch (err) {
-          console.error("[Chat] BLE Init error:", err);
-        }
-      })();
-    }
-  }, [permissionsGranted, isInitialized, initBLE]);
-
-  // 2. Monitor BLE initialization (role cycling handles scanning/advertising automatically)
+  // BLE is now auto-initialized at app boot in BLEContextEnhanced
+  // Just monitor the initialization status for UI feedback
   useEffect(() => {
     if (isInitialized) {
-      console.log(
-        "[Chat] BLE initialized - role cycling will handle scanning/advertising",
-      );
+      console.log("[Chat] BLE ready (initialized at app boot)");
     }
   }, [isInitialized]);
 
@@ -701,6 +691,9 @@ export default function ChatScreen({
           style={styles.keyboardView}
           keyboardVerticalOffset={0}
         >
+          {/* ENHANCED: BLE Session Monitor - Debug panel for connection state */}
+          <BLESessionMonitor />
+          
           <View style={styles.container}>
             <ChatHeader
               nickname={selectedPeerNickname}

@@ -11,7 +11,7 @@
  * 4. Verify handshakes are automatically initiated
  */
 
-import { useBLE } from "@/src/contexts/BLEContext";
+import { useBLE } from "@/src/contexts/BLEContextEnhanced";
 import { useNoiseChat } from "@/src/hooks/useNoiseChat";
 import React, { useEffect } from "react";
 import {

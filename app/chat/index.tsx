@@ -4,5 +4,10 @@ import { useLocalSearchParams } from "expo-router";
 export default function ChatPage() {
   const { selectedPeer } = useLocalSearchParams<{ selectedPeer?: string }>();
 
-  return <ChatScreen initialSelectedPeer={selectedPeer || null} />;
+  // Handle the string "null" or "undefined" that may come from route params
+  const normalizedPeer = selectedPeer && selectedPeer !== "null" && selectedPeer !== "undefined"
+    ? selectedPeer
+    : null;
+
+  return <ChatScreen initialSelectedPeer={normalizedPeer} />;
 }

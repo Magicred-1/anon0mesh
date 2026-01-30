@@ -5,7 +5,7 @@ import QRScannerModal from "@/components/modals/QRScannerModal";
 import SendConfirmationModal from "@/components/modals/SendConfirmationModal";
 import NumericKeyboard from "@/components/ui/NumericKeyboard";
 import { useWalletBalances } from "@/hooks/useWalletBalances";
-import { useBLE } from "@/src/contexts/BLEContext";
+import { useBLE } from "@/src/contexts/BLEContextEnhanced";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { Packet } from "@/src/domain/entities/Packet";
 import { useBLENotificationUpdater } from "@/src/hooks/useBLENotificationUpdater";

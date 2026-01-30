@@ -14,10 +14,12 @@ import "react-native-reanimated";
 
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import "@/global.css";
-import { BLEProvider } from "@/src/contexts/BLEContext";
-import { NoiseProvider } from "@/src/contexts/NoiseContext";
-import { WalletProvider } from "@/src/contexts/WalletContext";
 
+// ENHANCED BLE CONTEXTS - Replace original providers for persistent sessions
+import { BLEProvider } from "@/src/contexts/BLEContextEnhanced";
+import { NoiseProvider } from "@/src/contexts/NoiseContextEnhanced";
+
+import { WalletProvider } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
 
 export const unstable_settings = {
@@ -36,7 +38,9 @@ export default function RootLayout() {
   return (
     <GluestackUIProvider mode="dark">
       <WalletProvider autoInitialize={true}>
+        {/* ENHANCED: BLEContextEnhanced provides persistent sessions with auto-reconnect */}
         <BLEProvider>
+          {/* ENHANCED: NoiseContextEnhanced integrates with BLE sessions for automatic handshake */}
           <NoiseProvider>
             <ThemeProvider
               value={colorScheme === "dark" ? DarkTheme : DefaultTheme}

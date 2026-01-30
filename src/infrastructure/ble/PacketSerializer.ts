@@ -115,7 +115,7 @@ export function serialize(packet: Packet): Uint8Array {
  */
 export function deserialize(data: Uint8Array): Packet {
   if (data.length < HEADER_SIZE + SENDER_ID_SIZE) {
-    throw new Error("Invalid packet: too short");
+    throw new Error(`Invalid packet: too short (${data.length} bytes, need at least ${HEADER_SIZE + SENDER_ID_SIZE})`);
   }
 
   let offset = 0;
@@ -123,10 +123,21 @@ export function deserialize(data: Uint8Array): Packet {
   // Read header (14 bytes: version + type + ttl + timestamp + flags + payload_length)
   const version = data[offset++];
   if (version !== PROTOCOL_VERSION) {
-    throw new Error(`Unsupported protocol version: ${version}`);
+    // Log the actual data for debugging
+    console.warn(`[PacketSerializer] Protocol version mismatch: got ${version}, expected ${PROTOCOL_VERSION}`);
+    console.warn(`[PacketSerializer] First 20 bytes:`, Array.from(data.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+    throw new Error(`Unsupported protocol version: ${version} (expected ${PROTOCOL_VERSION})`);
   }
 
   const type = data[offset++] as PacketType;
+  
+  // Validate packet type
+  if (type > 19 || type < 0) {
+    console.warn(`[PacketSerializer] Invalid packet type: ${type}`);
+    console.warn(`[PacketSerializer] First 20 bytes:`, Array.from(data.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+    throw new Error(`Invalid packet type: ${type}`);
+  }
+  
   const ttl = data[offset++];
 
   // Timestamp (8 bytes)

@@ -52,7 +52,9 @@ export class BLEAdapter implements IBLEAdapter {
   private peripheralPacketHandler:
     | ((packet: Packet, senderDeviceId: string) => void)
     | null = null;
-  private incomingConnectionListeners: Set<(deviceId: string, connected: boolean) => void> = new Set();
+  private incomingConnectionListeners: Set<
+    (deviceId: string, connected: boolean) => void
+  > = new Set();
 
   // Statistics
   private stats = {
@@ -181,10 +183,10 @@ export class BLEAdapter implements IBLEAdapter {
         const permissions =
           androidVersion >= 31
             ? [
-              PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
-              PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
-              PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
-            ]
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
+                PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
+                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
+              ]
             : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!];
 
         console.log("[BLE Peripheral] Requesting permissions:", permissions);
@@ -225,23 +227,25 @@ export class BLEAdapter implements IBLEAdapter {
       this.peripheralManager = new Peripheral();
 
       // Wait for peripheral to be ready with timeout
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Peripheral initialization timeout"));
-        }, 5000);
+      await new Promise<void>(
+        (resolve: () => void, reject: (arg0: Error) => void) => {
+          const timeout = setTimeout(() => {
+            reject(new Error("Peripheral initialization timeout"));
+          }, 5000);
 
-        this.peripheralManager!.on("ready", () => {
-          clearTimeout(timeout);
-          console.log("[BLE Peripheral] Ready");
-          resolve();
-        });
+          this.peripheralManager!.on("ready", () => {
+            clearTimeout(timeout);
+            console.log("[BLE Peripheral] Ready");
+            resolve();
+          });
 
-        this.peripheralManager!.on("error", (error: Error) => {
-          clearTimeout(timeout);
-          console.error("[BLE Peripheral] Error:", error);
-          reject(error);
-        });
-      });
+          this.peripheralManager!.on("error", (error: Error) => {
+            clearTimeout(timeout);
+            console.error("[BLE Peripheral] Error:", error);
+            reject(error);
+          });
+        },
+      );
 
       this.initialized = true;
       console.log(
@@ -439,7 +443,7 @@ export class BLEAdapter implements IBLEAdapter {
 
           if (!device) return;
 
-          // On iOS, filtering by service UUID in startDeviceScan guarantees the service 
+          // On iOS, filtering by service UUID in startDeviceScan guarantees the service
           // metadata is present if the device is found.
 
           console.log("[BLE Central] Device discovered via service filter:", {
@@ -451,21 +455,26 @@ export class BLEAdapter implements IBLEAdapter {
           // Filter for our mesh service - but be lenient about how it's advertised
           // Some devices might not include service UUID in advertisement data
           // Normalize UUID for robust comparison (handles casing and hyphens)
-          const normalizeUUID = (uuid: string) => uuid.toLowerCase().replace(/-/g, "");
+          const normalizeUUID = (uuid: string) =>
+            uuid.toLowerCase().replace(/-/g, "");
           const targetServiceUUID = normalizeUUID(BLE_UUIDS.SERVICE_UUID);
 
           const hasServiceUUID = device.serviceUUIDs?.some(
-            (uuid: string) => normalizeUUID(uuid) === targetServiceUUID
+            (uuid: string) => normalizeUUID(uuid) === targetServiceUUID,
           );
 
           const hasAnon0meshName = device.name
             ?.toLowerCase()
             .includes("anon0mesh");
 
-          // TRUST NATIVE FILTER: If we filter by service UUID natively (which we now do), 
-          // any discovered device is guaranteed to be a mesh node. 
+          // TRUST NATIVE FILTER: If we filter by service UUID natively (which we now do),
+          // any discovered device is guaranteed to be a mesh node.
           // On iOS, serviceUUIDs might not be present in the initial advertisement object.
-          const isRecognized = hasServiceUUID || hasAnon0meshName || (!device.serviceUUIDs || device.serviceUUIDs.length === 0);
+          const isRecognized =
+            hasServiceUUID ||
+            hasAnon0meshName ||
+            !device.serviceUUIDs ||
+            device.serviceUUIDs.length === 0;
 
           if (!isRecognized) {
             console.log(
@@ -560,7 +569,9 @@ export class BLEAdapter implements IBLEAdapter {
     // Check if a connection is already in progress
     const inProgress = this.connectionQueue.get(deviceId);
     if (inProgress) {
-      console.log(`[BLE Central] ⏳ Connection to ${deviceId} already in progress, waiting...`);
+      console.log(
+        `[BLE Central] ⏳ Connection to ${deviceId} already in progress, waiting...`,
+      );
       return inProgress;
     }
 
@@ -794,7 +805,9 @@ export class BLEAdapter implements IBLEAdapter {
         // Verify the device is still connected
         const isConnected = await device.isConnected();
         if (!isConnected) {
-          console.log(`[BLE Central] Device ${deviceId} disconnected, reconnecting...`);
+          console.log(
+            `[BLE Central] Device ${deviceId} disconnected, reconnecting...`,
+          );
           this.outgoingConnections.delete(deviceId);
           await this.connectAndSubscribe(deviceId);
           const reconnected = await this.isConnected(deviceId);
@@ -816,28 +829,36 @@ export class BLEAdapter implements IBLEAdapter {
         }
 
         // Normalize UUID for robust comparison
-        const normalizeUUID = (uuid: string) => uuid.toLowerCase().replace(/-/g, "");
+        const normalizeUUID = (uuid: string) =>
+          uuid.toLowerCase().replace(/-/g, "");
         const targetServiceUUID = normalizeUUID(BLE_UUIDS.SERVICE_UUID);
 
         try {
           const services = await device.services();
           const targetService = services.find(
-            s => normalizeUUID(s.uuid) === targetServiceUUID
+            (s) => normalizeUUID(s.uuid) === targetServiceUUID,
           );
 
           if (!targetService) {
-            console.error(`[BLE Central] ❌ Service ${BLE_UUIDS.SERVICE_UUID} not found on ${deviceId}`);
-            console.log(`[BLE Central] Available services:`, services.map(s => s.uuid));
+            console.error(
+              `[BLE Central] ❌ Service ${BLE_UUIDS.SERVICE_UUID} not found on ${deviceId}`,
+            );
+            console.log(
+              `[BLE Central] Available services:`,
+              services.map((s) => s.uuid),
+            );
 
             // Try rediscovering services
-            console.log(`[BLE Central] 🔄 Rediscovering services on ${deviceId}...`);
+            console.log(
+              `[BLE Central] 🔄 Rediscovering services on ${deviceId}...`,
+            );
             await device.discoverAllServicesAndCharacteristics();
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 500));
 
             // Check again
             const servicesRetry = await device.services();
             const targetServiceRetry = servicesRetry.find(
-              s => normalizeUUID(s.uuid) === targetServiceUUID
+              (s) => normalizeUUID(s.uuid) === targetServiceUUID,
             );
 
             if (!targetServiceRetry) {
@@ -849,18 +870,26 @@ export class BLEAdapter implements IBLEAdapter {
             }
           }
 
-          const characteristics = await device.characteristicsForService(BLE_UUIDS.SERVICE_UUID);
+          const characteristics = await device.characteristicsForService(
+            BLE_UUIDS.SERVICE_UUID,
+          );
           const targetTxUUID = normalizeUUID(BLE_UUIDS.TX_CHARACTERISTIC_UUID);
           const txChar = characteristics.find(
-            c => normalizeUUID(c.uuid) === targetTxUUID
+            (c) => normalizeUUID(c.uuid) === targetTxUUID,
           );
 
           if (!txChar) {
-            console.error(`[BLE Central] ❌ TX characteristic not found on ${deviceId}`);
-            console.log(`[BLE Central] Available characteristics:`, characteristics.map(c => ({
-              uuid: c.uuid,
-              isWritable: c.isWritableWithResponse || c.isWritableWithoutResponse,
-            })));
+            console.error(
+              `[BLE Central] ❌ TX characteristic not found on ${deviceId}`,
+            );
+            console.log(
+              `[BLE Central] Available characteristics:`,
+              characteristics.map((c) => ({
+                uuid: c.uuid,
+                isWritable:
+                  c.isWritableWithResponse || c.isWritableWithoutResponse,
+              })),
+            );
 
             return {
               success: false,
@@ -869,9 +898,14 @@ export class BLEAdapter implements IBLEAdapter {
             };
           }
 
-          console.log(`[BLE Central] ✅ TX characteristic verified on ${deviceId}`);
+          console.log(
+            `[BLE Central] ✅ TX characteristic verified on ${deviceId}`,
+          );
         } catch (verifyError) {
-          console.warn(`[BLE Central] ⚠️ Could not verify characteristic (proceeding anyway):`, verifyError);
+          console.warn(
+            `[BLE Central] ⚠️ Could not verify characteristic (proceeding anyway):`,
+            verifyError,
+          );
           // Proceed anyway - the write will fail if characteristic doesn't exist
         }
 
@@ -920,9 +954,10 @@ export class BLEAdapter implements IBLEAdapter {
     } catch (error) {
       // Enhanced error logging for debugging
       const errorObj = error as any;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorReason = errorObj?.reason ?? 'none';
-      const errorCode = errorObj?.errorCode ?? errorObj?.code ?? 'none';
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorReason = errorObj?.reason ?? "none";
+      const errorCode = errorObj?.errorCode ?? errorObj?.code ?? "none";
 
       console.error(`[BLE Central] ❌ Failed to write packet to ${deviceId}:`, {
         message: errorMessage,
@@ -945,7 +980,9 @@ export class BLEAdapter implements IBLEAdapter {
     onPacketReceived: (packet: Packet) => void,
   ): Promise<void> {
     if (this.packetSubscriptions.has(deviceId)) {
-      console.log(`[BLE Central] 📡 Already subscribed to packets from ${deviceId}`);
+      console.log(
+        `[BLE Central] 📡 Already subscribed to packets from ${deviceId}`,
+      );
       return;
     }
 
@@ -1119,10 +1156,10 @@ export class BLEAdapter implements IBLEAdapter {
       const permissions =
         androidVersion >= 31
           ? [
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
-          ]
+              PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE!,
+              PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT!,
+              PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!,
+            ]
           : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION!];
 
       const results = await PermissionsAndroid.requestMultiple(permissions);
@@ -1404,7 +1441,9 @@ export class BLEAdapter implements IBLEAdapter {
 
         // Notify listeners
         if (event.device) {
-          this.incomingConnectionListeners.forEach(l => l(event.device, true));
+          this.incomingConnectionListeners.forEach((l) =>
+            l(event.device, true),
+          );
         }
       });
 
@@ -1422,7 +1461,9 @@ export class BLEAdapter implements IBLEAdapter {
 
         // Notify listeners
         if (event.device) {
-          this.incomingConnectionListeners.forEach(l => l(event.device, false));
+          this.incomingConnectionListeners.forEach((l) =>
+            l(event.device, false),
+          );
         }
       });
 
@@ -1585,9 +1626,9 @@ export class BLEAdapter implements IBLEAdapter {
       ],
       localPeer: this.localPeer
         ? {
-          peerId: this.localPeer.id.toShortString(),
-          nickname: this.localPeer.nickname.toString(),
-        }
+            peerId: this.localPeer.id.toShortString(),
+            nickname: this.localPeer.nickname.toString(),
+          }
         : null,
     };
 
@@ -1850,11 +1891,15 @@ export class BLEAdapter implements IBLEAdapter {
     return states;
   }
 
-  onIncomingConnection(callback: (deviceId: string, connected: boolean) => void): void {
+  onIncomingConnection(
+    callback: (deviceId: string, connected: boolean) => void,
+  ): void {
     this.incomingConnectionListeners.add(callback);
   }
 
-  removeIncomingConnectionListener(callback: (deviceId: string, connected: boolean) => void): void {
+  removeIncomingConnectionListener(
+    callback: (deviceId: string, connected: boolean) => void,
+  ): void {
     this.incomingConnectionListeners.delete(callback);
   }
 
@@ -1889,7 +1934,10 @@ export class BLEAdapter implements IBLEAdapter {
     );
 
     if (results.length > 0 && successCount === 0) {
-      console.warn("[BLE] ⚠️ Broadcast failed on ALL channels:", results.map(r => r.error).join(", "));
+      console.warn(
+        "[BLE] ⚠️ Broadcast failed on ALL channels:",
+        results.map((r) => r.error).join(", "),
+      );
     }
 
     return results;
@@ -1955,7 +2003,7 @@ export class BLEAdapter implements IBLEAdapter {
         this.incomingConnections.add(deviceId);
 
         if (isNew) {
-          this.incomingConnectionListeners.forEach(l => l(deviceId, true));
+          this.incomingConnectionListeners.forEach((l) => l(deviceId, true));
         }
       }
 

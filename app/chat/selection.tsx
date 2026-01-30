@@ -14,7 +14,7 @@ const ChatSelectionPage = () => {
           params: { selectedPeer: peerId },
         });
       }}
-      onNavigateToMessages={() => router.push("/chat")}
+      onNavigateToMessages={() => router.push({ pathname: "/chat", params: { selectedPeer: "broadcast" } })}
       onNavigateToWallet={() => router.push("/wallet")}
       onNavigateToHistory={() => router.push("/wallet/history")}
       onNavigateToMeshZone={() => router.push("/zone")}

@@ -48,7 +48,7 @@ export class NoiseManager {
 
   constructor(
     private readonly identityStateManager: SecureIdentityStateManager,
-  ) { }
+  ) {}
 
   attachAdapter(adapter: IBLEAdapter) {
     if (this.adapter === adapter) return;
@@ -191,7 +191,9 @@ export class NoiseManager {
   /**
    * Helper to resolve session by either transport ID or logical PeerId
    */
-  private getSessionEntry(id: string): { session: NoiseSession; initiator: boolean } | undefined {
+  private getSessionEntry(
+    id: string,
+  ): { session: NoiseSession; initiator: boolean } | undefined {
     // 1. Try exact transport ID match
     let entry = this.sessions.get(id);
     if (entry) return entry;
@@ -201,7 +203,9 @@ export class NoiseManager {
     if (transportId) {
       entry = this.sessions.get(transportId);
       if (entry) {
-        console.log(`[NOISE] 🔍 Resolved logical ID ${id} to transport ID ${transportId}`);
+        console.log(
+          `[NOISE] 🔍 Resolved logical ID ${id} to transport ID ${transportId}`,
+        );
         return entry;
       }
     }
@@ -211,7 +215,9 @@ export class NoiseManager {
     if (mappedTransportId) {
       entry = this.sessions.get(mappedTransportId);
       if (entry) {
-        console.log(`[NOISE] 🔍 Resolved public key ${id.slice(0, 8)} to transport ID ${mappedTransportId}`);
+        console.log(
+          `[NOISE] 🔍 Resolved public key ${id.slice(0, 8)} to transport ID ${mappedTransportId}`,
+        );
         return entry;
       }
     }
@@ -222,7 +228,11 @@ export class NoiseManager {
   /**
    * Resolve a stable, unique identifier for the sender of a packet
    */
-  private getEffectiveSenderId(senderDeviceId: string, packet: Packet, session?: NoiseSession): string {
+  private getEffectiveSenderId(
+    senderDeviceId: string,
+    packet: Packet,
+    session?: NoiseSession,
+  ): string {
     // 1. If packet has a senderId, use its truncated form (most stable)
     if (packet.senderId) {
       return packet.senderId.toString().substring(0, 6);
@@ -230,12 +240,16 @@ export class NoiseManager {
 
     // 2. If we have a session with a known remote key, use it
     if (session?.getRemoteStaticKey()) {
-      return Buffer.from(session.getRemoteStaticKey()!).toString('hex').substring(0, 6);
+      return Buffer.from(session.getRemoteStaticKey()!)
+        .toString("hex")
+        .substring(0, 6);
     }
 
     // 3. Fallback to existing transport ID mapping
     // Check if this transport is already known to belong to a Peer
-    for (const [peerId, transportId] of this.peerIdToDeviceId.entries()) {
+    for (const [peerId, transportId] of Array.from(
+      this.peerIdToDeviceId.entries(),
+    )) {
       if (transportId === senderDeviceId) return peerId;
     }
 
@@ -271,6 +285,20 @@ export class NoiseManager {
     this.handshakesInProgress.add(deviceId);
 
     try {
+      // Ensure connection is established before sending handshake
+      if (this.adapter) {
+        const isConnected = await this.adapter.isConnected(deviceId);
+        if (!isConnected) {
+          console.log(`[NOISE] 🔗 Connecting to ${deviceId} before handshake...`);
+          const connected = await this.adapter.connect(deviceId);
+          if (!connected) {
+            throw new Error(`Failed to connect to ${deviceId}`);
+          }
+          // Small delay to ensure connection is fully ready
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+
       const identity = this.identityStateManager.getIdentity();
       if (!identity) throw new Error("Identity not initialized");
 
@@ -330,38 +358,52 @@ export class NoiseManager {
     const resolvedDeviceId = this.peerIdToDeviceId.get(deviceId) || deviceId;
     const isLinkLogical = resolvedDeviceId !== deviceId;
 
-    // Choose send method based on connection direction
-    const isConnected = await this.adapter.isConnected(resolvedDeviceId);
-
     console.log(
-      `[NOISE] Sending packet type ${PacketType[packet.type]} to ${resolvedDeviceId}${isLinkLogical ? ` (via logical ID ${deviceId})` : ""} (connected: ${isConnected})`,
+      `[NOISE] Sending packet type ${PacketType[packet.type]} to ${resolvedDeviceId}${isLinkLogical ? ` (via logical ID ${deviceId})` : ""}`,
     );
 
-    // Retry logic for "Not advertising" errors (advertising may be restarting)
+    // Retry logic for connection and transmission
     const maxRetries = 3;
     const retryDelay = 100; // ms
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
+        // Check connection status on each attempt
+        let isConnected = await this.adapter.isConnected(resolvedDeviceId);
+        
         if (!isConnected) {
           // Check if device is already connected to us (as Peripheral)
-          // If it is, we don't need to connect as Central, we can just notify
           const incoming = await this.adapter.getIncomingConnections();
-          const isIncoming = incoming.some(c => c.deviceId === resolvedDeviceId);
+          const isIncoming = incoming.some(
+            (c) => c.deviceId === resolvedDeviceId,
+          );
 
           if (isIncoming) {
-            console.log(`[NOISE] Device ${resolvedDeviceId} already connected to us (Peripheral role). Using notify.`);
+            console.log(
+              `[NOISE] Device ${resolvedDeviceId} connected to us (Peripheral role). Using notify.`,
+            );
           } else {
-            console.log(`[NOISE] 🔗 Connecting and subscribing to ${resolvedDeviceId}...`);
+            console.log(
+              `[NOISE] 🔗 Connecting to ${resolvedDeviceId} (attempt ${attempt + 1}/${maxRetries})...`,
+            );
             await this.adapter.connectAndSubscribe(resolvedDeviceId);
+            // Re-check connection after connect
+            isConnected = await this.adapter.isConnected(resolvedDeviceId);
+            if (!isConnected) {
+              throw new Error(`Failed to establish connection to ${resolvedDeviceId}`);
+            }
           }
         }
 
         // Now re-check if we are connected (as Central)
-        const currentlyConnected = await this.adapter.isConnected(resolvedDeviceId);
+        const currentlyConnected =
+          await this.adapter.isConnected(resolvedDeviceId);
 
         if (currentlyConnected) {
-          const result = await this.adapter.writePacket(resolvedDeviceId, packet);
+          const result = await this.adapter.writePacket(
+            resolvedDeviceId,
+            packet,
+          );
           if (!result.success) {
             console.warn(`[NOISE] Write failed: ${result.error}`);
             // Fall back to notify if write failed
@@ -382,7 +424,9 @@ export class NoiseManager {
                 console.log(
                   `[NOISE] Transport not ready (${error}), retrying in ${retryDelay}ms (attempt ${attempt + 1}/${maxRetries})...`,
                 );
-                await new Promise((resolve) => setTimeout(resolve, retryDelay * (attempt + 1))); // Incremental backoff
+                await new Promise((resolve) =>
+                  setTimeout(resolve, retryDelay * (attempt + 1)),
+                ); // Incremental backoff
                 continue;
               }
               throw new Error(
@@ -393,7 +437,10 @@ export class NoiseManager {
           return; // Success
         } else {
           // Try notify (device may be connected to us, or we're in peripheral mode broadcasting)
-          const result = await this.adapter.notifyPacket(resolvedDeviceId, packet);
+          const result = await this.adapter.notifyPacket(
+            resolvedDeviceId,
+            packet,
+          );
           if (!result.success) {
             // Check if it's a temporary advertising issue
             if (
@@ -439,7 +486,9 @@ export class NoiseManager {
     if (!this.adapter) throw new Error("Adapter not attached");
     const entry = this.getSessionEntry(deviceId);
     if (!entry) {
-      console.error(`[NOISE] No session for ID: ${deviceId}. Map size: ${this.sessions.size}, PeerMap size: ${this.peerIdToDeviceId.size}`);
+      console.error(
+        `[NOISE] No session for ID: ${deviceId}. Map size: ${this.sessions.size}, PeerMap size: ${this.peerIdToDeviceId.size}`,
+      );
       throw new Error(`No session for device ${deviceId}`);
     }
     const { session } = entry;
@@ -709,7 +758,10 @@ export class NoiseManager {
             try {
               listener(senderId, plaintext);
             } catch (err) {
-              console.error("[NOISE] Error in message listener (broadcast):", err);
+              console.error(
+                "[NOISE] Error in message listener (broadcast):",
+                err,
+              );
             }
           });
           return;
@@ -749,7 +801,11 @@ export class NoiseManager {
             Buffer.from(packet.payload),
           );
 
-          const senderId = this.getEffectiveSenderId(senderDeviceId, packet, entry.session);
+          const senderId = this.getEffectiveSenderId(
+            senderDeviceId,
+            packet,
+            entry.session,
+          );
 
           // Notify listeners
           this.listeners.forEach((listener) => {
