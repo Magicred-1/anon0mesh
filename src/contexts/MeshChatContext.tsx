@@ -10,6 +10,8 @@
  * This replaces the complex BLE+Noise stack with a simpler, more robust solution.
  */
 
+import * as SecureStore from "expo-secure-store";
+import { BleMesh, Message as MeshMessage, Peer } from "kard-network-ble-mesh";
 import React, {
   createContext,
   useCallback,
@@ -18,10 +20,14 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Alert, Platform } from "react-native";
-import { BleMesh, Peer, Message as MeshMessage } from "kard-network-ble-mesh";
+import { Platform } from "react-native";
 import { identityStateManager } from "../infrastructure/identity";
-import * as SecureStore from "expo-secure-store";
+import {
+  clearAllUnreadMessages,
+  hideBLEForegroundNotification,
+  showBLEForegroundNotification,
+  updatePeerCount,
+} from "../utils/bleNotification";
 
 export interface MeshChatMessage {
   id: string;
@@ -35,6 +41,10 @@ export interface MeshChatMessage {
   to?: string;
 }
 
+interface UnreadCounts {
+  [peerId: string]: number;
+}
+
 interface MeshChatContextType {
   // State
   isInitialized: boolean;
@@ -44,22 +54,37 @@ interface MeshChatContextType {
   peers: Peer[];
   messages: MeshChatMessage[];
   error: string | null;
+  unreadCounts: UnreadCounts;
+  totalUnreadCount: number;
 
   // Actions
   initialize: (nickname?: string) => Promise<void>;
   shutdown: () => Promise<void>;
   setNickname: (nickname: string) => Promise<void>;
-  sendMessage: (content: string) => Promise<void>;
-  sendPrivateMessage: (content: string, recipientPeerId: string) => Promise<void>;
+  sendMessage: (content: string, channel?: string) => Promise<string>;
+  sendPrivateMessage: (
+    content: string,
+    recipientPeerId: string,
+  ) => Promise<string>;
+  sendReadReceipt: (
+    messageId: string,
+    recipientPeerId: string,
+  ) => Promise<void>;
   clearMessages: () => void;
   broadcastAnnounce: () => Promise<void>;
   hasEncryptedSession: (peerId: string) => Promise<boolean>;
+  initiateHandshake: (peerId: string) => Promise<void>;
   getIdentityFingerprint: () => Promise<string>;
   getPeerFingerprint: (peerId: string) => Promise<string | null>;
-  
+
   // Peer management
   getPeerById: (peerId: string) => Peer | undefined;
   connectedPeerCount: number;
+
+  // Unread message management
+  markPeerAsRead: (peerId: string) => void;
+  getUnreadCountForPeer: (peerId: string) => number;
+  markAllAsRead: () => void;
 }
 
 const MeshChatContext = createContext<MeshChatContextType | null>(null);
@@ -88,11 +113,13 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<MeshChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<UnreadCounts>({});
 
   const bleMesh = BleMesh;
-  const unsubscribers = useRef<Array<() => void>>([]);
+  const unsubscribers = useRef<(() => void)[]>([]);
   const messageIdCache = useRef<Set<string>>(new Set());
   const MAX_CACHE_SIZE = 1000;
+  const readMessageIds = useRef<Set<string>>(new Set());
 
   // Cleanup function for event listeners
   const cleanupListeners = useCallback(() => {
@@ -107,48 +134,55 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   }, []);
 
   // Initialize the mesh service
-  const initialize = useCallback(async (nickname?: string) => {
-    if (isInitialized) {
-      console.log("[MeshChat] Already initialized");
-      return;
-    }
-
-    try {
-      console.log("[MeshChat] Initializing mesh chat...");
-
-      // Get nickname from identity or params
-      let nick = nickname;
-      if (!nick) {
-        const identity = identityStateManager.getIdentity();
-        nick = identity?.nickname || await SecureStore.getItemAsync("nickname") || "Anonymous";
+  const initialize = useCallback(
+    async (nickname?: string) => {
+      if (isInitialized) {
+        console.log("[MeshChat] Already initialized");
+        return;
       }
 
-      // Start the mesh service
-      await bleMesh.start({ nickname: nick });
+      try {
+        console.log("[MeshChat] Initializing mesh chat...");
 
-      // Get my peer ID
-      const peerId = await bleMesh.getMyPeerId();
-      const currentNickname = await bleMesh.getMyNickname();
+        // Get nickname from identity or params
+        let nick = nickname;
+        if (!nick) {
+          const identity = identityStateManager.getIdentity();
+          nick =
+            identity?.nickname ||
+            (await SecureStore.getItemAsync("nickname")) ||
+            "Anonymous";
+        }
 
-      setMyPeerId(peerId);
-      setMyNicknameState(currentNickname);
-      setIsInitialized(true);
-      setIsConnected(true);
-      setError(null);
+        // Start the mesh service
+        await bleMesh.start({ nickname: nick });
 
-      console.log("[MeshChat] ✅ Initialized successfully");
-      console.log("[MeshChat] Peer ID:", peerId);
-      console.log("[MeshChat] Nickname:", currentNickname);
+        // Get my peer ID
+        const peerId = await bleMesh.getMyPeerId();
+        const currentNickname = await bleMesh.getMyNickname();
 
-      // Setup event listeners
-      setupEventListeners();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      console.error("[MeshChat] Initialization failed:", errorMessage);
-      setError(errorMessage);
-      throw err;
-    }
-  }, [isInitialized]);
+        setMyPeerId(peerId);
+        setMyNicknameState(currentNickname);
+        setIsInitialized(true);
+        setIsConnected(true);
+        setError(null);
+
+        console.log("[MeshChat] ✅ Initialized successfully");
+        console.log("[MeshChat] Peer ID:", peerId);
+        console.log("[MeshChat] Nickname:", currentNickname);
+
+        // Setup event listeners
+        setupEventListeners();
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error";
+        console.error("[MeshChat] Initialization failed:", errorMessage);
+        setError(errorMessage);
+        throw err;
+      }
+    },
+    [isInitialized],
+  );
 
   // Setup event listeners for mesh events
   const setupEventListeners = useCallback(() => {
@@ -168,10 +202,12 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     unsubscribers.current.push(unsubMessages);
 
     // Listen for connection state changes
-    const unsubState = bleMesh.onConnectionStateChanged(({ state, peerCount }) => {
-      console.log("[MeshChat] Connection state:", state, "Peers:", peerCount);
-      setIsConnected(state === "connected");
-    });
+    const unsubState = bleMesh.onConnectionStateChanged(
+      ({ state, peerCount }) => {
+        console.log("[MeshChat] Connection state:", state, "Peers:", peerCount);
+        setIsConnected(state === "connected");
+      },
+    );
     unsubscribers.current.push(unsubState);
 
     // Listen for errors
@@ -183,40 +219,91 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   }, []);
 
   // Handle incoming messages
-  const handleIncomingMessage = useCallback((meshMessage: MeshMessage) => {
-    // Check for duplicates
-    if (messageIdCache.current.has(meshMessage.id)) {
-      return;
-    }
-
-    // Add to cache
-    messageIdCache.current.add(meshMessage.id);
-    if (messageIdCache.current.size > MAX_CACHE_SIZE) {
-      const first = messageIdCache.current.values().next().value;
-      if (first) {
-        messageIdCache.current.delete(first);
+  const handleIncomingMessage = useCallback(
+    (meshMessage: MeshMessage) => {
+      // Check for duplicates
+      if (messageIdCache.current.has(meshMessage.id)) {
+        return;
       }
-    }
 
-    // Convert to our message format
-    const chatMessage: MeshChatMessage = {
-      id: meshMessage.id,
-      deviceId: meshMessage.senderPeerId,
-      senderPeerId: meshMessage.senderPeerId,
-      senderNickname: meshMessage.senderNickname,
-      message: meshMessage.content,
-      timestamp: meshMessage.timestamp,
-      isMine: meshMessage.senderPeerId === myPeerId,
-      isPrivate: meshMessage.isPrivate,
-    };
+      // Add to cache
+      messageIdCache.current.add(meshMessage.id);
+      if (messageIdCache.current.size > MAX_CACHE_SIZE) {
+        const first = messageIdCache.current.values().next().value;
+        if (first) {
+          messageIdCache.current.delete(first);
+        }
+      }
 
-    console.log(
-      `[MeshChat] 📨 ${meshMessage.isPrivate ? "Private" : "Public"} message from ${meshMessage.senderNickname}:`,
-      meshMessage.content.substring(0, 50)
-    );
+      // Convert to our message format
+      const chatMessage: MeshChatMessage = {
+        id: meshMessage.id,
+        deviceId: meshMessage.senderPeerId,
+        senderPeerId: meshMessage.senderPeerId,
+        senderNickname: meshMessage.senderNickname,
+        message: meshMessage.content,
+        timestamp: meshMessage.timestamp,
+        isMine: meshMessage.senderPeerId === myPeerId,
+        isPrivate: meshMessage.isPrivate,
+      };
 
-    setMessages((prev) => [...prev, chatMessage]);
-  }, [myPeerId]);
+      console.log(
+        `[MeshChat] 📨 ${meshMessage.isPrivate ? "Private" : "Public"} message from ${meshMessage.senderNickname}:`,
+        meshMessage.content.substring(0, 50),
+      );
+
+      setMessages((prev) => [...prev, chatMessage]);
+
+      // Track unread counts for private messages from others
+      if (meshMessage.isPrivate && meshMessage.senderPeerId !== myPeerId) {
+        // Check if this message has already been marked as read
+        if (!readMessageIds.current.has(meshMessage.id)) {
+          setUnreadCounts((prev) => ({
+            ...prev,
+            [meshMessage.senderPeerId]:
+              (prev[meshMessage.senderPeerId] || 0) + 1,
+          }));
+        }
+      }
+    },
+    [myPeerId],
+  );
+
+  // Mark all messages from a peer as read
+  const markPeerAsRead = useCallback(
+    (peerId: string) => {
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [peerId]: 0,
+      }));
+
+      // Also mark all existing messages from this peer as read
+      messages.forEach((msg) => {
+        if (msg.senderPeerId === peerId && msg.isPrivate && !msg.isMine) {
+          readMessageIds.current.add(msg.id);
+        }
+      });
+    },
+    [messages],
+  );
+
+  // Get unread count for a specific peer
+  const getUnreadCountForPeer = useCallback(
+    (peerId: string) => {
+      return unreadCounts[peerId] || 0;
+    },
+    [unreadCounts],
+  );
+
+  // Mark all messages as read
+  const markAllAsRead = useCallback(() => {
+    setUnreadCounts({});
+    messages.forEach((msg) => {
+      if (msg.isPrivate && !msg.isMine) {
+        readMessageIds.current.add(msg.id);
+      }
+    });
+  }, [messages]);
 
   // Shutdown the mesh service
   const shutdown = useCallback(async () => {
@@ -246,69 +333,135 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   }, []);
 
   // Send a public broadcast message
-  const sendMessage = useCallback(async (content: string) => {
-    if (!isInitialized) {
-      throw new Error("Mesh chat not initialized");
-    }
+  const sendMessage = useCallback(
+    async (content: string, channel?: string) => {
+      if (!isInitialized) {
+        throw new Error("Mesh chat not initialized");
+      }
 
-    try {
-      console.log("[MeshChat] 📢 Broadcasting message:", content.substring(0, 50));
-      await bleMesh.sendMessage(content);
+      try {
+        console.log(
+          "[MeshChat] 📢 Broadcasting message:",
+          content.substring(0, 50),
+        );
+        const messageId = await bleMesh.sendMessage(content, channel);
 
-      // Add to local messages (the library doesn't echo our own messages back)
-      const localMessage: MeshChatMessage = {
-        id: `local-${Date.now()}`,
-        deviceId: myPeerId,
-        senderPeerId: myPeerId,
-        senderNickname: myNickname,
-        message: content,
-        timestamp: Date.now(),
-        isMine: true,
-        isPrivate: false,
-      };
-      setMessages((prev) => [...prev, localMessage]);
-    } catch (err) {
-      console.error("[MeshChat] Failed to send message:", err);
-      throw err;
-    }
-  }, [isInitialized, myPeerId, myNickname]);
+        // Add to local messages (the library doesn't echo our own messages back)
+        const localMessage: MeshChatMessage = {
+          id: messageId,
+          deviceId: myPeerId,
+          senderPeerId: myPeerId,
+          senderNickname: myNickname,
+          message: content,
+          timestamp: Date.now(),
+          isMine: true,
+          isPrivate: false,
+        };
+        setMessages((prev) => [...prev, localMessage]);
+
+        return messageId;
+      } catch (err) {
+        console.error("[MeshChat] Failed to send message:", err);
+        throw err;
+      }
+    },
+    [isInitialized, myPeerId, myNickname],
+  );
 
   // Send a private encrypted message
-  const sendPrivateMessage = useCallback(async (content: string, recipientPeerId: string) => {
-    if (!isInitialized) {
-      throw new Error("Mesh chat not initialized");
-    }
+  const sendPrivateMessage = useCallback(
+    async (content: string, recipientPeerId: string) => {
+      if (!isInitialized) {
+        throw new Error("Mesh chat not initialized");
+      }
 
-    try {
-      console.log(
-        `[MeshChat] 🔒 Sending private message to ${recipientPeerId}:`,
-        content.substring(0, 50)
-      );
-      await bleMesh.sendPrivateMessage(content, recipientPeerId);
+      try {
+        console.log(
+          `[MeshChat] 🔒 Sending private message to ${recipientPeerId}:`,
+          content.substring(0, 50),
+        );
+        const messageId = await bleMesh.sendPrivateMessage(
+          content,
+          recipientPeerId,
+        );
 
-      // Add to local messages
-      const localMessage: MeshChatMessage = {
-        id: `local-${Date.now()}`,
-        deviceId: recipientPeerId,
-        senderPeerId: myPeerId,
-        senderNickname: myNickname,
-        message: content,
-        timestamp: Date.now(),
-        isMine: true,
-        isPrivate: true,
-        to: recipientPeerId,
-      };
-      setMessages((prev) => [...prev, localMessage]);
-    } catch (err) {
-      console.error("[MeshChat] Failed to send private message:", err);
-      throw err;
-    }
-  }, [isInitialized, myPeerId, myNickname]);
+        // Add to local messages
+        const localMessage: MeshChatMessage = {
+          id: messageId,
+          deviceId: recipientPeerId,
+          senderPeerId: myPeerId,
+          senderNickname: myNickname,
+          message: content,
+          timestamp: Date.now(),
+          isMine: true,
+          isPrivate: true,
+          to: recipientPeerId,
+        };
+        setMessages((prev) => [...prev, localMessage]);
+
+        return messageId;
+      } catch (err) {
+        console.error("[MeshChat] Failed to send private message:", err);
+        throw err;
+      }
+    },
+    [isInitialized, myPeerId, myNickname],
+  );
+
+  // Send a read receipt for a received message
+  const sendReadReceipt = useCallback(
+    async (messageId: string, recipientPeerId: string) => {
+      if (!isInitialized) {
+        throw new Error("Mesh chat not initialized");
+      }
+
+      try {
+        console.log(
+          `[MeshChat] 📖 Sending read receipt for message ${messageId} to ${recipientPeerId}`,
+        );
+        await bleMesh.sendReadReceipt(messageId, recipientPeerId);
+      } catch (err) {
+        console.error("[MeshChat] Failed to send read receipt:", err);
+        throw err;
+      }
+    },
+    [isInitialized],
+  );
+
+  // Initiates a Noise handshake with a peer for encrypted communication
+  const initiateHandshake = useCallback(
+    async (peerId: string) => {
+      if (!isInitialized) {
+        throw new Error("Mesh chat not initialized");
+      }
+
+      try {
+        console.log(`[MeshChat] 🤝 Initiating handshake with ${peerId}`);
+        await bleMesh.initiateHandshake(peerId);
+        console.log(`[MeshChat] ✅ Handshake initiated with ${peerId}`);
+      } catch (err) {
+        console.error(
+          `[MeshChat] Failed to initiate handshake with ${peerId}:`,
+          err,
+        );
+        throw err;
+      }
+    },
+    [isInitialized],
+  );
 
   // Clear all messages
   const clearMessages = useCallback(() => {
     setMessages([]);
     messageIdCache.current.clear();
+    readMessageIds.current.clear();
+    setUnreadCounts({});
+    // Also clear notification counts
+    if (Platform.OS === "android") {
+      clearAllUnreadMessages().catch((err) => {
+        console.error("[MeshChat] Failed to clear message notifications:", err);
+      });
+    }
     console.log("[MeshChat] Messages cleared");
   }, []);
 
@@ -338,13 +491,16 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   }, []);
 
   // Get peer by ID
-  const getPeerById = useCallback((peerId: string) => {
-    return peers.find((p) => p.peerId === peerId);
-  }, [peers]);
+  const getPeerById = useCallback(
+    (peerId: string) => {
+      return peers.find((p) => p.peerId === peerId);
+    },
+    [peers],
+  );
 
   // Auto-initialize on mount - only run once
   const hasInitialized = useRef(false);
-  
+
   useEffect(() => {
     if (autoInitialize && !hasInitialized.current) {
       hasInitialized.current = true;
@@ -381,6 +537,40 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   // Calculate connected peer count
   const connectedPeerCount = peers.filter((p) => p.isConnected).length;
 
+  // Calculate total unread count
+  const totalUnreadCount = Object.values(unreadCounts).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+
+  // Update notification when peer count changes
+  useEffect(() => {
+    if (isInitialized && Platform.OS === "android") {
+      updatePeerCount(connectedPeerCount);
+    }
+  }, [connectedPeerCount, isInitialized]);
+
+  // Show/hide foreground notification based on initialization state
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    if (isInitialized && isConnected) {
+      showBLEForegroundNotification().catch((err) => {
+        console.error("[MeshChat] Failed to show BLE notification:", err);
+      });
+    } else if (!isInitialized) {
+      hideBLEForegroundNotification().catch((err) => {
+        console.error("[MeshChat] Failed to hide BLE notification:", err);
+      });
+    }
+
+    return () => {
+      if (!isInitialized) {
+        hideBLEForegroundNotification().catch(() => {});
+      }
+    };
+  }, [isInitialized, isConnected]);
+
   const value: MeshChatContextType = {
     isInitialized,
     isConnected,
@@ -389,18 +579,25 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     peers,
     messages,
     error,
+    unreadCounts,
+    totalUnreadCount,
     initialize,
     shutdown,
     setNickname,
     sendMessage,
     sendPrivateMessage,
+    sendReadReceipt,
     clearMessages,
     broadcastAnnounce,
     hasEncryptedSession,
+    initiateHandshake,
     getIdentityFingerprint,
     getPeerFingerprint,
     getPeerById,
     connectedPeerCount,
+    markPeerAsRead,
+    getUnreadCountForPeer,
+    markAllAsRead,
   };
 
   return (

@@ -3,12 +3,36 @@
  *
  * Manages persistent notifications for background BLE operation on Android.
  * Required to prevent Android from killing BLE service when app is backgrounded.
+ *
+ * Enhanced to show:
+ * - Connected peer count
+ * - Unread private messages count
+ * - Unread public messages count
+ * - Pending transactions (high priority)
  */
 
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 let notificationId: string | null = null;
+
+// Notification state tracking
+interface NotificationState {
+  connectedCount: number;
+  pendingTransactionCount: number;
+  unreadPrivateCount: number;
+  unreadPublicCount: number;
+}
+
+const currentState: NotificationState = {
+  connectedCount: 0,
+  pendingTransactionCount: 0,
+  unreadPrivateCount: 0,
+  unreadPublicCount: 0,
+};
+
+// Track if the service is active
+let isNotificationActive = false;
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -54,7 +78,7 @@ export async function showBLEForegroundNotification(): Promise<void> {
 
     // Create notification channel for BLE service
     await Notifications.setNotificationChannelAsync("ble-service", {
-      name: "Mesh Network Service",
+      name: "anon0mesh Service",
       importance: Notifications.AndroidImportance.LOW, // Low = no sound/vibration
       description: "Keeps Bluetooth mesh networking active in background",
       enableVibrate: false,
@@ -66,8 +90,8 @@ export async function showBLEForegroundNotification(): Promise<void> {
     // Show persistent notification
     notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: "📡 Mesh Network Active",
-        body: "Connected to nearby devices via Bluetooth",
+        title: "anon0mesh Status",
+        body: "Searching for nearby devices...",
         data: { persistent: true, service: "ble-mesh" },
         priority: Notifications.AndroidNotificationPriority.LOW,
         sticky: true, // Can't be dismissed by swiping
@@ -76,6 +100,7 @@ export async function showBLEForegroundNotification(): Promise<void> {
       trigger: null, // Show immediately
     });
 
+    isNotificationActive = true;
     console.log(
       "[BLE Notification] ✅ Foreground notification shown:",
       notificationId,
@@ -99,6 +124,12 @@ export async function hideBLEForegroundNotification(): Promise<void> {
     await Notifications.dismissNotificationAsync(notificationId);
     console.log("[BLE Notification] ✅ Notification dismissed");
     notificationId = null;
+    isNotificationActive = false;
+    // Reset state
+    currentState.connectedCount = 0;
+    currentState.pendingTransactionCount = 0;
+    currentState.unreadPrivateCount = 0;
+    currentState.unreadPublicCount = 0;
   } catch (error) {
     console.error(
       "[BLE Notification] ❌ Failed to dismiss notification:",
@@ -106,17 +137,84 @@ export async function hideBLEForegroundNotification(): Promise<void> {
     );
     // Clear the ID anyway to allow re-showing
     notificationId = null;
+    isNotificationActive = false;
   }
 }
 
 /**
- * Updates the notification content with status information
- * Shows pending transactions if any, otherwise shows connection count
+ * Builds the notification title and body based on current state
+ * Priority: Pending transactions > Private messages > Public messages > Peer count
  */
-export async function updateBLENotification(
-  connectedCount: number,
-  pendingTransactionCount = 0,
-): Promise<void> {
+function buildNotificationContent(): {
+  title: string;
+  body: string;
+  priority: Notifications.AndroidNotificationPriority;
+} {
+  const {
+    connectedCount,
+    pendingTransactionCount,
+    unreadPrivateCount,
+    unreadPublicCount,
+  } = currentState;
+
+  // Highest priority: Pending transactions
+  if (pendingTransactionCount > 0) {
+    const txText =
+      pendingTransactionCount === 1 ? "transaction" : "transactions";
+    return {
+      title: "⚡ Pending Transactions",
+      body: `${pendingTransactionCount} ${txText} waiting for signature`,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+    };
+  }
+
+  // Build status parts
+  const parts: string[] = [];
+
+  // Connected peers
+  if (connectedCount > 0) {
+    const peerText = connectedCount === 1 ? "peer" : "peers";
+    parts.push(`🔗 ${connectedCount} ${peerText} connected`);
+  }
+
+  // Private messages
+  if (unreadPrivateCount > 0) {
+    const msgText = unreadPrivateCount === 1 ? "message" : "messages";
+    parts.push(`🔒 ${unreadPrivateCount} private ${msgText}`);
+  }
+
+  // Public messages
+  if (unreadPublicCount > 0) {
+    const msgText = unreadPublicCount === 1 ? "message" : "messages";
+    parts.push(`📢 ${unreadPublicCount} public ${msgText}`);
+  }
+
+  // Determine priority based on unread messages
+  let priority = Notifications.AndroidNotificationPriority.LOW;
+  if (unreadPrivateCount > 0) {
+    priority = Notifications.AndroidNotificationPriority.DEFAULT;
+  }
+
+  // Build final content
+  if (parts.length === 0) {
+    return {
+      title: "anon0mesh",
+      body: "Searching for nearby devices...",
+      priority,
+    };
+  }
+
+  return {
+    title: "anon0mesh Status",
+    body: parts.join(" · "),
+    priority,
+  };
+}
+
+/**
+ * Updates the notification with current state
+ */
+async function refreshNotification(): Promise<void> {
   if (Platform.OS !== "android" || !notificationId) {
     return;
   }
@@ -125,37 +223,17 @@ export async function updateBLENotification(
     // Dismiss old notification
     await Notifications.dismissNotificationAsync(notificationId);
 
-    // Priority message: Pending transactions
-    let title = "📡 Mesh Network Active";
-    let bodyMessage = "";
-    let priority = Notifications.AndroidNotificationPriority.LOW;
-
-    if (pendingTransactionCount > 0) {
-      // High priority for pending transactions - user needs to act
-      title = "⚡ Pending Transactions";
-      const txText =
-        pendingTransactionCount === 1 ? "transaction" : "transactions";
-      bodyMessage = `${pendingTransactionCount} ${txText} waiting for signature`;
-      priority = Notifications.AndroidNotificationPriority.DEFAULT; // Higher priority
-    } else {
-      // Normal status message
-      const peerText = connectedCount === 1 ? "peer" : "peers";
-      bodyMessage =
-        connectedCount > 0
-          ? `Connected to ${connectedCount} ${peerText}`
-          : "Searching for nearby devices...";
-    }
+    const { title, body, priority } = buildNotificationContent();
 
     // Show new one with updated content
     notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title,
-        body: bodyMessage,
+        body,
         data: {
           persistent: true,
           service: "ble-mesh",
-          connectedCount,
-          pendingTransactionCount,
+          ...currentState,
         },
         priority,
         sticky: true,
@@ -165,11 +243,87 @@ export async function updateBLENotification(
     });
 
     console.log(
-      `[BLE Notification] Updated notification (${connectedCount} peers, ${pendingTransactionCount} pending tx)`,
+      `[BLE Notification] Updated: ${currentState.connectedCount} peers, ${currentState.unreadPrivateCount} private, ${currentState.unreadPublicCount} public, ${currentState.pendingTransactionCount} pending tx`,
     );
   } catch (error) {
-    console.error("[BLE Notification] Failed to update notification:", error);
+    console.error("[BLE Notification] Failed to refresh notification:", error);
   }
+}
+
+/**
+ * Updates the notification with peer connection count
+ */
+export async function updatePeerCount(count: number): Promise<void> {
+  currentState.connectedCount = count;
+  await refreshNotification();
+}
+
+/**
+ * Updates the notification with pending transaction count
+ */
+export async function updatePendingTransactions(count: number): Promise<void> {
+  currentState.pendingTransactionCount = count;
+  await refreshNotification();
+}
+
+/**
+ * Increments the unread private message count
+ * Call this when a new private message is received
+ */
+export async function incrementUnreadPrivateMessages(count = 1): Promise<void> {
+  currentState.unreadPrivateCount += count;
+  await refreshNotification();
+}
+
+/**
+ * Increments the unread public message count
+ * Call this when a new public message is received
+ */
+export async function incrementUnreadPublicMessages(count = 1): Promise<void> {
+  currentState.unreadPublicCount += count;
+  await refreshNotification();
+}
+
+/**
+ * Clears the unread private message count
+ * Call this when the user views private messages
+ */
+export async function clearUnreadPrivateMessages(): Promise<void> {
+  currentState.unreadPrivateCount = 0;
+  await refreshNotification();
+}
+
+/**
+ * Clears the unread public message count
+ * Call this when the user views public messages
+ */
+export async function clearUnreadPublicMessages(): Promise<void> {
+  currentState.unreadPublicCount = 0;
+  await refreshNotification();
+}
+
+/**
+ * Clears all unread message counts
+ * Call this when the user opens the chat screen
+ */
+export async function clearAllUnreadMessages(): Promise<void> {
+  currentState.unreadPrivateCount = 0;
+  currentState.unreadPublicCount = 0;
+  await refreshNotification();
+}
+
+/**
+ * Legacy: Updates the notification content with status information
+ * Shows pending transactions if any, otherwise shows connection count
+ * @deprecated Use the specific update functions instead
+ */
+export async function updateBLENotification(
+  connectedCount: number,
+  pendingTransactionCount = 0,
+): Promise<void> {
+  currentState.connectedCount = connectedCount;
+  currentState.pendingTransactionCount = pendingTransactionCount;
+  await refreshNotification();
 }
 
 /**
@@ -177,4 +331,11 @@ export async function updateBLENotification(
  */
 export function isBLENotificationShowing(): boolean {
   return notificationId !== null;
+}
+
+/**
+ * Get the current notification state (for debugging)
+ */
+export function getNotificationState(): NotificationState {
+  return { ...currentState };
 }

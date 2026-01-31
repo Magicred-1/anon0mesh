@@ -1,5 +1,5 @@
 import { subscribeToConnectivityChanges } from "@/src/infrastructure/wallet/utils/connectivity";
-import { CaretLeft } from "phosphor-react-native";
+import { CaretLeft, Wallet } from "phosphor-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -19,7 +19,13 @@ interface ChatHeaderProps {
 }
 
 export default function ChatHeader(props: ChatHeaderProps) {
-  const { nickname, selectedPeer, onlinePeersCount, onNavigateToSelection } = props;
+  const {
+    nickname,
+    selectedPeer,
+    onlinePeersCount,
+    onNavigateToSelection,
+    onWalletPress,
+  } = props;
 
   const handleBackPress = () => {
     if (onNavigateToSelection) {
@@ -72,8 +78,7 @@ export default function ChatHeader(props: ChatHeaderProps) {
 
   // Display name based on selection
   // TODO: Add zone support
-  const displayName =
-    !selectedPeer ? "Broadcast" : nickname || "Mesh Chat";
+  const displayName = !selectedPeer ? "Broadcast" : nickname || "Mesh Chat";
 
   return (
     <View style={styles.header}>
@@ -96,6 +101,15 @@ export default function ChatHeader(props: ChatHeaderProps) {
 
       {/* Right side icons */}
       <View style={styles.headerRight}>
+        {/* Wallet Icon */}
+        <TouchableOpacity
+          onPress={onWalletPress}
+          activeOpacity={0.7}
+          style={styles.walletButton}
+        >
+          <Wallet size={20} color="#00CED1" weight="regular" />
+        </TouchableOpacity>
+
         {/* BLE Peers Counter */}
         <View style={styles.peersContainer}>
           <View style={styles.peopleIcon}>
@@ -135,17 +149,6 @@ export default function ChatHeader(props: ChatHeaderProps) {
           </View>
         </View>
       </View>
-
-      {/* Zone Selector Modal
-      <ZoneSelectorModal
-        visible={showZoneSelector}
-        onClose={() => setShowZoneSelector(false)}
-        onSelectZone={(zone) => {
-          setSelectedZone(zone);
-          console.log('Selected zone:', zone);
-        }}
-        selectedZone={selectedZone}
-      /> */}
     </View>
   );
 }
@@ -180,6 +183,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  walletButton: {
+    padding: 4,
   },
   peersContainer: {
     flexDirection: "row",
@@ -257,72 +263,5 @@ const styles = StyleSheet.create({
   titleTouch: {
     paddingVertical: 4,
     paddingHorizontal: 6,
-  },
-  // Profile Icon
-  profileIcon: {
-    width: 20,
-    height: 20,
-    alignItems: "center",
-  },
-  profileHead: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#00d9ff",
-  },
-  profileBody: {
-    width: 16,
-    height: 10,
-    borderRadius: 8,
-    backgroundColor: "#00d9ff",
-    marginTop: 2,
-  },
-  // Bluetooth Icon
-  bluetoothIcon: {
-    width: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bluetoothActive: {
-    opacity: 1,
-  },
-  bluetoothSymbol: {
-    width: 12,
-    height: 18,
-    borderLeftWidth: 2,
-    borderRightWidth: 2,
-    borderTopWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: "#00CED1",
-    borderTopLeftRadius: 6,
-    borderTopRightRadius: 6,
-    borderBottomLeftRadius: 6,
-    borderBottomRightRadius: 6,
-    transform: [{ rotate: "45deg" }],
-  },
-  // Trash Icon
-  trashIcon: {
-    width: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "flex-start",
-  },
-  trashLid: {
-    width: 16,
-    height: 3,
-    backgroundColor: "#00CED1",
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
-    marginBottom: 2,
-  },
-  trashBody: {
-    width: 12,
-    height: 10,
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: "#00CED1",
-    borderBottomLeftRadius: 2,
-    borderBottomRightRadius: 2,
   },
 });

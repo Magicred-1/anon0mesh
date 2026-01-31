@@ -54,6 +54,8 @@ export default function ChatSelectionScreenMesh({
     myNickname,
     peers: meshPeers,
     connectedPeerCount,
+    getUnreadCountForPeer,
+    markPeerAsRead,
   } = useMeshChat();
 
   // Debug logging
@@ -89,8 +91,9 @@ export default function ChatSelectionScreenMesh({
       online: peer.isConnected,
       hasSession: peer.isVerified,
       rssi: peer.rssi,
+      unreadCount: getUnreadCountForPeer(peer.peerId),
     }));
-  }, [meshPeers]);
+  }, [meshPeers, getUnreadCountForPeer]);
 
   // Add "Broadcast to All" option at the top
   const renderBroadcastOption = () => (
@@ -140,7 +143,10 @@ export default function ChatSelectionScreenMesh({
     return (
       <TouchableOpacity
         style={[styles.peerItem, isPressed && styles.peerItemPressed]}
-        onPress={() => onSelectPeer(item.id)}
+        onPress={() => {
+          markPeerAsRead(item.id);
+          onSelectPeer(item.id);
+        }}
         onPressIn={() => setPressedItemId(item.id)}
         onPressOut={() => setPressedItemId(null)}
         activeOpacity={1}
@@ -168,6 +174,13 @@ export default function ChatSelectionScreenMesh({
               {isOnline ? "Connected" : `Last seen ${item.lastActive}`}
             </Text>
           </View>
+          {item.unreadCount ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>
+                {item.unreadCount > 99 ? "99+" : item.unreadCount}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.chevronIcon}>
             <CaretRight size={24} color="#22D3EE" weight="regular" />
           </View>
@@ -383,6 +396,22 @@ const styles = StyleSheet.create({
   },
   chevronIcon: {
     marginLeft: 0,
+  },
+  unreadBadge: {
+    backgroundColor: "#EF4444",
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+    marginRight: 12,
+  },
+  unreadBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+    fontFamily: "SpaceGrotesk_700Bold",
   },
   firstPeerItem: {
     backgroundColor: "#1e3a5f",

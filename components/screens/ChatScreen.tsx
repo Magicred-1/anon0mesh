@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 
 import ChatHeader from "@/components/chat/ChatHeader";
@@ -32,6 +32,7 @@ import { useWallet } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
 import { parseCommand, SendCommandResult } from "@/src/utils/chatCommands";
 import { checkInternetConnectivity } from "@/src/infrastructure/wallet/utils/connectivity";
+import { clearAllUnreadMessages } from "@/src/utils/bleNotification";
 import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
 
 interface Peer {
@@ -71,6 +72,7 @@ export default function MeshChatScreen({
     sendPrivateMessage,
     clearMessages: clearMeshMessages,
     setNickname: setMeshNickname,
+    markPeerAsRead,
   } = useMeshChat();
 
   // Local UI state
@@ -82,12 +84,26 @@ export default function MeshChatScreen({
     initialSelectedPeer || null
   );
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // Track the last marked peer to avoid redundant calls
+  const lastMarkedPeerRef = useRef<string | null>(null);
   const [editNickVisible, setEditNickVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
 
   // Permission request state
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
+
+  // Clear notification counts when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      if (Platform.OS === "android") {
+        clearAllUnreadMessages().catch((err) => {
+          console.error("[ChatScreen] Failed to clear unread messages:", err);
+        });
+      }
+    }, [])
+  );
 
   // Payment modal state
   const [paymentCommand, setPaymentCommand] = useState<SendCommandResult | null>(null);
@@ -274,6 +290,25 @@ export default function MeshChatScreen({
     );
   }, [allMessages, selectedPeer]);
 
+  // Mark messages as read when viewing a peer's chat
+  useEffect(() => {
+    if (selectedPeer && selectedPeer !== lastMarkedPeerRef.current) {
+      markPeerAsRead(selectedPeer);
+      lastMarkedPeerRef.current = selectedPeer;
+    } else if (!selectedPeer) {
+      lastMarkedPeerRef.current = null;
+    }
+  }, [selectedPeer, markPeerAsRead]);
+
+  // Also mark as read when the screen is focused (in case new messages arrived while away)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (selectedPeer) {
+        markPeerAsRead(selectedPeer);
+      }
+    }, [selectedPeer, markPeerAsRead])
+  );
+
   // Get selected peer display name
   const selectedPeerNickname = React.useMemo(() => {
     if (!selectedPeer) {
@@ -339,7 +374,12 @@ export default function MeshChatScreen({
             visible={showSidebar}
             peers={peers}
             selectedPeerId={selectedPeer}
-            onPeerSelect={setSelectedPeer}
+            onPeerSelect={(peerId: string | null) => {
+              if (peerId) {
+                markPeerAsRead(peerId);
+              }
+              setSelectedPeer(peerId);
+            }}
             onClose={() => setShowSidebar(false)}
             onDisconnect={handleClearMessages}
           />

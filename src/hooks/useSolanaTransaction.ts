@@ -54,13 +54,14 @@ import {
 } from "../domain/services/SolanaTransactionService";
 import { PeerId } from "../domain/value-objects/PeerId";
 import { DurableNonceManager } from "../infrastructure/wallet/transaction/SolanaDurableNonce";
+import { useTor, UseTorOptions } from "./useTor";
 
 // ============================================
 // TYPES
 // ============================================
 
 export interface UseSolanaTransactionConfig {
-  connection: Connection;
+  connection?: Connection; // Optional: external connection (if not using Tor)
   wallet: Keypair | null;
   nonceAccount?: PublicKey; // Optional durable nonce account
   isBeacon?: boolean; // Whether this peer is a beacon (has internet)
@@ -71,6 +72,8 @@ export interface UseSolanaTransactionConfig {
   ) => Promise<boolean>;
   onReceipt?: (receipt: TransactionReceipt) => void;
   onPacketReady?: (packets: Packet[]) => void; // Callback to send packets via BLE
+  // Tor configuration - if provided, transactions will be routed through Tor
+  tor?: UseTorOptions | boolean; // true = use default Tor config, or provide custom config
 }
 
 export interface SendTransactionParams {
@@ -86,6 +89,14 @@ export interface UseSolanaTransactionReturn {
   pendingTransactions: PendingTransaction[];
   incomingRequests: Map<string, TransactionRequest>;
   isReady: boolean;
+  // Tor state (if using Tor)
+  torStatus: {
+    isInitialized: boolean;
+    isRunning: boolean;
+    isLoading: boolean;
+    error: Error | null;
+    connection: Connection | null;
+  };
 
   // Methods - Sender side
   sendTransactionRequest: (
@@ -99,6 +110,9 @@ export interface UseSolanaTransactionReturn {
   // Methods - Both sides
   handleIncomingPacket: (packet: Packet) => Promise<void>;
   clearTransaction: (requestId: string) => void;
+  // Tor controls (if using Tor)
+  initializeTor: () => Promise<boolean>;
+  shutdownTor: () => Promise<void>;
 }
 
 // ============================================
@@ -109,7 +123,7 @@ export function useSolanaTransaction(
   config: UseSolanaTransactionConfig,
 ): UseSolanaTransactionReturn {
   const {
-    connection,
+    connection: externalConnection,
     wallet,
     nonceAccount,
     isBeacon = false,
@@ -117,7 +131,30 @@ export function useSolanaTransaction(
     onTransactionRequest,
     onReceipt,
     onPacketReady,
+    tor: torConfig,
   } = config;
+
+  // Determine if we should use Tor
+  const useTorEnabled = !!torConfig;
+  const torOptions: UseTorOptions | undefined =
+    typeof torConfig === "boolean"
+      ? { rpcUrl: "https://api.devnet.solana.com" } // Default if just 'true'
+      : torConfig || undefined;
+
+  // Initialize Tor hook if enabled
+  const {
+    isInitialized: torInitialized,
+    isRunning: torRunning,
+    isLoading: torLoading,
+    error: torError,
+    connection: torConnection,
+    initialize: initializeTor,
+    shutdown: shutdownTor,
+    sendTransfer: sendTransferViaTor,
+  } = useTor(torOptions ?? { rpcUrl: "https://api.devnet.solana.com" });
+
+  // Use Tor connection if enabled, otherwise use external connection
+  const connection = useTorEnabled ? torConnection : externalConnection;
 
   const [pendingTransactions, setPendingTransactions] = useState<
     PendingTransaction[]
@@ -138,9 +175,13 @@ export function useSolanaTransaction(
   useEffect(() => {
     if (connection) {
       serviceRef.current = new SolanaTransactionService(connection);
-      console.log("[useSolanaTransaction] 🔧 Service initialized");
+      console.log(
+        useTorEnabled
+          ? "[useSolanaTransaction] 🔧 Service initialized with Tor"
+          : "[useSolanaTransaction] 🔧 Service initialized"
+      );
     }
-  }, [connection]);
+  }, [connection, useTorEnabled]);
 
   // Initialize nonce manager if nonce account provided
   useEffect(() => {
@@ -154,8 +195,20 @@ export function useSolanaTransaction(
   }, [connection, wallet, nonceAccount]);
 
   const isReady = useMemo(() => {
-    return !!serviceRef.current && !!wallet;
-  }, [wallet]);
+    const baseReady = !!serviceRef.current && !!wallet;
+    if (useTorEnabled) {
+      return baseReady && torInitialized && torRunning;
+    }
+    return baseReady;
+  }, [wallet, useTorEnabled, torInitialized, torRunning]);
+
+  // Auto-initialize Tor if enabled
+  useEffect(() => {
+    if (useTorEnabled && !torInitialized && !torLoading) {
+      console.log("[useSolanaTransaction] 🧅 Auto-initializing Tor...");
+      initializeTor();
+    }
+  }, [useTorEnabled, torInitialized, torLoading, initializeTor]);
 
   // Cleanup expired transactions periodically
   useEffect(() => {
@@ -230,6 +283,35 @@ export function useSolanaTransaction(
 
         // Case 1: User has internet → Send directly to Solana
         if (hasInternet) {
+          // If using Tor, send through Tor
+          if (useTorEnabled && torConnection) {
+            console.log(
+              `[useSolanaTransaction] 🧅 Sending via Tor to Solana`,
+            );
+
+            try {
+              const result = await sendTransferViaTor(
+                wallet,
+                recipientPubkey,
+                amountSOL,
+                memo,
+              );
+
+              console.log(
+                `[useSolanaTransaction] ✅ Transaction confirmed via Tor: ${result.signature}`,
+              );
+
+              return result.signature;
+            } catch (error) {
+              console.error(
+                `[useSolanaTransaction] ❌ Tor transaction failed:`,
+                error,
+              );
+              throw error;
+            }
+          }
+
+          // Regular direct submission (non-Tor)
           console.log(
             `[useSolanaTransaction] 🌐 User has internet - submitting directly to Solana`,
           );
@@ -294,7 +376,16 @@ export function useSolanaTransaction(
         return null;
       }
     },
-    [wallet, connection, nonceAccount, onPacketReady, hasInternet],
+    [
+      wallet,
+      connection,
+      nonceAccount,
+      onPacketReady,
+      hasInternet,
+      useTorEnabled,
+      torConnection,
+      sendTransferViaTor,
+    ],
   );
 
   /**
@@ -413,11 +504,43 @@ export function useSolanaTransaction(
                 "[useSolanaTransaction] ✅ Beacon mode - co-signing transaction",
               );
 
-              // Co-sign and submit to Solana
-              const receipt = await serviceRef.current.signAndSubmit(
-                request,
-                wallet,
-              );
+              let receipt: TransactionReceipt;
+
+              // If using Tor, send through Tor
+              if (useTorEnabled && torConnection && wallet) {
+                console.log(
+                  "[useSolanaTransaction] 🧅 Co-signing and submitting via Tor",
+                );
+
+                try {
+                  // Use the existing service but with Tor connection
+                  // The connection is already Tor-routed via the hook
+                  receipt = await serviceRef.current.signAndSubmit(
+                    request,
+                    wallet,
+                  );
+
+                  console.log(
+                    `[useSolanaTransaction] ✅ Transaction submitted via Tor: ${receipt.signature}`,
+                  );
+                } catch (error) {
+                  console.error(
+                    "[useSolanaTransaction] ❌ Tor submission failed, falling back:",
+                    error,
+                  );
+                  // Fall back to regular submission
+                  receipt = await serviceRef.current.signAndSubmit(
+                    request,
+                    wallet,
+                  );
+                }
+              } else {
+                // Regular submission
+                receipt = await serviceRef.current.signAndSubmit(
+                  request,
+                  wallet,
+                );
+              }
 
               // Send receipt back to original sender
               const receiptPackets = serviceRef.current.createReceipt(
@@ -535,6 +658,8 @@ export function useSolanaTransaction(
       onTransactionRequest,
       onReceipt,
       onPacketReady,
+      useTorEnabled,
+      torConnection,
     ],
   );
 
@@ -553,6 +678,14 @@ export function useSolanaTransaction(
     pendingTransactions,
     incomingRequests,
     isReady,
+    // Tor status
+    torStatus: {
+      isInitialized: torInitialized,
+      isRunning: torRunning,
+      isLoading: torLoading,
+      error: torError,
+      connection: torConnection,
+    },
 
     // Methods
     sendTransactionRequest,
@@ -560,5 +693,8 @@ export function useSolanaTransaction(
     rejectTransaction,
     handleIncomingPacket,
     clearTransaction,
+    // Tor controls
+    initializeTor,
+    shutdownTor,
   };
 }
