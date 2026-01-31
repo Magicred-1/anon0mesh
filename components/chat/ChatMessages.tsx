@@ -15,6 +15,7 @@ export interface Message {
   isMine: boolean;
   isNostr?: boolean; // Flag for Nostr messages
   isEncrypted?: boolean; // Flag for encrypted messages
+  isPrivate?: boolean; // Flag for private (1-to-1) messages
   senderId?: string; // Original device ID or public key
 }
 

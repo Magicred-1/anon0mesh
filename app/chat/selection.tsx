@@ -8,13 +8,14 @@ export default function ChatSelectionPage() {
     <ChatSelectionScreen
       onSelectPeer={(peerId) => {
         console.log("Selected peer:", peerId);
-        // Navigate to chat with selected peer (or "broadcast" for all peers)
+        // Navigate to chat with selected peer (null = broadcast to all)
+        // Use "null" string for broadcast to ensure consistent handling
         router.push({
           pathname: "/chat",
-          params: { selectedPeer: peerId },
+          params: peerId ? { selectedPeer: peerId } : { selectedPeer: "null" },
         });
       }}
-      onNavigateToMessages={() => router.push({ pathname: "/chat", params: { selectedPeer: "broadcast" } })}
+      onNavigateToMessages={() => router.push({ pathname: "/chat" })}
       onNavigateToWallet={() => router.push("/wallet")}
       onNavigateToHistory={() => router.push("/wallet/history")}
       onNavigateToMeshZone={() => router.push("/zone")}

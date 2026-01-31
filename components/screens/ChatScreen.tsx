@@ -79,7 +79,7 @@ export default function MeshChatScreen({
   const [inputText, setInputText] = useState("");
   const [peers, setPeers] = useState<Peer[]>([]);
   const [selectedPeer, setSelectedPeer] = useState<string | null>(
-    initialSelectedPeer || "broadcast"
+    initialSelectedPeer || null
   );
   const [showSidebar, setShowSidebar] = useState(false);
   const [editNickVisible, setEditNickVisible] = useState(false);
@@ -205,7 +205,7 @@ export default function MeshChatScreen({
       }
 
       // Send based on selected peer
-      if (selectedPeer && selectedPeer !== "broadcast") {
+      if (selectedPeer) {
         // PRIVATE MESSAGE: Always send private message to selected peer
         console.log("[MeshChatScreen] Sending private message to:", selectedPeer);
         await sendPrivateMessage(messageContent, selectedPeer);
@@ -232,7 +232,7 @@ export default function MeshChatScreen({
     const paymentMessage = `💸 Payment Request: ${paymentCommand.amount} ${token} to @${paymentCommand.recipient}`;
 
     try {
-      if (selectedPeer && selectedPeer !== "broadcast") {
+      if (selectedPeer) {
         // PRIVATE: Send payment request as private message
         await sendPrivateMessage(paymentMessage, selectedPeer);
       } else {
@@ -262,24 +262,22 @@ export default function MeshChatScreen({
 
   // Filter messages based on selected peer
   const filteredMessages = React.useMemo(() => {
-    if (selectedPeer === "broadcast") {
-      return allMessages;
+    if (!selectedPeer) {
+      // Broadcast (null): Only show public (non-private) messages
+      return allMessages.filter((m) => !m.isPrivate);
     }
-    if (selectedPeer) {
-      return allMessages.filter(
-        (m) =>
-          m.senderId === selectedPeer ||
-          (m.isMine && m.to === selectedPeer) ||
-          (m.isMine && !m.to && selectedPeer !== "broadcast")
-      );
-    }
-    return allMessages.filter((m) => !m.to);
+    // Private chat: Only show private messages between me and the selected peer
+    return allMessages.filter(
+      (m) =>
+        m.isPrivate &&
+        (m.to === selectedPeer || m.senderId === selectedPeer)
+    );
   }, [allMessages, selectedPeer]);
 
   // Get selected peer display name
   const selectedPeerNickname = React.useMemo(() => {
-    if (!selectedPeer || selectedPeer === "broadcast") {
-      return "Local Chat";
+    if (!selectedPeer) {
+      return "Broadcast";
     }
     const peer = peers.find((p) => p.id === selectedPeer);
     return peer?.nickname || selectedPeer.slice(0, 8);
@@ -330,9 +328,9 @@ export default function MeshChatScreen({
               onChangeText={setInputText}
               onSend={handleSend}
               placeholder={
-                selectedPeerNickname
-                  ? `Message ${selectedPeerNickname}`
-                  : "Type message..."
+                selectedPeer
+                  ? `Private message to ${selectedPeerNickname}`
+                  : "Broadcast message to all..."
               }
             />
           </View>

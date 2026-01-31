@@ -1,8 +1,0 @@
-[package]
-name = "encrypted-ixs"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-arcis = { version = "=0.6.1" }
-blake3 = "=1.8.2"

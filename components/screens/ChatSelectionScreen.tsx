@@ -24,7 +24,7 @@ interface Peer {
 }
 
 interface ChatSelectionScreenProps {
-  onSelectPeer: (peerId: string) => void;
+  onSelectPeer: (peerId: string | null) => void;
   onBack?: () => void;
   onNavigateToMessages?: () => void;
   onNavigateToWallet?: () => void;
@@ -100,7 +100,7 @@ export default function ChatSelectionScreenMesh({
         styles.broadcastItem,
         pressedItemId === "broadcast" && styles.peerItemPressed,
       ]}
-      onPress={() => onSelectPeer("broadcast")}
+      onPress={() => onSelectPeer(null)}
       onPressIn={() => setPressedItemId("broadcast")}
       onPressOut={() => setPressedItemId(null)}
       activeOpacity={1}
@@ -129,15 +129,17 @@ export default function ChatSelectionScreenMesh({
     const isPressed = pressedItemId === item.id;
     const isOnline = item.online;
     const hasSecureSession = item.hasSession;
-    const isFirstItem = index === 0;
+
+    // Derive signal strength label from RSSI
+    const getSignalIcon = (rssi: number) => {
+      if (rssi > -60) return "📶"; // strong
+      if (rssi > -80) return "📳"; // medium
+      return "📴"; // weak
+    };
 
     return (
       <TouchableOpacity
-        style={[
-          styles.peerItem,
-          isPressed && styles.peerItemPressed,
-          isFirstItem && styles.firstPeerItem,
-        ]}
+        style={[styles.peerItem, isPressed && styles.peerItemPressed]}
         onPress={() => onSelectPeer(item.id)}
         onPressIn={() => setPressedItemId(item.id)}
         onPressOut={() => setPressedItemId(null)}
@@ -153,16 +155,17 @@ export default function ChatSelectionScreenMesh({
                 ]}
               />
               <Text style={styles.peerName}>{item.name}</Text>
-              {hasSecureSession && <Text style={styles.secureIcon}>🔒</Text>}
-              {item.rssi && (
-                <Text style={styles.rssiText}>
-                  {item.rssi > -60 ? "📶" : item.rssi > -80 ? "📶" : "📶"}
-                </Text>
+              {item.rssi != null && (
+                <Text style={styles.rssiText}>{getSignalIcon(item.rssi)}</Text>
               )}
             </View>
-            <Text style={styles.privateMessageLabel}>🔒 Private Message</Text>
+            <Text style={styles.privateMessageLabel}>
+              {hasSecureSession
+                ? "🔒 Verified · Private"
+                : "🔓 Unverified · Private"}
+            </Text>
             <Text style={styles.lastActive}>
-              {isOnline ? "Connected" : item.lastActive}
+              {isOnline ? "Connected" : `Last seen ${item.lastActive}`}
             </Text>
           </View>
           <View style={styles.chevronIcon}>
