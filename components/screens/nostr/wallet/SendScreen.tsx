@@ -5,10 +5,10 @@ import QRScannerModal from "@/components/modals/QRScannerModal";
 import SendConfirmationModal from "@/components/modals/SendConfirmationModal";
 import NumericKeyboard from "@/components/ui/NumericKeyboard";
 import { useWalletBalances } from "@/hooks/useWalletBalances";
-import { useBLE } from "@/src/contexts/BLEContextEnhanced";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { Packet } from "@/src/domain/entities/Packet";
-import { useBLENotificationUpdater } from "@/src/hooks/useBLENotificationUpdater";
+// import { useBLENotificationUpdater } from "@/src/hooks/useBLENotificationUpdater";
+import { useMeshChat } from "@/src/contexts/MeshChatContext";
 import { useSolanaTransaction } from "@/src/hooks/useSolanaTransaction";
 import type { ConnectivityStatus } from "@/src/infrastructure/wallet/utils/connectivity";
 import * as ConnectivityUtils from "@/src/infrastructure/wallet/utils/connectivity";
@@ -69,8 +69,17 @@ export default function SendScreen() {
   // Use wallet balances hook
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
 
-  // BLE context for discovering nearby peers
-  const { discoveredDevices, isInitialized: bleInitialized } = useBLE();
+  // Mesh chat context for discovering nearby peers
+  const { peers: meshPeers, isInitialized: bleInitialized } = useMeshChat();
+  
+  // Map mesh peers to legacy format for compatibility
+  const discoveredDevices = React.useMemo(() => {
+    return meshPeers.map(p => ({
+      id: p.peerId,
+      name: p.nickname,
+      isConnected: p.isConnected,
+    }));
+  }, [meshPeers]);
 
   // Create a keypair from wallet for transaction signing
   // Note: This is a workaround - we'll use wallet.signTransaction instead
@@ -152,11 +161,12 @@ export default function SendScreen() {
   });
 
   // Update BLE notification with pending transaction count
-  useBLENotificationUpdater({
-    connectedPeerCount: discoveredDevices.length,
-    pendingTransactionCount: pendingTransactions.length,
-    updateInterval: 5000, // Update every 5 seconds
-  });
+  // NOTE: useBLENotificationUpdater removed - using kard-network-ble-mesh now
+  // useBLENotificationUpdater({
+  //   connectedPeerCount: discoveredDevices.length,
+  //   pendingTransactionCount: pendingTransactions.length,
+  //   updateInterval: 5000,
+  // });
 
   // Get balance for selected token
   const balance = balances.find((b) => b.symbol === token)?.balance ?? 0;

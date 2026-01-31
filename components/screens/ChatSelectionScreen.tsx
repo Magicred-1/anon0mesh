@@ -1,5 +1,4 @@
-import { useBLE } from "@/src/contexts/BLEContextEnhanced";
-import { useNoiseChat } from "@/src/hooks/useNoiseChat";
+import { useMeshChat } from "@/src/contexts/MeshChatContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { Broadcast, CaretRight } from "phosphor-react-native";
 import React, { useState } from "react";
@@ -21,6 +20,7 @@ interface Peer {
   online: boolean;
   hasSession?: boolean;
   unreadCount?: number;
+  rssi?: number;
 }
 
 interface ChatSelectionScreenProps {
@@ -34,7 +34,7 @@ interface ChatSelectionScreenProps {
   onDisconnect?: () => void;
 }
 
-export default function ChatSelectionScreen({
+export default function ChatSelectionScreenMesh({
   onSelectPeer,
   onBack,
   onNavigateToMessages,
@@ -46,90 +46,51 @@ export default function ChatSelectionScreen({
 }: ChatSelectionScreenProps) {
   const [pressedItemId, setPressedItemId] = useState<string | null>(null);
 
-  // Get BLE context for peer discovery
-  // BLE is auto-initialized at app boot in BLEContextEnhanced
+  // Get mesh chat context
   const {
-    discoveredDevices,
-    isScanning,
-    isAdvertising,
     isInitialized,
-    sessions: bleSessions,
-  } = useBLE();
-
-  // Get Noise chat context for encrypted sessions
-  const { sessions } = useNoiseChat();
+    isConnected,
+    myPeerId,
+    myNickname,
+    peers: meshPeers,
+    connectedPeerCount,
+  } = useMeshChat();
 
   // Debug logging
   React.useEffect(() => {
-    console.log("[ChatSelection] BLE State:", {
+    console.log("[ChatSelectionMesh] Mesh State:", {
       isInitialized,
-      isScanning,
-      isAdvertising,
-      discoveredCount: discoveredDevices.length,
-      bleSessionCount: bleSessions.length,
-      noiseSessionCount: sessions.size,
+      isConnected,
+      myPeerId: myPeerId?.slice(0, 8),
+      myNickname,
+      peerCount: meshPeers.length,
+      connectedCount: connectedPeerCount,
     });
-    console.log("[ChatSelection] Discovered devices:", discoveredDevices);
-    console.log("[ChatSelection] BLE Sessions:", bleSessions.map(s => ({ deviceId: s.deviceId, nickname: s.nickname, state: s.state })));
-  }, [discoveredDevices, sessions, bleSessions, isScanning, isAdvertising, isInitialized]);
+  }, [
+    isInitialized,
+    isConnected,
+    myPeerId,
+    myNickname,
+    meshPeers,
+    connectedPeerCount,
+  ]);
 
-  // Note: Auto-handshake is handled by useNoiseChat hook
-  // Don't duplicate the logic here
-
-  // Convert BLE devices to Peer format
+  // Convert mesh peers to UI format
   const peers: Peer[] = React.useMemo(() => {
-    console.log("[ChatSelection] Converting devices to peers...");
+    console.log("[ChatSelectionMesh] Converting mesh peers...");
 
-    const realPeers = discoveredDevices.map((device) => {
-      // Find the BLE session for this device to get nickname
-      const bleSession = bleSessions.find(s => s.deviceId === device.id);
-      
-      // In BLE peripheral mode, "connected" means we have an active session
-      const hasNoiseSession = sessions.has(device.id);
-      const hasBleSession = !!bleSession;
-      const isConnected = hasNoiseSession || (bleSession?.state === "connected");
-
-      // Priority for nickname: BLE session > parsed from device name > fallback
-      let name = bleSession?.nickname;
-      
-      // If no session nickname, parse from advertisement name format: AM-[truncatedId]-[nickname]
-      if (!name && device.name?.startsWith("AM-")) {
-        const parts = device.name.split("-");
-        if (parts.length >= 3) {
-          name = parts.slice(2).join("-");
-        } else if (parts.length === 2) {
-          name = "Peer-" + parts[1];
-        }
-      }
-      
-      // Fallback to device name or truncated ID
-      if (!name) {
-        name = device.name || device.id.substring(0, 8);
-      }
-
-      console.log("[ChatSelection] Peer:", {
-        id: device.peerId || device.id,
-        transportId: device.id,
-        name,
-        hasNoiseSession,
-        hasBleSession,
-        bleSessionState: bleSession?.state,
-      });
-
-      return {
-        id: device.peerId || device.id,
-        transportId: device.id,
-        name,
-        lastActive: isConnected ? "now" : "discovered",
-        online: isConnected,
-        hasSession: hasNoiseSession,
-      };
-    });
-
-    return realPeers;
-  }, [discoveredDevices, sessions, bleSessions]);
-
-  const connectedPeers = peers.filter((p) => p.online).length;
+    return meshPeers.map((peer) => ({
+      id: peer.peerId,
+      transportId: peer.peerId,
+      name: peer.nickname || peer.peerId.slice(0, 8),
+      lastActive: peer.isConnected
+        ? "now"
+        : new Date(peer.lastSeen).toLocaleTimeString(),
+      online: peer.isConnected,
+      hasSession: peer.isVerified,
+      rssi: peer.rssi,
+    }));
+  }, [meshPeers]);
 
   // Add "Broadcast to All" option at the top
   const renderBroadcastOption = () => (
@@ -153,8 +114,8 @@ export default function ChatSelectionScreen({
             <Text style={styles.broadcastName}>Broadcast to All</Text>
           </View>
           <Text style={styles.broadcastSubtext}>
-            Send encrypted message to {connectedPeers} connected{" "}
-            {connectedPeers === 1 ? "peer" : "peers"}
+            Send message to {connectedPeerCount} connected{" "}
+            {connectedPeerCount === 1 ? "peer" : "peers"}
           </Text>
         </View>
         <View style={styles.chevronIcon}>
@@ -193,8 +154,16 @@ export default function ChatSelectionScreen({
               />
               <Text style={styles.peerName}>{item.name}</Text>
               {hasSecureSession && <Text style={styles.secureIcon}>🔒</Text>}
+              {item.rssi && (
+                <Text style={styles.rssiText}>
+                  {item.rssi > -60 ? "📶" : item.rssi > -80 ? "📶" : "📶"}
+                </Text>
+              )}
             </View>
-            <Text style={styles.lastActive}>{item.lastActive}</Text>
+            <Text style={styles.privateMessageLabel}>🔒 Private Message</Text>
+            <Text style={styles.lastActive}>
+              {isOnline ? "Connected" : item.lastActive}
+            </Text>
           </View>
           <View style={styles.chevronIcon}>
             <CaretRight size={24} color="#22D3EE" weight="regular" />
@@ -217,12 +186,25 @@ export default function ChatSelectionScreen({
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Messages</Text>
           <View style={styles.peersCountContainer}>
-            <View style={styles.peersCountDot} />
+            <View
+              style={[
+                styles.peersCountDot,
+                !isConnected && styles.peersCountDotOffline,
+              ]}
+            />
             <Text style={styles.peersCountText}>
-              {connectedPeers} {connectedPeers === 1 ? "peer" : "peers"}{" "}
+              {connectedPeerCount} {connectedPeerCount === 1 ? "peer" : "peers"}{" "}
               connected
             </Text>
           </View>
+        </View>
+
+        {/* My Info */}
+        <View style={styles.myInfoContainer}>
+          <Text style={styles.myInfoText}>
+            {myNickname} ({myPeerId ? myPeerId.slice(0, 8) : "..."}{" "}
+            {isConnected ? "🟢" : "🔴"})
+          </Text>
         </View>
 
         {/* Peer List */}
@@ -234,13 +216,15 @@ export default function ChatSelectionScreen({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.peerListContent}
             ListHeaderComponent={
-              connectedPeers > 0 ? renderBroadcastOption : null
+              connectedPeerCount > 0 ? renderBroadcastOption : null
             }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No peers discovered yet</Text>
                 <Text style={styles.emptySubtext}>
-                  BLE scanning is active. Nearby devices will appear here.
+                  {isInitialized
+                    ? "BLE mesh is active. Nearby devices will appear here."
+                    : "Initializing BLE mesh..."}
                 </Text>
               </View>
             }
@@ -293,11 +277,35 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: "#22D3EE",
   },
+  peersCountDotOffline: {
+    backgroundColor: "#EF4444",
+  },
   peersCountText: {
     color: "#22D3EE",
     fontSize: 13,
     fontWeight: "400",
     marginLeft: 6,
+  },
+  myInfoContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "rgba(34, 211, 238, 0.05)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(34, 211, 238, 0.1)",
+  },
+  myInfoText: {
+    color: "#94A3B8",
+    fontSize: 13,
+  },
+  statusText: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusOnline: {
+    color: "#22D3EE",
+  },
+  statusOffline: {
+    color: "#EF4444",
   },
   peerListContainer: {
     flex: 1,
@@ -351,6 +359,17 @@ const styles = StyleSheet.create({
   secureIcon: {
     fontSize: 14,
     marginLeft: 6,
+  },
+  privateMessageLabel: {
+    color: "#22D3EE",
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  rssiText: {
+    fontSize: 12,
+    marginLeft: 4,
   },
   lastActive: {
     color: "#9CA3AF",

@@ -1,7 +1,7 @@
 import ChatSelectionScreen from "@/components/screens/ChatSelectionScreen";
 import { useRouter } from "expo-router";
 
-const ChatSelectionPage = () => {
+export default function ChatSelectionPage() {
   const router = useRouter();
 
   return (
@@ -25,6 +25,4 @@ const ChatSelectionPage = () => {
       }}
     />
   );
-};
-
-export default ChatSelectionPage;
+}

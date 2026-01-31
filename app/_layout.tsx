@@ -16,8 +16,11 @@ import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import "@/global.css";
 
 // ENHANCED BLE CONTEXTS - Replace original providers for persistent sessions
-import { BLEProvider } from "@/src/contexts/BLEContextEnhanced";
-import { NoiseProvider } from "@/src/contexts/NoiseContextEnhanced";
+// import { BLEProvider } from "@/src/contexts/BLEContextEnhanced";
+// import { NoiseProvider } from "@/src/contexts/NoiseContextEnhanced";
+
+// MESH CHAT - New kard-network-ble-mesh integration
+import { MeshChatProvider } from "@/src/contexts/MeshChatContext";
 
 import { WalletProvider } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
@@ -38,28 +41,25 @@ export default function RootLayout() {
   return (
     <GluestackUIProvider mode="dark">
       <WalletProvider autoInitialize={true}>
-        {/* ENHANCED: BLEContextEnhanced provides persistent sessions with auto-reconnect */}
-        <BLEProvider>
-          {/* ENHANCED: NoiseContextEnhanced integrates with BLE sessions for automatic handshake */}
-          <NoiseProvider>
-            <ThemeProvider
-              value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-            >
-              {/* Hide default stack header globally */}
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="onboarding" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="landing" />
-                <Stack.Screen name="chat" />
-                <Stack.Screen name="wallet" />
-                <Stack.Screen name="profile" />
-                <Stack.Screen name="zone" />
-                <Stack.Screen name="ble-test" />
-              </Stack>
-              <StatusBar style="auto" />
-            </ThemeProvider>
-          </NoiseProvider>
-        </BLEProvider>
+        {/* MESH CHAT: kard-network-ble-mesh integration */}
+        <MeshChatProvider autoInitialize={true}>
+          <ThemeProvider
+            value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+          >
+            {/* Hide default stack header globally */}
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="onboarding" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="landing" />
+              <Stack.Screen name="chat" />
+              <Stack.Screen name="wallet" />
+              <Stack.Screen name="profile" />
+              <Stack.Screen name="zone" />
+              <Stack.Screen name="ble-test" />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </MeshChatProvider>
       </WalletProvider>
     </GluestackUIProvider>
   );
