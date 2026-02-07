@@ -5,6 +5,9 @@
  * instead of the complex BLE+Noise stack.
  */
 
+import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect, useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -16,24 +19,20 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useFocusEffect } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 
+import BluetoothPermissionRequest from "@/components/bluetooth/BluetoothPermissionRequest";
 import ChatHeader from "@/components/chat/ChatHeader";
 import ChatInput from "@/components/chat/ChatInput";
 import ChatMessages, { Message } from "@/components/chat/ChatMessages";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import EditNicknameModal from "@/components/modals/EditNicknameModal";
-import BluetoothPermissionRequest from "@/components/bluetooth/BluetoothPermissionRequest";
 
-import { useMeshChat } from "@/src/contexts/MeshChatContext";
+import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
+import { useMeshChat } from "@/src/contexts/MeshBLEContext";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
-import { parseCommand, SendCommandResult } from "@/src/utils/chatCommands";
-import { checkInternetConnectivity } from "@/src/infrastructure/wallet/utils/connectivity";
 import { clearAllUnreadMessages } from "@/src/utils/bleNotification";
-import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
+import { parseCommand, SendCommandResult } from "@/src/utils/chatCommands";
 
 interface Peer {
   id: string;
@@ -81,7 +80,7 @@ export default function MeshChatScreen({
   const [inputText, setInputText] = useState("");
   const [peers, setPeers] = useState<Peer[]>([]);
   const [selectedPeer, setSelectedPeer] = useState<string | null>(
-    initialSelectedPeer || null
+    initialSelectedPeer || null,
   );
   const [showSidebar, setShowSidebar] = useState(false);
 
@@ -102,11 +101,12 @@ export default function MeshChatScreen({
           console.error("[ChatScreen] Failed to clear unread messages:", err);
         });
       }
-    }, [])
+    }, []),
   );
 
   // Payment modal state
-  const [paymentCommand, setPaymentCommand] = useState<SendCommandResult | null>(null);
+  const [paymentCommand, setPaymentCommand] =
+    useState<SendCommandResult | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Initialize wallet and identity
@@ -132,8 +132,9 @@ export default function MeshChatScreen({
         }
 
         // Load nickname
-        const identity = identityStateManager.getIdentity() || 
-          await identityStateManager.initialize();
+        const identity =
+          identityStateManager.getIdentity() ||
+          (await identityStateManager.initialize());
         if (mounted && identity) {
           setNickname(identity.nickname);
         } else if (mounted) {
@@ -177,7 +178,7 @@ export default function MeshChatScreen({
   const allMessages = React.useMemo((): Message[] => {
     return meshMessages.map((msg, idx) => ({
       id: msg.id || `msg-${idx}`,
-      from: msg.isMine ? (nickname || "Me") : msg.senderNickname,
+      from: msg.isMine ? nickname || "Me" : msg.senderNickname,
       senderId: msg.senderPeerId,
       to: msg.to,
       msg: msg.message,
@@ -215,7 +216,7 @@ export default function MeshChatScreen({
       if (!meshReady) {
         Alert.alert(
           "Not Ready",
-          "BLE Mesh is still initializing. Please wait..."
+          "BLE Mesh is still initializing. Please wait...",
         );
         return;
       }
@@ -223,7 +224,10 @@ export default function MeshChatScreen({
       // Send based on selected peer
       if (selectedPeer) {
         // PRIVATE MESSAGE: Always send private message to selected peer
-        console.log("[MeshChatScreen] Sending private message to:", selectedPeer);
+        console.log(
+          "[MeshChatScreen] Sending private message to:",
+          selectedPeer,
+        );
         await sendPrivateMessage(messageContent, selectedPeer);
       } else {
         // BROADCAST: Send public message to all peers
@@ -258,7 +262,7 @@ export default function MeshChatScreen({
 
       Alert.alert(
         "Payment Request Sent",
-        `Your request to send ${paymentCommand.amount} ${token} has been sent.`
+        `Your request to send ${paymentCommand.amount} ${token} has been sent.`,
       );
     } catch (error) {
       console.error("[MeshChatScreen] Payment error:", error);
@@ -285,8 +289,7 @@ export default function MeshChatScreen({
     // Private chat: Only show private messages between me and the selected peer
     return allMessages.filter(
       (m) =>
-        m.isPrivate &&
-        (m.to === selectedPeer || m.senderId === selectedPeer)
+        m.isPrivate && (m.to === selectedPeer || m.senderId === selectedPeer),
     );
   }, [allMessages, selectedPeer]);
 
@@ -306,7 +309,7 @@ export default function MeshChatScreen({
       if (selectedPeer) {
         markPeerAsRead(selectedPeer);
       }
-    }, [selectedPeer, markPeerAsRead])
+    }, [selectedPeer, markPeerAsRead]),
   );
 
   // Get selected peer display name

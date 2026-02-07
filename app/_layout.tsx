@@ -20,7 +20,10 @@ import "@/global.css";
 // import { NoiseProvider } from "@/src/contexts/NoiseContextEnhanced";
 
 // MESH CHAT - New kard-network-ble-mesh integration
-import { MeshChatProvider } from "@/src/contexts/MeshChatContext";
+import {
+  MeshChatProvider,
+  TransactionApprovalModal,
+} from "@/src/contexts/MeshBLEContext";
 
 import { WalletProvider } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
@@ -57,6 +60,7 @@ export default function RootLayout() {
               <Stack.Screen name="zone" />
               <Stack.Screen name="ble-test" />
             </Stack>
+            <TransactionApprovalModal />
             <StatusBar style="auto" />
           </ThemeProvider>
         </MeshChatProvider>

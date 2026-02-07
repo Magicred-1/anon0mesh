@@ -1,41 +1,44 @@
 /**
- * useOfflineWallets Hook
+ * useMWAOfflineWallets Hook
  *
  * React hook for managing offline wallets with durable nonce accounts
- * 
- * BLE Mode Support:
- * - createWallet: Uses BLE mesh for nonce account creation
- * - createNonceTransaction: Uses BLE mesh for transfers
+ * Works with Mobile Wallet Adapter (Seeker, Saga, etc.)
+ *
+ * MWA Mode Support:
+ * - createWallet: Uses MWA wallet for nonce account creation and funding
  * - sweepFunds: Uses direct RPC (always, for reliability)
- * - addFunds: Uses direct RPC (always, for reliability)
+ * - All nonce operations work with MWA signing
  */
 
-import { Connection, Keypair } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { useCallback, useEffect, useState } from "react";
 import {
-  OfflineWalletData,
-  OfflineWalletManager,
-  OfflineWalletState,
-} from "../src/infrastructure/wallet/OfflineWallet";
-import { useMeshChat, NonceTransactionType } from "../src/contexts/MeshBLEContext";
-import { serializeNonceTransaction } from "../src/infrastructure/wallet/transaction/SolanaDurableNonce";
+  MWAOfflineWalletData,
+  MWAOfflineWalletManager,
+  MWAOfflineWalletState,
+  IWalletAdapter,
+} from "../src/infrastructure/wallet/MWAOfflineWallet";
+import {
+  useMeshChat,
+  NonceTransactionType,
+} from "../src/contexts/MeshBLEContext";
 
-export interface UseOfflineWalletsConfig {
+export interface UseMWAOfflineWalletsConfig {
   connection: Connection;
-  authority: Keypair | null;
+  walletAdapter: IWalletAdapter | null;
   /** Enable BLE mesh mode for nonce transactions (except sweep/add_funds) */
   bleMode?: boolean;
 }
 
-export interface CreateOfflineWalletParams {
+export interface CreateMWAOfflineWalletParams {
   label?: string;
   initialFundingSOL?: number;
   createNonceAccount?: boolean;
 }
 
-export interface UseOfflineWalletsReturn {
+export interface UseMWAOfflineWalletsReturn {
   // State
-  wallets: OfflineWalletData[];
+  wallets: MWAOfflineWalletData[];
   isLoading: boolean;
   error: string | null;
   /** Whether BLE mode is active */
@@ -45,25 +48,22 @@ export interface UseOfflineWalletsReturn {
 
   // Methods
   createWallet: (
-    params?: CreateOfflineWalletParams,
-  ) => Promise<OfflineWalletState | null>;
+    params?: CreateMWAOfflineWalletParams
+  ) => Promise<MWAOfflineWalletState | null>;
   deleteWallet: (
     walletId: string,
-    closeNonceAccount?: boolean,
+    closeNonceAccount?: boolean
   ) => Promise<void>;
-  loadWallet: (walletId: string) => Promise<OfflineWalletState | null>;
+  loadWallet: (walletId: string) => Promise<MWAOfflineWalletState | null>;
   refreshBalances: (walletId?: string) => Promise<void>;
   sweepFunds: (walletId: string) => Promise<string>;
-  /** Add funds to a disposable wallet (always uses direct RPC, not BLE) */
-  addFunds: (
-    walletId: string, 
-    amountSOL: number
-  ) => Promise<string>;
+  /** Add funds to a disposable wallet from MWA wallet (always uses direct RPC, not BLE) */
+  addFunds: (walletId: string, amountSOL: number) => Promise<string>;
 
   // Nonce management
   createNonceTransaction: (
     walletId: string,
-    instructions: any[],
+    instructions: any[]
   ) => Promise<{ transaction: any; serialized: string; nonceValue: string }>;
   submitNonceTransaction: (
     transaction: any,
@@ -74,11 +74,11 @@ export interface UseOfflineWalletsReturn {
       recipientPeerId?: string;
       /** Description for the transaction */
       description?: string;
-    },
+    }
   ) => Promise<{ signature: string; nonceAdvanced: boolean; bleRequestId?: string }>;
   advanceNonce: (walletId: string) => Promise<string>;
   getNonceValue: (walletId: string) => Promise<string | null>;
-  
+
   // BLE-specific methods
   /** Send nonce transaction via BLE mesh (for create, transfer, advance, close) */
   sendNonceTransactionBLE: (
@@ -89,19 +89,19 @@ export interface UseOfflineWalletsReturn {
     options?: {
       recipientPeerId?: string;
       description?: string;
-    },
+    }
   ) => Promise<string>;
 }
 
 /**
- * Hook for managing disposable wallets
+ * Hook for managing MWA-compatible disposable wallets
  */
-export function useOfflineWallets(
-  config: UseOfflineWalletsConfig,
-): UseOfflineWalletsReturn {
-  const { connection, authority, bleMode = false } = config;
+export function useMWAOfflineWallets(
+  config: UseMWAOfflineWalletsConfig
+): UseMWAOfflineWalletsReturn {
+  const { connection, walletAdapter, bleMode = false } = config;
 
-  const [wallets, setWallets] = useState<OfflineWalletData[]>([]);
+  const [wallets, setWallets] = useState<MWAOfflineWalletData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,8 +110,8 @@ export function useOfflineWallets(
   const isBLEReady = bleMode && meshChat?.isInitialized && meshChat?.isConnected;
 
   // Create manager instance
-  const manager = authority
-    ? new OfflineWalletManager(connection, authority)
+  const manager = walletAdapter
+    ? new MWAOfflineWalletManager(connection, walletAdapter)
     : null;
 
   /**
@@ -127,7 +127,7 @@ export function useOfflineWallets(
         setWallets(loaded);
         setError(null);
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to load wallets:", err);
+        console.error("[useMWAOfflineWallets] Failed to load wallets:", err);
         setError(err instanceof Error ? err.message : "Failed to load wallets");
       } finally {
         setIsLoading(false);
@@ -135,17 +135,23 @@ export function useOfflineWallets(
     };
 
     loadWallets();
-  }, [authority]); // Re-load when authority changes
+  }, [walletAdapter]); // Re-load when wallet adapter changes
 
   /**
-   * Create a new offline wallet
+   * Create a new MWA-compatible offline wallet
    */
   const createWallet = useCallback(
     async (
-      params?: CreateOfflineWalletParams,
-    ): Promise<OfflineWalletState | null> => {
-      if (!manager || !authority) {
+      params?: CreateMWAOfflineWalletParams
+    ): Promise<MWAOfflineWalletState | null> => {
+      if (!manager || !walletAdapter) {
         setError("Wallet manager not initialized");
+        return null;
+      }
+
+      const authority = walletAdapter.getPublicKey();
+      if (!authority) {
+        setError("MWA wallet not connected");
         return null;
       }
 
@@ -155,7 +161,7 @@ export function useOfflineWallets(
       try {
         const wallet = await manager.createOfflineWallet({
           connection,
-          authority,
+          walletAdapter,
           label: params?.label,
           initialFundingSOL: params?.initialFundingSOL,
           createNonceAccount: params?.createNonceAccount ?? true,
@@ -167,26 +173,21 @@ export function useOfflineWallets(
 
         return wallet;
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to create wallet:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to create wallet",
-        );
+        console.error("[useMWAOfflineWallets] Failed to create wallet:", err);
+        setError(err instanceof Error ? err.message : "Failed to create wallet");
         return null;
       } finally {
         setIsLoading(false);
       }
     },
-    [connection, authority, manager],
+    [connection, walletAdapter, manager]
   );
 
   /**
    * Delete a disposable wallet
    */
   const deleteWallet = useCallback(
-    async (
-      walletId: string,
-      closeNonceAccount: boolean = true,
-    ): Promise<void> => {
+    async (walletId: string, closeNonceAccount: boolean = true): Promise<void> => {
       if (!manager) {
         setError("Wallet manager not initialized");
         return;
@@ -202,22 +203,20 @@ export function useOfflineWallets(
         const updated = await manager.loadAllOfflineWallets();
         setWallets(updated);
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to delete wallet:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to delete wallet",
-        );
+        console.error("[useMWAOfflineWallets] Failed to delete wallet:", err);
+        setError(err instanceof Error ? err.message : "Failed to delete wallet");
       } finally {
         setIsLoading(false);
       }
     },
-    [manager],
+    [manager]
   );
 
   /**
    * Load a specific wallet with its keypair
    */
   const loadWallet = useCallback(
-    async (walletId: string): Promise<OfflineWalletState | null> => {
+    async (walletId: string): Promise<MWAOfflineWalletState | null> => {
       if (!manager) {
         setError("Wallet manager not initialized");
         return null;
@@ -226,12 +225,12 @@ export function useOfflineWallets(
       try {
         return await manager.loadOfflineWallet(walletId);
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to load wallet:", err);
+        console.error("[useMWAOfflineWallets] Failed to load wallet:", err);
         setError(err instanceof Error ? err.message : "Failed to load wallet");
         return null;
       }
     },
-    [manager],
+    [manager]
   );
 
   /**
@@ -262,15 +261,15 @@ export function useOfflineWallets(
         const updated = await manager.loadAllOfflineWallets();
         setWallets(updated);
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to refresh balances:", err);
+        console.error("[useMWAOfflineWallets] Failed to refresh balances:", err);
         setError(
-          err instanceof Error ? err.message : "Failed to refresh balances",
+          err instanceof Error ? err.message : "Failed to refresh balances"
         );
       } finally {
         setIsLoading(false);
       }
     },
-    [manager, wallets],
+    [manager, wallets]
   );
 
   /**
@@ -289,7 +288,7 @@ export function useOfflineWallets(
       try {
         // Sweep funds always uses direct RPC, not BLE
         // This ensures the funds are reliably returned to the primary wallet
-        console.log("[useOfflineWallets] Sweeping funds via direct RPC...");
+        console.log("[useMWAOfflineWallets] Sweeping funds via direct RPC...");
         const signature = await manager.sweepFunds(walletId);
 
         // Refresh balances after sweep
@@ -297,7 +296,7 @@ export function useOfflineWallets(
 
         return signature;
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to sweep funds:", err);
+        console.error("[useMWAOfflineWallets] Failed to sweep funds:", err);
         const errorMsg =
           err instanceof Error ? err.message : "Failed to sweep funds";
         setError(errorMsg);
@@ -306,17 +305,22 @@ export function useOfflineWallets(
         setIsLoading(false);
       }
     },
-    [manager, refreshBalances],
+    [manager, refreshBalances]
   );
 
   /**
-   * Add funds to a disposable wallet from primary wallet
+   * Add funds to a disposable wallet from MWA wallet
    * ALWAYS uses direct RPC (never BLE) for funding
    */
   const addFunds = useCallback(
     async (walletId: string, amountSOL: number): Promise<string> => {
-      if (!manager) {
+      if (!manager || !walletAdapter) {
         throw new Error("Wallet manager not initialized");
+      }
+
+      const authority = walletAdapter.getPublicKey();
+      if (!authority) {
+        throw new Error("MWA wallet not connected");
       }
 
       setIsLoading(true);
@@ -330,32 +334,32 @@ export function useOfflineWallets(
         }
 
         console.log(
-          `[useOfflineWallets] Adding ${amountSOL} SOL to wallet via direct RPC...`
+          `[useMWAOfflineWallets] Adding ${amountSOL} SOL to wallet via direct RPC...`
         );
 
-        // Create transfer from authority to disposable wallet
-        const {
-          Transaction,
-          SystemProgram,
-          LAMPORTS_PER_SOL,
-        } = await import("@solana/web3.js");
+        // Create transfer from MWA wallet to disposable wallet
+        const { Transaction, SystemProgram, LAMPORTS_PER_SOL } = await import(
+          "@solana/web3.js"
+        );
 
         const transaction = new Transaction().add(
           SystemProgram.transfer({
-            fromPubkey: authority!.publicKey,
+            fromPubkey: authority,
             toPubkey: wallet.keypair.publicKey,
             lamports: amountSOL * LAMPORTS_PER_SOL,
-          }),
+          })
         );
 
         const { blockhash, lastValidBlockHeight } =
           await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
-        transaction.feePayer = authority!.publicKey;
-        transaction.sign(authority!);
+        transaction.feePayer = authority;
+
+        // Sign with MWA wallet
+        const signedTx = await walletAdapter.signTransaction(transaction);
 
         const signature = await connection.sendRawTransaction(
-          transaction.serialize(),
+          signedTx.serialize()
         );
         await connection.confirmTransaction({
           signature,
@@ -368,7 +372,7 @@ export function useOfflineWallets(
 
         return signature;
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to add funds:", err);
+        console.error("[useMWAOfflineWallets] Failed to add funds:", err);
         const errorMsg =
           err instanceof Error ? err.message : "Failed to add funds";
         setError(errorMsg);
@@ -377,7 +381,7 @@ export function useOfflineWallets(
         setIsLoading(false);
       }
     },
-    [manager, authority, connection, refreshBalances],
+    [manager, walletAdapter, connection, refreshBalances]
   );
 
   /**
@@ -393,7 +397,7 @@ export function useOfflineWallets(
       options?: {
         recipientPeerId?: string;
         description?: string;
-      },
+      }
     ): Promise<string> => {
       if (!meshChat) {
         throw new Error("BLE mesh not available");
@@ -409,8 +413,8 @@ export function useOfflineWallets(
       setError(null);
 
       try {
-        console.log(`[useOfflineWallets] Sending ${type} via BLE mesh...`);
-        
+        console.log(`[useMWAOfflineWallets] Sending ${type} via BLE mesh...`);
+
         const requestId = await meshChat.sendNonceTransaction(
           serializedTransaction,
           {
@@ -418,13 +422,13 @@ export function useOfflineWallets(
             description: options?.description || `${type} nonce transaction`,
             recipientPeerId: options?.recipientPeerId,
             transactionType: type,
-          },
+          }
         );
 
-        console.log(`[useOfflineWallets] BLE request sent: ${requestId}`);
+        console.log(`[useMWAOfflineWallets] BLE request sent: ${requestId}`);
         return requestId;
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to send via BLE:", err);
+        console.error("[useMWAOfflineWallets] Failed to send via BLE:", err);
         const errorMsg =
           err instanceof Error ? err.message : "Failed to send via BLE";
         setError(errorMsg);
@@ -433,7 +437,7 @@ export function useOfflineWallets(
         setIsLoading(false);
       }
     },
-    [meshChat],
+    [meshChat]
   );
 
   /**
@@ -452,8 +456,8 @@ export function useOfflineWallets(
         return await manager.createNonceTransaction(walletId, instructions);
       } catch (err) {
         console.error(
-          "[useOfflineWallets] Failed to create nonce transaction:",
-          err,
+          "[useMWAOfflineWallets] Failed to create nonce transaction:",
+          err
         );
         const errorMsg =
           err instanceof Error
@@ -465,11 +469,11 @@ export function useOfflineWallets(
         setIsLoading(false);
       }
     },
-    [manager],
+    [manager]
   );
 
   /**
-   * Submit a nonce transaction 
+   * Submit a nonce transaction
    * - If BLE mode is enabled and type supports it: uses BLE mesh
    * - Otherwise: uses direct RPC
    */
@@ -480,7 +484,7 @@ export function useOfflineWallets(
         type?: NonceTransactionType;
         recipientPeerId?: string;
         description?: string;
-      },
+      }
     ) => {
       if (!manager) {
         throw new Error("Wallet manager not initialized");
@@ -496,26 +500,30 @@ export function useOfflineWallets(
         if (useBLE && meshChat) {
           // Serialize the transaction for BLE
           const serialized = transaction.serialize
-            ? transaction.serialize({ requireAllSignatures: true }).toString("base64")
+            ? transaction
+                .serialize({ requireAllSignatures: true })
+                .toString("base64")
             : transaction;
 
           // Get nonce account from transaction (first account in nonceAdvance instruction)
-          const nonceAccount = transaction.instructions?.[0]?.keys?.[0]?.pubkey?.toBase58() || "";
+          const nonceAccount =
+            transaction.instructions?.[0]?.keys?.[0]?.pubkey?.toBase58() || "";
 
-          console.log(`[useOfflineWallets] Submitting ${txType} via BLE mesh...`);
-          
-          const bleRequestId = await meshChat.sendNonceTransaction(
-            serialized,
-            {
-              nonceAccount,
-              description: options?.description || `${txType} nonce transaction`,
-              recipientPeerId: options?.recipientPeerId,
-              transactionType: txType,
-            },
+          console.log(
+            `[useMWAOfflineWallets] Submitting ${txType} via BLE mesh...`
           );
 
-          console.log(`[useOfflineWallets] BLE request sent: ${bleRequestId}`);
-          
+          const bleRequestId = await meshChat.sendNonceTransaction(serialized, {
+            nonceAccount,
+            description: options?.description || `${txType} nonce transaction`,
+            recipientPeerId: options?.recipientPeerId,
+            transactionType: txType,
+          });
+
+          console.log(
+            `[useMWAOfflineWallets] BLE request sent: ${bleRequestId}`
+          );
+
           // Return a pending result - actual confirmation comes via BLE receipt
           return {
             signature: bleRequestId, // Use request ID as placeholder
@@ -524,14 +532,16 @@ export function useOfflineWallets(
           };
         } else {
           // Use direct RPC submission
-          console.log(`[useOfflineWallets] Submitting ${txType} via direct RPC...`);
+          console.log(
+            `[useMWAOfflineWallets] Submitting ${txType} via direct RPC...`
+          );
           const result = await manager.submitNonceTransaction(transaction);
           return { ...result, bleRequestId: undefined };
         }
       } catch (err) {
         console.error(
-          "[useOfflineWallets] Failed to submit nonce transaction:",
-          err,
+          "[useMWAOfflineWallets] Failed to submit nonce transaction:",
+          err
         );
         const errorMsg =
           err instanceof Error
@@ -543,7 +553,7 @@ export function useOfflineWallets(
         setIsLoading(false);
       }
     },
-    [manager, bleMode, meshChat],
+    [manager, bleMode, meshChat]
   );
 
   /**
@@ -561,7 +571,7 @@ export function useOfflineWallets(
       try {
         return await manager.advanceNonce(walletId);
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to advance nonce:", err);
+        console.error("[useMWAOfflineWallets] Failed to advance nonce:", err);
         const errorMsg =
           err instanceof Error ? err.message : "Failed to advance nonce";
         setError(errorMsg);
@@ -570,7 +580,7 @@ export function useOfflineWallets(
         setIsLoading(false);
       }
     },
-    [manager],
+    [manager]
   );
 
   /**
@@ -585,11 +595,11 @@ export function useOfflineWallets(
       try {
         return await manager.getNonceValue(walletId);
       } catch (err) {
-        console.error("[useOfflineWallets] Failed to get nonce value:", err);
+        console.error("[useMWAOfflineWallets] Failed to get nonce value:", err);
         return null;
       }
     },
-    [manager],
+    [manager]
   );
 
   return {

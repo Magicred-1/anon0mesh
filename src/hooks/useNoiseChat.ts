@@ -3,12 +3,12 @@
  *
  * This hook is now a compatibility wrapper around MeshChatContext.
  * It provides the same API as the old NoiseContext for backward compatibility.
- * 
+ *
  * MIGRATED: Now uses MeshChatContext with kard-network-ble-mesh library.
  */
 
-import { useMeshChat, MeshChatMessage } from "../contexts/MeshChatContext";
 import { useCallback, useMemo } from "react";
+import { MeshChatMessage, useMeshChat } from "../contexts/MeshBLEContext";
 
 // Re-export types for compatibility
 export type NoiseMessage = MeshChatMessage;
@@ -31,7 +31,7 @@ export function useNoiseChat() {
   // Map mesh peers to noise sessions format
   const sessions = useMemo(() => {
     const sessionMap = new Map<string, NoiseSessionInfo>();
-    
+
     for (const peer of mesh.peers) {
       sessionMap.set(peer.peerId, {
         deviceId: peer.peerId,
@@ -39,15 +39,13 @@ export function useNoiseChat() {
         remotePublicKey: peer.peerId,
       });
     }
-    
+
     return sessionMap;
   }, [mesh.peers]);
 
   // Map mesh peers to connected peers list
   const connectedPeers = useMemo(() => {
-    return mesh.peers
-      .filter((p) => p.isConnected)
-      .map((p) => p.peerId);
+    return mesh.peers.filter((p) => p.isConnected).map((p) => p.peerId);
   }, [mesh.peers]);
 
   // Known nicknames map
@@ -76,7 +74,7 @@ export function useNoiseChat() {
     async (deviceId: string, message: string) => {
       await mesh.sendPrivateMessage(message, deviceId);
     },
-    [mesh]
+    [mesh],
   );
 
   // Broadcast message
@@ -88,17 +86,14 @@ export function useNoiseChat() {
         await mesh.sendMessage(message);
       }
     },
-    [mesh]
+    [mesh],
   );
 
   // Initiate handshake (automatic in mesh mode - no-op for compatibility)
-  const initiateHandshake = useCallback(
-    async (_deviceId: string) => {
-      // Mesh library handles handshakes automatically
-      return Promise.resolve();
-    },
-    []
-  );
+  const initiateHandshake = useCallback(async (_deviceId: string) => {
+    // Mesh library handles handshakes automatically
+    return Promise.resolve();
+  }, []);
 
   // Check if handshake is complete
   const isHandshakeComplete = useCallback(
@@ -106,7 +101,7 @@ export function useNoiseChat() {
       const peer = mesh.getPeerById(deviceId);
       return peer?.isVerified ?? false;
     },
-    [mesh]
+    [mesh],
   );
 
   // Clear messages

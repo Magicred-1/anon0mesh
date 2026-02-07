@@ -1,7 +1,7 @@
 /**
- * MeshChatContext - React Context for kard-network-ble-mesh messaging
+ * MeshChatContext - React Context for @magicred-1/ble-mesh integration
  *
- * Provides direct integration with the kard-network-ble-mesh library for:
+ * Provides direct integration with the @magicred-1/ble-mesh library for:
  * - Automatic mesh networking with peer-to-peer relay
  * - End-to-end encryption via Noise protocol
  * - Public and private messaging
@@ -10,8 +10,8 @@
  * This replaces the complex BLE+Noise stack with a simpler, more robust solution.
  */
 
+import { BleMesh, Message as MeshMessage, Peer } from "@magicred-1/ble-mesh";
 import * as SecureStore from "expo-secure-store";
-import { BleMesh, Message as MeshMessage, Peer } from "kard-network-ble-mesh";
 import React, {
   createContext,
   useCallback,
@@ -20,7 +20,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import { identityStateManager } from "../infrastructure/identity";
 import {
   clearAllUnreadMessages,
@@ -28,6 +28,32 @@ import {
   showBLEForegroundNotification,
   updatePeerCount,
 } from "../utils/bleNotification";
+
+// ============================================
+// TRANSACTION REQUEST TYPES
+// ============================================
+
+export interface TransactionRequest {
+  id: string;
+  requestId: string;
+  senderPeerId: string;
+  senderNickname: string;
+  serializedTransaction: string;
+  description?: string;
+  timestamp: number;
+  type: "standard" | "nonce";
+  nonceAccount?: string;
+  firstSignerPublicKey?: string;
+  secondSignerPublicKey?: string;
+}
+
+export type TransactionDecision = "pending" | "approved" | "declined" | "processing";
+
+export interface TransactionRequestWithDecision extends TransactionRequest {
+  decision: TransactionDecision;
+  decisionTimestamp?: number;
+  error?: string;
+}
 
 export interface MeshChatMessage {
   id: string;
@@ -40,6 +66,15 @@ export interface MeshChatMessage {
   isPrivate: boolean;
   to?: string;
 }
+
+// Nonce account transaction types
+export type NonceTransactionType = 
+  | "create" 
+  | "transfer" 
+  | "advance" 
+  | "close" 
+  | "sweep" 
+  | "add_funds";
 
 interface UnreadCounts {
   [peerId: string]: number;
@@ -56,6 +91,11 @@ interface MeshChatContextType {
   error: string | null;
   unreadCounts: UnreadCounts;
   totalUnreadCount: number;
+
+  // Transaction request state
+  pendingTransactionRequests: TransactionRequestWithDecision[];
+  currentTransactionRequest: TransactionRequestWithDecision | null;
+  showTransactionModal: boolean;
 
   // Actions
   initialize: (nickname?: string) => Promise<void>;
@@ -76,6 +116,37 @@ interface MeshChatContextType {
   initiateHandshake: (peerId: string) => Promise<void>;
   getIdentityFingerprint: () => Promise<string>;
   getPeerFingerprint: (peerId: string) => Promise<string | null>;
+
+  // Transaction management
+  sendTransaction: (
+    serializedTransaction: string,
+    options?: {
+      firstSignerPublicKey: string;
+      secondSignerPublicKey?: string;
+      description?: string;
+      recipientPeerId?: string;
+    },
+  ) => Promise<string>;
+
+  // Nonce account transaction management (BLE-only except sweep/add funds)
+  sendNonceTransaction: (
+    serializedTransaction: string,
+    options?: {
+      nonceAccount: string;
+      description?: string;
+      recipientPeerId?: string;
+      transactionType?: NonceTransactionType;
+    },
+  ) => Promise<string>;
+
+  // Check if a transaction type should use BLE
+  shouldUseBLEForNonceTx: (type: NonceTransactionType) => boolean;
+
+  // Transaction approval UI
+  approveTransactionRequest: (requestId: string) => Promise<void>;
+  declineTransactionRequest: (requestId: string, reason?: string) => void;
+  dismissTransactionModal: () => void;
+  clearTransactionHistory: () => void;
 
   // Peer management
   getPeerById: (peerId: string) => Peer | undefined;
@@ -115,11 +186,20 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<UnreadCounts>({});
 
+  // Transaction request state
+  const [pendingTransactionRequests, setPendingTransactionRequests] = useState<
+    TransactionRequestWithDecision[]
+  >([]);
+  const [currentTransactionRequest, setCurrentTransactionRequest] =
+    useState<TransactionRequestWithDecision | null>(null);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+
   const bleMesh = BleMesh;
   const unsubscribers = useRef<(() => void)[]>([]);
   const messageIdCache = useRef<Set<string>>(new Set());
   const MAX_CACHE_SIZE = 1000;
   const readMessageIds = useRef<Set<string>>(new Set());
+  const transactionRequestCache = useRef<Set<string>>(new Set());
 
   // Cleanup function for event listeners
   const cleanupListeners = useCallback(() => {
@@ -156,6 +236,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
 
         // Start the mesh service
         await bleMesh.start({ nickname: nick });
+        console.log("[MeshChat] Mesh service started with nickname:", nick);
 
         // Get my peer ID
         const peerId = await bleMesh.getMyPeerId();
@@ -185,6 +266,203 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   );
 
   // Setup event listeners for mesh events
+  // ============================================
+  // TRANSACTION REQUEST HANDLING
+  // ============================================
+
+  // Handle incoming transaction requests from peers
+  const handleIncomingTransactionRequest = useCallback(
+    (request: {
+      requestId: string;
+      senderPeerId: string;
+      senderNickname?: string;
+      serializedTransaction: string;
+      description?: string;
+      firstSignerPublicKey?: string;
+      secondSignerPublicKey?: string;
+    }) => {
+      // Check for duplicate requests
+      if (transactionRequestCache.current.has(request.requestId)) {
+        console.log(`[MeshChat] Duplicate transaction request ignored: ${request.requestId}`);
+        return;
+      }
+      transactionRequestCache.current.add(request.requestId);
+
+      // Get sender nickname from peers list or use unknown
+      const senderPeer = peers.find(p => p.peerId === request.senderPeerId);
+      const senderNickname = request.senderNickname || senderPeer?.nickname || "Unknown Peer";
+
+      // Determine if it's a nonce transaction based on description or firstSigner
+      const isNonceTx = request.description?.toLowerCase().includes("nonce") || 
+                        request.firstSignerPublicKey?.includes("nonce");
+
+      const txRequest: TransactionRequestWithDecision = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        requestId: request.requestId,
+        senderPeerId: request.senderPeerId,
+        senderNickname: senderNickname,
+        serializedTransaction: request.serializedTransaction,
+        description: request.description,
+        timestamp: Date.now(),
+        type: isNonceTx ? "nonce" : "standard",
+        nonceAccount: request.firstSignerPublicKey,
+        firstSignerPublicKey: request.firstSignerPublicKey,
+        secondSignerPublicKey: request.secondSignerPublicKey,
+        decision: "pending",
+      };
+
+      console.log(`[MeshChat] 📥 Transaction request received from ${senderNickname}`);
+      console.log(`[MeshChat] Type: ${txRequest.type}, Description: ${txRequest.description}`);
+
+      // Add to pending requests
+      setPendingTransactionRequests((prev) => [txRequest, ...prev]);
+
+      // Show as current request if no other modal is open
+      setCurrentTransactionRequest((current) => {
+        if (!current || current.decision !== "pending") {
+          setShowTransactionModal(true);
+          return txRequest;
+        }
+        return current;
+      });
+    },
+    [peers]
+  );
+
+  // Approve a transaction request
+  const approveTransactionRequest = useCallback(
+    async (requestId: string) => {
+      const request = pendingTransactionRequests.find(
+        (r) => r.requestId === requestId
+      );
+      if (!request) {
+        console.error(`[MeshChat] Transaction request not found: ${requestId}`);
+        return;
+      }
+
+      // Update state to processing
+      setPendingTransactionRequests((prev) =>
+        prev.map((r) =>
+          r.requestId === requestId
+            ? { ...r, decision: "processing" }
+            : r
+        )
+      );
+
+      if (currentTransactionRequest?.requestId === requestId) {
+        setCurrentTransactionRequest((prev) =>
+          prev ? { ...prev, decision: "processing" } : null
+        );
+      }
+
+      try {
+        console.log(`[MeshChat] ✅ Approving transaction: ${requestId}`);
+
+        // Send approval response back to sender
+        await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
+          signedTransaction: request.serializedTransaction, // Echo back as "signed" (in real impl, would actually sign)
+        });
+
+        // Update state to approved
+        setPendingTransactionRequests((prev) =>
+          prev.map((r) =>
+            r.requestId === requestId
+              ? { ...r, decision: "approved", decisionTimestamp: Date.now() }
+              : r
+          )
+        );
+
+        // Move to next pending request if any
+        const nextPending = pendingTransactionRequests.find(
+          (r) => r.requestId !== requestId && r.decision === "pending"
+        );
+        if (nextPending) {
+          setCurrentTransactionRequest(nextPending);
+        } else {
+          setShowTransactionModal(false);
+          setCurrentTransactionRequest(null);
+        }
+
+        console.log(`[MeshChat] ✅ Transaction approved and response sent`);
+      } catch (err) {
+        console.error(`[MeshChat] Failed to approve transaction:`, err);
+        
+        setPendingTransactionRequests((prev) =>
+          prev.map((r) =>
+            r.requestId === requestId
+              ? { ...r, decision: "pending", error: err instanceof Error ? err.message : "Unknown error" }
+              : r
+          )
+        );
+
+        Alert.alert(
+          "Approval Failed",
+          "Failed to send approval response. Please try again."
+        );
+      }
+    },
+    [pendingTransactionRequests, currentTransactionRequest, myPeerId, myNickname]
+  );
+
+  // Decline a transaction request
+  const declineTransactionRequest = useCallback(
+    async (requestId: string, reason?: string) => {
+      const request = pendingTransactionRequests.find(
+        (r) => r.requestId === requestId
+      );
+      if (!request) {
+        console.error(`[MeshChat] Transaction request not found: ${requestId}`);
+        return;
+      }
+
+      try {
+        console.log(`[MeshChat] ❌ Declining transaction: ${requestId}`);
+
+        // Send decline response back to sender
+        await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
+          error: reason || "Declined by user",
+        });
+
+        // Update state to declined
+        setPendingTransactionRequests((prev) =>
+          prev.map((r) =>
+            r.requestId === requestId
+              ? { ...r, decision: "declined", decisionTimestamp: Date.now() }
+              : r
+          )
+        );
+
+        // Move to next pending request if any
+        const nextPending = pendingTransactionRequests.find(
+          (r) => r.requestId !== requestId && r.decision === "pending"
+        );
+        if (nextPending) {
+          setCurrentTransactionRequest(nextPending);
+        } else {
+          setShowTransactionModal(false);
+          setCurrentTransactionRequest(null);
+        }
+
+        console.log(`[MeshChat] ❌ Transaction declined and response sent`);
+      } catch (err) {
+        console.error(`[MeshChat] Failed to decline transaction:`, err);
+      }
+    },
+    [pendingTransactionRequests, myPeerId, myNickname]
+  );
+
+  // Dismiss the transaction modal without making a decision
+  const dismissTransactionModal = useCallback(() => {
+    setShowTransactionModal(false);
+    // Don't clear current request, just hide the modal
+  }, []);
+
+  // Clear transaction history (keep pending)
+  const clearTransactionHistory = useCallback(() => {
+    setPendingTransactionRequests((prev) =>
+      prev.filter((r) => r.decision === "pending")
+    );
+  }, []);
   const setupEventListeners = useCallback(() => {
     cleanupListeners();
 
@@ -201,6 +479,41 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     });
     unsubscribers.current.push(unsubMessages);
 
+    // Listen for incoming transaction requests
+    const unsubTxRequests = bleMesh.onTransactionReceived(({ transaction }) => {
+      handleIncomingTransactionRequest({
+        requestId: transaction.id,
+        senderPeerId: transaction.senderPeerId,
+        senderNickname: "Unknown", // Will be updated from peers list
+        serializedTransaction: transaction.serializedTransaction,
+        description: transaction.description,
+        firstSignerPublicKey: transaction.firstSignerPublicKey,
+        secondSignerPublicKey: transaction.secondSignerPublicKey,
+      });
+    });
+    unsubscribers.current.push(unsubTxRequests);
+
+    // Listen for transaction responses (when peers acknowledge our transactions)
+    const unsubTxResponses = bleMesh.onTransactionResponse(({ response }) => {
+      console.log(`[MeshChat] 📥 Transaction response received for ${response.id}`);
+      
+      if (response.error) {
+        console.error(`[MeshChat] Transaction declined: ${response.error}`);
+        Alert.alert(
+          "Transaction Declined",
+          `A peer declined your transaction: ${response.error}`
+        );
+      } else if (response.signedTransaction) {
+        console.log(`[MeshChat] ✅ Transaction signed by ${response.responderPeerId}`);
+        // The transaction has been co-signed, now we can submit it
+        Alert.alert(
+          "Transaction Co-signed",
+          `Your transaction has been co-signed by a peer and is ready to submit.`
+        );
+      }
+    });
+    unsubscribers.current.push(unsubTxResponses);
+
     // Listen for connection state changes
     const unsubState = bleMesh.onConnectionStateChanged(
       ({ state, peerCount }) => {
@@ -216,7 +529,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       setError(`${code}: ${message}`);
     });
     unsubscribers.current.push(unsubError);
-  }, []);
+  }, [handleIncomingTransactionRequest]);
 
   // Handle incoming messages
   const handleIncomingMessage = useCallback(
@@ -490,6 +803,108 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     return bleMesh.getPeerFingerprint(peerId);
   }, []);
 
+  // Send a Solana transaction for co-signing
+  const sendTransaction = useCallback(
+    async (
+      serializedTransaction: string,
+      options?: {
+        firstSignerPublicKey: string;
+        secondSignerPublicKey?: string;
+        description?: string;
+        recipientPeerId?: string;
+      },
+    ) => {
+      if (!isInitialized) {
+        throw new Error("Mesh chat not initialized");
+      }
+
+      try {
+        console.log(
+          `[MeshChat] 📤 Sending transaction${options?.recipientPeerId ? ` to ${options.recipientPeerId}` : " (broadcast)"}`,
+        );
+        const transactionId = await bleMesh.sendTransaction(
+          serializedTransaction,
+          options,
+        );
+        console.log(`[MeshChat] ✅ Transaction sent with ID: ${transactionId}`);
+        return transactionId;
+      } catch (err) {
+        console.error("[MeshChat] Failed to send transaction:", err);
+        throw err;
+      }
+    },
+    [isInitialized],
+  );
+
+  // Check if a nonce transaction type should use BLE
+  // Returns false for sweep and add_funds (use direct RPC)
+  // Returns true for all other types (use BLE mesh)
+  const shouldUseBLEForNonceTx = useCallback(
+    (type: NonceTransactionType): boolean => {
+      // Sweep and Add Funds should use direct RPC (not BLE)
+      if (type === "sweep" || type === "add_funds") {
+        return false;
+      }
+      // All other nonce operations use BLE
+      return true;
+    },
+    [],
+  );
+
+  // Send a nonce account transaction via BLE mesh
+  // Uses BLE for: create, transfer, advance, close
+  // Uses direct RPC for: sweep, add_funds
+  const sendNonceTransaction = useCallback(
+    async (
+      serializedTransaction: string,
+      options?: {
+        nonceAccount: string;
+        description?: string;
+        recipientPeerId?: string;
+        transactionType?: NonceTransactionType;
+      },
+    ): Promise<string> => {
+      const txType = options?.transactionType || "transfer";
+      
+      // Check if this transaction type should use BLE
+      if (!shouldUseBLEForNonceTx(txType)) {
+        throw new Error(
+          `Transaction type '${txType}' should use direct RPC, not BLE. ` +
+          "Use the regular connection.sendRawTransaction for sweep/add_funds."
+        );
+      }
+
+      if (!isInitialized) {
+        throw new Error("Mesh chat not initialized. Cannot send via BLE.");
+      }
+
+      try {
+        console.log(
+          `[MeshChat] 📤 Sending nonce transaction via BLE${options?.recipientPeerId ? ` to ${options.recipientPeerId}` : " (broadcast)"}`,
+        );
+        console.log(`[MeshChat] Type: ${txType}, Nonce: ${options?.nonceAccount}`);
+        
+        // Use the same underlying method but with nonce-specific metadata
+        const transactionId = await bleMesh.sendTransaction(
+          serializedTransaction,
+          {
+            firstSignerPublicKey: options?.nonceAccount || "",
+            description: options?.description || `${txType} nonce transaction`,
+            recipientPeerId: options?.recipientPeerId,
+          },
+        );
+        
+        console.log(`[MeshChat] ✅ Nonce transaction sent with ID: ${transactionId}`);
+        return transactionId;
+      } catch (err) {
+        console.error("[MeshChat] Failed to send nonce transaction:", err);
+        throw err;
+      }
+    },
+    [isInitialized, shouldUseBLEForNonceTx],
+  );
+
+
   // Get peer by ID
   const getPeerById = useCallback(
     (peerId: string) => {
@@ -581,6 +996,9 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     error,
     unreadCounts,
     totalUnreadCount,
+    pendingTransactionRequests,
+    currentTransactionRequest,
+    showTransactionModal,
     initialize,
     shutdown,
     setNickname,
@@ -593,6 +1011,13 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     initiateHandshake,
     getIdentityFingerprint,
     getPeerFingerprint,
+    sendTransaction,
+    sendNonceTransaction,
+    shouldUseBLEForNonceTx,
+    approveTransactionRequest,
+    declineTransactionRequest,
+    dismissTransactionModal,
+    clearTransactionHistory,
     getPeerById,
     connectedPeerCount,
     markPeerAsRead,
@@ -606,3 +1031,30 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     </MeshChatContext.Provider>
   );
 };
+
+// ============================================
+// TRANSACTION APPROVAL MODAL EXPORT
+// ============================================
+
+export { TransactionApprovalModal } from "../components/TransactionApprovalModal";
+
+// ============================================
+// USAGE EXAMPLE
+// ============================================
+
+/*
+// In your App.tsx or root component:
+import { MeshChatProvider, TransactionApprovalModal } from "./contexts/MeshBLEContext";
+
+function App() {
+  return (
+    <MeshChatProvider>
+      <YourApp />
+      <TransactionApprovalModal />
+    </MeshChatProvider>
+  );
+}
+
+// The modal will automatically show when a transaction request is received.
+// Users can approve or decline, and the response is sent back via BLE.
+*/

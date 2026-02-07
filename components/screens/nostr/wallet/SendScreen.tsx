@@ -4,17 +4,23 @@ import ZECIcon from "@/components/icons/ZECIcon";
 import QRScannerModal from "@/components/modals/QRScannerModal";
 import SendConfirmationModal from "@/components/modals/SendConfirmationModal";
 import NumericKeyboard from "@/components/ui/NumericKeyboard";
+import { useMWAOfflineWallets } from "@/hooks/useMWAOfflineWallets";
+import { useOfflineWallets } from "@/hooks/useOfflineWallets";
 import { useWalletBalances } from "@/hooks/useWalletBalances";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { Packet } from "@/src/domain/entities/Packet";
 // import { useBLENotificationUpdater } from "@/src/hooks/useBLENotificationUpdater";
-import { useMeshChat } from "@/src/contexts/MeshChatContext";
+import {
+  TransactionApprovalModal,
+  useMeshChat,
+} from "@/src/contexts/MeshBLEContext";
 import { useSolanaTransaction } from "@/src/hooks/useSolanaTransaction";
+import { IWalletAdapter } from "@/src/infrastructure/wallet/transaction/MWADurableNonce";
 import type { ConnectivityStatus } from "@/src/infrastructure/wallet/utils/connectivity";
 import * as ConnectivityUtils from "@/src/infrastructure/wallet/utils/connectivity";
 import "@/src/polyfills";
 import { createSolanaConnection } from "@/src/utils/solana";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -37,6 +43,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+// Type for transaction mode
+type TransactionMode = "online" | "ble_mesh" | "offline_wallet";
+
+// Wallet mode type
+type WalletMode = "local" | "mwa" | "unknown";
 
 type TokenType = "SOL" | "USDC" | "ZEC";
 
@@ -70,23 +82,42 @@ export default function SendScreen() {
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
 
   // Mesh chat context for discovering nearby peers
-  const { peers: meshPeers, isInitialized: bleInitialized } = useMeshChat();
-  
+  const {
+    peers: meshPeers,
+    isInitialized: bleInitialized,
+    isConnected: bleConnected,
+    shouldUseBLEForNonceTx,
+  } = useMeshChat();
+
   // Map mesh peers to legacy format for compatibility
   const discoveredDevices = React.useMemo(() => {
-    return meshPeers.map(p => ({
+    return meshPeers.map((p) => ({
       id: p.peerId,
       name: p.nickname,
       isConnected: p.isConnected,
     }));
   }, [meshPeers]);
 
-  // Create a keypair from wallet for transaction signing
-  // Note: This is a workaround - we'll use wallet.signTransaction instead
+  // Create a keypair from wallet for transaction signing (Local wallet mode)
   const [walletKeypair, setWalletKeypair] = useState<any>(null);
+  
+  // Detect wallet mode
+  const [walletMode, setWalletMode] = useState<WalletMode>("unknown");
 
+  // Transaction mode state
+  const [transactionMode, setTransactionMode] =
+    useState<TransactionMode>("online");
+  // Multiple wallet selection (array of selected wallet IDs)
+  const [selectedOfflineWalletIds, setSelectedOfflineWalletIds] = useState<
+    string[]
+  >([]);
+
+  // Connection for Solana transactions
+  const connection = createSolanaConnection({ network: "devnet" });
+
+  // Detect wallet mode on mount
   useEffect(() => {
-    const loadKeypair = async () => {
+    const detectWalletMode = async () => {
       if (wallet && wallet.isConnected()) {
         try {
           // Try to export secret key (only works for LocalWalletAdapter)
@@ -94,17 +125,62 @@ export default function SendScreen() {
           const { Keypair } = await import("@solana/web3.js");
           const kp = Keypair.fromSecretKey(secretKey);
           setWalletKeypair(kp);
-          console.log(
-            "[SendScreen] Wallet keypair loaded for BLE transactions",
-          );
+          setWalletMode("local");
+          console.log("[SendScreen] Local wallet detected - keypair loaded");
         } catch (error) {
-          console.warn("[SendScreen] Could not load keypair:", error);
-          // MWA wallets won't support this - that's OK
+          // MWA wallets won't support exportSecretKey
+          setWalletMode("mwa");
+          console.log("[SendScreen] MWA wallet detected - using adapter mode");
         }
       }
     };
-    loadKeypair();
+    detectWalletMode();
   }, [wallet]);
+
+  // Create MWA wallet adapter
+  const mwaWalletAdapter: IWalletAdapter | null = React.useMemo(() => {
+    if (walletMode !== "mwa" || !wallet || !publicKey) return null;
+    
+    return {
+      getPublicKey: () => publicKey,
+      signTransaction: async (transaction: Transaction) => {
+        const signed = await wallet.signTransaction(transaction);
+        return signed as Transaction;
+      },
+      signAllTransactions: async (transactions: Transaction[]) => {
+        const signed = await wallet.signAllTransactions(transactions);
+        return signed as Transaction[];
+      },
+    };
+  }, [walletMode, wallet, publicKey]);
+
+  // Use offline wallets hook for Local wallets
+  const localWalletsHook = useOfflineWallets({
+    connection,
+    authority: walletKeypair,
+    bleMode: true,
+  });
+
+  // Use MWA offline wallets hook for MWA wallets
+  const mwaWalletsHook = useMWAOfflineWallets({
+    connection,
+    walletAdapter: mwaWalletAdapter,
+    bleMode: true,
+  });
+
+  // Select the appropriate hook based on wallet mode
+  const {
+    wallets: offlineWallets,
+    isLoading: isOfflineWalletsLoading,
+    isBLEMode,
+    isBLEReady,
+    createWallet: createOfflineWallet,
+    sweepFunds,
+    addFunds,
+    createNonceTransaction,
+    submitNonceTransaction,
+    sendNonceTransactionBLE,
+  } = walletMode === "mwa" ? mwaWalletsHook : localWalletsHook;
 
   // Security: Clear keypair from memory when component unmounts
   useEffect(() => {
@@ -116,7 +192,6 @@ export default function SendScreen() {
   }, [walletKeypair]);
 
   // Solana transaction hook for BLE offline transactions
-  const connection = createSolanaConnection({ network: "devnet" });
   const {
     sendTransactionRequest,
     pendingTransactions,
@@ -170,6 +245,16 @@ export default function SendScreen() {
 
   // Get balance for selected token
   const balance = balances.find((b) => b.symbol === token)?.balance ?? 0;
+
+  // Get selected offline wallets and total balance
+  const selectedOfflineWallets = offlineWallets.filter((w) =>
+    selectedOfflineWalletIds.includes(w.id),
+  );
+  const totalOfflineBalance = selectedOfflineWallets.reduce(
+    (sum, w) => sum + w.balances.sol,
+    0,
+  );
+  const selectedWalletCount = selectedOfflineWallets.length;
 
   // Check connectivity
   useEffect(() => {
@@ -267,30 +352,20 @@ export default function SendScreen() {
       return;
     }
 
-    // Check if sufficient balance
+    // Check if sufficient balance based on transaction mode
     const amountNum = parseFloat(amount);
-    if (amountNum > balance) {
+    const currentBalance =
+      transactionMode === "offline_wallet" && selectedWalletCount > 0
+        ? totalOfflineBalance
+        : balance;
+
+    if (amountNum > currentBalance) {
       Alert.alert(
         "Insufficient Balance",
-        `You only have ${balance} ${token} available`,
+        `You only have ${currentBalance} ${token} available`,
       );
       return;
     }
-
-    // Check connectivity before sending
-    const sendCheck = await ConnectivityUtils.canSendTransaction();
-
-    if (!sendCheck.canSend) {
-      Alert.alert(
-        "Cannot Send",
-        sendCheck.reason || "No internet or Bluetooth connection available",
-        [{ text: "OK" }],
-      );
-      return;
-    }
-
-    const useOfflineMode =
-      sendCheck.useOfflineMode || !connectivity?.isInternetConnected;
 
     // Only SOL and USDC transfers supported (ZEC coming soon)
     if (token === "ZEC") {
@@ -301,320 +376,404 @@ export default function SendScreen() {
       return;
     }
 
-    setIsSending(true);
+    // === OFFLINE WALLET MODE (Nonce Account via BLE) ===
+    if (transactionMode === "offline_wallet") {
+      if (selectedWalletCount === 0) {
+        Alert.alert("Error", "Please select at least one nonce wallet");
+        return;
+      }
 
-    try {
-      if (useOfflineMode) {
-        // Offline BLE Transaction
-        console.log("[Send] 📡 Initiating offline BLE transaction...");
-
-        if (!bleInitialized) {
-          Alert.alert(
-            "BLE Not Ready",
-            "Bluetooth is not initialized. Please try again.",
-          );
-          setIsSending(false);
-          return;
-        }
-
-        // Check if there are nearby peers
-        if (discoveredDevices.length === 0) {
-          Alert.alert(
-            "No Peers Found",
-            "No Bluetooth peers detected. Make sure there are nearby devices with Bluetooth enabled and the app running.",
-            [{ text: "OK" }],
-          );
-          setIsSending(false);
-          return;
-        }
-
-        console.log(
-          `[Send] 📡 Broadcasting to ${discoveredDevices.length} peer(s)`,
+      if (!isBLEReady) {
+        Alert.alert(
+          "BLE Not Ready",
+          "BLE mesh is not initialized. Please wait for BLE to connect.",
         );
-        console.log(`[Send] Amount: ${amountNum} ${token}`);
-        console.log(`[Send] Final recipient: ${recipientPubKey.toBase58()}`);
+        return;
+      }
 
-        try {
-          // Broadcast transaction request to ALL nearby BLE peers
-          // Any connected peer can co-sign with their keypair
-          const requestId = await sendTransactionRequest({
-            recipientPubkey: recipientPubKey, // Final recipient of funds
-            amountSOL: token === "SOL" ? amountNum : 0,
-            memo: `${token} transfer via BLE mesh - ${amountNum} ${token} to ${recipientPubKey.toBase58().slice(0, 8)}`,
-            // No targetPeerId = broadcast to all peers
+      setIsSending(true);
+
+      try {
+        console.log("[Send] 📡 Creating nonce transactions via BLE mesh...");
+        console.log(`[Send] From ${selectedWalletCount} nonce wallet(s)`);
+        console.log(`[Send] To: ${recipientPubKey.toBase58()}`);
+        console.log(`[Send] Total Amount: ${amountNum} SOL`);
+
+        // Calculate amount per wallet (split equally for now)
+        const amountPerWallet = amountNum / selectedWalletCount;
+        const { SystemProgram, LAMPORTS_PER_SOL } =
+          await import("@solana/web3.js");
+
+        // Create transactions for each selected wallet
+        const bleRequestIds: string[] = [];
+
+        for (const wallet of selectedOfflineWallets) {
+          // Check if wallet has enough balance
+          if (wallet.balances.sol < amountPerWallet) {
+            console.warn(
+              `[Send] Wallet ${wallet.publicKey.slice(0, 8)} has insufficient balance`,
+            );
+            continue;
+          }
+
+          // Create transfer instruction
+          const instruction = SystemProgram.transfer({
+            fromPubkey: new PublicKey(wallet.publicKey),
+            toPubkey: recipientPubKey,
+            lamports: amountPerWallet * LAMPORTS_PER_SOL,
           });
 
-          if (requestId) {
-            const peerNames = discoveredDevices
-              .map((d) => d.name || d.id.slice(0, 8))
-              .join(", ");
-            Alert.alert(
-              "Transaction Broadcast via BLE",
-              `Your transaction request has been broadcast to ${discoveredDevices.length} nearby peer(s): ${peerNames}\n\nRequest ID: ${requestId}\n\nAny peer can co-sign this transaction. It will be completed when someone approves it.`,
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    // Clear form and go back
-                    setAmount("0.00");
-                    setRecipient("");
-                    router.back();
-                  },
-                },
-              ],
-            );
-          } else {
-            throw new Error("Failed to create transaction request");
-          }
-        } catch (bleError) {
-          console.error("[Send] BLE transaction error:", bleError);
-          Alert.alert(
-            "BLE Transaction Failed",
-            bleError instanceof Error
-              ? bleError.message
-              : "Unknown error occurred",
-            [{ text: "OK" }],
-          );
-        }
-      } else {
-        // Online transaction
-        console.log("[Send] Sending online transaction...");
-        console.log("[Send] Token:", token);
-        console.log("[Send] From:", publicKey.toBase58());
-        console.log("[Send] To:", recipientPubKey.toBase58());
-        console.log("[Send] Amount:", amountNum, token);
-
-        if (!wallet || !wallet.isConnected()) {
-          throw new Error("Wallet not connected");
-        }
-
-        const walletAdapter = wallet;
-
-        // Create connection
-        const connection = createSolanaConnection({ network: "devnet" });
-
-        // Build transaction using wallet adapter
-        const {
-          Transaction,
-          SystemProgram,
-          LAMPORTS_PER_SOL,
-          TransactionInstruction,
-        } = await import("@solana/web3.js");
-
-        const transaction = new Transaction();
-
-        if (token === "SOL") {
-          // SOL transfer
-          console.log("[Send] Building SOL transfer...");
-          transaction.add(
-            SystemProgram.transfer({
-              fromPubkey: publicKey,
-              toPubkey: recipientPubKey,
-              lamports: amountNum * LAMPORTS_PER_SOL,
-            }),
-          );
-        } else if (token === "USDC") {
-          // USDC (SPL Token) transfer - Manual implementation for React Native compatibility
-          console.log("[Send] Building USDC transfer...");
-
-          const mintPubKey = new PublicKey(USDC_DEVNET_MINT);
-
-          // Token Program IDs
-          const TOKEN_PROGRAM_ID = new PublicKey(
-            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          );
-          const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
-            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-          );
-
-          // Manually derive associated token addresses
-          const getAssociatedTokenAddressSync = (
-            mint: PublicKey,
-            owner: PublicKey,
-          ): PublicKey => {
-            const [address] = PublicKey.findProgramAddressSync(
-              [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-              ASSOCIATED_TOKEN_PROGRAM_ID,
-            );
-            return address;
-          };
-
-          const senderTokenAccount = getAssociatedTokenAddressSync(
-            mintPubKey,
-            publicKey,
-          );
-          const recipientTokenAccount = getAssociatedTokenAddressSync(
-            mintPubKey,
-            recipientPubKey,
+          // Create durable nonce transaction
+          const { serialized, nonceValue } = await createNonceTransaction(
+            wallet.id,
+            [instruction],
           );
 
           console.log(
-            "[Send] Sender token account:",
-            senderTokenAccount.toBase58(),
-          );
-          console.log(
-            "[Send] Recipient token account:",
-            recipientTokenAccount.toBase58(),
+            `[Send] Nonce transaction created for ${wallet.publicKey.slice(0, 8)}, nonce: ${nonceValue.slice(0, 16)}`,
           );
 
-          // Check if recipient token account exists
-          const recipientAccountInfo = await connection.getAccountInfo(
-            recipientTokenAccount,
-          );
-
-          if (!recipientAccountInfo) {
-            console.log(
-              "[Send] Recipient token account does not exist, creating...",
-            );
-
-            // Manually create associated token account instruction
-            const keys = [
-              { pubkey: publicKey, isSigner: true, isWritable: true }, // payer
-              {
-                pubkey: recipientTokenAccount,
-                isSigner: false,
-                isWritable: true,
-              }, // associated token account
-              { pubkey: recipientPubKey, isSigner: false, isWritable: false }, // wallet address
-              { pubkey: mintPubKey, isSigner: false, isWritable: false }, // token mint
-              {
-                pubkey: new PublicKey("11111111111111111111111111111111"),
-                isSigner: false,
-                isWritable: false,
-              }, // system program
-              { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token program
-            ];
-
-            transaction.add(
-              new TransactionInstruction({
-                keys,
-                programId: ASSOCIATED_TOKEN_PROGRAM_ID,
-                data: Buffer.from([]), // Create instruction has no data
-              }),
-            );
-          }
-
-          // Add token transfer instruction
-          // USDC has 6 decimals on devnet
-          const usdcDecimals = 6;
-          const transferAmount = Math.floor(
-            amountNum * Math.pow(10, usdcDecimals),
-          );
-
-          console.log("[Send] Transfer amount (base units):", transferAmount);
-
-          // Manually create transfer instruction
-          // Instruction: 3 (Transfer) + amount (u64, 8 bytes)
-          const dataLayout = Buffer.alloc(9);
-          dataLayout.writeUInt8(3, 0); // Transfer instruction
-          dataLayout.writeBigUInt64LE(BigInt(transferAmount), 1);
-
-          const transferKeys = [
-            { pubkey: senderTokenAccount, isSigner: false, isWritable: true }, // source
+          // Send via BLE mesh
+          const bleRequestId = await sendNonceTransactionBLE(
+            wallet.id,
+            serialized,
+            wallet.nonceAccount || "",
+            "transfer",
             {
-              pubkey: recipientTokenAccount,
-              isSigner: false,
-              isWritable: true,
-            }, // destination
-            { pubkey: publicKey, isSigner: true, isWritable: false }, // owner
-          ];
-
-          transaction.add(
-            new TransactionInstruction({
-              keys: transferKeys,
-              programId: TOKEN_PROGRAM_ID,
-              data: dataLayout,
-            }),
+              description: `Transfer ${amountPerWallet.toFixed(4)} SOL from ${wallet.publicKey.slice(0, 8)}`,
+            },
           );
+
+          bleRequestIds.push(bleRequestId);
         }
 
-        // Add memo
-        transaction.add(
-          new TransactionInstruction({
-            keys: [],
-            programId: new PublicKey(
-              "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
-            ),
-            data: Buffer.from(`Sent ${token} from anon0mesh`, "utf-8"),
-          }),
-        );
-
-        // Get recent blockhash
-        const { blockhash, lastValidBlockHeight } =
-          await connection.getLatestBlockhash("confirmed");
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = publicKey;
-
-        console.log("[Send] Transaction built, signing...");
-
-        // Sign transaction using wallet adapter
-        const signedTransaction =
-          await walletAdapter.signTransaction(transaction);
-
-        console.log("[Send] Transaction signed, submitting...");
-
-        // Submit transaction
-        const signature = await connection.sendRawTransaction(
-          signedTransaction.serialize(),
-          {
-            skipPreflight: false,
-            preflightCommitment: "confirmed",
-            maxRetries: 3,
-          },
-        );
-
-        console.log("[Send] Transaction submitted:", signature);
-        console.log("[Send] Waiting for confirmation...");
-
-        // Wait for confirmation
-        const confirmation = await connection.confirmTransaction(
-          {
-            signature,
-            blockhash,
-            lastValidBlockHeight,
-          },
-          "confirmed",
-        );
-
-        if (confirmation.value.err) {
+        if (bleRequestIds.length === 0) {
           throw new Error(
-            `Transaction failed: ${JSON.stringify(confirmation.value.err)}`,
+            "No transactions could be created. Check wallet balances.",
           );
         }
 
-        console.log("[Send] ✅ Transaction confirmed!");
-
-        // Refresh balances
-        await fetchBalances(publicKey);
-
-        // Show success
         Alert.alert(
-          "Transaction Sent!",
-          `Successfully sent ${amountNum} ${token} to ${recipientPubKey.toBase58().slice(0, 8)}...\n\nSignature: ${signature.slice(0, 8)}...`,
+          "Nonce Transactions Sent via BLE",
+          `Sent ${bleRequestIds.length} transaction(s) via BLE mesh.\n\n` +
+            `Total Amount: ${amountNum} SOL\n` +
+            `Per Wallet: ${amountPerWallet.toFixed(4)} SOL\n\n` +
+            `Request IDs:\n${bleRequestIds.join("\n").slice(0, 100)}...`,
           [
             {
-              text: "View Details",
+              text: "OK",
               onPress: () => {
-                // TODO: Open transaction details or explorer
-                console.log("View tx:", signature);
-                console.log(
-                  "Explorer:",
-                  `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
-                );
-              },
-            },
-            {
-              text: "Done",
-              onPress: () => {
-                setShowConfirmation(true);
-                // Reset form
                 setAmount("0.00");
                 setRecipient("");
+                setSelectedOfflineWalletIds([]);
+                router.back();
               },
             },
           ],
         );
+      } catch (err) {
+        console.error("[Send] Nonce transaction error:", err);
+        Alert.alert(
+          "Transaction Failed",
+          err instanceof Error ? err.message : "Unknown error occurred",
+          [{ text: "OK" }],
+        );
+      } finally {
+        setIsSending(false);
       }
+      return;
+    }
+
+    // === BLE MESH MODE (Standard) ===
+    if (transactionMode === "ble_mesh") {
+      if (!bleInitialized) {
+        Alert.alert("BLE Not Ready", "Bluetooth is not initialized.");
+        return;
+      }
+
+      if (discoveredDevices.length === 0) {
+        Alert.alert(
+          "No Peers Found",
+          "No Bluetooth peers detected. Make sure there are nearby devices.",
+          [{ text: "OK" }],
+        );
+        return;
+      }
+
+      setIsSending(true);
+
+      try {
+        console.log("[Send] 📡 Broadcasting via BLE mesh...");
+        console.log(`[Send] Amount: ${amountNum} ${token}`);
+
+        const requestId = await sendTransactionRequest({
+          recipientPubkey: recipientPubKey,
+          amountSOL: token === "SOL" ? amountNum : 0,
+          memo: `${token} transfer via BLE mesh`,
+        });
+
+        if (requestId) {
+          const peerNames = discoveredDevices
+            .map((d) => d.name || d.id.slice(0, 8))
+            .join(", ");
+          Alert.alert(
+            "Transaction Broadcast",
+            `Broadcast to ${discoveredDevices.length} peer(s): ${peerNames}`,
+            [{ text: "OK", onPress: () => router.back() }],
+          );
+        }
+      } catch (err) {
+        console.error("[Send] BLE error:", err);
+        Alert.alert(
+          "Failed",
+          err instanceof Error ? err.message : "Unknown error",
+        );
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
+
+    // === ONLINE MODE ===
+    setIsSending(true);
+
+    try {
+      console.log("[Send] Sending online transaction...");
+      console.log("[Send] Token:", token);
+      console.log("[Send] From:", publicKey.toBase58());
+      console.log("[Send] To:", recipientPubKey.toBase58());
+      console.log("[Send] Amount:", amountNum, token);
+
+      if (!wallet || !wallet.isConnected()) {
+        throw new Error("Wallet not connected");
+      }
+
+      const walletAdapter = wallet;
+
+      // Create connection
+      const connection = createSolanaConnection({ network: "devnet" });
+
+      // Build transaction using wallet adapter
+      const {
+        Transaction,
+        SystemProgram,
+        LAMPORTS_PER_SOL,
+        TransactionInstruction,
+      } = await import("@solana/web3.js");
+
+      const transaction = new Transaction();
+
+      if (token === "SOL") {
+        // SOL transfer
+        console.log("[Send] Building SOL transfer...");
+        transaction.add(
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: recipientPubKey,
+            lamports: amountNum * LAMPORTS_PER_SOL,
+          }),
+        );
+      } else if (token === "USDC") {
+        // USDC (SPL Token) transfer - Manual implementation for React Native compatibility
+        console.log("[Send] Building USDC transfer...");
+
+        const mintPubKey = new PublicKey(USDC_DEVNET_MINT);
+
+        // Token Program IDs
+        const TOKEN_PROGRAM_ID = new PublicKey(
+          "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        );
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
+          "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+        );
+
+        // Manually derive associated token addresses
+        const getAssociatedTokenAddressSync = (
+          mint: PublicKey,
+          owner: PublicKey,
+        ): PublicKey => {
+          const [address] = PublicKey.findProgramAddressSync(
+            [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+          );
+          return address;
+        };
+
+        const senderTokenAccount = getAssociatedTokenAddressSync(
+          mintPubKey,
+          publicKey,
+        );
+        const recipientTokenAccount = getAssociatedTokenAddressSync(
+          mintPubKey,
+          recipientPubKey,
+        );
+
+        console.log(
+          "[Send] Sender token account:",
+          senderTokenAccount.toBase58(),
+        );
+        console.log(
+          "[Send] Recipient token account:",
+          recipientTokenAccount.toBase58(),
+        );
+
+        // Check if recipient token account exists
+        const recipientAccountInfo = await connection.getAccountInfo(
+          recipientTokenAccount,
+        );
+
+        if (!recipientAccountInfo) {
+          console.log(
+            "[Send] Recipient token account does not exist, creating...",
+          );
+
+          // Manually create associated token account instruction
+          const keys = [
+            { pubkey: publicKey, isSigner: true, isWritable: true }, // payer
+            {
+              pubkey: recipientTokenAccount,
+              isSigner: false,
+              isWritable: true,
+            }, // associated token account
+            { pubkey: recipientPubKey, isSigner: false, isWritable: false }, // wallet address
+            { pubkey: mintPubKey, isSigner: false, isWritable: false }, // token mint
+            {
+              pubkey: new PublicKey("11111111111111111111111111111111"),
+              isSigner: false,
+              isWritable: false,
+            }, // system program
+            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token program
+          ];
+
+          transaction.add(
+            new TransactionInstruction({
+              keys,
+              programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+              data: Buffer.from([]), // Create instruction has no data
+            }),
+          );
+        }
+
+        // Add token transfer instruction
+        // USDC has 6 decimals on devnet
+        const usdcDecimals = 6;
+        const transferAmount = Math.floor(
+          amountNum * Math.pow(10, usdcDecimals),
+        );
+
+        console.log("[Send] Transfer amount (base units):", transferAmount);
+
+        // Manually create transfer instruction
+        // Instruction: 3 (Transfer) + amount (u64, 8 bytes)
+        const dataLayout = Buffer.alloc(9);
+        dataLayout.writeUInt8(3, 0); // Transfer instruction
+        dataLayout.writeBigUInt64LE(BigInt(transferAmount), 1);
+
+        const transferKeys = [
+          { pubkey: senderTokenAccount, isSigner: false, isWritable: true }, // source
+          {
+            pubkey: recipientTokenAccount,
+            isSigner: false,
+            isWritable: true,
+          }, // destination
+          { pubkey: publicKey, isSigner: true, isWritable: false }, // owner
+        ];
+
+        transaction.add(
+          new TransactionInstruction({
+            keys: transferKeys,
+            programId: TOKEN_PROGRAM_ID,
+            data: dataLayout,
+          }),
+        );
+      }
+
+      // Add memo
+      transaction.add(
+        new TransactionInstruction({
+          keys: [],
+          programId: new PublicKey(
+            "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+          ),
+          data: Buffer.from(`Sent ${token} from anon0mesh`, "utf-8"),
+        }),
+      );
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash("confirmed");
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      console.log("[Send] Transaction built, signing...");
+
+      // Sign transaction using wallet adapter
+      const signedTransaction =
+        await walletAdapter.signTransaction(transaction);
+
+      console.log("[Send] Transaction signed, submitting...");
+
+      // Submit transaction
+      const signature = await connection.sendRawTransaction(
+        signedTransaction.serialize(),
+        {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+          maxRetries: 3,
+        },
+      );
+
+      console.log("[Send] Transaction submitted:", signature);
+      console.log("[Send] Waiting for confirmation...");
+
+      // Wait for confirmation
+      const confirmation = await connection.confirmTransaction(
+        {
+          signature,
+          blockhash,
+          lastValidBlockHeight,
+        },
+        "confirmed",
+      );
+
+      if (confirmation.value.err) {
+        throw new Error(
+          `Transaction failed: ${JSON.stringify(confirmation.value.err)}`,
+        );
+      }
+
+      console.log("[Send] ✅ Transaction confirmed!");
+
+      // Refresh balances
+      await fetchBalances(publicKey);
+
+      // Show success
+      Alert.alert(
+        "Transaction Sent!",
+        `Successfully sent ${amountNum} ${token} to ${recipientPubKey.toBase58().slice(0, 8)}...\n\nSignature: ${signature.slice(0, 8)}...`,
+        [
+          {
+            text: "View Details",
+            onPress: () => {
+              // TODO: Open transaction details or explorer
+              console.log("View tx:", signature);
+              console.log(
+                "Explorer:",
+                `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
+              );
+            },
+          },
+          {
+            text: "Done",
+            onPress: () => {
+              setShowConfirmation(true);
+              // Reset form
+              setAmount("0.00");
+              setRecipient("");
+            },
+          },
+        ],
+      );
     } catch (error) {
       console.error("[Send] Transaction failed:", error);
       Alert.alert(
@@ -783,14 +942,34 @@ export default function SendScreen() {
                 style={styles.fromSelector}
                 onPress={() => setShowFromDropdown(!showFromDropdown)}
               >
-                {/* Primary Wallet Address */}
-                <Text style={styles.fromPrimaryText}>
-                  Primary Wallet (
-                  {publicKey
-                    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
-                    : "Loading..."}
-                  )
-                </Text>
+                {/* Show Primary or Nonce Wallet selection */}
+                {selectedOfflineWalletIds.length > 0 ? (
+                  <View style={styles.fromSelectorContent}>
+                    <Text style={styles.fromPrimaryText}>
+                      {selectedOfflineWalletIds.length === 1
+                        ? "Nonce Wallet"
+                        : `${selectedOfflineWalletIds.length} Nonce Wallets`}
+                    </Text>
+                    <Text style={styles.fromSecondaryText}>
+                      Total: {totalOfflineBalance.toFixed(4)} SOL
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.fromSelectorContent}>
+                    <Text style={styles.fromPrimaryText}>
+                      Primary Wallet (
+                      {publicKey
+                        ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+                        : "Loading..."}
+                      )
+                    </Text>
+                    {walletMode !== "unknown" && (
+                      <Text style={styles.walletModeText}>
+                        {walletMode === "mwa" ? "🔐 MWA Mode" : "🔑 Local Mode"}
+                      </Text>
+                    )}
+                  </View>
+                )}
                 {showFromDropdown ? (
                   <CaretUp size={20} color="#9CA3AF" weight="regular" />
                 ) : (
@@ -801,37 +980,145 @@ export default function SendScreen() {
               {/* From Dropdown */}
               {showFromDropdown && (
                 <View style={styles.fromDropdown}>
-                  {/* <TouchableOpacity 
-                      style={styles.fromOption}
-                      onPress={() => {
-                        setSelectedFrom('disposable1');
-                        setShowFromDropdown(false);
-                      }}
-                    >
-                      <Text style={styles.fromOptionText}>
-                        Disposable Address (8nXF...QyaS)
-                      </Text>
-                      <Text style={styles.fromOptionBalance}>75.89 SOL</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.fromOption}
-                      onPress={() => {
-                        setSelectedFrom('disposable2');
-                        setShowFromDropdown(false);
-                      }}
-                    >
-                      <Text style={styles.fromOptionText}>
-                        Disposable Address (8nXF...QyaS)
-                      </Text>
-                      <Text style={styles.fromOptionBalance}>75.89 SOL</Text>
-                    </TouchableOpacity> */}
+                  {/* Nonce Wallets Section */}
+                  {offlineWallets.length > 0 && (
+                    <View style={styles.fromSection}>
+                      <View style={styles.fromSectionHeader}>
+                        <Text style={styles.fromSectionTitle}>
+                          Nonce Wallets
+                        </Text>
+                        <Text style={styles.fromSectionCount}>
+                          {selectedOfflineWalletIds.length} selected
+                        </Text>
+                      </View>
+
+                      {/* Wallet List in Dropdown */}
+                      <View style={styles.fromWalletList}>
+                        {offlineWallets.map((wallet) => {
+                          const isSelected = selectedOfflineWalletIds.includes(
+                            wallet.id,
+                          );
+                          return (
+                            <TouchableOpacity
+                              key={wallet.id}
+                              style={[
+                                styles.fromWalletOption,
+                                isSelected && styles.fromWalletOptionSelected,
+                              ]}
+                              onPress={() => {
+                                if (isSelected) {
+                                  setSelectedOfflineWalletIds((prev) => {
+                                    const newIds = prev.filter(
+                                      (id) => id !== wallet.id,
+                                    );
+                                    // Switch back to online if no wallets selected
+                                    if (newIds.length === 0) {
+                                      setTransactionMode("online");
+                                    }
+                                    return newIds;
+                                  });
+                                } else {
+                                  setSelectedOfflineWalletIds((prev) => [
+                                    ...prev,
+                                    wallet.id,
+                                  ]);
+                                  // Auto-switch to offline_wallet mode when selecting
+                                  setTransactionMode("offline_wallet");
+                                }
+                              }}
+                            >
+                              <View style={styles.fromWalletCheckbox}>
+                                <View
+                                  style={[
+                                    styles.checkbox,
+                                    isSelected && styles.checkboxSelected,
+                                  ]}
+                                >
+                                  {isSelected && (
+                                    <Text style={styles.checkmark}>✓</Text>
+                                  )}
+                                </View>
+                              </View>
+                              <View style={styles.fromWalletInfo}>
+                                <Text style={styles.fromWalletLabel}>
+                                  {wallet.label || "Wallet"}
+                                </Text>
+                                <Text style={styles.fromWalletBalance}>
+                                  {wallet.balances.sol.toFixed(4)} SOL
+                                </Text>
+                                <Text style={styles.fromWalletAddress}>
+                                  {wallet.publicKey.slice(0, 6)}...
+                                  {wallet.publicKey.slice(-4)}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {/* Total Balance */}
+                      {selectedOfflineWalletIds.length > 0 && (
+                        <View style={styles.fromTotalBalance}>
+                          <Text style={styles.fromTotalLabel}>Total:</Text>
+                          <Text style={styles.fromTotalValue}>
+                            {totalOfflineBalance.toFixed(4)} SOL
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Select All / Clear */}
+                      <View style={styles.fromActions}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedOfflineWalletIds(
+                              offlineWallets.map((w) => w.id),
+                            );
+                            setTransactionMode("offline_wallet");
+                          }}
+                        >
+                          <Text style={styles.fromActionText}>Select All</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedOfflineWalletIds([]);
+                            setTransactionMode("online");
+                          }}
+                        >
+                          <Text style={styles.fromActionText}>Clear</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Create New Wallet */}
                   <TouchableOpacity
                     style={styles.createNewButton}
-                    onPress={handleCreateNewAddress}
+                    onPress={async () => {
+                      try {
+                        const newWallet = await createOfflineWallet({
+                          label: `Wallet ${offlineWallets.length + 1}`,
+                          createNonceAccount: true,
+                        });
+                        if (newWallet) {
+                          Alert.alert(
+                            "Nonce Wallet Created",
+                            `Address: ${newWallet.data.publicKey.slice(0, 8)}...\n\n` +
+                              "This wallet uses BLE mesh for transactions.",
+                          );
+                        }
+                      } catch (err) {
+                        Alert.alert(
+                          "Error",
+                          err instanceof Error
+                            ? err.message
+                            : "Failed to create wallet",
+                        );
+                      }
+                    }}
                   >
                     <Text style={styles.createNewIcon}>+</Text>
                     <Text style={styles.createNewText}>
-                      Create new disposable address
+                      Create new nonce wallet
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -899,8 +1186,32 @@ export default function SendScreen() {
             />
           )}
 
+          {/* BLE Status Indicator -->
+          {transactionMode !== "online" && (
+            <View style={styles.bleStatusBanner}>
+              <View
+                style={[
+                  styles.statusDot,
+                  {
+                    backgroundColor: isBLEReady ? "#22D3EE" : "#ff4444",
+                  },
+                ]}
+              />
+              <Text style={styles.connectivityText}>
+                {isBLEReady
+                  ? `BLE Mesh Ready (${meshPeers.length} peers)`
+                  : "BLE Mesh Not Ready"}
+              </Text>
+              {isBLEMode && (
+                <Text style={styles.bleModeText}>
+                  Nonce transactions use BLE
+                </Text>
+              )}
+            </View>
+          )}
+
           {/* Connectivity Status */}
-          {connectivity && (
+          {connectivity && transactionMode === "online" && (
             <View style={styles.connectivityBanner}>
               <View
                 style={[
@@ -940,6 +1251,9 @@ export default function SendScreen() {
         onClose={() => setShowQRScanner(false)}
         onScan={handleQRScanned}
       />
+
+      {/* Transaction Approval Modal - Shows when peers send tx requests */}
+      <TransactionApprovalModal />
     </LinearGradient>
   );
 }
@@ -1171,6 +1485,116 @@ const styles = StyleSheet.create({
   fromDropdown: {
     borderTopWidth: 1,
     borderTopColor: "rgba(34, 211, 238, 0.3)",
+    maxHeight: 300,
+  },
+  fromSelectorContent: {
+    flexDirection: "column",
+  },
+  fromSecondaryText: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  walletModeText: {
+    color: "#22D3EE",
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: "600",
+  },
+  fromSection: {
+    paddingVertical: 12,
+  },
+  fromSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  fromSectionTitle: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  fromSectionCount: {
+    color: "#22D3EE",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  fromWalletList: {
+    paddingHorizontal: 12,
+  },
+  fromWalletOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#072B31",
+    borderRadius: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#106471",
+  },
+  fromWalletOptionSelected: {
+    borderColor: "#22D3EE",
+    backgroundColor: "#106471",
+  },
+  fromWalletCheckbox: {
+    marginRight: 12,
+  },
+  fromWalletInfo: {
+    flex: 1,
+  },
+  fromWalletLabel: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  fromWalletBalance: {
+    color: "#22D3EE",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  fromWalletAddress: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  fromTotalBalance: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 8,
+    backgroundColor: "#06181B",
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "rgba(34, 211, 238, 0.2)",
+  },
+  fromTotalLabel: {
+    color: "#9CA3AF",
+    fontSize: 12,
+  },
+  fromTotalValue: {
+    color: "#22D3EE",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  fromActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  fromActionText: {
+    color: "#22D3EE",
+    fontSize: 12,
+    textDecorationLine: "underline",
   },
   fromOption: {
     flexDirection: "row",
@@ -1245,5 +1669,130 @@ const styles = StyleSheet.create({
   connectivityText: {
     color: "#22D3EE",
     fontSize: 12,
+  },
+  // Transaction Mode Selector
+  modeSelector: {
+    marginVertical: 12,
+  },
+  modeLabel: {
+    color: "#9CA3AF",
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  modeButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  modeButton: {
+    backgroundColor: "#072B31",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#106471",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  modeButtonActive: {
+    backgroundColor: "#106471",
+    borderColor: "#22D3EE",
+  },
+  modeButtonText: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  modeButtonTextActive: {
+    color: "#22D3EE",
+  },
+  // BLE Status Banner
+  bleStatusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    flexWrap: "wrap",
+  },
+  bleModeText: {
+    color: "#9CA3AF",
+    fontSize: 10,
+    width: "100%",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  // Wallet List
+  walletList: {
+    flexDirection: "row",
+    gap: 8,
+    paddingVertical: 4,
+  },
+  walletCard: {
+    backgroundColor: "#072B31",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#106471",
+    padding: 12,
+    minWidth: 120,
+    alignItems: "center",
+  },
+  walletCardActive: {
+    borderColor: "#22D3EE",
+    backgroundColor: "#106471",
+  },
+  walletCardLabel: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  walletCardBalance: {
+    color: "#22D3EE",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  walletCardAddress: {
+    color: "#9CA3AF",
+    fontSize: 10,
+  },
+  walletCardCreate: {
+    backgroundColor: "#06181B",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#106471",
+    borderStyle: "dashed",
+    padding: 12,
+    minWidth: 120,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  walletCardCreateIcon: {
+    color: "#22D3EE",
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  walletCardCreateText: {
+    color: "#22D3EE",
+    fontSize: 10,
+    textAlign: "center",
+  },
+  // Checkbox (used in From dropdown)
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: "#9CA3AF",
+    backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxSelected: {
+    borderColor: "#22D3EE",
+    backgroundColor: "#22D3EE",
+  },
+  checkmark: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "bold",
   },
 });

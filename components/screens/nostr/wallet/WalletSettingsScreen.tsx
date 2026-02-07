@@ -1,9 +1,11 @@
 import SolanaIcon from "@/components/icons/SolanaIcon";
 import CreateOffline from "@/components/modals/CreateOfflineAddressModal";
 import { useOfflineWallets } from "@/hooks/useOfflineWallets";
+import { useMWAOfflineWallets } from "@/hooks/useMWAOfflineWallets";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { createSolanaConnection } from "@/src/utils/solana";
-import { Keypair } from "@solana/web3.js";
+import { IWalletAdapter } from "@/src/infrastructure/wallet/transaction/MWADurableNonce";
+import { Keypair, Transaction } from "@solana/web3.js";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -41,7 +43,7 @@ export default function WalletSettingsScreen() {
     [],
   );
 
-  // Get authority keypair from wallet
+  // Get authority keypair from wallet (Local mode only)
   const [authority, setAuthority] = useState<Keypair | null>(null);
 
   useEffect(() => {
@@ -60,21 +62,41 @@ export default function WalletSettingsScreen() {
         } catch (err) {
           console.error("[WalletSettings] Failed to load authority:", err);
         }
-      } else if (walletMode === "mwa" && publicKey) {
-        // For MWA - we'll use the wallet's signTransaction method instead
-        // No need for keypair export!
-        console.log(
-          "[WalletSettings] MWA wallet ready - offline wallets supported via transaction signing! 🔥",
-        );
-        // Create a pseudo-keypair with just the publicKey for compatibility
-        // The actual signing will be done by MWA wallet
-        setAuthority(null); // We'll handle this differently
       }
     };
     loadAuthority();
-  }, [wallet, isConnected, walletMode, publicKey]);
+  }, [wallet, isConnected, walletMode]);
 
-  // Use offline wallets hook
+  // Create MWA wallet adapter
+  const mwaWalletAdapter: IWalletAdapter | null = useMemo(() => {
+    if (walletMode !== "mwa" || !wallet || !publicKey) return null;
+    
+    return {
+      getPublicKey: () => publicKey,
+      signTransaction: async (transaction: Transaction) => {
+        const signed = await wallet.signTransaction(transaction);
+        return signed as Transaction;
+      },
+      signAllTransactions: async (transactions: Transaction[]) => {
+        const signed = await wallet.signAllTransactions(transactions);
+        return signed as Transaction[];
+      },
+    };
+  }, [walletMode, wallet, publicKey]);
+
+  // Use offline wallets hook for Local wallets
+  const localWalletsHook = useOfflineWallets({
+    connection,
+    authority,
+  });
+
+  // Use MWA offline wallets hook for MWA wallets
+  const mwaWalletsHook = useMWAOfflineWallets({
+    connection,
+    walletAdapter: mwaWalletAdapter,
+  });
+
+  // Select the appropriate hook based on wallet mode
   const {
     wallets: offlineWallets,
     isLoading: offlineLoading,
@@ -83,10 +105,7 @@ export default function WalletSettingsScreen() {
     deleteWallet,
     refreshBalances,
     sweepFunds,
-  } = useOfflineWallets({
-    connection,
-    authority,
-  });
+  } = walletMode === "mwa" ? mwaWalletsHook : localWalletsHook;
 
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
   const [isDepositModalVisible, setIsDepositModalVisible] = useState(false);
@@ -217,37 +236,38 @@ export default function WalletSettingsScreen() {
       return;
     }
 
+    // For local wallets, need authority keypair
+    if (walletMode === "local" && !authority) {
+      Alert.alert("Error", "Primary wallet keypair not loaded");
+      return;
+    }
+
+    // For MWA wallets, need adapter
+    if (walletMode === "mwa" && !mwaWalletAdapter) {
+      Alert.alert("Error", "MWA wallet adapter not ready");
+      return;
+    }
+
     try {
       const initialFunding = token === "SOL" ? amount : 0;
 
-      // For MWA wallets, we need to use the wallet adapter's signing
-      // For now, show a message that this feature is coming soon for MWA
-      if (walletMode === "mwa") {
-        Alert.alert(
-          "Coming Soon",
-          "Offline wallets with MWA support is being implemented! For now, use a local wallet.",
-        );
-        return;
-      }
-
-      // For local wallets, continue with existing flow
-      if (!authority) {
-        Alert.alert("Error", "Primary wallet keypair not loaded");
-        return;
-      }
-      const wallet = await createWallet({
+      const newWallet = await createWallet({
         label,
         initialFundingSOL: initialFunding,
         createNonceAccount: true,
       });
 
-      if (wallet) {
+      if (newWallet) {
+        const fundingMsg = initialFunding 
+          ? `Funded with ${initialFunding} SOL` 
+          : "No initial funding (you can fund later)";
+        
         Alert.alert(
           "Success",
           `Offline wallet created!\n\n` +
-            `Address: ${wallet.data.publicKey.slice(0, 8)}...${wallet.data.publicKey.slice(-8)}\n` +
-            `Nonce Account: ${wallet.data.nonceAccount ? "Yes ✅" : "No"}\n` +
-            `${initialFunding ? `Funded with ${initialFunding} SOL` : "No initial funding"}`,
+            `Address: ${newWallet.data.publicKey.slice(0, 8)}...${newWallet.data.publicKey.slice(-8)}\n` +
+            `Nonce Account: ${newWallet.data.nonceAccount ? "Yes ✅" : "No"}\n` +
+            `${fundingMsg}`,
         );
       }
     } catch (err) {
@@ -308,16 +328,6 @@ export default function WalletSettingsScreen() {
                       : "Loading..."}
                   </Text>
                 </View>
-              ) : !isConnected && walletMode === "mwa" ? (
-                <View style={styles.connectContainer}>
-                  <Text style={styles.connectText}>MWA Wallet Detected</Text>
-                  <TouchableOpacity
-                    onPress={handleConnectWallet}
-                    style={styles.connectButton}
-                  >
-                    <Text style={styles.connectButtonText}>Connect Wallet</Text>
-                  </TouchableOpacity>
-                </View>
               ) : (
                 <>
                   <Text style={styles.primaryAddress}>{primaryWallet}</Text>
@@ -343,9 +353,16 @@ export default function WalletSettingsScreen() {
           {/* Offline Wallets Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                Offline Wallets (Nonce Accounts)
-              </Text>
+              <View style={styles.titleWithBadge}>
+                <Text style={styles.sectionTitle}>
+                  Offline Wallets (Nonce Accounts)
+                </Text>
+                {walletMode === "mwa" && (
+                  <View style={styles.mwaBadge}>
+                    <Text style={styles.mwaBadgeText}>MWA</Text>
+                  </View>
+                )}
+              </View>
               {offlineWallets.length > 0 && (
                 <TouchableOpacity
                   onPress={handleRefreshBalances}
@@ -356,22 +373,7 @@ export default function WalletSettingsScreen() {
               )}
             </View>
 
-            {walletMode === "mwa" ? (
-              <View style={styles.mwaNoticeCard}>
-                <Text style={styles.mwaNoticeTitle}>
-                  � MWA + Nonce Accounts (Coming Soon!)
-                </Text>
-                <Text style={styles.mwaNoticeText}>
-                  Disposable wallets with nonce accounts ARE possible on Solana
-                  Mobile! We&apos;re implementing MWA transaction signing for
-                  nonce account creation.
-                </Text>
-                <Text style={styles.mwaNoticeSubtext}>
-                  For now, use a local wallet to access this feature. MWA
-                  support coming in the next update! 🚀
-                </Text>
-              </View>
-            ) : offlineWallets.length === 0 ? (
+            {offlineWallets.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>No offline wallets yet</Text>
                 <Text style={styles.emptySubtext}>
@@ -736,6 +738,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#8a9999",
     fontStyle: "italic",
+  },
+  titleWithBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  mwaBadge: {
+    backgroundColor: "#22D3EE",
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  mwaBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0D0D0D",
   },
   emptyState: {
     backgroundColor: "#06181B",

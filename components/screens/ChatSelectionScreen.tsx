@@ -1,4 +1,4 @@
-import { useMeshChat } from "@/src/contexts/MeshChatContext";
+import { useMeshChat } from "@/src/contexts/MeshBLEContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { Broadcast, CaretRight } from "phosphor-react-native";
 import React, { useState } from "react";
