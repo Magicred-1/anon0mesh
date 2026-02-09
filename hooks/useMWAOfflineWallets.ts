@@ -11,13 +11,13 @@
  */
 
 import { Connection, PublicKey } from "@solana/web3.js";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MWAOfflineWalletData,
   MWAOfflineWalletManager,
   MWAOfflineWalletState,
-  IWalletAdapter,
 } from "../src/infrastructure/wallet/MWAOfflineWallet";
+import { IWalletAdapter } from "../src/infrastructure/wallet/transaction/MWADurableNonce";
 import {
   useMeshChat,
   NonceTransactionType,
@@ -55,6 +55,7 @@ export interface UseMWAOfflineWalletsReturn {
     closeNonceAccount?: boolean
   ) => Promise<void>;
   loadWallet: (walletId: string) => Promise<MWAOfflineWalletState | null>;
+  reloadWallets: () => Promise<void>;
   refreshBalances: (walletId?: string) => Promise<void>;
   sweepFunds: (walletId: string) => Promise<string>;
   /** Add funds to a disposable wallet from MWA wallet (always uses direct RPC, not BLE) */
@@ -80,11 +81,20 @@ export interface UseMWAOfflineWalletsReturn {
   getNonceValue: (walletId: string) => Promise<string | null>;
 
   // BLE-specific methods
-  /** Send nonce transaction via BLE mesh (for create, transfer, advance, close) */
+  /** 
+   * Send nonce transaction via BLE mesh (for create, transfer, advance, close) 
+   * 
+   * Broadcasts to all connected peers like regular messages.
+   * Uses existing mesh sessions - no new handshakes needed.
+   * Any peer can accept and be the second signer.
+   * 
+   * @param signerPublicKey - The public key of the signer (wallet's pubkey, NOT nonce account)
+   * @param options.recipientPeerId - Optional: if set, sends to specific peer only
+   */
   sendNonceTransactionBLE: (
     walletId: string,
     serializedTransaction: string,
-    nonceAccount: string,
+    signerPublicKey: string,
     type: NonceTransactionType,
     options?: {
       recipientPeerId?: string;
@@ -109,33 +119,49 @@ export function useMWAOfflineWallets(
   const meshChat = useMeshChat();
   const isBLEReady = bleMode && meshChat?.isInitialized && meshChat?.isConnected;
 
-  // Create manager instance
-  const manager = walletAdapter
-    ? new MWAOfflineWalletManager(connection, walletAdapter)
-    : null;
+  // Create manager instance (stable reference)
+  // Only recreate when adapter reference changes (useMemo in parent should keep it stable)
+  const manager = useMemo(() => {
+    console.log("[useMWAOfflineWallets] Creating manager, adapter exists:", !!walletAdapter);
+    return walletAdapter
+      ? new MWAOfflineWalletManager(connection, walletAdapter)
+      : null;
+  }, [connection, walletAdapter]);
 
   /**
-   * Load all offline wallets on mount
+   * Load all offline wallets from storage
+   */
+  const reloadWallets = useCallback(async () => {
+    console.log("[useMWAOfflineWallets] Reloading wallets... manager exists:", !!manager);
+    if (!manager) {
+      console.log("[useMWAOfflineWallets] No manager, cannot reload");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const loaded = await manager.loadAllOfflineWallets();
+      console.log("[useMWAOfflineWallets] Reloaded wallets:", loaded.length);
+      setWallets(loaded);
+      setError(null);
+    } catch (err) {
+      console.error("[useMWAOfflineWallets] Failed to reload wallets:", err);
+      setError(err instanceof Error ? err.message : "Failed to load wallets");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [manager]);
+
+  /**
+   * Load all offline wallets on mount or when adapter becomes available
    */
   useEffect(() => {
-    const loadWallets = async () => {
-      if (!manager) return;
-
-      setIsLoading(true);
-      try {
-        const loaded = await manager.loadAllOfflineWallets();
-        setWallets(loaded);
-        setError(null);
-      } catch (err) {
-        console.error("[useMWAOfflineWallets] Failed to load wallets:", err);
-        setError(err instanceof Error ? err.message : "Failed to load wallets");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadWallets();
-  }, [walletAdapter]); // Re-load when wallet adapter changes
+    console.log("[useMWAOfflineWallets] Mount/manager effect - manager:", !!manager);
+    if (manager) {
+      reloadWallets();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manager]);
 
   /**
    * Create a new MWA-compatible offline wallet
@@ -387,12 +413,22 @@ export function useMWAOfflineWallets(
   /**
    * Send a nonce transaction via BLE mesh
    * For: create, transfer, advance, close (NOT sweep/add_funds)
+   * 
+   * Broadcasts to all connected peers like regular messages.
+   * Uses existing mesh sessions - no new handshakes needed.
+   * Any peer can accept and be the second signer.
+   * 
+   * @param walletId - The wallet ID
+   * @param serializedTransaction - The serialized transaction
+   * @param signerPublicKey - The public key of the signer (wallet's pubkey, NOT nonce account)
+   * @param type - The transaction type
+   * @param options.recipientPeerId - Optional: if set, sends to specific peer only
    */
   const sendNonceTransactionBLE = useCallback(
     async (
       walletId: string,
       serializedTransaction: string,
-      nonceAccount: string,
+      signerPublicKey: string,
       type: NonceTransactionType,
       options?: {
         recipientPeerId?: string;
@@ -413,20 +449,59 @@ export function useMWAOfflineWallets(
       setError(null);
 
       try {
-        console.log(`[useMWAOfflineWallets] Sending ${type} via BLE mesh...`);
+        // Determine if we're broadcasting or targeting a specific peer
+        const isBroadcast = !options?.recipientPeerId;
+        
+        if (isBroadcast) {
+          console.log(`[useMWAOfflineWallets] 📢 Broadcasting ${type} to ALL connected peers`);
+          console.log(`[useMWAOfflineWallets] Any peer can accept and co-sign this transaction`);
+        } else {
+          console.log(`[useMWAOfflineWallets] 📤 Sending ${type} to specific peer: ${options?.recipientPeerId}`);
+        }
+        console.log(`[useMWAOfflineWallets] Signer: ${signerPublicKey.slice(0, 16)}...`);
 
-        const requestId = await meshChat.sendNonceTransaction(
-          serializedTransaction,
-          {
-            nonceAccount,
-            description: options?.description || `${type} nonce transaction`,
-            recipientPeerId: options?.recipientPeerId,
-            transactionType: type,
+        // Ensure encrypted sessions are established before sending
+        // This is required for transaction transmission
+        console.log(`[useMWAOfflineWallets] 🔐 Ensuring encrypted sessions...`);
+        const sessionsEstablished = await meshChat.ensureEncryptedSessions();
+        if (sessionsEstablished > 0) {
+          console.log(`[useMWAOfflineWallets] ✅ Established ${sessionsEstablished} new session(s)`);
+        }
+
+        // Try to send with retry logic for MTU issues
+        let requestId: string;
+        let attempts = 0;
+        const maxAttempts = 2;
+        
+        while (attempts < maxAttempts) {
+          attempts++;
+          try {
+            requestId = await meshChat.sendNonceTransaction(
+              serializedTransaction,
+              {
+                nonceAccount: signerPublicKey,
+                description: options?.description || `${type} nonce transaction`,
+                recipientPeerId: options?.recipientPeerId,
+                transactionType: type,
+              }
+            );
+            break; // Success
+          } catch (sendErr) {
+            const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+            
+            // If it's an MTU error and we haven't retried yet, wait and try again
+            if (errMsg.includes("notification should not be longer") && attempts < maxAttempts) {
+              console.log(`[useMWAOfflineWallets] ⚠️ MTU not ready, waiting 3 seconds before retry...`);
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+              console.log(`[useMWAOfflineWallets] 🔄 Retrying transaction send...`);
+            } else {
+              throw sendErr; // Re-throw if not MTU error or max retries reached
+            }
           }
-        );
+        }
 
-        console.log(`[useMWAOfflineWallets] BLE request sent: ${requestId}`);
-        return requestId;
+        console.log(`[useMWAOfflineWallets] ✅ Transaction ${isBroadcast ? 'broadcast' : 'sent'}: ${requestId!}`);
+        return requestId!;
       } catch (err) {
         console.error("[useMWAOfflineWallets] Failed to send via BLE:", err);
         const errorMsg =
@@ -611,6 +686,7 @@ export function useMWAOfflineWallets(
     createWallet,
     deleteWallet,
     loadWallet,
+    reloadWallets,
     refreshBalances,
     sweepFunds,
     addFunds,

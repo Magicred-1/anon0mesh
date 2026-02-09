@@ -10,7 +10,13 @@
  * This replaces the complex BLE+Noise stack with a simpler, more robust solution.
  */
 
-import { BleMesh, Message as MeshMessage, Peer } from "@magicred-1/ble-mesh";
+import {
+  BleMesh,
+  Message as MeshMessage,
+  Peer,
+  SolanaTransaction,
+  TransactionResponse,
+} from "@magicred-1/ble-mesh";
 import * as SecureStore from "expo-secure-store";
 import React, {
   createContext,
@@ -28,9 +34,11 @@ import {
   showBLEForegroundNotification,
   updatePeerCount,
 } from "../utils/bleNotification";
+import { BLETransactionChunker } from "../utils/bleTransactionChunking";
 
 // ============================================
 // TRANSACTION REQUEST TYPES
+// Aligned with @magicred-1/ble-mesh library
 // ============================================
 
 export interface TransactionRequest {
@@ -45,9 +53,18 @@ export interface TransactionRequest {
   nonceAccount?: string;
   firstSignerPublicKey?: string;
   secondSignerPublicKey?: string;
+  /**
+   * If true, transaction was sent to specific peer only (like private message).
+   * If false/undefined, transaction was broadcast to all peers (like public message).
+   */
+  isPrivate?: boolean;
 }
 
-export type TransactionDecision = "pending" | "approved" | "declined" | "processing";
+export type TransactionDecision =
+  | "pending"
+  | "approved"
+  | "declined"
+  | "processing";
 
 export interface TransactionRequestWithDecision extends TransactionRequest {
   decision: TransactionDecision;
@@ -68,12 +85,12 @@ export interface MeshChatMessage {
 }
 
 // Nonce account transaction types
-export type NonceTransactionType = 
-  | "create" 
-  | "transfer" 
-  | "advance" 
-  | "close" 
-  | "sweep" 
+export type NonceTransactionType =
+  | "create"
+  | "transfer"
+  | "advance"
+  | "close"
+  | "sweep"
   | "add_funds";
 
 interface UnreadCounts {
@@ -117,24 +134,32 @@ interface MeshChatContextType {
   getIdentityFingerprint: () => Promise<string>;
   getPeerFingerprint: (peerId: string) => Promise<string | null>;
 
+  // Session management for transactions
+  ensureEncryptedSessions: () => Promise<number>; // Returns number of new sessions established
+
   // Transaction management
+  // Broadcasts to all connected peers like regular messages
+  // Uses existing mesh sessions - no new handshakes needed
+  // Any peer can accept and co-sign the transaction
   sendTransaction: (
     serializedTransaction: string,
     options?: {
       firstSignerPublicKey: string;
       secondSignerPublicKey?: string;
       description?: string;
-      recipientPeerId?: string;
+      recipientPeerId?: string; // If set, sends to specific peer only
     },
   ) => Promise<string>;
 
   // Nonce account transaction management (BLE-only except sweep/add funds)
+  // Broadcasts to all connected peers like regular messages
+  // Uses existing mesh sessions - no new handshakes needed
   sendNonceTransaction: (
     serializedTransaction: string,
     options?: {
       nonceAccount: string;
       description?: string;
-      recipientPeerId?: string;
+      recipientPeerId?: string; // If set, sends to specific peer only
       transactionType?: NonceTransactionType;
     },
   ) => Promise<string>;
@@ -197,6 +222,20 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   const bleMesh = BleMesh;
   const unsubscribers = useRef<(() => void)[]>([]);
   const messageIdCache = useRef<Set<string>>(new Set());
+  const peersRef = useRef<Peer[]>([]);
+  const myPeerIdRef = useRef<string>("");
+
+  // Transaction chunker for large transactions
+  const chunkerRef = useRef<BLETransactionChunker | null>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    peersRef.current = peers;
+  }, [peers]);
+
+  useEffect(() => {
+    myPeerIdRef.current = myPeerId;
+  }, [myPeerId]);
   const MAX_CACHE_SIZE = 1000;
   const readMessageIds = useRef<Set<string>>(new Set());
   const transactionRequestCache = useRef<Set<string>>(new Set());
@@ -223,6 +262,40 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
 
       try {
         console.log("[MeshChat] Initializing mesh chat...");
+
+        // Clear caches on fresh initialization
+        transactionRequestCache.current.clear();
+        messageIdCache.current.clear();
+        console.log("[MeshChat] Caches cleared");
+
+        // Initialize transaction chunker with completion callback
+        if (!chunkerRef.current) {
+          chunkerRef.current = new BLETransactionChunker(
+            (transferId, serializedTransaction, metadata) => {
+              console.log(`[MeshChat] 🔥 Transaction reassembled from chunks!`);
+              console.log(`[MeshChat] Transfer ID: ${transferId}`);
+              console.log(
+                `[MeshChat] Transaction size: ${serializedTransaction.length} bytes`,
+              );
+
+              // Create a synthetic transaction object to trigger the approval modal
+              const syntheticTransaction: SolanaTransaction = {
+                id: transferId,
+                senderPeerId: metadata.firstSignerPublicKey || "unknown",
+                serializedTransaction,
+                description: metadata.description,
+                timestamp: Date.now(),
+                firstSignerPublicKey: metadata.firstSignerPublicKey || "",
+                secondSignerPublicKey: metadata.secondSignerPublicKey,
+                requiresSecondSigner: !!metadata.secondSignerPublicKey,
+              };
+
+              // Trigger the transaction handler
+              handleIncomingTransactionRequest(syntheticTransaction);
+            },
+          );
+          console.log("[MeshChat] Transaction chunker initialized");
+        }
 
         // Get nickname from identity or params
         let nick = nickname;
@@ -251,9 +324,11 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
         console.log("[MeshChat] ✅ Initialized successfully");
         console.log("[MeshChat] Peer ID:", peerId);
         console.log("[MeshChat] Nickname:", currentNickname);
+        console.log("[MeshChat] Setting up event listeners...");
 
         // Setup event listeners
         setupEventListeners();
+        console.log("[MeshChat] Event listeners setup complete");
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Unknown error";
@@ -271,48 +346,77 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   // ============================================
 
   // Handle incoming transaction requests from peers
+  // Aligned with @magicred-1/ble-mesh SolanaTransaction type
   const handleIncomingTransactionRequest = useCallback(
-    (request: {
-      requestId: string;
-      senderPeerId: string;
-      senderNickname?: string;
-      serializedTransaction: string;
-      description?: string;
-      firstSignerPublicKey?: string;
-      secondSignerPublicKey?: string;
-    }) => {
+    (transaction: SolanaTransaction) => {
+      console.log(`[MeshChat] 🔥🔥🔥 handleIncomingTransactionRequest CALLED`, {
+        requestId: transaction.id,
+        senderPeerId: transaction.senderPeerId,
+        hasSerializedTx: !!transaction.serializedTransaction,
+        serializedLength: transaction.serializedTransaction?.length,
+        requiresSecondSigner: transaction.requiresSecondSigner,
+      });
+
       // Check for duplicate requests
-      if (transactionRequestCache.current.has(request.requestId)) {
-        console.log(`[MeshChat] Duplicate transaction request ignored: ${request.requestId}`);
+      const isDuplicate = transactionRequestCache.current.has(transaction.id);
+      console.log(
+        `[MeshChat] Cache check: ${transaction.id} - ${isDuplicate ? "DUPLICATE" : "NEW"}`,
+      );
+      console.log(
+        `[MeshChat] Cache size: ${transactionRequestCache.current.size}`,
+      );
+
+      if (isDuplicate) {
+        console.log(
+          `[MeshChat] ❌ Duplicate transaction request ignored: ${transaction.id}`,
+        );
         return;
       }
-      transactionRequestCache.current.add(request.requestId);
+      transactionRequestCache.current.add(transaction.id);
+      console.log(`[MeshChat] ✅ Added to cache: ${transaction.id}`);
 
       // Get sender nickname from peers list or use unknown
-      const senderPeer = peers.find(p => p.peerId === request.senderPeerId);
-      const senderNickname = request.senderNickname || senderPeer?.nickname || "Unknown Peer";
+      // Use ref to avoid dependency issues
+      const senderPeer = peersRef.current.find(
+        (p) => p.peerId === transaction.senderPeerId,
+      );
+      const senderNickname = senderPeer?.nickname || "Unknown Peer";
 
-      // Determine if it's a nonce transaction based on description or firstSigner
-      const isNonceTx = request.description?.toLowerCase().includes("nonce") || 
-                        request.firstSignerPublicKey?.includes("nonce");
+      // Determine if it's a nonce transaction based on description
+      // We check for "nonce" in the description (case-insensitive)
+      const isNonceTx =
+        transaction.description?.toLowerCase().includes("nonce") || false;
+
+      // Determine if this was a targeted (private) or broadcast transaction
+      // If secondSignerPublicKey is set, it was likely targeted to a specific peer
+      // Otherwise, it was broadcast to all peers (like a public message)
+      const isPrivate = !!transaction.secondSignerPublicKey;
 
       const txRequest: TransactionRequestWithDecision = {
         id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        requestId: request.requestId,
-        senderPeerId: request.senderPeerId,
+        requestId: transaction.id,
+        senderPeerId: transaction.senderPeerId,
         senderNickname: senderNickname,
-        serializedTransaction: request.serializedTransaction,
-        description: request.description,
-        timestamp: Date.now(),
+        serializedTransaction: transaction.serializedTransaction,
+        description: transaction.description,
+        timestamp: transaction.timestamp,
         type: isNonceTx ? "nonce" : "standard",
-        nonceAccount: request.firstSignerPublicKey,
-        firstSignerPublicKey: request.firstSignerPublicKey,
-        secondSignerPublicKey: request.secondSignerPublicKey,
+        nonceAccount: transaction.firstSignerPublicKey,
+        firstSignerPublicKey: transaction.firstSignerPublicKey,
+        secondSignerPublicKey: transaction.secondSignerPublicKey,
+        isPrivate: isPrivate,
         decision: "pending",
       };
 
-      console.log(`[MeshChat] 📥 Transaction request received from ${senderNickname}`);
-      console.log(`[MeshChat] Type: ${txRequest.type}, Description: ${txRequest.description}`);
+      console.log(
+        `[MeshChat] 📥 Transaction request received from ${senderNickname}`,
+      );
+      console.log(
+        `[MeshChat] Type: ${txRequest.type}, Description: ${txRequest.description}`,
+      );
+      console.log(
+        `[MeshChat] 📢 Broadcast: ${!isPrivate ? "YES - Any peer can sign" : "NO - Targeted to specific peer"}`,
+      );
 
       // Add to pending requests
       setPendingTransactionRequests((prev) => [txRequest, ...prev]);
@@ -326,14 +430,23 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
         return current;
       });
     },
-    [peers]
+    [], // No dependencies - uses refs for mutable data
   );
+
+  // Debug: Log when the callback is registered (should only happen once)
+  useEffect(() => {
+    console.log(
+      "[MeshChat] handleIncomingTransactionRequest callback registered (should be once)",
+    );
+  }, []);
+
+  // Approve a transaction request
 
   // Approve a transaction request
   const approveTransactionRequest = useCallback(
     async (requestId: string) => {
       const request = pendingTransactionRequests.find(
-        (r) => r.requestId === requestId
+        (r) => r.requestId === requestId,
       );
       if (!request) {
         console.error(`[MeshChat] Transaction request not found: ${requestId}`);
@@ -343,15 +456,13 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       // Update state to processing
       setPendingTransactionRequests((prev) =>
         prev.map((r) =>
-          r.requestId === requestId
-            ? { ...r, decision: "processing" }
-            : r
-        )
+          r.requestId === requestId ? { ...r, decision: "processing" } : r,
+        ),
       );
 
       if (currentTransactionRequest?.requestId === requestId) {
         setCurrentTransactionRequest((prev) =>
-          prev ? { ...prev, decision: "processing" } : null
+          prev ? { ...prev, decision: "processing" } : null,
         );
       }
 
@@ -368,13 +479,13 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
           prev.map((r) =>
             r.requestId === requestId
               ? { ...r, decision: "approved", decisionTimestamp: Date.now() }
-              : r
-          )
+              : r,
+          ),
         );
 
         // Move to next pending request if any
         const nextPending = pendingTransactionRequests.find(
-          (r) => r.requestId !== requestId && r.decision === "pending"
+          (r) => r.requestId !== requestId && r.decision === "pending",
         );
         if (nextPending) {
           setCurrentTransactionRequest(nextPending);
@@ -386,29 +497,38 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
         console.log(`[MeshChat] ✅ Transaction approved and response sent`);
       } catch (err) {
         console.error(`[MeshChat] Failed to approve transaction:`, err);
-        
+
         setPendingTransactionRequests((prev) =>
           prev.map((r) =>
             r.requestId === requestId
-              ? { ...r, decision: "pending", error: err instanceof Error ? err.message : "Unknown error" }
-              : r
-          )
+              ? {
+                  ...r,
+                  decision: "pending",
+                  error: err instanceof Error ? err.message : "Unknown error",
+                }
+              : r,
+          ),
         );
 
         Alert.alert(
           "Approval Failed",
-          "Failed to send approval response. Please try again."
+          "Failed to send approval response. Please try again.",
         );
       }
     },
-    [pendingTransactionRequests, currentTransactionRequest, myPeerId, myNickname]
+    [
+      pendingTransactionRequests,
+      currentTransactionRequest,
+      myPeerId,
+      myNickname,
+    ],
   );
 
   // Decline a transaction request
   const declineTransactionRequest = useCallback(
     async (requestId: string, reason?: string) => {
       const request = pendingTransactionRequests.find(
-        (r) => r.requestId === requestId
+        (r) => r.requestId === requestId,
       );
       if (!request) {
         console.error(`[MeshChat] Transaction request not found: ${requestId}`);
@@ -428,13 +548,13 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
           prev.map((r) =>
             r.requestId === requestId
               ? { ...r, decision: "declined", decisionTimestamp: Date.now() }
-              : r
-          )
+              : r,
+          ),
         );
 
         // Move to next pending request if any
         const nextPending = pendingTransactionRequests.find(
-          (r) => r.requestId !== requestId && r.decision === "pending"
+          (r) => r.requestId !== requestId && r.decision === "pending",
         );
         if (nextPending) {
           setCurrentTransactionRequest(nextPending);
@@ -448,7 +568,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
         console.error(`[MeshChat] Failed to decline transaction:`, err);
       }
     },
-    [pendingTransactionRequests, myPeerId, myNickname]
+    [pendingTransactionRequests, myPeerId, myNickname],
   );
 
   // Dismiss the transaction modal without making a decision
@@ -460,80 +580,27 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   // Clear transaction history (keep pending)
   const clearTransactionHistory = useCallback(() => {
     setPendingTransactionRequests((prev) =>
-      prev.filter((r) => r.decision === "pending")
+      prev.filter((r) => r.decision === "pending"),
     );
   }, []);
-  const setupEventListeners = useCallback(() => {
-    cleanupListeners();
-
-    // Listen for peer list updates
-    const unsubPeers = bleMesh.onPeerListUpdated(({ peers: updatedPeers }) => {
-      console.log("[MeshChat] Peers updated:", updatedPeers.length);
-      setPeers(updatedPeers);
-    });
-    unsubscribers.current.push(unsubPeers);
-
-    // Listen for incoming messages
-    const unsubMessages = bleMesh.onMessageReceived(({ message }) => {
-      handleIncomingMessage(message);
-    });
-    unsubscribers.current.push(unsubMessages);
-
-    // Listen for incoming transaction requests
-    const unsubTxRequests = bleMesh.onTransactionReceived(({ transaction }) => {
-      handleIncomingTransactionRequest({
-        requestId: transaction.id,
-        senderPeerId: transaction.senderPeerId,
-        senderNickname: "Unknown", // Will be updated from peers list
-        serializedTransaction: transaction.serializedTransaction,
-        description: transaction.description,
-        firstSignerPublicKey: transaction.firstSignerPublicKey,
-        secondSignerPublicKey: transaction.secondSignerPublicKey,
-      });
-    });
-    unsubscribers.current.push(unsubTxRequests);
-
-    // Listen for transaction responses (when peers acknowledge our transactions)
-    const unsubTxResponses = bleMesh.onTransactionResponse(({ response }) => {
-      console.log(`[MeshChat] 📥 Transaction response received for ${response.id}`);
-      
-      if (response.error) {
-        console.error(`[MeshChat] Transaction declined: ${response.error}`);
-        Alert.alert(
-          "Transaction Declined",
-          `A peer declined your transaction: ${response.error}`
-        );
-      } else if (response.signedTransaction) {
-        console.log(`[MeshChat] ✅ Transaction signed by ${response.responderPeerId}`);
-        // The transaction has been co-signed, now we can submit it
-        Alert.alert(
-          "Transaction Co-signed",
-          `Your transaction has been co-signed by a peer and is ready to submit.`
-        );
-      }
-    });
-    unsubscribers.current.push(unsubTxResponses);
-
-    // Listen for connection state changes
-    const unsubState = bleMesh.onConnectionStateChanged(
-      ({ state, peerCount }) => {
-        console.log("[MeshChat] Connection state:", state, "Peers:", peerCount);
-        setIsConnected(state === "connected");
-      },
-    );
-    unsubscribers.current.push(unsubState);
-
-    // Listen for errors
-    const unsubError = bleMesh.onError(({ code, message }) => {
-      console.error("[MeshChat] Mesh error:", code, message);
-      setError(`${code}: ${message}`);
-    });
-    unsubscribers.current.push(unsubError);
-  }, [handleIncomingTransactionRequest]);
 
   // Handle incoming messages
   const handleIncomingMessage = useCallback(
     (meshMessage: MeshMessage) => {
+      // Check if this is a transaction chunk message
+      if (chunkerRef.current) {
+        const isChunk = chunkerRef.current.handleIncomingMessage(
+          meshMessage.content,
+          meshMessage.senderPeerId,
+        );
+        if (isChunk) {
+          console.log(
+            `[MeshChat] Message was a transaction chunk, handled by chunker`,
+          );
+          return; // Don't process as regular message
+        }
+      }
+
       // Check for duplicates
       if (messageIdCache.current.has(meshMessage.id)) {
         return;
@@ -556,7 +623,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
         senderNickname: meshMessage.senderNickname,
         message: meshMessage.content,
         timestamp: meshMessage.timestamp,
-        isMine: meshMessage.senderPeerId === myPeerId,
+        isMine: meshMessage.senderPeerId === myPeerIdRef.current,
         isPrivate: meshMessage.isPrivate,
       };
 
@@ -568,7 +635,10 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       setMessages((prev) => [...prev, chatMessage]);
 
       // Track unread counts for private messages from others
-      if (meshMessage.isPrivate && meshMessage.senderPeerId !== myPeerId) {
+      if (
+        meshMessage.isPrivate &&
+        meshMessage.senderPeerId !== myPeerIdRef.current
+      ) {
         // Check if this message has already been marked as read
         if (!readMessageIds.current.has(meshMessage.id)) {
           setUnreadCounts((prev) => ({
@@ -579,8 +649,155 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
         }
       }
     },
-    [myPeerId],
+    [], // Empty deps - uses refs
   );
+
+  const setupEventListeners = useCallback(() => {
+    console.log("[MeshChat] Setting up event listeners...");
+    console.log("[MeshChat] BleMesh module:", !!bleMesh);
+    console.log("[MeshChat] BleMesh methods:", Object.keys(bleMesh || {}));
+
+    cleanupListeners();
+
+    // Listen for peer list updates
+    console.log("[MeshChat] Registering onPeerListUpdated...");
+    const unsubPeers = bleMesh.onPeerListUpdated(({ peers: updatedPeers }) => {
+      console.log("[MeshChat] Peers updated:", updatedPeers.length);
+      setPeers(updatedPeers);
+    });
+    unsubscribers.current.push(unsubPeers);
+    console.log("[MeshChat] onPeerListUpdated registered");
+
+    // Listen for incoming messages
+    console.log("[MeshChat] Registering onMessageReceived...");
+    const unsubMessages = bleMesh.onMessageReceived(({ message }) => {
+      handleIncomingMessage(message);
+    });
+    unsubscribers.current.push(unsubMessages);
+    console.log("[MeshChat] onMessageReceived registered");
+
+    // Listen for incoming transaction requests
+    // Aligned with @magicred-1/ble-mesh SolanaTransaction type
+    console.log("[MeshChat] Setting up onTransactionReceived listener...");
+    const unsubTxRequests = bleMesh.onTransactionReceived(({ transaction }) => {
+      console.log(`[MeshChat] 🔥🔥🔥 TRANSACTION RECEIVED EVENT FIRED`);
+      console.log(
+        `[MeshChat] 📥 Raw transaction data:`,
+        JSON.stringify(
+          {
+            id: transaction.id,
+            senderPeerId: transaction.senderPeerId,
+            description: transaction.description,
+            serializedLength: transaction.serializedTransaction?.length,
+            firstSignerPublicKey: transaction.firstSignerPublicKey,
+            secondSignerPublicKey: transaction.secondSignerPublicKey,
+            requiresSecondSigner: transaction.requiresSecondSigner,
+          },
+          null,
+          2,
+        ),
+      );
+
+      if (!transaction.id) {
+        console.error(`[MeshChat] ❌ Received transaction without ID!`);
+        return;
+      }
+
+      if (!transaction.serializedTransaction) {
+        console.error(
+          `[MeshChat] ❌ Received transaction without serialized data!`,
+        );
+        return;
+      }
+
+      // Pass the SolanaTransaction directly to the handler
+      // The handler determines if it was broadcast (isPrivate=false) or targeted (isPrivate=true)
+      handleIncomingTransactionRequest(transaction);
+    });
+    unsubscribers.current.push(unsubTxRequests);
+    console.log("[MeshChat] onTransactionReceived listener registered");
+
+    // Listen for transaction responses (when peers acknowledge our transactions)
+    // Aligned with @magicred-1/ble-mesh TransactionResponse type
+    const unsubTxResponses = bleMesh.onTransactionResponse(
+      ({ response }: { response: TransactionResponse }) => {
+        console.log(
+          `[MeshChat] ✅ TRANSACTION RESPONSE RECEIVED - ID: ${response.id}`,
+        );
+        console.log(
+          `[MeshChat] 📥 Response from peer: ${response.responderPeerId}`,
+        );
+        console.log(
+          `[MeshChat] Response details:`,
+          JSON.stringify(
+            {
+              id: response.id,
+              responderPeerId: response.responderPeerId,
+              hasError: !!response.error,
+              hasSignedTx: !!response.signedTransaction,
+              timestamp: response.timestamp,
+              error: response.error,
+            },
+            null,
+            2,
+          ),
+        );
+
+        if (response.error) {
+          console.error(
+            `[MeshChat] ❌ Transaction DECLINED: ${response.error}`,
+          );
+          Alert.alert(
+            "Transaction Declined",
+            `A peer declined your transaction: ${response.error}`,
+          );
+        } else if (response.signedTransaction) {
+          console.log(
+            `[MeshChat] ✅ Transaction ACKNOWLEDGED/SIGNED by ${response.responderPeerId}`,
+          );
+          console.log(
+            `[MeshChat] Signed transaction length: ${response.signedTransaction.length}`,
+          );
+          // The transaction has been co-signed, now we can submit it
+          Alert.alert(
+            "Transaction Acknowledged",
+            `Your transaction has been acknowledged by peer: ${response.responderPeerId.slice(0, 8)}...\n\nTransaction ID: ${response.id}`,
+          );
+        } else {
+          console.warn(
+            `[MeshChat] ⚠️ Response received but no error or signed transaction`,
+          );
+        }
+      },
+    );
+    unsubscribers.current.push(unsubTxResponses);
+    console.log("[MeshChat] onTransactionResponse listener registered");
+
+    // Listen for connection state changes
+    const unsubState = bleMesh.onConnectionStateChanged(
+      ({ state, peerCount }) => {
+        console.log("[MeshChat] Connection state:", state, "Peers:", peerCount);
+        setIsConnected(state === "connected");
+      },
+    );
+    unsubscribers.current.push(unsubState);
+
+    // Listen for errors
+    const unsubError = bleMesh.onError(({ code, message }) => {
+      console.error("[MeshChat] Mesh error:", code, message);
+      setError(`${code}: ${message}`);
+    });
+    unsubscribers.current.push(unsubError);
+
+    console.log(
+      `[MeshChat] ✅ All event listeners registered (${unsubscribers.current.length} listeners)`,
+    );
+  }, [
+    bleMesh,
+    cleanupListeners,
+    handleIncomingTransactionRequest,
+    handleIncomingMessage,
+  ]);
 
   // Mark all messages from a peer as read
   const markPeerAsRead = useCallback(
@@ -803,7 +1020,46 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     return bleMesh.getPeerFingerprint(peerId);
   }, []);
 
-  // Send a Solana transaction for co-signing
+  // Ensure encrypted sessions with all connected peers
+  // Call this before sending transactions to ensure they can be delivered
+  const ensureEncryptedSessions = useCallback(async (): Promise<number> => {
+    if (!isInitialized) return 0;
+
+    const connectedPeers = peers.filter((p) => p.isConnected);
+    let sessionsEstablished = 0;
+
+    for (const peer of connectedPeers) {
+      const hasSession = await bleMesh.hasEncryptedSession(peer.peerId);
+      if (!hasSession) {
+        try {
+          console.log(
+            `[MeshChat] 🔐 Initiating handshake with ${peer.nickname || peer.peerId.slice(0, 8)}...`,
+          );
+          await bleMesh.initiateHandshake(peer.peerId);
+          sessionsEstablished++;
+        } catch (err) {
+          console.warn(
+            `[MeshChat] Failed to initiate handshake with ${peer.peerId}:`,
+            err,
+          );
+        }
+      }
+    }
+
+    if (sessionsEstablished > 0) {
+      console.log(
+        `[MeshChat] ✅ Initiated ${sessionsEstablished} handshake(s)`,
+      );
+      // Wait a bit for handshakes to complete
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    return sessionsEstablished;
+  }, [isInitialized, peers]);
+
+  // Send a Solana transaction for co-signing via BLE mesh
+  // Broadcasts to all connected peers without initiating new handshakes
+  // (sessions are already established via the normal mesh flow)
   const sendTransaction = useCallback(
     async (
       serializedTransaction: string,
@@ -819,21 +1075,130 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       }
 
       try {
-        console.log(
-          `[MeshChat] 📤 Sending transaction${options?.recipientPeerId ? ` to ${options.recipientPeerId}` : " (broadcast)"}`,
-        );
+        // Check transaction size - BLE MTU is typically 512 bytes max
+        const txSize = serializedTransaction.length;
+        console.log(`[MeshChat] Transaction size: ${txSize} bytes`);
+
+        if (txSize > 400) {
+          console.warn(
+            `[MeshChat] ⚠️ Transaction is large (${txSize} bytes). BLE MTU limit is ~512 bytes.`,
+          );
+          console.warn(
+            `[MeshChat] Consider using smaller transactions or direct RPC for large transfers.`,
+          );
+        }
+
+        // Check which peers have encrypted sessions ready for transactions
+        const peersWithSessions: string[] = [];
+        for (const peer of peers.filter((p) => p.isConnected)) {
+          const hasSession = await bleMesh.hasEncryptedSession(peer.peerId);
+          if (hasSession) {
+            peersWithSessions.push(peer.peerId);
+          }
+        }
+
+        // If a specific recipient is provided, use private message-like routing
+        // Otherwise, broadcast to all connected peers like regular messages
+        if (options?.recipientPeerId) {
+          console.log(
+            `[MeshChat] 📤 Sending transaction to specific peer: ${options.recipientPeerId}`,
+          );
+          const hasSession = await bleMesh.hasEncryptedSession(
+            options.recipientPeerId,
+          );
+          if (!hasSession) {
+            console.warn(
+              `[MeshChat] ⚠️ No encrypted session with ${options.recipientPeerId}`,
+            );
+            console.warn(`[MeshChat] Attempting to send anyway...`);
+          }
+        } else {
+          const connectedPeers = peers.filter((p) => p.isConnected);
+          console.log(
+            `[MeshChat] 📤 Broadcasting transaction to ${connectedPeers.length} peer(s) like a regular message`,
+          );
+          console.log(
+            `[MeshChat] Connected peers:`,
+            connectedPeers.map(
+              (p) => `${p.nickname || "Unknown"} (${p.peerId.slice(0, 8)})`,
+            ),
+          );
+          console.log(
+            `[MeshChat] Peers with encrypted sessions: ${peersWithSessions.length}`,
+            peersWithSessions.map((id) => id.slice(0, 8)),
+          );
+
+          if (peersWithSessions.length === 0 && connectedPeers.length > 0) {
+            console.warn(
+              `[MeshChat] ⚠️ No encrypted sessions established yet!`,
+            );
+            console.warn(
+              `[MeshChat] Transactions require encrypted sessions. Waiting...`,
+            );
+            // Still attempt to send - the native layer may queue it
+          }
+        }
+
+        // Wait for MTU negotiation and service discovery to complete
+        // MTU is requested after GATT connection, and we need it for large payloads
+        // Default MTU is 23 bytes, we need 512 for transactions
+        console.log(`[MeshChat] ⏳ Waiting for MTU negotiation (5s)...`);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        console.log(`[MeshChat] ✅ MTU should be ready now`);
+
+        // Send a small test message first to ensure connection is fully ready
+        try {
+          console.log(
+            `[MeshChat] 🧪 Sending test ping to verify connection...`,
+          );
+          await bleMesh.sendMessage(`ping_tx_${Date.now()}`);
+          console.log(`[MeshChat] ✅ Test ping sent successfully`);
+        } catch (pingErr) {
+          console.warn(`[MeshChat] ⚠️ Test ping failed:`, pingErr);
+        }
+
+        // Another short delay after ping
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         const transactionId = await bleMesh.sendTransaction(
           serializedTransaction,
           options,
         );
-        console.log(`[MeshChat] ✅ Transaction sent with ID: ${transactionId}`);
+        console.log(
+          `[MeshChat] ✅ Transaction broadcast with ID: ${transactionId}`,
+        );
         return transactionId;
       } catch (err) {
-        console.error("[MeshChat] Failed to send transaction:", err);
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error("[MeshChat] Failed to broadcast transaction:", errorMsg);
+
+        // Provide helpful error messages for common issues
+        if (errorMsg.includes("notification should not be longer")) {
+          console.error("[MeshChat] 💡 This error usually means:");
+          console.error(
+            "[MeshChat]    1. The BLE MTU hasn't been negotiated yet (wait a few seconds and retry)",
+          );
+          console.error(
+            "[MeshChat]    2. The transaction is too large even with chunking",
+          );
+          console.error(
+            "[MeshChat]    3. Try sending a smaller transaction amount",
+          );
+
+          // Suggest retry
+          throw new Error(
+            `${errorMsg}\n\n` +
+              `The BLE connection may not be fully ready. Please:\n` +
+              `1. Wait 5-10 seconds for MTU negotiation to complete\n` +
+              `2. Try sending a smaller transaction amount\n` +
+              `3. Or use direct RPC for larger transactions`,
+          );
+        }
+
         throw err;
       }
     },
-    [isInitialized],
+    [isInitialized, peers],
   );
 
   // Check if a nonce transaction type should use BLE
@@ -854,6 +1219,11 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   // Send a nonce account transaction via BLE mesh
   // Uses BLE for: create, transfer, advance, close
   // Uses direct RPC for: sweep, add_funds
+  //
+  // ✨ v2.0 Update: Transactions flow like regular messages
+  // - Broadcast to all connected peers without new handshakes
+  // - Sessions already established via normal mesh flow
+  // - Any peer can accept and be the second signer
   const sendNonceTransaction = useCallback(
     async (
       serializedTransaction: string,
@@ -865,12 +1235,12 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       },
     ): Promise<string> => {
       const txType = options?.transactionType || "transfer";
-      
+
       // Check if this transaction type should use BLE
       if (!shouldUseBLEForNonceTx(txType)) {
         throw new Error(
           `Transaction type '${txType}' should use direct RPC, not BLE. ` +
-          "Use the regular connection.sendRawTransaction for sweep/add_funds."
+            "Use the regular connection.sendRawTransaction for sweep/add_funds.",
         );
       }
 
@@ -879,31 +1249,112 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       }
 
       try {
+        const txSize = serializedTransaction.length;
+        console.log(`[MeshChat] Transaction size: ${txSize} bytes`);
+
+        // Use chunking for transactions > 300 bytes to avoid BLE size limits
+        if (txSize > 300 && chunkerRef.current) {
+          console.log(
+            `[MeshChat] 📦 Transaction is large (${txSize} bytes), using frontend chunking`,
+          );
+
+          const baseDescription =
+            options?.description || `${txType} transaction`;
+          const description = baseDescription.toLowerCase().includes("nonce")
+            ? baseDescription
+            : `${baseDescription} [nonce]`;
+
+          const transferId = await chunkerRef.current.sendChunkedTransaction(
+            serializedTransaction,
+            {
+              description,
+              firstSignerPublicKey: options?.nonceAccount,
+              nonceAccount: options?.nonceAccount,
+              transactionType: "nonce",
+              recipientPeerId: options?.recipientPeerId,
+            },
+          );
+
+          console.log(
+            `[MeshChat] ✅ Chunked transaction sent with ID: ${transferId}`,
+          );
+          return transferId;
+        }
+
+        // For smaller transactions, use native method (fallback)
         console.log(
-          `[MeshChat] 📤 Sending nonce transaction via BLE${options?.recipientPeerId ? ` to ${options.recipientPeerId}` : " (broadcast)"}`,
+          `[MeshChat] Transaction is small enough, using native send`,
         );
-        console.log(`[MeshChat] Type: ${txType}, Nonce: ${options?.nonceAccount}`);
-        
+
         // Use the same underlying method but with nonce-specific metadata
-        const transactionId = await bleMesh.sendTransaction(
-          serializedTransaction,
-          {
-            firstSignerPublicKey: options?.nonceAccount || "",
-            description: options?.description || `${txType} nonce transaction`,
-            recipientPeerId: options?.recipientPeerId,
-          },
-        );
-        
-        console.log(`[MeshChat] ✅ Nonce transaction sent with ID: ${transactionId}`);
+        // firstSignerPublicKey is the WALLET's public key (the signer), not the nonce account
+        // CRITICAL: Description MUST contain "nonce" for receiver to detect transaction type
+        const baseDescription = options?.description || `${txType} transaction`;
+        const description = baseDescription.toLowerCase().includes("nonce")
+          ? baseDescription
+          : `${baseDescription} [nonce]`;
+
+        // Prepare transaction options
+        const txOptions = {
+          firstSignerPublicKey: options?.nonceAccount || "", // This is the signer's pubkey
+          description: description,
+          recipientPeerId: options?.recipientPeerId,
+        };
+
+        let transactionId: string;
+
+        // v2.0: Transactions flow like messages - using existing sessions
+        // If recipientPeerId is specified, send like a private message
+        // Otherwise, broadcast to all connected peers like a regular message
+        if (options?.recipientPeerId) {
+          // Targeted transaction - send to specific peer using existing session
+          console.log(
+            `[MeshChat] 📤 Sending nonce transaction to specific peer: ${options.recipientPeerId}`,
+          );
+          console.log(
+            `[MeshChat] Type: ${txType}, using existing encrypted session`,
+          );
+
+          transactionId = await bleMesh.sendTransaction(
+            serializedTransaction,
+            txOptions,
+          );
+        } else {
+          // Broadcast transaction - flows like a regular message to all peers
+          const connectedPeers = peers.filter((p) => p.isConnected);
+          console.log(
+            `[MeshChat] 📤 Broadcasting nonce transaction (${txType}) like a regular message`,
+          );
+          console.log(
+            `[MeshChat] Reaching ${connectedPeers.length} connected peer(s):`,
+            connectedPeers
+              .map(
+                (p) => `${p.nickname || "Unknown"} (${p.peerId.slice(0, 8)})`,
+              )
+              .join(", ") || "None",
+          );
+          console.log(
+            `[MeshChat] Using existing mesh sessions - no new handshakes needed`,
+          );
+
+          transactionId = await bleMesh.sendTransaction(
+            serializedTransaction,
+            txOptions,
+          );
+
+          console.log(
+            `[MeshChat] ✅ Transaction broadcast to mesh. Any peer can accept and co-sign.`,
+          );
+        }
+
         return transactionId;
       } catch (err) {
-        console.error("[MeshChat] Failed to send nonce transaction:", err);
+        console.error("[MeshChat] Failed to broadcast nonce transaction:", err);
         throw err;
       }
     },
-    [isInitialized, shouldUseBLEForNonceTx],
+    [isInitialized, shouldUseBLEForNonceTx, peers],
   );
-
 
   // Get peer by ID
   const getPeerById = useCallback(
@@ -917,14 +1368,24 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   const hasInitialized = useRef(false);
 
   useEffect(() => {
+    console.log(
+      `[MeshChat] Provider mounted - autoInitialize: ${autoInitialize}`,
+    );
+
     if (autoInitialize && !hasInitialized.current) {
       hasInitialized.current = true;
+      console.log("[MeshChat] Starting auto-initialization...");
       initialize().catch((err) => {
         console.error("[MeshChat] Auto-initialization failed:", err);
       });
+    } else {
+      console.log(
+        `[MeshChat] Skipping auto-init - autoInitialize: ${autoInitialize}, hasInit: ${hasInitialized.current}`,
+      );
     }
 
     return () => {
+      console.log("[MeshChat] Provider unmounting...");
       // Only shutdown if we initialized
       if (hasInitialized.current) {
         shutdown();
@@ -941,6 +1402,13 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       try {
         const currentPeers = await bleMesh.getPeers();
         setPeers(currentPeers);
+
+        // Debug logging
+        if (currentPeers.length > 0) {
+          console.log(
+            `[MeshChat] ${currentPeers.length} peers, ${currentPeers.filter((p) => p.isConnected).length} connected`,
+          );
+        }
       } catch (err) {
         console.warn("[MeshChat] Failed to refresh peers:", err);
       }
@@ -948,6 +1416,13 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
 
     return () => clearInterval(interval);
   }, [isInitialized]);
+
+  // Debug logging for initialization state
+  useEffect(() => {
+    console.log(
+      `[MeshChat] State changed - Initialized: ${isInitialized}, Connected: ${isConnected}, Peers: ${peers.length}`,
+    );
+  }, [isInitialized, isConnected, peers.length]);
 
   // Calculate connected peer count
   const connectedPeerCount = peers.filter((p) => p.isConnected).length;
@@ -1011,6 +1486,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
     initiateHandshake,
     getIdentityFingerprint,
     getPeerFingerprint,
+    ensureEncryptedSessions,
     sendTransaction,
     sendNonceTransaction,
     shouldUseBLEForNonceTx,

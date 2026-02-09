@@ -67,10 +67,22 @@ export default function WalletSettingsScreen() {
     loadAuthority();
   }, [wallet, isConnected, walletMode]);
 
-  // Create MWA wallet adapter
+  // Create MWA wallet adapter as soon as we have wallet and publicKey
+  // MWA wallet = has signTransaction (exportSecretKey may exist but throws)
   const mwaWalletAdapter: IWalletAdapter | null = useMemo(() => {
-    if (walletMode !== "mwa" || !wallet || !publicKey) return null;
+    console.log("[WalletSettings] Creating MWA adapter check - wallet:", !!wallet, "publicKey:", !!publicKey);
+    if (!wallet || !publicKey) return null;
+
+    // Check if wallet can sign transactions
+    const hasSignTransaction = typeof wallet.signTransaction === "function";
     
+    if (!hasSignTransaction) {
+      console.log("[WalletSettings] Wallet cannot sign, skipping adapter");
+      return null;
+    }
+
+    console.log("[WalletSettings] ✅ Creating MWA wallet adapter");
+
     return {
       getPublicKey: () => publicKey,
       signTransaction: async (transaction: Transaction) => {
@@ -82,7 +94,7 @@ export default function WalletSettingsScreen() {
         return signed as Transaction[];
       },
     };
-  }, [walletMode, wallet, publicKey]);
+  }, [wallet, publicKey]);
 
   // Use offline wallets hook for Local wallets
   const localWalletsHook = useOfflineWallets({

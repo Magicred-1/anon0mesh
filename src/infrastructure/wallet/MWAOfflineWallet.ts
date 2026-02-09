@@ -14,9 +14,11 @@ import {
   Connection,
   Keypair,
   LAMPORTS_PER_SOL,
+  NONCE_ACCOUNT_LENGTH,
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import * as SecureStore from "expo-secure-store";
 import {
@@ -75,7 +77,11 @@ export class MWAOfflineWalletManager {
   }
 
   /**
-   * Create a new MWA-compatible offline wallet with optional nonce account
+   * Create a new MWA-compatible offline wallet with nonce account and optional funding
+   * ALL IN ONE ATOMIC TRANSACTION
+   * 
+   * Based on Solana durable nonce guide:
+   * https://solana.com/fr/developers/guides/advanced/introduction-to-durable-nonces
    */
   async createOfflineWallet(
     params: CreateMWAOfflineWalletParams
@@ -93,82 +99,107 @@ export class MWAOfflineWalletManager {
       throw new Error("MWA wallet not connected");
     }
 
-    console.log("[MWA OfflineWallet] Creating new offline wallet...");
+    console.log("[MWA OfflineWallet] Creating new offline wallet (ATOMIC)...");
 
     // Generate new keypair for the disposable wallet
     const keypair = Keypair.generate();
     const publicKey = keypair.publicKey;
 
-    console.log("[MWA OfflineWallet] Address:", publicKey.toBase58());
+    // Generate keypair for the nonce account (if needed)
+    const nonceKeypair = createNonceAccount ? Keypair.generate() : null;
 
-    // Create nonce account if requested (using MWA)
-    let nonceAccountPubkey: PublicKey | null = null;
-    let nonceKeypair: Keypair | null = null;
+    console.log("[MWA OfflineWallet] Wallet address:", publicKey.toBase58());
+    if (nonceKeypair) {
+      console.log("[MWA OfflineWallet] Nonce address:", nonceKeypair.publicKey.toBase58());
+    }
 
-    if (createNonceAccount) {
-      const nonceManager = new MWANonceManager(connection, walletAdapter);
+    // Build ONE transaction that does EVERYTHING:
+    // 1. Create nonce account (if requested)
+    // 2. Initialize nonce account (if requested)
+    // 3. Fund the wallet (if requested)
+    const transaction = new Transaction();
 
-      // Create nonce account (funded with rent-exempt amount)
-      // This will prompt the MWA wallet for signature
-      const result = await nonceManager.createNonceAccount({
-        fundingAmountSOL: 0.002, // Slightly more than rent-exempt minimum
-      });
-
-      nonceAccountPubkey = result.nonceAccount;
-      nonceKeypair = result.nonceKeypair;
-
-      console.log(
-        "[MWA OfflineWallet] Nonce account created:",
-        nonceAccountPubkey.toBase58()
+    // Step 1 & 2: Create and initialize nonce account
+    if (createNonceAccount && nonceKeypair) {
+      const nonceRentExempt = await connection.getMinimumBalanceForRentExemption(
+        NONCE_ACCOUNT_LENGTH
       );
+      // Add small buffer for safety
+      const nonceFunding = nonceRentExempt + 5000; // rent + 0.000005 SOL buffer
+
+      // Create nonce account
+      transaction.add(
+        SystemProgram.createAccount({
+          fromPubkey: authority,
+          newAccountPubkey: nonceKeypair.publicKey,
+          lamports: nonceFunding,
+          space: NONCE_ACCOUNT_LENGTH,
+          programId: SystemProgram.programId,
+        })
+      );
+
+      // Initialize nonce account (authority is the OFFLINE WALLET - not MWA)
+      // This allows the offline wallet to advance the nonce without MWA signing
+      transaction.add(
+        SystemProgram.nonceInitialize({
+          noncePubkey: nonceKeypair.publicKey,
+          authorizedPubkey: publicKey, // Offline wallet is the authority
+        })
+      );
+
+      console.log("[MWA OfflineWallet] Added nonce account creation:", nonceFunding / LAMPORTS_PER_SOL, "SOL");
     }
 
-    // Fund the disposable wallet if requested (using MWA)
-    // This is optional - wallet creation succeeds even if funding fails
+    // Step 3: Fund the disposable wallet
     if (initialFundingSOL > 0) {
-      try {
-        console.log(
-          "[MWA OfflineWallet] Funding with",
-          initialFundingSOL,
-          "SOL..."
-        );
-
-        const transaction = new Transaction().add(
-          SystemProgram.transfer({
-            fromPubkey: authority,
-            toPubkey: publicKey,
-            lamports: initialFundingSOL * LAMPORTS_PER_SOL,
-          })
-        );
-
-        const { blockhash, lastValidBlockHeight } =
-          await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = authority;
-
-        // Sign with MWA wallet
-        const signedTx = await walletAdapter.signTransaction(transaction);
-
-        const signature = await connection.sendRawTransaction(
-          signedTx.serialize()
-        );
-        await connection.confirmTransaction({
-          signature,
-          blockhash,
-          lastValidBlockHeight,
-        });
-
-        console.log("[MWA OfflineWallet] Funded:", signature);
-      } catch (fundError) {
-        // Funding failed (user cancelled or error), but wallet is still created
-        console.warn(
-          "[MWA OfflineWallet] Funding failed (user may have cancelled):",
-          fundError instanceof Error ? fundError.message : fundError
-        );
-        console.log("[MWA OfflineWallet] Wallet created without funding - you can fund it later");
-        // Continue with wallet creation - don't throw
-      }
+      transaction.add(
+        SystemProgram.transfer({
+          fromPubkey: authority,
+          toPubkey: publicKey,
+          lamports: Math.floor(initialFundingSOL * LAMPORTS_PER_SOL),
+        })
+      );
+      console.log("[MWA OfflineWallet] Added wallet funding:", initialFundingSOL, "SOL");
     }
+
+    // If nothing to do, throw error
+    if (transaction.instructions.length === 0) {
+      throw new Error("No operations specified - set createNonceAccount=true or initialFundingSOL>0");
+    }
+
+    // Get recent blockhash and set fee payer
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = authority;
+
+    // Sign with local keypairs first (nonce account if created)
+    if (nonceKeypair) {
+      transaction.partialSign(nonceKeypair);
+    }
+
+    // Sign with MWA wallet (this prompts the wallet app)
+    console.log("[MWA OfflineWallet] Requesting MWA signature for atomic transaction...");
+    const signedTx = await walletAdapter.signTransaction(transaction);
+
+    // Send the transaction
+    console.log("[MWA OfflineWallet] Sending atomic transaction...");
+    const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+      maxRetries: 3,
+    });
+
+    // Wait for confirmation
+    await connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    });
+
+    console.log("[MWA OfflineWallet] ✅ Atomic transaction confirmed:", signature);
+
+    const nonceAccountPubkey = nonceKeypair?.publicKey || null;
 
     // Get initial balance
     const balance = await connection.getBalance(publicKey);
@@ -245,11 +276,15 @@ export class MWAOfflineWalletManager {
    */
   async loadAllOfflineWallets(): Promise<MWAOfflineWalletData[]> {
     try {
+      console.log("[MWA OfflineWallet] Loading from key:", MWA_OFFLINE_WALLETS_KEY);
       const stored = await SecureStore.getItemAsync(MWA_OFFLINE_WALLETS_KEY);
+      console.log("[MWA OfflineWallet] Stored data:", stored ? "found" : "not found");
       if (!stored) {
         return [];
       }
-      return JSON.parse(stored);
+      const wallets = JSON.parse(stored);
+      console.log("[MWA OfflineWallet] Parsed wallets:", wallets.length);
+      return wallets;
     } catch (error) {
       console.error("[MWA OfflineWallet] Failed to load wallets:", error);
       return [];
@@ -453,6 +488,8 @@ export class MWAOfflineWalletManager {
     }
 
     console.log("[MWA OfflineWallet] Creating nonce transaction...");
+    console.log("[MWA OfflineWallet] Wallet address:", wallet.keypair.publicKey.toBase58());
+    console.log("[MWA OfflineWallet] Nonce account:", wallet.nonceAccount.toBase58());
 
     // Create a nonce manager using the offline wallet's keypair as authority
     // (not MWA - the disposable wallet signs its own transactions)
@@ -480,6 +517,16 @@ export class MWAOfflineWalletManager {
     }
 
     console.log("[MWA OfflineWallet] Current nonce:", nonceInfo.nonce);
+    console.log("[MWA OfflineWallet] Nonce authority:", nonceInfo.authority.toBase58());
+    console.log("[MWA OfflineWallet] Wallet is authority:", nonceInfo.authority.equals(wallet.keypair.publicKey));
+    
+    // Check if wallet is the nonce authority
+    if (!nonceInfo.authority.equals(wallet.keypair.publicKey)) {
+      console.error("[MWA OfflineWallet] ❌ Wallet is NOT the nonce authority!");
+      console.error("[MWA OfflineWallet] Expected:", wallet.keypair.publicKey.toBase58());
+      console.error("[MWA OfflineWallet] Actual:", nonceInfo.authority.toBase58());
+      throw new Error("Wallet is not the nonce authority. Delete and recreate the wallet.");
+    }
 
     // Create transaction with nonce
     const transaction = await nonceManager.createNonceTransaction({
@@ -491,13 +538,15 @@ export class MWAOfflineWalletManager {
     });
 
     // Sign with the disposable wallet's keypair
+    // This signs both the nonceAdvance and the transfer instructions
     transaction.sign(wallet.keypair);
 
     // Serialize for mesh relay
+    // requireAllSignatures: false - allows partial signing for relay
     const serialized = transaction
       .serialize({
-        requireAllSignatures: true,
-        verifySignatures: true,
+        requireAllSignatures: false,
+        verifySignatures: false,
       })
       .toString("base64");
 

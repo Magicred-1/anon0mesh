@@ -1,3 +1,29 @@
+/**
+ * SendScreen - Send SOL, USDC, and ZEC transactions
+ *
+ * Supports three transaction modes:
+ * 1. Online (Internet) - Standard Solana transactions
+ * 2. BLE Mesh - Peer-to-peer mesh network transactions
+ * 3. Offline Wallets - Durable nonce accounts via BLE (BLE-only)
+ *
+ * ✨ v2.0 Improvement: Transactions Flow Like Messages
+ * - Transactions are broadcast to all connected peers like regular messages
+ * - Uses existing mesh sessions - no new handshakes needed
+ * - Any peer can accept the transaction and be the second signer
+ * - No timeout delays - transactions flow through established sessions
+ *
+ * ✨ v1.3.0 Improvement: Non-blocking Handshakes
+ * - Transactions are sent immediately to native layer
+ * - Noise protocol handshakes happen asynchronously in background
+ * - No more 5-second timeout delays!
+ * - Native layer automatically queues messages if session isn't ready
+ *
+ * Offline wallets use durable nonce accounts which:
+ * - Create transactions that NEVER expire
+ * - Enable truly offline transaction signing
+ * - Can be broadcast via BLE mesh and relayed to Solana network later
+ */
+
 import SolanaIcon from "@/components/icons/SolanaIcon";
 import USDCIcon from "@/components/icons/USDCIcon";
 import ZECIcon from "@/components/icons/ZECIcon";
@@ -62,6 +88,7 @@ export default function SendScreen() {
     publicKey,
     isConnected,
     isLoading: isWalletLoading,
+    walletMode: contextWalletMode,
   } = useWallet();
   const [amount, setAmount] = useState("0.00");
   const [token, setToken] = useState<TokenType>("SOL");
@@ -100,9 +127,9 @@ export default function SendScreen() {
 
   // Create a keypair from wallet for transaction signing (Local wallet mode)
   const [walletKeypair, setWalletKeypair] = useState<any>(null);
-  
-  // Detect wallet mode
-  const [walletMode, setWalletMode] = useState<WalletMode>("unknown");
+
+  // Use wallet mode from context (single source of truth)
+  const walletMode = contextWalletMode || "unknown";
 
   // Transaction mode state
   const [transactionMode, setTransactionMode] =
@@ -112,35 +139,56 @@ export default function SendScreen() {
     string[]
   >([]);
 
-  // Connection for Solana transactions
-  const connection = createSolanaConnection({ network: "devnet" });
+  // Connection for Solana transactions (memoized to prevent recreating)
+  const connection = React.useMemo(
+    () => createSolanaConnection({ network: "devnet" }),
+    [],
+  );
 
-  // Detect wallet mode on mount
+  // Load keypair for local wallet mode (needed for signing)
+  // Try to export - if it fails, it's an MWA wallet (which is fine)
   useEffect(() => {
-    const detectWalletMode = async () => {
-      if (wallet && wallet.isConnected()) {
-        try {
-          // Try to export secret key (only works for LocalWalletAdapter)
-          const secretKey = await wallet.exportSecretKey();
-          const { Keypair } = await import("@solana/web3.js");
-          const kp = Keypair.fromSecretKey(secretKey);
-          setWalletKeypair(kp);
-          setWalletMode("local");
-          console.log("[SendScreen] Local wallet detected - keypair loaded");
-        } catch (error) {
-          // MWA wallets won't support exportSecretKey
-          setWalletMode("mwa");
-          console.log("[SendScreen] MWA wallet detected - using adapter mode");
-        }
+    const loadLocalKeypair = async () => {
+      if (!wallet || !wallet.isConnected()) return;
+
+      try {
+        // Try to export secret key (only works for LocalWalletAdapter)
+        const secretKey = await wallet.exportSecretKey();
+        const { Keypair } = await import("@solana/web3.js");
+        const kp = Keypair.fromSecretKey(secretKey);
+        setWalletKeypair(kp);
+        console.log("[SendScreen] ✅ Local wallet keypair loaded");
+      } catch (error) {
+        // Expected for MWA wallets - they can't export keys
+        console.log(
+          "[SendScreen] Not a local wallet (MWA detected), skipping keypair load",
+        );
       }
     };
-    detectWalletMode();
+    loadLocalKeypair();
   }, [wallet]);
 
-  // Create MWA wallet adapter
+  // Create MWA wallet adapter as soon as we have wallet and publicKey
+  // MWA wallet = has signTransaction (exportSecretKey may exist but throws for MWA)
   const mwaWalletAdapter: IWalletAdapter | null = React.useMemo(() => {
-    if (walletMode !== "mwa" || !wallet || !publicKey) return null;
-    
+    console.log(
+      "[SendScreen] Creating MWA adapter check - wallet:",
+      !!wallet,
+      "publicKey:",
+      !!publicKey,
+    );
+    if (!wallet || !publicKey) return null;
+
+    // Check if wallet can sign transactions
+    const hasSignTransaction = typeof wallet.signTransaction === "function";
+
+    if (!hasSignTransaction) {
+      console.log("[SendScreen] Wallet cannot sign, skipping adapter");
+      return null;
+    }
+
+    console.log("[SendScreen] ✅ Creating MWA wallet adapter");
+
     return {
       getPublicKey: () => publicKey,
       signTransaction: async (transaction: Transaction) => {
@@ -152,16 +200,17 @@ export default function SendScreen() {
         return signed as Transaction[];
       },
     };
-  }, [walletMode, wallet, publicKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicKey?.toBase58()]); // Only recreate when public key changes
 
-  // Use offline wallets hook for Local wallets
+  // Use offline wallets hook for Local wallets (only when in local mode)
   const localWalletsHook = useOfflineWallets({
     connection,
     authority: walletKeypair,
     bleMode: true,
   });
 
-  // Use MWA offline wallets hook for MWA wallets
+  // Use MWA offline wallets hook for MWA wallets (only when in mwa mode)
   const mwaWalletsHook = useMWAOfflineWallets({
     connection,
     walletAdapter: mwaWalletAdapter,
@@ -169,6 +218,11 @@ export default function SendScreen() {
   });
 
   // Select the appropriate hook based on wallet mode
+  // For MWA mode or unknown mode with MWA adapter available, use MWA hook
+  const useMWA =
+    walletMode === "mwa" ||
+    (walletMode === "unknown" && mwaWalletAdapter !== null);
+
   const {
     wallets: offlineWallets,
     isLoading: isOfflineWalletsLoading,
@@ -177,10 +231,61 @@ export default function SendScreen() {
     createWallet: createOfflineWallet,
     sweepFunds,
     addFunds,
+    reloadWallets,
+    refreshBalances,
     createNonceTransaction,
     submitNonceTransaction,
     sendNonceTransactionBLE,
-  } = walletMode === "mwa" ? mwaWalletsHook : localWalletsHook;
+  } = useMWA ? mwaWalletsHook : localWalletsHook;
+
+  // Debug logging
+  useEffect(() => {
+    console.log("[SendScreen] ========== DEBUG ==========");
+    console.log("[SendScreen] Wallet mode from context:", walletMode);
+    console.log("[SendScreen] Using MWA hook:", useMWA);
+    console.log(
+      "[SendScreen] MWA adapter available:",
+      mwaWalletAdapter !== null,
+    );
+    console.log("[SendScreen] Offline wallets count:", offlineWallets.length);
+    console.log("[SendScreen] Is MWA mode:", walletMode === "mwa");
+    console.log("[SendScreen] Wallet object:", wallet ? "exists" : "null");
+    console.log(
+      "[SendScreen] PublicKey:",
+      publicKey ? publicKey.toBase58().slice(0, 8) + "..." : "null",
+    );
+    console.log("[SendScreen] ==============================");
+  }, [
+    walletMode,
+    useMWA,
+    offlineWallets.length,
+    mwaWalletAdapter,
+    wallet,
+    publicKey,
+  ]);
+
+  // Force reload wallets when MWA adapter becomes available
+  useEffect(() => {
+    console.log(
+      "[SendScreen] Reload effect - mode:",
+      walletMode,
+      "adapter:",
+      !!mwaWalletAdapter,
+    );
+    if (walletMode === "mwa" && mwaWalletAdapter && reloadWallets) {
+      console.log(
+        "[SendScreen] MWA adapter ready, triggering wallet reload...",
+      );
+      reloadWallets()
+        .then(() => {
+          console.log("[SendScreen] Wallet reload completed successfully");
+        })
+        .catch((err) => {
+          console.error("[SendScreen] Failed to reload wallets:", err);
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletMode, mwaWalletAdapter?.getPublicKey()?.toBase58()]);
 
   // Security: Clear keypair from memory when component unmounts
   useEffect(() => {
@@ -314,8 +419,11 @@ export default function SendScreen() {
   };
 
   const handleMaxAmount = () => {
+    // Use nonce wallet balance if selected, otherwise use main wallet balance
+    const currentBalance =
+      selectedOfflineWalletIds.length > 0 ? totalOfflineBalance : balance;
     // Leave a small amount for transaction fees
-    const maxAmount = Math.max(0, balance - 0.001);
+    const maxAmount = Math.max(0, currentBalance - 0.001);
     setAmount(maxAmount.toFixed(token === "SOL" ? 4 : 2));
   };
 
@@ -394,10 +502,11 @@ export default function SendScreen() {
       setIsSending(true);
 
       try {
-        console.log("[Send] 📡 Creating nonce transactions via BLE mesh...");
+        console.log("[Send] 📡 Creating nonce transactions for BLE mesh broadcast...");
         console.log(`[Send] From ${selectedWalletCount} nonce wallet(s)`);
         console.log(`[Send] To: ${recipientPubKey.toBase58()}`);
         console.log(`[Send] Total Amount: ${amountNum} SOL`);
+        console.log("[Send] ✨ Transactions flow like messages - any peer can co-sign!");
 
         // Calculate amount per wallet (split equally for now)
         const amountPerWallet = amountNum / selectedWalletCount;
@@ -433,11 +542,15 @@ export default function SendScreen() {
             `[Send] Nonce transaction created for ${wallet.publicKey.slice(0, 8)}, nonce: ${nonceValue.slice(0, 16)}`,
           );
 
-          // Send via BLE mesh
+          // Broadcast transaction via BLE mesh
+          // ✨ Flows like a regular message to all connected peers
+          // Uses existing mesh sessions - no new handshakes needed
+          // Any peer can accept and be the second signer
+          // firstSignerPublicKey should be the WALLET's public key (the signer), not the nonce account
           const bleRequestId = await sendNonceTransactionBLE(
             wallet.id,
             serialized,
-            wallet.nonceAccount || "",
+            wallet.publicKey, // This is the actual signer (offline wallet)
             "transfer",
             {
               description: `Transfer ${amountPerWallet.toFixed(4)} SOL from ${wallet.publicKey.slice(0, 8)}`,
@@ -454,8 +567,10 @@ export default function SendScreen() {
         }
 
         Alert.alert(
-          "Nonce Transactions Sent via BLE",
-          `Sent ${bleRequestIds.length} transaction(s) via BLE mesh.\n\n` +
+          "Nonce Transactions Broadcast via BLE",
+          `✨ Broadcast ${bleRequestIds.length} transaction(s) to all connected peers!\n\n` +
+            `Transactions flow like regular messages through the mesh.\n` +
+            `Any peer can accept and co-sign - no targeted handshakes needed.\n\n` +
             `Total Amount: ${amountNum} SOL\n` +
             `Per Wallet: ${amountPerWallet.toFixed(4)} SOL\n\n` +
             `Request IDs:\n${bleRequestIds.join("\n").slice(0, 100)}...`,
@@ -485,6 +600,10 @@ export default function SendScreen() {
     }
 
     // === BLE MESH MODE (Standard) ===
+    // Transactions flow like regular messages through the mesh
+    // - Broadcast to all connected peers without new handshakes
+    // - Uses existing mesh sessions (established during normal chat flow)
+    // - Any peer can accept and be the second signer
     if (transactionMode === "ble_mesh") {
       if (!bleInitialized) {
         Alert.alert("BLE Not Ready", "Bluetooth is not initialized.");
@@ -503,13 +622,16 @@ export default function SendScreen() {
       setIsSending(true);
 
       try {
-        console.log("[Send] 📡 Broadcasting via BLE mesh...");
+        console.log("[Send] 📡 Broadcasting transaction via BLE mesh...");
+        console.log("[Send] Transaction flows like a regular message to all peers");
         console.log(`[Send] Amount: ${amountNum} ${token}`);
+        console.log(`[Send] ${discoveredDevices.length} peer(s) available to co-sign`);
 
         const requestId = await sendTransactionRequest({
           recipientPubkey: recipientPubKey,
           amountSOL: token === "SOL" ? amountNum : 0,
           memo: `${token} transfer via BLE mesh`,
+          // targetPeerId is not set, so it broadcasts to all peers like a public message
         });
 
         if (requestId) {
@@ -518,7 +640,7 @@ export default function SendScreen() {
             .join(", ");
           Alert.alert(
             "Transaction Broadcast",
-            `Broadcast to ${discoveredDevices.length} peer(s): ${peerNames}`,
+            `Transaction sent to ${discoveredDevices.length} peer(s): ${peerNames}\n\nAny peer can accept and co-sign this transaction.`,
             [{ text: "OK", onPress: () => router.back() }],
           );
         }
@@ -894,17 +1016,24 @@ export default function SendScreen() {
             <View style={styles.balanceRow}>
               <View style={styles.balanceLeft}>
                 <Text style={styles.balanceLabel}>Balance:</Text>
-                {isRefreshing ? (
+                {isRefreshing || isOfflineWalletsLoading ? (
                   <ActivityIndicator size="small" color="#22D3EE" />
                 ) : (
                   <>
                     <Text style={styles.balanceAmount}>
-                      {balance.toFixed(token === "SOL" ? 4 : 2)} {token}
+                      {selectedOfflineWalletIds.length > 0
+                        ? `${totalOfflineBalance.toFixed(token === "SOL" ? 4 : 2)} ${token} (nonce)`
+                        : `${balance.toFixed(token === "SOL" ? 4 : 2)} ${token}`}
                     </Text>
+                    {selectedOfflineWalletIds.length > 0 && (
+                      <Text style={styles.nonceWalletIndicator}>
+                        (Using offline wallet)
+                      </Text>
+                    )}
                   </>
                 )}
               </View>
-              {!isRefreshing && (
+              {!isRefreshing && !isOfflineWalletsLoading && (
                 <Text style={styles.usdValue}>
                   ≈${" "}
                   {token === "SOL"
@@ -945,13 +1074,9 @@ export default function SendScreen() {
                 {/* Show Primary or Nonce Wallet selection */}
                 {selectedOfflineWalletIds.length > 0 ? (
                   <View style={styles.fromSelectorContent}>
-                    <Text style={styles.fromPrimaryText}>
-                      {selectedOfflineWalletIds.length === 1
-                        ? "Nonce Wallet"
-                        : `${selectedOfflineWalletIds.length} Nonce Wallets`}
-                    </Text>
+                    <Text style={styles.fromPrimaryText}>Official Wallet</Text>
                     <Text style={styles.fromSecondaryText}>
-                      Total: {totalOfflineBalance.toFixed(4)} SOL
+                      Balance: {totalOfflineBalance.toFixed(4)} SOL
                     </Text>
                   </View>
                 ) : (
@@ -965,7 +1090,7 @@ export default function SendScreen() {
                     </Text>
                     {walletMode !== "unknown" && (
                       <Text style={styles.walletModeText}>
-                        {walletMode === "mwa" ? "🔐 MWA Mode" : "🔑 Local Mode"}
+                        {walletMode === "mwa" ? "Seeker Mode" : "🔑 Local Mode"}
                       </Text>
                     )}
                   </View>
@@ -980,115 +1105,148 @@ export default function SendScreen() {
               {/* From Dropdown */}
               {showFromDropdown && (
                 <View style={styles.fromDropdown}>
-                  {/* Nonce Wallets Section */}
-                  {offlineWallets.length > 0 && (
-                    <View style={styles.fromSection}>
-                      <View style={styles.fromSectionHeader}>
-                        <Text style={styles.fromSectionTitle}>
-                          Nonce Wallets
-                        </Text>
-                        <Text style={styles.fromSectionCount}>
-                          {selectedOfflineWalletIds.length} selected
-                        </Text>
-                      </View>
-
-                      {/* Wallet List in Dropdown */}
-                      <View style={styles.fromWalletList}>
-                        {offlineWallets.map((wallet) => {
-                          const isSelected = selectedOfflineWalletIds.includes(
-                            wallet.id,
-                          );
-                          return (
-                            <TouchableOpacity
-                              key={wallet.id}
-                              style={[
-                                styles.fromWalletOption,
-                                isSelected && styles.fromWalletOptionSelected,
-                              ]}
-                              onPress={() => {
-                                if (isSelected) {
-                                  setSelectedOfflineWalletIds((prev) => {
-                                    const newIds = prev.filter(
-                                      (id) => id !== wallet.id,
-                                    );
-                                    // Switch back to online if no wallets selected
-                                    if (newIds.length === 0) {
-                                      setTransactionMode("online");
-                                    }
-                                    return newIds;
-                                  });
-                                } else {
-                                  setSelectedOfflineWalletIds((prev) => [
-                                    ...prev,
-                                    wallet.id,
-                                  ]);
-                                  // Auto-switch to offline_wallet mode when selecting
-                                  setTransactionMode("offline_wallet");
-                                }
-                              }}
-                            >
-                              <View style={styles.fromWalletCheckbox}>
-                                <View
-                                  style={[
-                                    styles.checkbox,
-                                    isSelected && styles.checkboxSelected,
-                                  ]}
-                                >
-                                  {isSelected && (
-                                    <Text style={styles.checkmark}>✓</Text>
-                                  )}
-                                </View>
-                              </View>
-                              <View style={styles.fromWalletInfo}>
-                                <Text style={styles.fromWalletLabel}>
-                                  {wallet.label || "Wallet"}
-                                </Text>
-                                <Text style={styles.fromWalletBalance}>
-                                  {wallet.balances.sol.toFixed(4)} SOL
-                                </Text>
-                                <Text style={styles.fromWalletAddress}>
-                                  {wallet.publicKey.slice(0, 6)}...
-                                  {wallet.publicKey.slice(-4)}
-                                </Text>
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-
-                      {/* Total Balance */}
-                      {selectedOfflineWalletIds.length > 0 && (
-                        <View style={styles.fromTotalBalance}>
-                          <Text style={styles.fromTotalLabel}>Total:</Text>
-                          <Text style={styles.fromTotalValue}>
-                            {totalOfflineBalance.toFixed(4)} SOL
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Select All / Clear */}
-                      <View style={styles.fromActions}>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setSelectedOfflineWalletIds(
-                              offlineWallets.map((w) => w.id),
-                            );
-                            setTransactionMode("offline_wallet");
-                          }}
-                        >
-                          <Text style={styles.fromActionText}>Select All</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => {
-                            setSelectedOfflineWalletIds([]);
-                            setTransactionMode("online");
-                          }}
-                        >
-                          <Text style={styles.fromActionText}>Clear</Text>
-                        </TouchableOpacity>
-                      </View>
+                  {/* MWA Mode Indicator */}
+                  {walletMode === "mwa" && (
+                    <View style={styles.mwaModeBanner}>
+                      <Text style={styles.mwaModeText}>
+                        Seeker Mode - Offline Wallets via Wallet Adapter
+                      </Text>
                     </View>
                   )}
+
+                  {/* Nonce Wallets Section */}
+                  {/* Show wallets section always, but content varies */}
+                  <View style={styles.fromSection}>
+                    <View style={styles.fromSectionHeader}>
+                      <Text style={styles.fromSectionTitle}>
+                        Nonce Wallets {walletMode === "mwa" && "(MWA)"}
+                      </Text>
+                      <View style={styles.fromSectionActions}>
+                        {isOfflineWalletsLoading && (
+                          <ActivityIndicator
+                            size="small"
+                            color="#22D3EE"
+                            style={{ marginRight: 8 }}
+                          />
+                        )}
+                        <Text style={styles.fromSectionCount}>
+                          {selectedOfflineWalletIds.length > 0
+                            ? "● Selected"
+                            : "Tap to select"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Show wallet list if we have wallets */}
+                    {offlineWallets.length > 0 ? (
+                      <>
+                        <View style={styles.fromWalletList}>
+                          {offlineWallets.map((wallet) => {
+                            const isSelected =
+                              selectedOfflineWalletIds.includes(wallet.id);
+                            return (
+                              <TouchableOpacity
+                                key={wallet.id}
+                                style={[
+                                  styles.fromWalletOption,
+                                  isSelected && styles.fromWalletOptionSelected,
+                                ]}
+                                onPress={() => {
+                                  if (isSelected) {
+                                    // Deselect if already selected
+                                    setSelectedOfflineWalletIds([]);
+                                    setTransactionMode("online");
+                                  } else {
+                                    // Single selection: replace any previously selected
+                                    setSelectedOfflineWalletIds([wallet.id]);
+                                    setTransactionMode("offline_wallet");
+                                  }
+                                }}
+                              >
+                                <View style={styles.fromWalletCheckbox}>
+                                  <View
+                                    style={[
+                                      styles.checkbox,
+                                      isSelected && styles.checkboxSelected,
+                                    ]}
+                                  >
+                                    {isSelected && (
+                                      <Text style={styles.checkmark}>✓</Text>
+                                    )}
+                                  </View>
+                                </View>
+                                <View style={styles.fromWalletInfo}>
+                                  <Text style={styles.fromWalletLabel}>
+                                    {wallet.label || "Wallet"}
+                                  </Text>
+                                  <Text style={styles.fromWalletBalance}>
+                                    {wallet.balances.sol.toFixed(4)} SOL
+                                  </Text>
+                                  <Text style={styles.fromWalletAddress}>
+                                    {wallet.publicKey.slice(0, 6)}...
+                                    {wallet.publicKey.slice(-4)}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        {/* Selected Wallet Balance */}
+                        {selectedOfflineWalletIds.length > 0 && (
+                          <View style={styles.fromTotalBalance}>
+                            <Text style={styles.fromTotalLabel}>Balance:</Text>
+                            <Text style={styles.fromTotalValue}>
+                              {totalOfflineBalance.toFixed(4)} SOL
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Clear / Refresh */}
+                        <View style={styles.fromActions}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setSelectedOfflineWalletIds([]);
+                              setTransactionMode("online");
+                            }}
+                          >
+                            <Text style={styles.fromActionText}>
+                              Clear Selection
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={async () => {
+                              console.log(
+                                "[SendScreen] Manual refresh triggered",
+                              );
+                              await refreshBalances();
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.fromActionText,
+                                { color: "#22D3EE" },
+                              ]}
+                            >
+                              ↻ Refresh
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : (
+                      /* Show message when no wallets found */
+                      <View style={styles.noWalletsMessage}>
+                        <Text style={styles.noWalletsText}>
+                          No offline wallets found
+                        </Text>
+                        <Text style={styles.noWalletsSubtext}>
+                          {walletMode === "mwa"
+                            ? "Create wallets in Wallet Settings first"
+                            : "Create a wallet using the button below"}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
 
                   {/* Create New Wallet */}
                   <TouchableOpacity
@@ -1149,9 +1307,18 @@ export default function SendScreen() {
           {!isSending && (
             <NumericKeyboard
               showDoneButton={false}
-              maxAmount={balance}
+              maxAmount={
+                selectedOfflineWalletIds.length > 0
+                  ? totalOfflineBalance
+                  : balance
+              }
               onPercentage={(percentage) => {
-                const calculatedAmount = (balance * percentage) / 100;
+                // Use nonce wallet balance if selected, otherwise main wallet
+                const currentBalance =
+                  selectedOfflineWalletIds.length > 0
+                    ? totalOfflineBalance
+                    : balance;
+                const calculatedAmount = (currentBalance * percentage) / 100;
                 setAmount(calculatedAmount.toFixed(5));
               }}
               onPress={(key) => {
@@ -1184,30 +1351,6 @@ export default function SendScreen() {
                 })
               }
             />
-          )}
-
-          {/* BLE Status Indicator -->
-          {transactionMode !== "online" && (
-            <View style={styles.bleStatusBanner}>
-              <View
-                style={[
-                  styles.statusDot,
-                  {
-                    backgroundColor: isBLEReady ? "#22D3EE" : "#ff4444",
-                  },
-                ]}
-              />
-              <Text style={styles.connectivityText}>
-                {isBLEReady
-                  ? `BLE Mesh Ready (${meshPeers.length} peers)`
-                  : "BLE Mesh Not Ready"}
-              </Text>
-              {isBLEMode && (
-                <Text style={styles.bleModeText}>
-                  Nonce transactions use BLE
-                </Text>
-              )}
-            </View>
           )}
 
           {/* Connectivity Status */}
@@ -1794,5 +1937,50 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "bold",
+  },
+  // MWA Mode Banner
+  mwaModeBanner: {
+    backgroundColor: "#106471",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#22D3EE",
+  },
+  mwaModeText: {
+    color: "#22D3EE",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  // Section Actions (for loading spinner)
+  fromSectionActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  // No wallets message
+  noWalletsMessage: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  noWalletsText: {
+    color: "#9CA3AF",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  noWalletsSubtext: {
+    color: "#6B7280",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  // Nonce wallet indicator
+  nonceWalletIndicator: {
+    color: "#22D3EE",
+    fontSize: 11,
+    marginLeft: 4,
+    fontStyle: "italic",
   },
 });

@@ -2,7 +2,7 @@
  * useOfflineWallets Hook
  *
  * React hook for managing offline wallets with durable nonce accounts
- * 
+ *
  * BLE Mode Support:
  * - createWallet: Uses BLE mesh for nonce account creation
  * - createNonceTransaction: Uses BLE mesh for transfers
@@ -11,14 +11,16 @@
  */
 
 import { Connection, Keypair } from "@solana/web3.js";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  NonceTransactionType,
+  useMeshChat,
+} from "../src/contexts/MeshBLEContext";
 import {
   OfflineWalletData,
   OfflineWalletManager,
   OfflineWalletState,
 } from "../src/infrastructure/wallet/OfflineWallet";
-import { useMeshChat, NonceTransactionType } from "../src/contexts/MeshBLEContext";
-import { serializeNonceTransaction } from "../src/infrastructure/wallet/transaction/SolanaDurableNonce";
 
 export interface UseOfflineWalletsConfig {
   connection: Connection;
@@ -52,13 +54,11 @@ export interface UseOfflineWalletsReturn {
     closeNonceAccount?: boolean,
   ) => Promise<void>;
   loadWallet: (walletId: string) => Promise<OfflineWalletState | null>;
+  reloadWallets: () => Promise<void>;
   refreshBalances: (walletId?: string) => Promise<void>;
   sweepFunds: (walletId: string) => Promise<string>;
   /** Add funds to a disposable wallet (always uses direct RPC, not BLE) */
-  addFunds: (
-    walletId: string, 
-    amountSOL: number
-  ) => Promise<string>;
+  addFunds: (walletId: string, amountSOL: number) => Promise<string>;
 
   // Nonce management
   createNonceTransaction: (
@@ -75,16 +75,28 @@ export interface UseOfflineWalletsReturn {
       /** Description for the transaction */
       description?: string;
     },
-  ) => Promise<{ signature: string; nonceAdvanced: boolean; bleRequestId?: string }>;
+  ) => Promise<{
+    signature: string;
+    nonceAdvanced: boolean;
+    bleRequestId?: string;
+  }>;
   advanceNonce: (walletId: string) => Promise<string>;
   getNonceValue: (walletId: string) => Promise<string | null>;
-  
+
   // BLE-specific methods
-  /** Send nonce transaction via BLE mesh (for create, transfer, advance, close) */
+  /**
+   * Send nonce transaction via BLE mesh (for create, transfer, advance, close)
+   *
+   * Broadcasts to all connected peers like regular messages.
+   * Uses existing mesh sessions - no new handshakes needed.
+   * Any peer can accept and be the second signer.
+   *
+   * @param recipientPeerId - Optional: if set, sends to specific peer only
+   */
   sendNonceTransactionBLE: (
     walletId: string,
     serializedTransaction: string,
-    nonceAccount: string,
+    signerPublicKey: string,
     type: NonceTransactionType,
     options?: {
       recipientPeerId?: string;
@@ -107,35 +119,51 @@ export function useOfflineWallets(
 
   // Get BLE context for mesh transactions
   const meshChat = useMeshChat();
-  const isBLEReady = bleMode && meshChat?.isInitialized && meshChat?.isConnected;
+  const isBLEReady =
+    bleMode && meshChat?.isInitialized && meshChat?.isConnected;
 
-  // Create manager instance
-  const manager = authority
-    ? new OfflineWalletManager(connection, authority)
-    : null;
+  // Create manager instance (stable reference)
+  const manager = useMemo(() => {
+    console.log(
+      "[useOfflineWallets] Creating manager, authority exists:",
+      !!authority,
+    );
+    return authority ? new OfflineWalletManager(connection, authority) : null;
+  }, [connection, authority]);
 
   /**
-   * Load all offline wallets on mount
+   * Load all offline wallets from storage
+   */
+  const reloadWallets = useCallback(async () => {
+    if (!manager) return;
+
+    setIsLoading(true);
+    try {
+      const loaded = await manager.loadAllOfflineWallets();
+      console.log("[useOfflineWallets] Reloaded wallets:", loaded.length);
+      setWallets(loaded);
+      setError(null);
+    } catch (err) {
+      console.error("[useOfflineWallets] Failed to reload wallets:", err);
+      setError(err instanceof Error ? err.message : "Failed to load wallets");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [manager]);
+
+  /**
+   * Load all offline wallets on mount or when authority becomes available
    */
   useEffect(() => {
-    const loadWallets = async () => {
-      if (!manager) return;
-
-      setIsLoading(true);
-      try {
-        const loaded = await manager.loadAllOfflineWallets();
-        setWallets(loaded);
-        setError(null);
-      } catch (err) {
-        console.error("[useOfflineWallets] Failed to load wallets:", err);
-        setError(err instanceof Error ? err.message : "Failed to load wallets");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadWallets();
-  }, [authority]); // Re-load when authority changes
+    console.log(
+      "[useOfflineWallets] Mount/manager effect - manager:",
+      !!manager,
+    );
+    if (manager) {
+      reloadWallets();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manager]);
 
   /**
    * Create a new offline wallet
@@ -330,15 +358,12 @@ export function useOfflineWallets(
         }
 
         console.log(
-          `[useOfflineWallets] Adding ${amountSOL} SOL to wallet via direct RPC...`
+          `[useOfflineWallets] Adding ${amountSOL} SOL to wallet via direct RPC...`,
         );
 
         // Create transfer from authority to disposable wallet
-        const {
-          Transaction,
-          SystemProgram,
-          LAMPORTS_PER_SOL,
-        } = await import("@solana/web3.js");
+        const { Transaction, SystemProgram, LAMPORTS_PER_SOL } =
+          await import("@solana/web3.js");
 
         const transaction = new Transaction().add(
           SystemProgram.transfer({
@@ -383,12 +408,16 @@ export function useOfflineWallets(
   /**
    * Send a nonce transaction via BLE mesh
    * For: create, transfer, advance, close (NOT sweep/add_funds)
+   *
+   * Broadcasts to all connected peers like regular messages.
+   * Uses existing mesh sessions - no new handshakes needed.
+   * Any peer can accept and be the second signer.
    */
   const sendNonceTransactionBLE = useCallback(
     async (
       walletId: string,
       serializedTransaction: string,
-      nonceAccount: string,
+      signerPublicKey: string,
       type: NonceTransactionType,
       options?: {
         recipientPeerId?: string;
@@ -401,7 +430,7 @@ export function useOfflineWallets(
 
       if (!meshChat.shouldUseBLEForNonceTx(type)) {
         throw new Error(
-          `Transaction type '${type}' should use direct RPC, not BLE.`
+          `Transaction type '${type}' should use direct RPC, not BLE.`,
         );
       }
 
@@ -409,20 +438,68 @@ export function useOfflineWallets(
       setError(null);
 
       try {
-        console.log(`[useOfflineWallets] Sending ${type} via BLE mesh...`);
+        // Determine if we're broadcasting or targeting a specific peer
+        const isBroadcast = !options?.recipientPeerId;
         
-        const requestId = await meshChat.sendNonceTransaction(
-          serializedTransaction,
-          {
-            nonceAccount,
-            description: options?.description || `${type} nonce transaction`,
-            recipientPeerId: options?.recipientPeerId,
-            transactionType: type,
-          },
-        );
+        if (isBroadcast) {
+          console.log(`[useOfflineWallets] 📢 Broadcasting ${type} to ALL connected peers`);
+          console.log(`[useOfflineWallets] Any peer can accept and co-sign this transaction`);
+        } else {
+          console.log(`[useOfflineWallets] 📤 Sending ${type} to specific peer: ${options?.recipientPeerId}`);
+        }
+        console.log(`[useOfflineWallets] Signer: ${signerPublicKey.slice(0, 16)}...`);
 
-        console.log(`[useOfflineWallets] BLE request sent: ${requestId}`);
-        return requestId;
+        // Check transaction size
+        const txSize = serializedTransaction.length;
+        console.log(`[useOfflineWallets] Transaction size: ${txSize} bytes (base64)`);
+        
+        if (txSize > 400) {
+          console.warn(`[useOfflineWallets] ⚠️ Transaction is large (${txSize} bytes)`);
+          console.warn(`[useOfflineWallets] BLE MTU limit is ~400-512 bytes. This may fail!`);
+          console.warn(`[useOfflineWallets] Consider using smaller amounts or direct RPC.`);
+        }
+
+        // Ensure encrypted sessions are established before sending
+        // This is required for transaction transmission
+        console.log(`[useOfflineWallets] 🔐 Ensuring encrypted sessions...`);
+        const sessionsEstablished = await meshChat.ensureEncryptedSessions();
+        if (sessionsEstablished > 0) {
+          console.log(`[useOfflineWallets] ✅ Established ${sessionsEstablished} new session(s)`);
+        }
+
+        // Try to send with retry logic for MTU issues
+        let requestId: string;
+        let attempts = 0;
+        const maxAttempts = 2;
+        
+        while (attempts < maxAttempts) {
+          attempts++;
+          try {
+            requestId = await meshChat.sendTransaction(
+              serializedTransaction,
+              {
+                firstSignerPublicKey: signerPublicKey,
+                description: options?.description || `${type} nonce transaction`,
+                recipientPeerId: options?.recipientPeerId,
+              },
+            );
+            break; // Success
+          } catch (sendErr) {
+            const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+            
+            // If it's an MTU error and we haven't retried yet, wait and try again
+            if (errMsg.includes("notification should not be longer") && attempts < maxAttempts) {
+              console.log(`[useOfflineWallets] ⚠️ MTU not ready, waiting 3 seconds before retry...`);
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+              console.log(`[useOfflineWallets] 🔄 Retrying transaction send...`);
+            } else {
+              throw sendErr; // Re-throw if not MTU error or max retries reached
+            }
+          }
+        }
+
+        console.log(`[useOfflineWallets] ✅ Transaction ${isBroadcast ? 'broadcast' : 'sent'}: ${requestId!}`);
+        return requestId!;
       } catch (err) {
         console.error("[useOfflineWallets] Failed to send via BLE:", err);
         const errorMsg =
@@ -469,7 +546,7 @@ export function useOfflineWallets(
   );
 
   /**
-   * Submit a nonce transaction 
+   * Submit a nonce transaction
    * - If BLE mode is enabled and type supports it: uses BLE mesh
    * - Otherwise: uses direct RPC
    */
@@ -496,26 +573,28 @@ export function useOfflineWallets(
         if (useBLE && meshChat) {
           // Serialize the transaction for BLE
           const serialized = transaction.serialize
-            ? transaction.serialize({ requireAllSignatures: true }).toString("base64")
+            ? transaction
+                .serialize({ requireAllSignatures: true })
+                .toString("base64")
             : transaction;
 
           // Get nonce account from transaction (first account in nonceAdvance instruction)
-          const nonceAccount = transaction.instructions?.[0]?.keys?.[0]?.pubkey?.toBase58() || "";
+          const nonceAccount =
+            transaction.instructions?.[0]?.keys?.[0]?.pubkey?.toBase58() || "";
 
-          console.log(`[useOfflineWallets] Submitting ${txType} via BLE mesh...`);
-          
-          const bleRequestId = await meshChat.sendNonceTransaction(
-            serialized,
-            {
-              nonceAccount,
-              description: options?.description || `${txType} nonce transaction`,
-              recipientPeerId: options?.recipientPeerId,
-              transactionType: txType,
-            },
+          console.log(
+            `[useOfflineWallets] Submitting ${txType} via BLE mesh...`,
           );
 
+          const bleRequestId = await meshChat.sendNonceTransaction(serialized, {
+            nonceAccount,
+            description: options?.description || `${txType} nonce transaction`,
+            recipientPeerId: options?.recipientPeerId,
+            transactionType: txType,
+          });
+
           console.log(`[useOfflineWallets] BLE request sent: ${bleRequestId}`);
-          
+
           // Return a pending result - actual confirmation comes via BLE receipt
           return {
             signature: bleRequestId, // Use request ID as placeholder
@@ -524,7 +603,9 @@ export function useOfflineWallets(
           };
         } else {
           // Use direct RPC submission
-          console.log(`[useOfflineWallets] Submitting ${txType} via direct RPC...`);
+          console.log(
+            `[useOfflineWallets] Submitting ${txType} via direct RPC...`,
+          );
           const result = await manager.submitNonceTransaction(transaction);
           return { ...result, bleRequestId: undefined };
         }
@@ -601,6 +682,7 @@ export function useOfflineWallets(
     createWallet,
     deleteWallet,
     loadWallet,
+    reloadWallets,
     refreshBalances,
     sweepFunds,
     addFunds,

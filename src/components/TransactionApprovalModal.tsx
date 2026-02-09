@@ -128,7 +128,7 @@ export const TransactionApprovalModal: React.FC = () => {
                 </Text>
               </View>
 
-              {/* Transaction Type */}
+              {/* Transaction Type & Broadcast Indicator */}
               <View style={styles.typeSection}>
                 <Text style={styles.label}>Type</Text>
                 <View style={styles.typeRow}>
@@ -151,6 +151,17 @@ export const TransactionApprovalModal: React.FC = () => {
                     {formatTimestamp(request.timestamp)}
                   </Text>
                 </View>
+                {/* Broadcast indicator */}
+                <View style={styles.broadcastRow}>
+                  <Text style={styles.broadcastIcon}>
+                    {request.isPrivate ? "🔒" : "📢"}
+                  </Text>
+                  <Text style={styles.broadcastText}>
+                    {request.isPrivate 
+                      ? "Targeted to you" 
+                      : "Broadcast - Any peer can sign"}
+                  </Text>
+                </View>
               </View>
 
               {/* Description */}
@@ -160,6 +171,12 @@ export const TransactionApprovalModal: React.FC = () => {
                   <Text style={styles.descriptionText}>
                     {request.description}
                   </Text>
+                  {!request.isPrivate && (
+                    <Text style={styles.broadcastNote}>
+                      This transaction was broadcast to all connected peers. 
+                      You can choose to sign it, or another peer may sign instead.
+                    </Text>
+                  )}
                 </View>
               )}
 
@@ -365,6 +382,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  broadcastRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "#06181B",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#106471",
+  },
+  broadcastIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  broadcastText: {
+    color: "#9CA3AF",
+    fontSize: 12,
+  },
   typeBadge: {
     backgroundColor: "#106471",
     paddingHorizontal: 10,
@@ -395,6 +431,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     lineHeight: 20,
+  },
+  broadcastNote: {
+    color: "#22D3EE",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+    fontStyle: "italic",
   },
   txDataSection: {
     marginBottom: 16,

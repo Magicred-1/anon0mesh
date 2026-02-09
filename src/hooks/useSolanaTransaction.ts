@@ -84,7 +84,9 @@ export interface SendTransactionParams {
   recipientPubkey: PublicKey; // Final Solana recipient public key
   amountSOL: number;
   memo?: string;
-  // Optional: specify a BLE peer ID, otherwise broadcasts to all connected peers
+  // Optional: specify a BLE peer ID to send to specific peer only
+  // If not set, broadcasts to all connected peers like regular messages
+  // Uses existing mesh sessions - no new handshakes needed
   targetPeerId?: string;
 }
 
