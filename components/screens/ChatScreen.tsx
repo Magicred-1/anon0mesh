@@ -174,18 +174,40 @@ export default function MeshChatScreen({
     setPeers(mappedPeers);
   }, [meshPeers]);
 
-  // Convert mesh messages to UI messages
+  // Convert mesh messages to UI messages (filter out transaction chunks)
   const allMessages = React.useMemo((): Message[] => {
-    return meshMessages.map((msg, idx) => ({
-      id: msg.id || `msg-${idx}`,
-      from: msg.isMine ? nickname || "Me" : msg.senderNickname,
-      senderId: msg.senderPeerId,
-      to: msg.to,
-      msg: msg.message,
-      ts: msg.timestamp,
-      isMine: msg.isMine,
-      isEncrypted: msg.isPrivate,
-    }));
+    return meshMessages
+      .filter((msg) => {
+        // Filter out transaction-related messages
+        const content = msg.message;
+        
+        // Skip transaction chunk messages
+        if (content.startsWith('TX_CHUNK:') || 
+            content.startsWith('TX_META:') || 
+            content.startsWith('TX_DONE:') ||
+            content.startsWith('TX_APPROVE:') ||
+            content.startsWith('TX_DECLINE:')) {
+          return false;
+        }
+        
+        // Skip raw transaction data (base64 serialized transactions)
+        // These are typically long base64 strings without spaces
+        if (content.length > 200 && /^[A-Za-z0-9+/=]+$/.test(content)) {
+          return false;
+        }
+        
+        return true;
+      })
+      .map((msg, idx) => ({
+        id: msg.id || `msg-${idx}`,
+        from: msg.isMine ? nickname || "Me" : msg.senderNickname,
+        senderId: msg.senderPeerId,
+        to: msg.to,
+        msg: msg.message,
+        ts: msg.timestamp,
+        isMine: msg.isMine,
+        isEncrypted: msg.isPrivate,
+      }));
   }, [meshMessages, nickname]);
 
   // Handle sending messages
