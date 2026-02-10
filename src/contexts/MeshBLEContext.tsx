@@ -196,11 +196,15 @@ export const useMeshChat = () => {
 interface MeshChatProviderProps {
   children: React.ReactNode;
   autoInitialize?: boolean;
+  connection?: any; // Solana Connection for transaction submission
+  wallet?: any; // Wallet keypair for signing transactions
 }
 
 export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   children,
   autoInitialize = true,
+  connection,
+  wallet,
 }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -271,9 +275,11 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
         // Initialize transaction chunker with completion callback
         if (!chunkerRef.current) {
           chunkerRef.current = new BLETransactionChunker(
-            (transferId, serializedTransaction, metadata) => {
+            // Transaction complete callback
+            (transferId, serializedTransaction, metadata, senderPeerId) => {
               console.log(`[MeshChat] 🔥 Transaction reassembled from chunks!`);
               console.log(`[MeshChat] Transfer ID: ${transferId}`);
+              console.log(`[MeshChat] Sender Peer ID: ${senderPeerId}`);
               console.log(
                 `[MeshChat] Transaction size: ${serializedTransaction.length} bytes`,
               );
@@ -281,7 +287,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
               // Create a synthetic transaction object to trigger the approval modal
               const syntheticTransaction: SolanaTransaction = {
                 id: transferId,
-                senderPeerId: metadata.firstSignerPublicKey || "unknown",
+                senderPeerId: senderPeerId, // Use the actual peer ID for response routing
                 serializedTransaction,
                 description: metadata.description,
                 timestamp: Date.now(),
@@ -292,6 +298,19 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
 
               // Trigger the transaction handler
               handleIncomingTransactionRequest(syntheticTransaction);
+            },
+            // Approval response callback
+            (transferId, signedTransaction, senderPeerId) => {
+              console.log(`[MeshChat] ✅ Received approval for ${transferId}`);
+              console.log(
+                `[MeshChat] Signed transaction: ${signedTransaction.length} bytes`,
+              );
+              // TODO: Handle the signed transaction (broadcast to network, etc.)
+            },
+            // Decline response callback
+            (transferId, senderPeerId) => {
+              console.log(`[MeshChat] ❌ Received decline for ${transferId}`);
+              // TODO: Handle the decline (notify user, etc.)
             },
           );
           console.log("[MeshChat] Transaction chunker initialized");
@@ -469,10 +488,108 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       try {
         console.log(`[MeshChat] ✅ Approving transaction: ${requestId}`);
 
-        // Send approval response back to sender
-        await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
-          signedTransaction: request.serializedTransaction, // Echo back as "signed" (in real impl, would actually sign)
-        });
+        let signedTransaction = request.serializedTransaction;
+        let submissionResult: { signature?: string; error?: string } | null = null;
+
+        // If we have connection, check signatures and submit to Solana
+        if (connection) {
+          try {
+            console.log(`[MeshChat] 🔐 Processing transaction for signing/submission...`);
+            
+            const { Transaction } = await import("@solana/web3.js");
+            const txBuffer = Buffer.from(request.serializedTransaction, "base64");
+            const transaction = Transaction.from(txBuffer);
+
+            // Check if all required signatures are present
+            const requiredSignatures = transaction.signatures.length;
+            const presentSignatures = transaction.signatures.filter(
+              sig => sig.signature !== null
+            ).length;
+
+            console.log(`[MeshChat] Signatures: ${presentSignatures}/${requiredSignatures} present`);
+
+            // If not all signatures are present and we have a wallet, co-sign
+            if (presentSignatures < requiredSignatures && wallet) {
+              console.log(`[MeshChat] 🔓 Missing signatures detected - enabling partial signing`);
+              
+              // Set requireAllSignatures to false to allow partial signing
+              (transaction as any).requireAllSignatures = false;
+              
+              // Sign with our keypair (co-sign)
+              console.log(`[MeshChat] ✍️ Adding co-signature with local wallet`);
+              transaction.partialSign(wallet);
+              
+              const newPresentSignatures = transaction.signatures.filter(
+                sig => sig.signature !== null
+              ).length;
+              console.log(`[MeshChat] ✅ Signatures now: ${newPresentSignatures}/${requiredSignatures}`);
+              
+              // Update the signed transaction
+              signedTransaction = Buffer.from(transaction.serialize()).toString("base64");
+            } else if (presentSignatures >= requiredSignatures) {
+              console.log(`[MeshChat] ✅ All signatures present, ready to submit`);
+            } else {
+              console.log(`[MeshChat] ⚠️ Missing signatures but no wallet available`);
+            }
+
+            // Submit to Solana
+            console.log(`[MeshChat] 📡 Submitting transaction to Solana...`);
+            const signature = await connection.sendRawTransaction(
+              transaction.serialize(),
+              {
+                skipPreflight: false,
+                preflightCommitment: "confirmed",
+              }
+            );
+
+            console.log(`[MeshChat] ✅ Transaction submitted: ${signature}`);
+
+            // Wait for confirmation
+            const { blockhash, lastValidBlockHeight } =
+              await connection.getLatestBlockhash();
+            const confirmation = await connection.confirmTransaction({
+              signature,
+              blockhash,
+              lastValidBlockHeight,
+            });
+
+            if (confirmation.value.err) {
+              throw new Error(
+                `Transaction failed: ${JSON.stringify(confirmation.value.err)}`
+              );
+            }
+
+            console.log(`[MeshChat] 🎉 Transaction confirmed: ${signature}`);
+            
+            // Use the potentially co-signed transaction
+            signedTransaction = Buffer.from(transaction.serialize()).toString("base64");
+            submissionResult = { signature };
+            
+          } catch (err) {
+            console.error(`[MeshChat] Failed to sign/submit transaction:`, err);
+            submissionResult = {
+              error: err instanceof Error ? err.message : "Unknown error"
+            };
+          }
+        } else {
+          console.log(
+            `[MeshChat] ⚠️ No connection - echoing transaction back`
+          );
+        }
+
+        // Send approval response via chunker (handles large transactions)
+        if (chunkerRef.current) {
+          await chunkerRef.current.sendApprovalResponse(
+            requestId,
+            signedTransaction,
+            request.senderPeerId,
+          );
+        } else {
+          // Fallback to native method if chunker not initialized
+          await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
+            signedTransaction,
+          });
+        }
 
         // Update state to approved
         setPendingTransactionRequests((prev) =>
@@ -538,10 +655,18 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
       try {
         console.log(`[MeshChat] ❌ Declining transaction: ${requestId}`);
 
-        // Send decline response back to sender
-        await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
-          error: reason || "Declined by user",
-        });
+        // Send decline response via chunker
+        if (chunkerRef.current) {
+          await chunkerRef.current.sendDeclineResponse(
+            requestId,
+            request.senderPeerId,
+          );
+        } else {
+          // Fallback to native method if chunker not initialized
+          await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
+            error: reason || "Declined by user",
+          });
+        }
 
         // Update state to declined
         setPendingTransactionRequests((prev) =>
@@ -1266,6 +1391,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
 
           const transferId = await chunkerRef.current.sendChunkedTransaction(
             serializedTransaction,
+            myPeerId, // Pass sender peer ID for response routing
             {
               description,
               firstSignerPublicKey: options?.nonceAccount,

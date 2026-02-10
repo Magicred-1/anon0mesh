@@ -440,23 +440,39 @@ export function useOfflineWallets(
       try {
         // Determine if we're broadcasting or targeting a specific peer
         const isBroadcast = !options?.recipientPeerId;
-        
+
         if (isBroadcast) {
-          console.log(`[useOfflineWallets] 📢 Broadcasting ${type} to ALL connected peers`);
-          console.log(`[useOfflineWallets] Any peer can accept and co-sign this transaction`);
+          console.log(
+            `[useOfflineWallets] 📢 Broadcasting ${type} to ALL connected peers`,
+          );
+          console.log(
+            `[useOfflineWallets] Any peer can accept and co-sign this transaction`,
+          );
         } else {
-          console.log(`[useOfflineWallets] 📤 Sending ${type} to specific peer: ${options?.recipientPeerId}`);
+          console.log(
+            `[useOfflineWallets] 📤 Sending ${type} to specific peer: ${options?.recipientPeerId}`,
+          );
         }
-        console.log(`[useOfflineWallets] Signer: ${signerPublicKey.slice(0, 16)}...`);
+        console.log(
+          `[useOfflineWallets] Signer: ${signerPublicKey.slice(0, 16)}...`,
+        );
 
         // Check transaction size
         const txSize = serializedTransaction.length;
-        console.log(`[useOfflineWallets] Transaction size: ${txSize} bytes (base64)`);
-        
+        console.log(
+          `[useOfflineWallets] Transaction size: ${txSize} bytes (base64)`,
+        );
+
         if (txSize > 400) {
-          console.warn(`[useOfflineWallets] ⚠️ Transaction is large (${txSize} bytes)`);
-          console.warn(`[useOfflineWallets] BLE MTU limit is ~400-512 bytes. This may fail!`);
-          console.warn(`[useOfflineWallets] Consider using smaller amounts or direct RPC.`);
+          console.warn(
+            `[useOfflineWallets] ⚠️ Transaction is large (${txSize} bytes)`,
+          );
+          console.warn(
+            `[useOfflineWallets] BLE MTU limit is ~400-512 bytes. This may fail!`,
+          );
+          console.warn(
+            `[useOfflineWallets] Consider using smaller amounts or direct RPC.`,
+          );
         }
 
         // Ensure encrypted sessions are established before sending
@@ -464,41 +480,50 @@ export function useOfflineWallets(
         console.log(`[useOfflineWallets] 🔐 Ensuring encrypted sessions...`);
         const sessionsEstablished = await meshChat.ensureEncryptedSessions();
         if (sessionsEstablished > 0) {
-          console.log(`[useOfflineWallets] ✅ Established ${sessionsEstablished} new session(s)`);
+          console.log(
+            `[useOfflineWallets] ✅ Established ${sessionsEstablished} new session(s)`,
+          );
         }
 
         // Try to send with retry logic for MTU issues
         let requestId: string;
         let attempts = 0;
         const maxAttempts = 2;
-        
+
         while (attempts < maxAttempts) {
           attempts++;
           try {
-            requestId = await meshChat.sendTransaction(
-              serializedTransaction,
-              {
-                firstSignerPublicKey: signerPublicKey,
-                description: options?.description || `${type} nonce transaction`,
-                recipientPeerId: options?.recipientPeerId,
-              },
-            );
+            requestId = await meshChat.sendTransaction(serializedTransaction, {
+              firstSignerPublicKey: signerPublicKey,
+              description: options?.description || `${type} nonce transaction`,
+              recipientPeerId: options?.recipientPeerId,
+            });
             break; // Success
           } catch (sendErr) {
-            const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
-            
+            const errMsg =
+              sendErr instanceof Error ? sendErr.message : String(sendErr);
+
             // If it's an MTU error and we haven't retried yet, wait and try again
-            if (errMsg.includes("notification should not be longer") && attempts < maxAttempts) {
-              console.log(`[useOfflineWallets] ⚠️ MTU not ready, waiting 3 seconds before retry...`);
+            if (
+              errMsg.includes("notification should not be longer") &&
+              attempts < maxAttempts
+            ) {
+              console.log(
+                `[useOfflineWallets] ⚠️ MTU not ready, waiting 3 seconds before retry...`,
+              );
               await new Promise((resolve) => setTimeout(resolve, 3000));
-              console.log(`[useOfflineWallets] 🔄 Retrying transaction send...`);
+              console.log(
+                `[useOfflineWallets] 🔄 Retrying transaction send...`,
+              );
             } else {
               throw sendErr; // Re-throw if not MTU error or max retries reached
             }
           }
         }
 
-        console.log(`[useOfflineWallets] ✅ Transaction ${isBroadcast ? 'broadcast' : 'sent'}: ${requestId!}`);
+        console.log(
+          `[useOfflineWallets] ✅ Transaction ${isBroadcast ? "broadcast" : "sent"}: ${requestId!}`,
+        );
         return requestId!;
       } catch (err) {
         console.error("[useOfflineWallets] Failed to send via BLE:", err);
@@ -515,9 +540,13 @@ export function useOfflineWallets(
 
   /**
    * Create a nonce transaction for offline signing and mesh relay
+   * 
+   * @param walletId - The wallet to use
+   * @param instructions - Transaction instructions
+   * @param secondSigner - Optional second signer public key for multi-sig
    */
   const createNonceTransaction = useCallback(
-    async (walletId: string, instructions: any[]) => {
+    async (walletId: string, instructions: any[], secondSigner?: any) => {
       if (!manager) {
         throw new Error("Wallet manager not initialized");
       }
@@ -526,7 +555,7 @@ export function useOfflineWallets(
       setError(null);
 
       try {
-        return await manager.createNonceTransaction(walletId, instructions);
+        return await manager.createNonceTransaction(walletId, instructions, secondSigner);
       } catch (err) {
         console.error(
           "[useOfflineWallets] Failed to create nonce transaction:",
@@ -574,7 +603,7 @@ export function useOfflineWallets(
           // Serialize the transaction for BLE
           const serialized = transaction.serialize
             ? transaction
-                .serialize({ requireAllSignatures: true })
+                .serialize({ requireAllSignatures: false })
                 .toString("base64")
             : transaction;
 

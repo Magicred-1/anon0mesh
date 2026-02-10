@@ -440,10 +440,15 @@ export class OfflineWalletManager {
   /**
    * Create a durable nonce transaction for offline signing
    * This transaction will NOT expire and can be relayed later through mesh
+   * 
+   * @param walletId - The wallet to use for signing
+   * @param instructions - Transaction instructions
+   * @param secondSigner - Optional second signer public key for multi-sig
    */
   async createNonceTransaction(
     walletId: string,
     instructions: any[], // TransactionInstruction[]
+    secondSigner?: PublicKey,
   ): Promise<{
     transaction: Transaction;
     serialized: string;
@@ -494,9 +499,20 @@ export class OfflineWalletManager {
       feePayer: wallet.keypair.publicKey,
     });
 
-    // Sign the transaction with the offline wallet's keypair
+    // If second signer is specified, add them to required signers
+    // This allows partial signing - first signer signs now, second signer signs later
+    if (secondSigner) {
+      console.log("[OfflineWallet] Adding second signer:", secondSigner.toBase58());
+      // Add second signer's signature slot (null signature for now)
+      transaction.signatures.push({
+        publicKey: secondSigner,
+        signature: null,
+      });
+    }
+
+    // Sign the transaction with the offline wallet's keypair (first signer)
     // This signs both the nonceAdvance and the transfer instructions
-    transaction.sign(wallet.keypair);
+    transaction.partialSign(wallet.keypair);
 
     // Serialize for mesh relay
     // requireAllSignatures: false - allows partial signing for relay
@@ -509,6 +525,12 @@ export class OfflineWalletManager {
 
     console.log("[OfflineWallet] ✅ Nonce transaction created");
     console.log("[OfflineWallet] Size:", serialized.length, "bytes");
+    if (secondSigner) {
+      console.log("[OfflineWallet] 🔐 Partially signed - waiting for second signer");
+      console.log("[OfflineWallet] Second signer:", secondSigner.toBase58());
+    } else {
+      console.log("[OfflineWallet] ✅ Fully signed - ready to submit");
+    }
 
     return {
       transaction,

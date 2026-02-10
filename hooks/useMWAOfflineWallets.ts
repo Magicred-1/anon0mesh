@@ -64,7 +64,8 @@ export interface UseMWAOfflineWalletsReturn {
   // Nonce management
   createNonceTransaction: (
     walletId: string,
-    instructions: any[]
+    instructions: any[],
+    offlineMode?: boolean
   ) => Promise<{ transaction: any; serialized: string; nonceValue: string }>;
   submitNonceTransaction: (
     transaction: any,
@@ -78,7 +79,9 @@ export interface UseMWAOfflineWalletsReturn {
     }
   ) => Promise<{ signature: string; nonceAdvanced: boolean; bleRequestId?: string }>;
   advanceNonce: (walletId: string) => Promise<string>;
-  getNonceValue: (walletId: string) => Promise<string | null>;
+  getNonceValue: (walletId: string, offlineMode?: boolean) => Promise<string | null>;
+  /** Sync all nonce values from network (call when coming online) */
+  syncAllNonceValues: () => Promise<void>;
 
   // BLE-specific methods
   /** 
@@ -517,9 +520,10 @@ export function useMWAOfflineWallets(
 
   /**
    * Create a nonce transaction for offline signing and mesh relay
+   * @param offlineMode - If true, uses cached nonce value for fully offline operation
    */
   const createNonceTransaction = useCallback(
-    async (walletId: string, instructions: any[]) => {
+    async (walletId: string, instructions: any[], offlineMode: boolean = false) => {
       if (!manager) {
         throw new Error("Wallet manager not initialized");
       }
@@ -528,7 +532,7 @@ export function useMWAOfflineWallets(
       setError(null);
 
       try {
-        return await manager.createNonceTransaction(walletId, instructions);
+        return await manager.createNonceTransaction(walletId, instructions, offlineMode);
       } catch (err) {
         console.error(
           "[useMWAOfflineWallets] Failed to create nonce transaction:",
@@ -660,18 +664,38 @@ export function useMWAOfflineWallets(
 
   /**
    * Get current nonce value for a wallet
+   * @param offlineMode - If true, uses cached nonce value (no network call)
    */
   const getNonceValue = useCallback(
-    async (walletId: string): Promise<string | null> => {
+    async (walletId: string, offlineMode: boolean = false): Promise<string | null> => {
       if (!manager) {
         return null;
       }
 
       try {
-        return await manager.getNonceValue(walletId);
+        return await manager.getNonceValue(walletId, offlineMode);
       } catch (err) {
         console.error("[useMWAOfflineWallets] Failed to get nonce value:", err);
         return null;
+      }
+    },
+    [manager]
+  );
+
+  /**
+   * Sync all nonce values from network (call when coming online)
+   */
+  const syncAllNonceValues = useCallback(
+    async () => {
+      if (!manager) {
+        console.warn("[useMWAOfflineWallets] Manager not initialized, cannot sync nonces");
+        return;
+      }
+
+      try {
+        await manager.syncAllNonceValues();
+      } catch (err) {
+        console.error("[useMWAOfflineWallets] Failed to sync nonce values:", err);
       }
     },
     [manager]
@@ -694,6 +718,7 @@ export function useMWAOfflineWallets(
     submitNonceTransaction,
     advanceNonce,
     getNonceValue,
+    syncAllNonceValues,
     sendNonceTransactionBLE,
   };
 }

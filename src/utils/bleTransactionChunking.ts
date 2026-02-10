@@ -26,6 +26,7 @@ export interface TransactionChunkMetadata {
   transferId: string;
   totalSize: number;
   totalChunks: number;
+  senderPeerId: string; // Peer ID of the sender (for response routing)
   description?: string;
   firstSignerPublicKey?: string;
   secondSignerPublicKey?: string;
@@ -37,6 +38,7 @@ interface PendingTransfer {
   metadata: TransactionChunkMetadata;
   chunks: Map<number, string>;
   receivedAt: number;
+  senderPeerId: string; // Track who sent the chunks
 }
 
 // ============================================
@@ -48,6 +50,8 @@ const CHUNK_TIMEOUT = 30000; // 30 seconds to receive all chunks
 const MESSAGE_PREFIX = "TX_CHUNK:"; // Prefix to identify transaction chunk messages
 const METADATA_PREFIX = "TX_META:"; // Prefix for metadata messages
 const COMPLETE_PREFIX = "TX_DONE:"; // Prefix for completion signal
+const APPROVE_PREFIX = "TX_APPROVE:"; // Prefix for approval response (may be chunked)
+const DECLINE_PREFIX = "TX_DECLINE:"; // Prefix for decline response
 
 // ============================================
 // CHUNKING UTILITY
@@ -59,6 +63,16 @@ export class BLETransactionChunker {
     transferId: string,
     serializedTransaction: string,
     metadata: TransactionChunkMetadata,
+    senderPeerId: string, // The actual peer ID who sent the chunks
+  ) => void;
+  private onApprovalResponse?: (
+    transferId: string,
+    signedTransaction: string,
+    senderPeerId: string,
+  ) => void;
+  private onDeclineResponse?: (
+    transferId: string,
+    senderPeerId: string,
   ) => void;
 
   constructor(
@@ -66,9 +80,18 @@ export class BLETransactionChunker {
       transferId: string,
       serializedTransaction: string,
       metadata: TransactionChunkMetadata,
+      senderPeerId: string,
     ) => void,
+    onApproval?: (
+      transferId: string,
+      signedTransaction: string,
+      senderPeerId: string,
+    ) => void,
+    onDecline?: (transferId: string, senderPeerId: string) => void,
   ) {
     this.onTransactionComplete = onComplete;
+    this.onApprovalResponse = onApproval;
+    this.onDeclineResponse = onDecline;
 
     // Clean up old transfers periodically
     setInterval(() => this.cleanupOldTransfers(), 60000); // Every minute
@@ -79,6 +102,7 @@ export class BLETransactionChunker {
    */
   async sendChunkedTransaction(
     serializedTransaction: string,
+    senderPeerId: string, // My peer ID for response routing
     options?: {
       description?: string;
       firstSignerPublicKey?: string;
@@ -98,6 +122,7 @@ export class BLETransactionChunker {
       `[BLE Chunker] 📦 Splitting transaction into ${totalChunks} chunks`,
     );
     console.log(`[BLE Chunker] Transfer ID: ${transferId}`);
+    console.log(`[BLE Chunker] Sender Peer ID: ${senderPeerId}`);
     console.log(
       `[BLE Chunker] Transaction size: ${serializedTransaction.length} bytes`,
     );
@@ -108,6 +133,7 @@ export class BLETransactionChunker {
       transferId,
       totalSize: serializedTransaction.length,
       totalChunks,
+      senderPeerId, // Include sender's peer ID for response routing
       description: options?.description,
       firstSignerPublicKey: options?.firstSignerPublicKey,
       secondSignerPublicKey: options?.secondSignerPublicKey,
@@ -190,6 +216,9 @@ export class BLETransactionChunker {
           `[BLE Chunker] 📥 Received metadata for transfer ${metadata.transferId}`,
         );
         console.log(
+          `[BLE Chunker] From sender: ${senderId} (reported: ${metadata.senderPeerId})`,
+        );
+        console.log(
           `[BLE Chunker] Expecting ${metadata.totalChunks} chunks (${metadata.totalSize} bytes total)`,
         );
 
@@ -197,6 +226,7 @@ export class BLETransactionChunker {
           metadata,
           chunks: new Map(),
           receivedAt: Date.now(),
+          senderPeerId: senderId, // Use the actual BLE sender ID, not the reported one
         });
 
         return true; // Handled
@@ -270,12 +300,13 @@ export class BLETransactionChunker {
         // Clean up
         this.pendingTransfers.delete(transferId);
 
-        // Trigger callback
+        // Trigger callback with actual sender peer ID
         if (this.onTransactionComplete) {
           this.onTransactionComplete(
             transferId,
             serializedTransaction,
             pending.metadata,
+            pending.senderPeerId, // Use the stored sender peer ID from BLE
           );
         }
       } catch (err) {
@@ -283,6 +314,104 @@ export class BLETransactionChunker {
       }
 
       return true; // Handled
+    }
+
+    // Check for approval response
+    if (message.startsWith(APPROVE_PREFIX)) {
+      const content = message.slice(APPROVE_PREFIX.length);
+
+      // Check if it's chunked approval (has META:, chunk index, or DONE:)
+      if (content.startsWith("META:")) {
+        // Chunked approval metadata
+        try {
+          const metadata = JSON.parse(content.slice(5));
+          console.log(
+            `[BLE Chunker] 📥 Received chunked approval metadata for ${metadata.transferId}`,
+          );
+          this.pendingTransfers.set(`approve_${metadata.transferId}`, {
+            metadata: {
+              ...metadata,
+              senderPeerId: senderId,
+            },
+            chunks: new Map(),
+            receivedAt: Date.now(),
+            senderPeerId: senderId,
+          });
+        } catch (err) {
+          console.error(
+            `[BLE Chunker] Failed to parse approval metadata:`,
+            err,
+          );
+        }
+        return true;
+      } else if (content.startsWith("DONE:")) {
+        // Chunked approval completion
+        const transferId = content.slice(5);
+        const pending = this.pendingTransfers.get(`approve_${transferId}`);
+        if (pending) {
+          try {
+            const signedTransaction = this.reassembleTransaction(
+              `approve_${transferId}`,
+            );
+            this.pendingTransfers.delete(`approve_${transferId}`);
+
+            if (this.onApprovalResponse) {
+              this.onApprovalResponse(transferId, signedTransaction, senderId);
+            }
+          } catch (err) {
+            console.error(`[BLE Chunker] Failed to reassemble approval:`, err);
+          }
+        }
+        return true;
+      } else if (content.includes(":")) {
+        const firstColon = content.indexOf(":");
+        const part = content.slice(0, firstColon);
+
+        // Check if it's a chunk index (number)
+        if (!isNaN(Number(part))) {
+          // Chunked approval chunk
+          const chunkIndex = Number(part);
+          const chunkData = content.slice(firstColon + 1);
+
+          // Find the pending approval transfer
+          for (const [key, pending] of this.pendingTransfers.entries()) {
+            if (key.startsWith("approve_")) {
+              pending.chunks.set(chunkIndex, chunkData);
+              console.log(
+                `[BLE Chunker] 📥 Received approval chunk ${chunkIndex + 1}/${pending.metadata.totalChunks}`,
+              );
+              return true;
+            }
+          }
+        } else {
+          // Direct approval (small enough to send in one message)
+          const [transferId, signedTransaction] = [
+            part,
+            content.slice(firstColon + 1),
+          ];
+          console.log(
+            `[BLE Chunker] 📥 Received approval response for ${transferId}`,
+          );
+
+          if (this.onApprovalResponse) {
+            this.onApprovalResponse(transferId, signedTransaction, senderId);
+          }
+        }
+      }
+      return true;
+    }
+
+    // Check for decline response
+    if (message.startsWith(DECLINE_PREFIX)) {
+      const transferId = message.slice(DECLINE_PREFIX.length);
+      console.log(
+        `[BLE Chunker] 📥 Received decline response for ${transferId}`,
+      );
+
+      if (this.onDeclineResponse) {
+        this.onDeclineResponse(transferId, senderId);
+      }
+      return true;
     }
 
     return false; // Not a chunk message
@@ -331,9 +460,79 @@ export class BLETransactionChunker {
   }
 
   /**
-   * Clean up old pending transfers
+   * Send an approval response (chunks if needed)
    */
-  private cleanupOldTransfers() {
+  async sendApprovalResponse(
+    transferId: string,
+    signedTransaction: string,
+    recipientPeerId: string,
+  ): Promise<void> {
+    console.log(
+      `[BLE Chunker] 📤 Sending approval response for ${transferId} (${signedTransaction.length} bytes)`,
+    );
+
+    // For large signed transactions, chunk them
+    if (signedTransaction.length > CHUNK_SIZE) {
+      console.log(`[BLE Chunker] 📦 Approval response is large, chunking...`);
+
+      const chunks = this.chunkString(signedTransaction, CHUNK_SIZE);
+
+      // Send metadata
+      const metadata = {
+        transferId,
+        totalChunks: chunks.length,
+        totalSize: signedTransaction.length,
+      };
+      await BleMesh.sendMessage(
+        `${APPROVE_PREFIX}META:${JSON.stringify(metadata)}`,
+        recipientPeerId,
+      );
+
+      // Send chunks
+      for (let i = 0; i < chunks.length; i++) {
+        await BleMesh.sendMessage(
+          `${APPROVE_PREFIX}${i}:${chunks[i]}`,
+          recipientPeerId,
+        );
+      }
+
+      // Send completion
+      await BleMesh.sendMessage(
+        `${APPROVE_PREFIX}DONE:${transferId}`,
+        recipientPeerId,
+      );
+    } else {
+      // Small enough to send directly
+      await BleMesh.sendMessage(
+        `${APPROVE_PREFIX}${transferId}:${signedTransaction}`,
+        recipientPeerId,
+      );
+    }
+
+    console.log(`[BLE Chunker] ✅ Approval response sent`);
+  }
+
+  /**
+   * Send a decline response
+   */
+  async sendDeclineResponse(
+    transferId: string,
+    recipientPeerId: string,
+  ): Promise<void> {
+    console.log(`[BLE Chunker] 📤 Sending decline response for ${transferId}`);
+
+    await BleMesh.sendMessage(
+      `${DECLINE_PREFIX}${transferId}`,
+      recipientPeerId,
+    );
+
+    console.log(`[BLE Chunker] ✅ Decline response sent`);
+  }
+
+  /**
+   * Clean up old transfers that have timed out
+   */
+  private cleanupOldTransfers(): void {
     const now = Date.now();
     const toDelete: string[] = [];
 

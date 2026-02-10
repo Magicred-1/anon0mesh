@@ -9,7 +9,7 @@ import {
 } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "react-native-reanimated";
 
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
@@ -25,8 +25,50 @@ import {
   TransactionApprovalModal,
 } from "@/src/contexts/MeshBLEContext";
 
-import { WalletProvider } from "@/src/contexts/WalletContext";
+import { WalletProvider, useWallet } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
+import { Connection, clusterApiUrl } from "@solana/web3.js";
+
+// Wrapper to inject wallet and connection into MeshChatProvider
+function MeshChatProviderWithWallet({ children }: { children: React.ReactNode }) {
+  const { wallet } = useWallet();
+  const [connection] = useState<Connection>(() => 
+    new Connection(clusterApiUrl("devnet"), "confirmed")
+  );
+  const [walletKeypair, setWalletKeypair] = useState<any>(null);
+
+  // Extract keypair from wallet for local wallets
+  useEffect(() => {
+    const loadKeypair = async () => {
+      if (!wallet || !wallet.isConnected()) return;
+
+      try {
+        // Try to export secret key (works for local wallets)
+        const secretKey = await wallet.exportSecretKey();
+        const { Keypair } = await import("@solana/web3.js");
+        const keypair = Keypair.fromSecretKey(secretKey);
+        setWalletKeypair(keypair);
+        console.log("[RootLayout] Loaded local wallet keypair for transaction signing");
+      } catch (error) {
+        // MWA wallets can't export keys, that's fine
+        console.log("[RootLayout] Wallet doesn't support key export (likely MWA)");
+        setWalletKeypair(null);
+      }
+    };
+
+    loadKeypair();
+  }, [wallet]);
+
+  return (
+    <MeshChatProvider 
+      autoInitialize={true}
+      connection={connection}
+      wallet={walletKeypair}
+    >
+      {children}
+    </MeshChatProvider>
+  );
+}
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -44,8 +86,8 @@ export default function RootLayout() {
   return (
     <GluestackUIProvider mode="dark">
       <WalletProvider autoInitialize={true}>
-        {/* MESH CHAT: kard-network-ble-mesh integration */}
-        <MeshChatProvider autoInitialize={true}>
+        {/* MESH CHAT: kard-network-ble-mesh integration with wallet injection */}
+        <MeshChatProviderWithWallet>
           <ThemeProvider
             value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
           >
@@ -63,7 +105,7 @@ export default function RootLayout() {
             <TransactionApprovalModal />
             <StatusBar style="auto" />
           </ThemeProvider>
-        </MeshChatProvider>
+        </MeshChatProviderWithWallet>
       </WalletProvider>
     </GluestackUIProvider>
   );

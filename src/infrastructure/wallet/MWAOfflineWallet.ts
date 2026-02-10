@@ -36,6 +36,10 @@ export interface MWAOfflineWalletData {
   label?: string;
   createdAt: number;
   nonceAccount?: string;
+  /** Last known nonce value (cached for offline use) */
+  lastKnownNonce?: string;
+  /** Timestamp of last nonce sync */
+  lastNonceSync?: number;
   balances: {
     sol: number;
     usdc: number;
@@ -204,6 +208,19 @@ export class MWAOfflineWalletManager {
     // Get initial balance
     const balance = await connection.getBalance(publicKey);
 
+    // Get initial nonce value if nonce account was created
+    let initialNonceValue: string | undefined;
+    if (nonceAccountPubkey && createNonceAccount) {
+      try {
+        const nonceManager = new MWANonceManager(connection, walletAdapter);
+        const nonceInfo = await nonceManager.getNonceAccount(nonceAccountPubkey);
+        initialNonceValue = nonceInfo?.nonce;
+        console.log("[MWA OfflineWallet] Initial nonce value cached:", initialNonceValue);
+      } catch (err) {
+        console.warn("[MWA OfflineWallet] Failed to fetch initial nonce, will sync later");
+      }
+    }
+
     // Create wallet data
     const walletData: MWAOfflineWalletData = {
       id: Date.now().toString(),
@@ -211,6 +228,8 @@ export class MWAOfflineWalletManager {
       label,
       createdAt: Date.now(),
       nonceAccount: nonceAccountPubkey?.toBase58(),
+      lastKnownNonce: initialNonceValue,
+      lastNonceSync: initialNonceValue ? Date.now() : undefined,
       balances: {
         sol: balance / LAMPORTS_PER_SOL,
         usdc: 0,
@@ -469,10 +488,13 @@ export class MWAOfflineWalletManager {
   /**
    * Create a durable nonce transaction for offline signing and mesh relay
    * This transaction will NOT expire and can be relayed later through mesh
+   * 
+   * @param offlineMode - If true, uses cached nonce value for fully offline operation
    */
   async createNonceTransaction(
     walletId: string,
-    instructions: TransactionInstruction[]
+    instructions: TransactionInstruction[],
+    offlineMode: boolean = false
   ): Promise<{
     transaction: Transaction;
     serialized: string;
@@ -490,6 +512,7 @@ export class MWAOfflineWalletManager {
     console.log("[MWA OfflineWallet] Creating nonce transaction...");
     console.log("[MWA OfflineWallet] Wallet address:", wallet.keypair.publicKey.toBase58());
     console.log("[MWA OfflineWallet] Nonce account:", wallet.nonceAccount.toBase58());
+    console.log("[MWA OfflineWallet] Offline mode:", offlineMode);
 
     // Create a nonce manager using the offline wallet's keypair as authority
     // (not MWA - the disposable wallet signs its own transactions)
@@ -510,29 +533,49 @@ export class MWAOfflineWalletManager {
       }
     );
 
-    // Get current nonce value
-    const nonceInfo = await nonceManager.getNonceAccount(wallet.nonceAccount);
-    if (!nonceInfo) {
-      throw new Error("Nonce account not found or invalid");
-    }
+    // Get nonce value (uses cache if offline)
+    let nonceValue: string;
+    let nonceAuthority: PublicKey;
 
-    console.log("[MWA OfflineWallet] Current nonce:", nonceInfo.nonce);
-    console.log("[MWA OfflineWallet] Nonce authority:", nonceInfo.authority.toBase58());
-    console.log("[MWA OfflineWallet] Wallet is authority:", nonceInfo.authority.equals(wallet.keypair.publicKey));
-    
-    // Check if wallet is the nonce authority
-    if (!nonceInfo.authority.equals(wallet.keypair.publicKey)) {
-      console.error("[MWA OfflineWallet] ❌ Wallet is NOT the nonce authority!");
-      console.error("[MWA OfflineWallet] Expected:", wallet.keypair.publicKey.toBase58());
-      console.error("[MWA OfflineWallet] Actual:", nonceInfo.authority.toBase58());
-      throw new Error("Wallet is not the nonce authority. Delete and recreate the wallet.");
+    if (offlineMode && wallet.data.lastKnownNonce) {
+      // OFFLINE MODE: Use cached nonce value
+      console.log(
+        "[MWA OfflineWallet] 📴 OFFLINE MODE: Using cached nonce:",
+        wallet.data.lastKnownNonce
+      );
+      nonceValue = wallet.data.lastKnownNonce;
+      nonceAuthority = wallet.keypair.publicKey;
+    } else {
+      // ONLINE MODE: Fetch from network
+      const nonceInfo = await nonceManager.getNonceAccount(wallet.nonceAccount);
+      if (!nonceInfo) {
+        throw new Error("Nonce account not found or invalid");
+      }
+
+      console.log("[MWA OfflineWallet] Current nonce:", nonceInfo.nonce);
+      console.log("[MWA OfflineWallet] Nonce authority:", nonceInfo.authority.toBase58());
+      console.log("[MWA OfflineWallet] Wallet is authority:", nonceInfo.authority.equals(wallet.keypair.publicKey));
+      
+      nonceValue = nonceInfo.nonce;
+      nonceAuthority = nonceInfo.authority;
+      
+      // Check if wallet is the nonce authority
+      if (!nonceInfo.authority.equals(wallet.keypair.publicKey)) {
+        console.error("[MWA OfflineWallet] ❌ Wallet is NOT the nonce authority!");
+        console.error("[MWA OfflineWallet] Expected:", wallet.keypair.publicKey.toBase58());
+        console.error("[MWA OfflineWallet] Actual:", nonceInfo.authority.toBase58());
+        throw new Error("Wallet is not the nonce authority. Delete and recreate the wallet.");
+      }
+      
+      // Cache the nonce value for future offline use
+      await this.updateCachedNonce(walletId, nonceValue);
     }
 
     // Create transaction with nonce
     const transaction = await nonceManager.createNonceTransaction({
       nonceAccount: wallet.nonceAccount,
-      nonceValue: nonceInfo.nonce,
-      nonceAuthority: wallet.keypair.publicKey,
+      nonceValue: nonceValue,
+      nonceAuthority: nonceAuthority,
       instructions,
       feePayer: wallet.keypair.publicKey,
     });
@@ -556,7 +599,7 @@ export class MWAOfflineWalletManager {
     return {
       transaction,
       serialized,
-      nonceValue: nonceInfo.nonce,
+      nonceValue,
     };
   }
 
@@ -632,27 +675,116 @@ export class MWAOfflineWalletManager {
 
   /**
    * Get the current nonce value for a wallet
+   * Uses cached value if offline, syncs from network when online
    */
-  async getNonceValue(walletId: string): Promise<string | null> {
+  async getNonceValue(
+    walletId: string,
+    offlineMode: boolean = false
+  ): Promise<string | null> {
     const wallet = await this.loadOfflineWallet(walletId);
     if (!wallet || !wallet.nonceAccount) {
       return null;
     }
 
-    // Use a nonce manager with the wallet's keypair
-    const nonceManager = new MWANonceManager(
-      this.connection,
-      {
-        getPublicKey: () => wallet.keypair.publicKey,
-        signTransaction: async (tx) => {
-          tx.partialSign(wallet.keypair);
-          return tx;
-        },
-        signAllTransactions: async (txs) => txs,
-      }
-    );
+    // If offline mode, use cached nonce value
+    if (offlineMode && wallet.data.lastKnownNonce) {
+      console.log(
+        "[MWA OfflineWallet] 📴 OFFLINE MODE: Using cached nonce:",
+        wallet.data.lastKnownNonce
+      );
+      return wallet.data.lastKnownNonce;
+    }
 
-    const nonceInfo = await nonceManager.getNonceAccount(wallet.nonceAccount);
-    return nonceInfo?.nonce || null;
+    // Online mode: fetch from network and update cache
+    try {
+      const nonceManager = new MWANonceManager(
+        this.connection,
+        {
+          getPublicKey: () => wallet.keypair.publicKey,
+          signTransaction: async (tx) => {
+            tx.partialSign(wallet.keypair);
+            return tx;
+          },
+          signAllTransactions: async (txs) => txs,
+        }
+      );
+
+      const nonceInfo = await nonceManager.getNonceAccount(wallet.nonceAccount);
+      const currentNonce = nonceInfo?.nonce || null;
+
+      // Update cached nonce value
+      if (currentNonce) {
+        await this.updateCachedNonce(walletId, currentNonce);
+        console.log(
+          "[MWA OfflineWallet] ✅ Nonce synced and cached:",
+          currentNonce
+        );
+      }
+
+      return currentNonce;
+    } catch (error) {
+      console.warn(
+        "[MWA OfflineWallet] ⚠️ Failed to fetch nonce from network:",
+        error
+      );
+      // Fallback to cached value if network fails
+      if (wallet.data.lastKnownNonce) {
+        console.log(
+          "[MWA OfflineWallet] 📴 Fallback to cached nonce:",
+          wallet.data.lastKnownNonce
+        );
+        return wallet.data.lastKnownNonce;
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Update the cached nonce value in local storage
+   */
+  private async updateCachedNonce(
+    walletId: string,
+    nonceValue: string
+  ): Promise<void> {
+    const allWallets = await this.loadAllOfflineWallets();
+    const index = allWallets.findIndex((w) => w.id === walletId);
+    
+    if (index >= 0) {
+      allWallets[index].lastKnownNonce = nonceValue;
+      allWallets[index].lastNonceSync = Date.now();
+      
+      await SecureStore.setItemAsync(
+        MWA_OFFLINE_WALLETS_KEY,
+        JSON.stringify(allWallets)
+      );
+      
+      console.log(
+        "[MWA OfflineWallet] 💾 Cached nonce updated locally:",
+        nonceValue.slice(0, 8) + "..."
+      );
+    }
+  }
+
+  /**
+   * Sync all nonce values from network (call when coming online)
+   */
+  async syncAllNonceValues(): Promise<void> {
+    console.log("[MWA OfflineWallet] 🔄 Syncing all nonce values from network...");
+    const allWallets = await this.loadAllOfflineWallets();
+    
+    for (const walletData of allWallets) {
+      if (walletData.nonceAccount) {
+        try {
+          await this.getNonceValue(walletData.id, false);
+        } catch (error) {
+          console.warn(
+            `[MWA OfflineWallet] Failed to sync nonce for ${walletData.id}:`,
+            error
+          );
+        }
+      }
+    }
+    
+    console.log("[MWA OfflineWallet] ✅ Nonce sync complete");
   }
 }
