@@ -30,10 +30,14 @@ import { identityStateManager } from "@/src/infrastructure/identity";
 import { Connection, clusterApiUrl } from "@solana/web3.js";
 
 // Wrapper to inject wallet and connection into MeshChatProvider
-function MeshChatProviderWithWallet({ children }: { children: React.ReactNode }) {
+function MeshChatProviderWithWallet({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { wallet } = useWallet();
-  const [connection] = useState<Connection>(() => 
-    new Connection(clusterApiUrl("devnet"), "confirmed")
+  const [connection] = useState<Connection>(
+    () => new Connection(clusterApiUrl("devnet"), "confirmed"),
   );
   const [walletKeypair, setWalletKeypair] = useState<any>(null);
 
@@ -48,10 +52,14 @@ function MeshChatProviderWithWallet({ children }: { children: React.ReactNode })
         const { Keypair } = await import("@solana/web3.js");
         const keypair = Keypair.fromSecretKey(secretKey);
         setWalletKeypair(keypair);
-        console.log("[RootLayout] Loaded local wallet keypair for transaction signing");
+        console.log(
+          "[RootLayout] Loaded local wallet keypair for transaction signing",
+        );
       } catch (error) {
         // MWA wallets can't export keys, that's fine
-        console.log("[RootLayout] Wallet doesn't support key export (likely MWA)");
+        console.log(
+          "[RootLayout] Wallet doesn't support key export (likely MWA)",
+        );
         setWalletKeypair(null);
       }
     };
@@ -60,7 +68,7 @@ function MeshChatProviderWithWallet({ children }: { children: React.ReactNode })
   }, [wallet]);
 
   return (
-    <MeshChatProvider 
+    <MeshChatProvider
       autoInitialize={true}
       connection={connection}
       wallet={walletKeypair}

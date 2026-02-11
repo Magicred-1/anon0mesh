@@ -3,6 +3,8 @@
  *
  * This is a cleaner implementation that uses the MeshChatContext directly
  * instead of the complex BLE+Noise stack.
+ *
+ * NOW WITH: Pigeon Transaction Notification 🕊️
  */
 
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,11 +13,14 @@ import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
+  Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +31,7 @@ import ChatInput from "@/components/chat/ChatInput";
 import ChatMessages, { Message } from "@/components/chat/ChatMessages";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import EditNicknameModal from "@/components/modals/EditNicknameModal";
+import TransactionApprovalModal from "@/src/components/TransactionApprovalModal";
 
 import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
 import { useMeshChat } from "@/src/contexts/MeshBLEContext";
@@ -46,6 +52,246 @@ interface MeshChatScreenProps {
   initialSelectedPeer?: string | null;
 }
 
+// ============================================
+// PIGEON TX NOTIFICATION COMPONENT (INLINE)
+// ============================================
+interface PigeonTxNotificationProps {
+  txCount: number;
+  onPress?: () => void;
+}
+
+function PigeonTxNotification({ txCount, onPress }: PigeonTxNotificationProps) {
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Bounce animation for the pigeon - only bounce when there are TXs
+  useEffect(() => {
+    // Always show the component (fade in on mount)
+    Animated.timing(opacityAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    if (txCount > 0) {
+      // Continuous bounce when there are transactions
+      const bounce = Animated.loop(
+        Animated.sequence([
+          Animated.timing(bounceAnim, {
+            toValue: -8,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(bounceAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      bounce.start();
+
+      return () => bounce.stop();
+    } else {
+      // Reset to resting position when no transactions
+      Animated.timing(bounceAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [txCount, bounceAnim, opacityAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        pigeonStyles.container,
+        {
+          opacity: opacityAnim,
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={pigeonStyles.touchable}
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
+        <View style={pigeonStyles.content}>
+          {/* Retro LCD-style border */}
+          <View style={pigeonStyles.lcdBorder}>
+            <View style={pigeonStyles.lcdScreen}>
+              {/* Animated Pigeon */}
+              <Animated.View
+                style={[
+                  pigeonStyles.pigeonContainer,
+                  {
+                    transform: [{ translateY: bounceAnim }],
+                  },
+                ]}
+              >
+                <Text style={pigeonStyles.pigeonEmoji}>🕊️</Text>
+              </Animated.View>
+
+              {/* Transaction Info */}
+              <View style={pigeonStyles.textContainer}>
+                <Text style={pigeonStyles.mainText}>
+                  {txCount > 0
+                    ? `${txCount} Offline TX${txCount > 1 ? "s" : ""}`
+                    : "No Pending TXs"}
+                </Text>
+                <Text style={pigeonStyles.subText}>
+                  {txCount > 0
+                    ? "📦 Tap to view pending transactions"
+                    : "🕊️ Ready to deliver transactions"}
+                </Text>
+              </View>
+
+              {/* Retro dots decoration */}
+              <View style={pigeonStyles.dotsContainer}>
+                {[...Array(3)].map((_, i) => (
+                  <View key={i} style={pigeonStyles.dot} />
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Pixel-art style corner decorations */}
+          <View style={pigeonStyles.cornerTL} />
+          <View style={pigeonStyles.cornerTR} />
+          <View style={pigeonStyles.cornerBL} />
+          <View style={pigeonStyles.cornerBR} />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+const pigeonStyles = StyleSheet.create({
+  container: {
+    width: "100%",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "transparent",
+  },
+  touchable: {
+    width: "100%",
+  },
+  content: {
+    position: "relative",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  lcdBorder: {
+    backgroundColor: "#00CED1",
+    padding: 3,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  lcdScreen: {
+    backgroundColor: "#089092",
+    borderRadius: 9,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 60,
+    // Retro LCD dot matrix pattern effect
+    shadowColor: "#0d8688",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  pigeonContainer: {
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pigeonEmoji: {
+    fontSize: 32,
+    // Add a slight pixel-art style shadow
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 0,
+  },
+  textContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  mainText: {
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+    letterSpacing: 1,
+    textShadowColor: "rgba(255, 255, 255, 0.3)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
+  },
+  subText: {
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontSize: 11,
+    color: "#fff",
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  dotsContainer: {
+    flexDirection: "column",
+    justifyContent: "space-around",
+    marginLeft: 8,
+    height: 30,
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#8B4513",
+    marginVertical: 2,
+  },
+  // Pixel-art corner decorations
+  cornerTL: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 8,
+    height: 8,
+    backgroundColor: "#00CED1",
+    opacity: 0.3,
+  },
+  cornerTR: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 8,
+    height: 8,
+    backgroundColor: "#FFD700",
+    opacity: 0.3,
+  },
+  cornerBL: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: 8,
+    height: 8,
+    backgroundColor: "#FFD700",
+    opacity: 0.3,
+  },
+  cornerBR: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 8,
+    height: 8,
+    backgroundColor: "#FFD700",
+    opacity: 0.3,
+  },
+});
+
+// ============================================
+// MAIN MESH CHAT SCREEN
+// ============================================
 export default function MeshChatScreen({
   initialSelectedPeer,
 }: MeshChatScreenProps = {}) {
@@ -72,6 +318,13 @@ export default function MeshChatScreen({
     clearMessages: clearMeshMessages,
     setNickname: setMeshNickname,
     markPeerAsRead,
+    pendingTransactionRequests,
+    currentTransactionRequest,
+    showTransactionModal,
+    approveTransactionRequest,
+    declineTransactionRequest,
+    dismissTransactionModal,
+    showTransactionApprovalModal,
   } = useMeshChat();
 
   // Local UI state
@@ -92,6 +345,13 @@ export default function MeshChatScreen({
   // Permission request state
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
+
+  // 🕊️ Offline transaction state - bind to actual pending transaction requests
+  const pendingTxCount = React.useMemo(() => {
+    return pendingTransactionRequests.filter(
+      (req) => req.decision === "pending",
+    ).length;
+  }, [pendingTransactionRequests]);
 
   // Clear notification counts when screen is focused
   useFocusEffect(
@@ -180,22 +440,24 @@ export default function MeshChatScreen({
       .filter((msg) => {
         // Filter out transaction-related messages
         const content = msg.message;
-        
+
         // Skip transaction chunk messages
-        if (content.startsWith('TX_CHUNK:') || 
-            content.startsWith('TX_META:') || 
-            content.startsWith('TX_DONE:') ||
-            content.startsWith('TX_APPROVE:') ||
-            content.startsWith('TX_DECLINE:')) {
+        if (
+          content.startsWith("TX_CHUNK:") ||
+          content.startsWith("TX_META:") ||
+          content.startsWith("TX_DONE:") ||
+          content.startsWith("TX_APPROVE:") ||
+          content.startsWith("TX_DECLINE:")
+        ) {
           return false;
         }
-        
+
         // Skip raw transaction data (base64 serialized transactions)
         // These are typically long base64 strings without spaces
         if (content.length > 200 && /^[A-Za-z0-9+/=]+$/.test(content)) {
           return false;
         }
-        
+
         return true;
       })
       .map((msg, idx) => ({
@@ -302,6 +564,26 @@ export default function MeshChatScreen({
     }
   };
 
+  // 🕊️ Handle pigeon notification tap
+  const handlePigeonTap = () => {
+    if (pendingTxCount > 0) {
+      // Open the transaction approval modal to view and sign pending transactions
+      console.log("[ChatScreen] Opening transaction approval modal");
+      showTransactionApprovalModal();
+    } else {
+      Alert.alert(
+        "Transaction Status",
+        "No pending transactions at the moment.\n\nThe pigeon is ready to deliver your next transaction via the mesh network! 🕊️",
+        [
+          {
+            text: "OK",
+            style: "default",
+          },
+        ],
+      );
+    }
+  };
+
   // Filter messages based on selected peer
   const filteredMessages = React.useMemo(() => {
     if (!selectedPeer) {
@@ -370,6 +652,12 @@ export default function MeshChatScreen({
               onClearCache={handleClearMessages}
               onBackPress={() => router.back()}
               onNavigateToSelection={() => router.push("/chat/selection")}
+            />
+
+            {/* 🕊️ PIGEON TRANSACTION NOTIFICATION - appears beneath header */}
+            <PigeonTxNotification
+              txCount={pendingTxCount}
+              onPress={handlePigeonTap}
             />
 
             <View style={styles.messagesContainer}>
@@ -454,6 +742,9 @@ export default function MeshChatScreen({
               }}
             />
           )}
+
+          {/* Transaction Approval Modal */}
+          <TransactionApprovalModal />
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>

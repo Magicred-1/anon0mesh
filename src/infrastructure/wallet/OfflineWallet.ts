@@ -98,19 +98,23 @@ export class OfflineWalletManager {
     if (createNonceAccount) {
       // Create nonce manager with the OFFLINE WALLET as authority (not main wallet)
       // This allows the offline wallet to sign nonce transactions without main wallet
-      const nonceManager = new DurableNonceManager({ connection, authority: keypair });
+      const nonceManager = new DurableNonceManager({
+        connection,
+        authority: keypair,
+      });
 
       // Create nonce account (funded with rent-exempt amount)
       // The offline wallet's keypair is used for nonce account creation
       // But the funding comes from the main wallet (authority param)
       const nonceKeypairForAccount = Keypair.generate();
-      const nonceRentExempt = await connection.getMinimumBalanceForRentExemption(
-        80 // NONCE_ACCOUNT_LENGTH
-      );
-      
+      const nonceRentExempt =
+        await connection.getMinimumBalanceForRentExemption(
+          80, // NONCE_ACCOUNT_LENGTH
+        );
+
       // Build transaction to create nonce account
       const transaction = new Transaction();
-      
+
       // 1. Create the nonce account (funded by main wallet)
       transaction.add(
         SystemProgram.createAccount({
@@ -119,27 +123,34 @@ export class OfflineWalletManager {
           lamports: nonceRentExempt + 5000, // rent + buffer
           space: 80,
           programId: SystemProgram.programId,
-        })
+        }),
       );
-      
+
       // 2. Initialize with OFFLINE WALLET as authority
       transaction.add(
         SystemProgram.nonceInitialize({
           noncePubkey: nonceKeypairForAccount.publicKey,
           authorizedPubkey: publicKey, // Offline wallet is the authority!
-        })
+        }),
       );
-      
+
       // Sign and send
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = authority.publicKey;
-      
+
       // Sign with both main wallet (funder) and nonce account
       transaction.sign(authority, nonceKeypairForAccount);
-      
-      const signature = await connection.sendRawTransaction(transaction.serialize());
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight });
+
+      const signature = await connection.sendRawTransaction(
+        transaction.serialize(),
+      );
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      });
 
       nonceAccountPubkey = nonceKeypairForAccount.publicKey;
       nonceKeypair = nonceKeypairForAccount;
@@ -147,7 +158,8 @@ export class OfflineWalletManager {
       console.log(
         "[OfflineWallet] Nonce account created:",
         nonceAccountPubkey.toBase58(),
-        "| Authority:", publicKey.toBase58()
+        "| Authority:",
+        publicKey.toBase58(),
       );
     }
 
@@ -440,7 +452,7 @@ export class OfflineWalletManager {
   /**
    * Create a durable nonce transaction for offline signing
    * This transaction will NOT expire and can be relayed later through mesh
-   * 
+   *
    * @param walletId - The wallet to use for signing
    * @param instructions - Transaction instructions
    * @param secondSigner - Optional second signer public key for multi-sig
@@ -464,8 +476,14 @@ export class OfflineWalletManager {
     }
 
     console.log("[OfflineWallet] Creating nonce transaction...");
-    console.log("[OfflineWallet] Wallet address:", wallet.keypair.publicKey.toBase58());
-    console.log("[OfflineWallet] Nonce account:", wallet.nonceAccount.toBase58());
+    console.log(
+      "[OfflineWallet] Wallet address:",
+      wallet.keypair.publicKey.toBase58(),
+    );
+    console.log(
+      "[OfflineWallet] Nonce account:",
+      wallet.nonceAccount.toBase58(),
+    );
 
     const nonceManager = new DurableNonceManager({
       connection: this.connection,
@@ -479,15 +497,26 @@ export class OfflineWalletManager {
     }
 
     console.log("[OfflineWallet] Current nonce:", nonceInfo.nonce);
-    console.log("[OfflineWallet] Nonce authority:", nonceInfo.authority.toBase58());
-    console.log("[OfflineWallet] Wallet is authority:", nonceInfo.authority.equals(wallet.keypair.publicKey));
-    
+    console.log(
+      "[OfflineWallet] Nonce authority:",
+      nonceInfo.authority.toBase58(),
+    );
+    console.log(
+      "[OfflineWallet] Wallet is authority:",
+      nonceInfo.authority.equals(wallet.keypair.publicKey),
+    );
+
     // Check if wallet is the nonce authority
     if (!nonceInfo.authority.equals(wallet.keypair.publicKey)) {
       console.error("[OfflineWallet] ❌ Wallet is NOT the nonce authority!");
-      console.error("[OfflineWallet] Expected:", wallet.keypair.publicKey.toBase58());
+      console.error(
+        "[OfflineWallet] Expected:",
+        wallet.keypair.publicKey.toBase58(),
+      );
       console.error("[OfflineWallet] Actual:", nonceInfo.authority.toBase58());
-      throw new Error("Wallet is not the nonce authority. Delete and recreate the wallet.");
+      throw new Error(
+        "Wallet is not the nonce authority. Delete and recreate the wallet.",
+      );
     }
 
     // Create transaction with nonce
@@ -499,23 +528,15 @@ export class OfflineWalletManager {
       feePayer: wallet.keypair.publicKey,
     });
 
-    // If second signer is specified, add them to required signers
-    // This allows partial signing - first signer signs now, second signer signs later
-    if (secondSigner) {
-      console.log("[OfflineWallet] Adding second signer:", secondSigner.toBase58());
-      // Add second signer's signature slot (null signature for now)
-      transaction.signatures.push({
-        publicKey: secondSigner,
-        signature: null,
-      });
-    }
-
-    // Sign the transaction with the offline wallet's keypair (first signer)
-    // This signs both the nonceAdvance and the transfer instructions
+    // Partially sign with sender's wallet (like Bob in the example)
+    // The beacon will add their signature and submit
+    console.log(
+      "[OfflineWallet] Partially signing transaction with sender wallet",
+    );
     transaction.partialSign(wallet.keypair);
 
-    // Serialize for mesh relay
-    // requireAllSignatures: false - allows partial signing for relay
+    // Serialize for BLE transmission with partial signature
+    // The beacon will deserialize, add their signature, and submit
     const serialized = transaction
       .serialize({
         requireAllSignatures: false,
@@ -523,14 +544,11 @@ export class OfflineWalletManager {
       })
       .toString("base64");
 
-    console.log("[OfflineWallet] ✅ Nonce transaction created");
+    console.log("[OfflineWallet] ✅ Nonce transaction partially signed");
     console.log("[OfflineWallet] Size:", serialized.length, "bytes");
-    if (secondSigner) {
-      console.log("[OfflineWallet] 🔐 Partially signed - waiting for second signer");
-      console.log("[OfflineWallet] Second signer:", secondSigner.toBase58());
-    } else {
-      console.log("[OfflineWallet] ✅ Fully signed - ready to submit");
-    }
+    console.log(
+      "[OfflineWallet] 📡 Ready to send to BLE beacon for co-signing & submission",
+    );
 
     return {
       transaction,

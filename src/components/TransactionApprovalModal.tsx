@@ -119,6 +119,17 @@ export const TransactionApprovalModal: React.FC = () => {
                 </Text>
               </View>
 
+              {/* Error Display - Show prominently if there's an error */}
+              {request.error && (
+                <View style={styles.errorSection}>
+                  <Text style={styles.errorIcon}>⚠️</Text>
+                  <View style={styles.errorTextContainer}>
+                    <Text style={styles.errorTitle}>Transaction Failed</Text>
+                    <Text style={styles.errorText}>{request.error}</Text>
+                  </View>
+                </View>
+              )}
+
               {/* Sender Info */}
               <View style={styles.senderSection}>
                 <Text style={styles.label}>From</Text>
@@ -544,6 +555,36 @@ const styles = StyleSheet.create({
     color: "#ffa500",
     fontSize: 14,
     fontWeight: "500",
+  },
+  errorSection: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#ff444420",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#ff4444",
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorIcon: {
+    fontSize: 20,
+    marginRight: 10,
+    marginTop: 2,
+  },
+  errorTextContainer: {
+    flex: 1,
+  },
+  errorTitle: {
+    color: "#ff6666",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  errorText: {
+    flex: 1,
+    color: "#ffaaaa",
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
 

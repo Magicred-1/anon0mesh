@@ -1,4 +1,4 @@
-# 🔥 OFFLINE MODE - COMPLETE LOCAL STORAGE 
+# 🔥 OFFLINE MODE - COMPLETE LOCAL STORAGE
 
 ## ✅ Full Offline Support Implemented
 
@@ -7,8 +7,9 @@ Your nonce accounts now work **100% OFFLINE** with everything stored locally! No
 ## 🎯 What's Stored Locally
 
 ### 1. **Wallet Data** (`SecureStore`)
+
 - ✅ Wallet keypairs (secret keys)
-- ✅ Nonce account keypairs  
+- ✅ Nonce account keypairs
 - ✅ Nonce account addresses
 - ✅ **Cached nonce values** 📦 (NEW!)
 - ✅ Last nonce sync timestamp
@@ -16,6 +17,7 @@ Your nonce accounts now work **100% OFFLINE** with everything stored locally! No
 - ✅ Labels and metadata
 
 ### 2. **Storage Keys**
+
 ```typescript
 // Main wallet list
 mwa_offline_wallets          // Array of wallet metadata
@@ -26,7 +28,9 @@ mwa_offline_nonce_key_{id}   // Nonce account secret key
 ```
 
 ### 3. **Cached Nonce Values**
+
 Each wallet now stores:
+
 ```typescript
 {
   lastKnownNonce: "24DCxiaPzDAPUNRzS6D7BzuvhPKgaE222bJamnenjxkL",
@@ -40,12 +44,11 @@ Each wallet now stores:
 
 ```typescript
 // Use cached nonce (no network call!)
-const { transaction, serialized, nonceValue } = 
-  await createNonceTransaction(
-    walletId,
-    instructions,
-    true  // 🔥 OFFLINE MODE = true
-  );
+const { transaction, serialized, nonceValue } = await createNonceTransaction(
+  walletId,
+  instructions,
+  true, // 🔥 OFFLINE MODE = true
+);
 
 console.log("Nonce used:", nonceValue);
 // Output: "Using cached nonce: 24DCxiaPz..."
@@ -71,18 +74,20 @@ await syncAllNonceValues();
 ## 📱 Complete Offline Flow
 
 ### 1. **Setup (One-time, requires internet)**
+
 ```typescript
 // Create wallet with nonce account
 const wallet = await createWallet({
   label: "Offline Wallet",
   createNonceAccount: true,
-  initialFundingSOL: 0.1
+  initialFundingSOL: 0.1,
 });
 
 // ✅ Nonce value is cached automatically
 ```
 
 ### 2. **Offline Transaction Creation**
+
 ```typescript
 // NO INTERNET NEEDED! ✨
 const tx = await createNonceTransaction(
@@ -91,10 +96,10 @@ const tx = await createNonceTransaction(
     SystemProgram.transfer({
       fromPubkey: walletAddress,
       toPubkey: recipientAddress,
-      lamports: 0.01 * LAMPORTS_PER_SOL
-    })
+      lamports: 0.01 * LAMPORTS_PER_SOL,
+    }),
   ],
-  true  // 📴 OFFLINE MODE
+  true, // 📴 OFFLINE MODE
 );
 
 // Transaction created using CACHED nonce
@@ -102,6 +107,7 @@ const tx = await createNonceTransaction(
 ```
 
 ### 3. **BLE Transmission (No Internet)**
+
 ```typescript
 // Send via BLE mesh
 const requestId = await sendNonceTransactionBLE(
@@ -110,8 +116,8 @@ const requestId = await sendNonceTransactionBLE(
   walletAddress,
   "transfer",
   {
-    description: "Transfer 0.01 SOL [nonce]"
-  }
+    description: "Transfer 0.01 SOL [nonce]",
+  },
 );
 
 // ✅ Transaction sent via Bluetooth!
@@ -119,6 +125,7 @@ const requestId = await sendNonceTransactionBLE(
 ```
 
 ### 4. **Syncing Later (When Online)**
+
 ```typescript
 // When internet available, sync nonce values
 await syncAllNonceValues();
@@ -129,16 +136,19 @@ await syncAllNonceValues();
 ## 🔒 Security Features
 
 ### **Encrypted Storage**
+
 - All keys stored in `expo-secure-store`
 - Hardware-backed encryption on supported devices
 - Automatic encryption at rest
 
 ### **Key Isolation**
+
 - Each wallet has separate keypair
 - Nonce accounts have separate keypairs
 - Main wallet never exposed
 
 ### **Authority Management**
+
 - Offline wallet IS the nonce authority
 - Can advance nonce without MWA signing
 - Full autonomous operation
@@ -146,6 +156,7 @@ await syncAllNonceValues();
 ## 💡 Smart Nonce Caching
 
 ### **Auto-Cache on Operations**
+
 ```typescript
 // Nonce cached when:
 1. Wallet created ✅
@@ -155,6 +166,7 @@ await syncAllNonceValues();
 ```
 
 ### **Fallback Logic**
+
 ```typescript
 try {
   // Try network
@@ -202,24 +214,28 @@ try {
 ## 🎯 Best Practices
 
 ### **Initial Setup**
+
 1. Create wallets when online
 2. Fund nonce accounts
 3. Let system cache initial nonce
 4. Go offline!
 
 ### **Offline Usage**
+
 1. Create transactions with `offlineMode: true`
 2. Send via BLE mesh
 3. Track which nonces were used
 4. Sync when back online
 
 ### **Nonce Management**
+
 1. Always sync when coming online
 2. Cache is automatically updated
 3. Offline mode uses last known value
 4. One transaction per nonce value
 
 ### **Error Handling**
+
 ```typescript
 // Check if nonce is cached
 const nonce = await getNonceValue(walletId, true);
@@ -232,26 +248,31 @@ if (!nonce) {
 ## 🔥 Key Features
 
 ✅ **100% Offline Transaction Creation**
+
 - No network calls required
 - Uses cached nonce values
 - All data stored locally
 
 ✅ **Automatic Nonce Caching**
+
 - Cached on wallet creation
 - Updated on every network fetch
 - Transparent to user
 
 ✅ **Smart Sync**
+
 - Syncs all wallets at once
 - Falls back to cache on network error
 - Timestamp tracking
 
 ✅ **BLE Mesh Integration**
+
 - Send via Bluetooth
 - Chunking for large transactions
 - No internet needed
 
 ✅ **Durable Transactions**
+
 - Never expire
 - Can be relayed anytime
 - Network-agnostic
@@ -264,11 +285,11 @@ const {
   createNonceTransaction,
   getNonceValue,
   syncAllNonceValues,
-  sendNonceTransactionBLE
+  sendNonceTransactionBLE,
 } = useMWAOfflineWallets({
   connection,
   walletAdapter: mwaWalletAdapter,
-  bleMode: true
+  bleMode: true,
 });
 
 // Check if we have cached nonce
@@ -280,7 +301,7 @@ console.log("Cached nonce:", cachedNonce);
 const tx = await createNonceTransaction(
   walletId,
   instructions,
-  true  // Offline mode!
+  true, // Offline mode!
 );
 
 // Send via BLE
@@ -288,7 +309,7 @@ await sendNonceTransactionBLE(
   walletId,
   tx.serialized,
   walletAddress,
-  "transfer"
+  "transfer",
 );
 
 // Later, when online...
@@ -298,6 +319,7 @@ await syncAllNonceValues();
 ## 🎉 You're Now Fully Offline!
 
 Your app can:
+
 - ✅ Create wallets (one-time online setup)
 - ✅ Store all keys locally
 - ✅ Cache nonce values
@@ -324,7 +346,7 @@ createNonceTransaction(
 )
 
 getNonceValue(
-  walletId: string, 
+  walletId: string,
   offlineMode?: boolean  // 🆕 Use cache if true
 )
 
@@ -354,6 +376,7 @@ syncAllNonceValues()  // 🆕 Sync all wallets
 **You now have a COMPLETE offline wallet system with local storage! 🎯**
 
 The system automatically:
+
 - 💾 Stores everything locally
 - 📦 Caches nonce values
 - 🔄 Syncs when online

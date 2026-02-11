@@ -39,6 +39,7 @@ interface PendingTransfer {
   chunks: Map<number, string>;
   receivedAt: number;
   senderPeerId: string; // Track who sent the chunks
+  completionReceived?: boolean; // Track if completion signal arrived before all chunks
 }
 
 // ============================================
@@ -86,8 +87,9 @@ export class BLETransactionChunker {
       transferId: string,
       signedTransaction: string,
       senderPeerId: string,
+      signature?: string,
     ) => void,
-    onDecline?: (transferId: string, senderPeerId: string) => void,
+    onDecline?: (transferId: string, senderPeerId: string, reason?: string) => void,
   ) {
     this.onTransactionComplete = onComplete;
     this.onApprovalResponse = onApproval;
@@ -260,6 +262,41 @@ export class BLETransactionChunker {
           `[BLE Chunker] Progress: ${pending.chunks.size}/${chunk.totalChunks} chunks received`,
         );
 
+        // Check if we now have all chunks AND completion was already received
+        if (
+          pending.chunks.size === chunk.totalChunks &&
+          (pending as any).completionReceived
+        ) {
+          console.log(
+            `[BLE Chunker] ✅ All chunks received, processing delayed completion...`,
+          );
+          // Reassemble now
+          try {
+            const serializedTransaction = this.reassembleTransaction(
+              chunk.transferId,
+            );
+            console.log(
+              `[BLE Chunker] ✅ Transaction reassembled (${serializedTransaction.length} bytes)`,
+            );
+
+            // Clean up
+            this.pendingTransfers.delete(chunk.transferId);
+
+            // Trigger callback
+            if (this.onTransactionComplete) {
+              this.onTransactionComplete(
+                chunk.transferId,
+                serializedTransaction,
+                pending.metadata,
+                pending.senderPeerId,
+              );
+            }
+          } catch (err) {
+            console.error(`[BLE Chunker] Failed to reassemble:`, err);
+            this.pendingTransfers.delete(chunk.transferId);
+          }
+        }
+
         return true; // Handled
       } catch (err) {
         console.error(`[BLE Chunker] Failed to parse chunk:`, err);
@@ -284,10 +321,12 @@ export class BLETransactionChunker {
 
       // Check if we have all chunks
       if (pending.chunks.size !== pending.metadata.totalChunks) {
-        console.error(
-          `[BLE Chunker] ❌ Missing chunks! Have ${pending.chunks.size}/${pending.metadata.totalChunks}`,
+        console.warn(
+          `[BLE Chunker] ⏳ Completion signal arrived early. Have ${pending.chunks.size}/${pending.metadata.totalChunks} chunks. Waiting...`,
         );
-        return true;
+        // Mark that completion signal was received
+        pending.completionReceived = true;
+        return true; // Don't process yet, wait for remaining chunks
       }
 
       // Reassemble transaction
@@ -355,8 +394,11 @@ export class BLETransactionChunker {
             );
             this.pendingTransfers.delete(`approve_${transferId}`);
 
+            // Extract signature from metadata if present
+            const signature = pending.metadata.signature;
+
             if (this.onApprovalResponse) {
-              this.onApprovalResponse(transferId, signedTransaction, senderId);
+              this.onApprovalResponse(transferId, signedTransaction, senderId, signature);
             }
           } catch (err) {
             console.error(`[BLE Chunker] Failed to reassemble approval:`, err);
@@ -403,13 +445,19 @@ export class BLETransactionChunker {
 
     // Check for decline response
     if (message.startsWith(DECLINE_PREFIX)) {
-      const transferId = message.slice(DECLINE_PREFIX.length);
+      const content = message.slice(DECLINE_PREFIX.length);
+      
+      // Parse transferId and optional reason (format: transferId:reason)
+      const colonIndex = content.indexOf(":");
+      const transferId = colonIndex > 0 ? content.slice(0, colonIndex) : content;
+      const reason = colonIndex > 0 ? content.slice(colonIndex + 1) : undefined;
+      
       console.log(
-        `[BLE Chunker] 📥 Received decline response for ${transferId}`,
+        `[BLE Chunker] 📥 Received decline response for ${transferId}${reason ? `: ${reason}` : ""}`,
       );
 
       if (this.onDeclineResponse) {
-        this.onDeclineResponse(transferId, senderId);
+        this.onDeclineResponse(transferId, senderId, reason);
       }
       return true;
     }
@@ -461,14 +509,16 @@ export class BLETransactionChunker {
 
   /**
    * Send an approval response (chunks if needed)
+   * Can include transaction signature if submission was successful
    */
   async sendApprovalResponse(
     transferId: string,
     signedTransaction: string,
     recipientPeerId: string,
+    signature?: string,
   ): Promise<void> {
     console.log(
-      `[BLE Chunker] 📤 Sending approval response for ${transferId} (${signedTransaction.length} bytes)`,
+      `[BLE Chunker] 📤 Sending approval response for ${transferId} (${signedTransaction.length} bytes)${signature ? ` with signature ${signature.slice(0, 8)}...` : ""}`,
     );
 
     // For large signed transactions, chunk them
@@ -477,11 +527,12 @@ export class BLETransactionChunker {
 
       const chunks = this.chunkString(signedTransaction, CHUNK_SIZE);
 
-      // Send metadata
+      // Send metadata with optional signature
       const metadata = {
         transferId,
         totalChunks: chunks.length,
         totalSize: signedTransaction.length,
+        signature, // Include signature if transaction was submitted
       };
       await BleMesh.sendMessage(
         `${APPROVE_PREFIX}META:${JSON.stringify(metadata)}`,
@@ -513,18 +564,21 @@ export class BLETransactionChunker {
   }
 
   /**
-   * Send a decline response
+   * Send a decline response with error reason
    */
   async sendDeclineResponse(
     transferId: string,
     recipientPeerId: string,
+    reason?: string,
   ): Promise<void> {
-    console.log(`[BLE Chunker] 📤 Sending decline response for ${transferId}`);
+    console.log(`[BLE Chunker] 📤 Sending decline response for ${transferId}${reason ? `: ${reason}` : ""}`);
 
-    await BleMesh.sendMessage(
-      `${DECLINE_PREFIX}${transferId}`,
-      recipientPeerId,
-    );
+    // Include reason in the decline message if provided
+    const message = reason 
+      ? `${DECLINE_PREFIX}${transferId}:${reason}`
+      : `${DECLINE_PREFIX}${transferId}`;
+    
+    await BleMesh.sendMessage(message, recipientPeerId);
 
     console.log(`[BLE Chunker] ✅ Decline response sent`);
   }

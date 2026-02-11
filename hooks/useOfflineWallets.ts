@@ -540,7 +540,7 @@ export function useOfflineWallets(
 
   /**
    * Create a nonce transaction for offline signing and mesh relay
-   * 
+   *
    * @param walletId - The wallet to use
    * @param instructions - Transaction instructions
    * @param secondSigner - Optional second signer public key for multi-sig
@@ -555,7 +555,11 @@ export function useOfflineWallets(
       setError(null);
 
       try {
-        return await manager.createNonceTransaction(walletId, instructions, secondSigner);
+        return await manager.createNonceTransaction(
+          walletId,
+          instructions,
+          secondSigner,
+        );
       } catch (err) {
         console.error(
           "[useOfflineWallets] Failed to create nonce transaction:",
