@@ -89,7 +89,11 @@ export class BLETransactionChunker {
       senderPeerId: string,
       signature?: string,
     ) => void,
-    onDecline?: (transferId: string, senderPeerId: string, reason?: string) => void,
+    onDecline?: (
+      transferId: string,
+      senderPeerId: string,
+      reason?: string,
+    ) => void,
   ) {
     this.onTransactionComplete = onComplete;
     this.onApprovalResponse = onApproval;
@@ -394,11 +398,8 @@ export class BLETransactionChunker {
             );
             this.pendingTransfers.delete(`approve_${transferId}`);
 
-            // Extract signature from metadata if present
-            const signature = pending.metadata.signature;
-
             if (this.onApprovalResponse) {
-              this.onApprovalResponse(transferId, signedTransaction, senderId, signature);
+              this.onApprovalResponse(transferId, signedTransaction, senderId);
             }
           } catch (err) {
             console.error(`[BLE Chunker] Failed to reassemble approval:`, err);
@@ -446,18 +447,19 @@ export class BLETransactionChunker {
     // Check for decline response
     if (message.startsWith(DECLINE_PREFIX)) {
       const content = message.slice(DECLINE_PREFIX.length);
-      
+
       // Parse transferId and optional reason (format: transferId:reason)
       const colonIndex = content.indexOf(":");
-      const transferId = colonIndex > 0 ? content.slice(0, colonIndex) : content;
+      const transferId =
+        colonIndex > 0 ? content.slice(0, colonIndex) : content;
       const reason = colonIndex > 0 ? content.slice(colonIndex + 1) : undefined;
-      
+
       console.log(
         `[BLE Chunker] 📥 Received decline response for ${transferId}${reason ? `: ${reason}` : ""}`,
       );
 
       if (this.onDeclineResponse) {
-        this.onDeclineResponse(transferId, senderId, reason);
+        this.onDeclineResponse(transferId, senderId);
       }
       return true;
     }
@@ -571,13 +573,15 @@ export class BLETransactionChunker {
     recipientPeerId: string,
     reason?: string,
   ): Promise<void> {
-    console.log(`[BLE Chunker] 📤 Sending decline response for ${transferId}${reason ? `: ${reason}` : ""}`);
+    console.log(
+      `[BLE Chunker] 📤 Sending decline response for ${transferId}${reason ? `: ${reason}` : ""}`,
+    );
 
     // Include reason in the decline message if provided
-    const message = reason 
+    const message = reason
       ? `${DECLINE_PREFIX}${transferId}:${reason}`
       : `${DECLINE_PREFIX}${transferId}`;
-    
+
     await BleMesh.sendMessage(message, recipientPeerId);
 
     console.log(`[BLE Chunker] ✅ Decline response sent`);

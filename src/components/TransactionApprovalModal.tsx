@@ -7,16 +7,15 @@
 import React from "react";
 import {
   Modal,
-  View,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
+  View,
 } from "react-native";
 import {
-  useMeshChat,
-  TransactionRequestWithDecision,
   TransactionDecision,
+  useMeshChat
 } from "../contexts/MeshBLEContext";
 
 export const TransactionApprovalModal: React.FC = () => {
@@ -35,7 +34,7 @@ export const TransactionApprovalModal: React.FC = () => {
 
   const request = currentTransactionRequest;
   const pendingCount = pendingTransactionRequests.filter(
-    (r) => r.decision === "pending"
+    (r) => r.decision === "pending",
   ).length;
 
   const getDecisionColor = (decision: TransactionDecision) => {
@@ -99,14 +98,19 @@ export const TransactionApprovalModal: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Current Request Card */}
             <View style={styles.requestCard}>
               {/* Status Badge */}
               <View
                 style={[
                   styles.statusBadge,
-                  { backgroundColor: getDecisionColor(request.decision) + "20" },
+                  {
+                    backgroundColor: getDecisionColor(request.decision) + "20",
+                  },
                 ]}
               >
                 <Text
@@ -168,8 +172,8 @@ export const TransactionApprovalModal: React.FC = () => {
                     {request.isPrivate ? "🔒" : "📢"}
                   </Text>
                   <Text style={styles.broadcastText}>
-                    {request.isPrivate 
-                      ? "Targeted to you" 
+                    {request.isPrivate
+                      ? "Targeted to you"
                       : "Broadcast - Any peer can sign"}
                   </Text>
                 </View>
@@ -184,8 +188,8 @@ export const TransactionApprovalModal: React.FC = () => {
                   </Text>
                   {!request.isPrivate && (
                     <Text style={styles.broadcastNote}>
-                      This transaction was broadcast to all connected peers. 
-                      You can choose to sign it, or another peer may sign instead.
+                      This transaction was broadcast to all connected peers. You
+                      can choose to sign it, or another peer may sign instead.
                     </Text>
                   )}
                 </View>
@@ -217,7 +221,9 @@ export const TransactionApprovalModal: React.FC = () => {
                   Queue ({pendingCount - 1} more)
                 </Text>
                 {pendingTransactionRequests
-                  .filter((r) => r.decision === "pending" && r.id !== request.id)
+                  .filter(
+                    (r) => r.decision === "pending" && r.id !== request.id,
+                  )
                   .slice(0, 3)
                   .map((pendingReq) => (
                     <View key={pendingReq.id} style={styles.queueItem}>
@@ -266,27 +272,28 @@ export const TransactionApprovalModal: React.FC = () => {
           )}
 
           {/* Completed State with Next Button */}
-          {request.decision !== "pending" && request.decision !== "processing" && (
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.button, styles.nextButton]}
-                onPress={() => {
-                  const nextPending = pendingTransactionRequests.find(
-                    (r) => r.decision === "pending"
-                  );
-                  if (nextPending) {
-                    // Context will handle showing the next one
-                  } else {
-                    dismissTransactionModal();
-                  }
-                }}
-              >
-                <Text style={styles.nextButtonText}>
-                  {pendingCount > 1 ? "Next Request" : "Done"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {request.decision !== "pending" &&
+            request.decision !== "processing" && (
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={[styles.button, styles.nextButton]}
+                  onPress={() => {
+                    const nextPending = pendingTransactionRequests.find(
+                      (r) => r.decision === "pending",
+                    );
+                    if (nextPending) {
+                      // Context will handle showing the next one
+                    } else {
+                      dismissTransactionModal();
+                    }
+                  }}
+                >
+                  <Text style={styles.nextButtonText}>
+                    {pendingCount > 1 ? "Next Request" : "Done"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
         </View>
       </View>
     </Modal>

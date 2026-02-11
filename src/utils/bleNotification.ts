@@ -87,6 +87,18 @@ export async function showBLEForegroundNotification(): Promise<void> {
       bypassDnd: false, // Don't override Do Not Disturb
     });
 
+    // Create notification channel for transaction alerts (high priority)
+    await Notifications.setNotificationChannelAsync("transaction-alerts", {
+      name: "Transaction Requests",
+      importance: Notifications.AndroidImportance.HIGH, // High = sound + heads-up
+      description: "Alerts for incoming transaction requests that need signing",
+      enableVibrate: true,
+      showBadge: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      sound: "default",
+      vibrationPattern: [0, 250, 250, 250],
+    });
+
     // Show persistent notification
     notificationId = await Notifications.scheduleNotificationAsync({
       content: {

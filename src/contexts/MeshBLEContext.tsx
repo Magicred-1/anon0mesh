@@ -302,14 +302,21 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
               handleIncomingTransactionRequest(syntheticTransaction);
             },
             // Approval response callback
-            (transferId, signedTransaction, senderPeerId, signature?: string) => {
+            (
+              transferId,
+              signedTransaction,
+              senderPeerId,
+              signature?: string,
+            ) => {
               console.log(`[MeshChat] ✅ Received approval for ${transferId}`);
               console.log(
                 `[MeshChat] Signed transaction: ${signedTransaction.length} bytes`,
               );
-              
+
               if (signature) {
-                console.log(`[MeshChat] 🎉 Transaction submitted to Solana: ${signature}`);
+                console.log(
+                  `[MeshChat] 🎉 Transaction submitted to Solana: ${signature}`,
+                );
                 Alert.alert(
                   "Transaction Successful",
                   `Your transaction was successfully broadcast to Solana!\n\nSignature: ${signature.slice(0, 8)}...${signature.slice(-8)}\n\nView on Solana Explorer:
@@ -319,10 +326,12 @@ https://explorer.solana.com/tx/${signature}`,
                       text: "OK",
                       style: "default",
                     },
-                  ]
+                  ],
                 );
               } else {
-                console.log(`[MeshChat] ✅ Transaction signed by peer (not submitted)`);
+                console.log(
+                  `[MeshChat] ✅ Transaction signed by peer (not submitted)`,
+                );
                 Alert.alert(
                   "Transaction Signed",
                   "The peer signed your transaction. You can now submit it to Solana.",
@@ -331,25 +340,24 @@ https://explorer.solana.com/tx/${signature}`,
                       text: "OK",
                       style: "default",
                     },
-                  ]
+                  ],
                 );
               }
             },
             // Decline response callback
             (transferId, senderPeerId, reason?: string) => {
-              console.log(`[MeshChat] ❌ Received decline for ${transferId}${reason ? `: ${reason}` : ""}`);
-              
-              const errorMessage = reason || "The peer declined to sign this transaction.";
-              Alert.alert(
-                "Transaction Declined",
-                errorMessage,
-                [
-                  {
-                    text: "OK",
-                    style: "default",
-                  },
-                ]
+              console.log(
+                `[MeshChat] ❌ Received decline for ${transferId}${reason ? `: ${reason}` : ""}`,
               );
+
+              const errorMessage =
+                reason || "The peer declined to sign this transaction.";
+              Alert.alert("Transaction Declined", errorMessage, [
+                {
+                  text: "OK",
+                  style: "default",
+                },
+              ]);
             },
           );
           console.log("[MeshChat] Transaction chunker initialized");
@@ -487,6 +495,43 @@ https://explorer.solana.com/tx/${signature}`,
         }
         return current;
       });
+
+      // Send push notification alert on Android
+      if (Platform.OS === "android") {
+        (async () => {
+          try {
+            const Notifications = await import("expo-notifications");
+
+            // Request permissions if needed
+            const { status } = await Notifications.requestPermissionsAsync();
+            if (status !== "granted") return;
+
+            // Send notification
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: "🕊️ New Transaction Request",
+                body: `${senderNickname} wants you to sign a ${txRequest.type} transaction`,
+                data: {
+                  type: "transaction_request",
+                  requestId: transaction.id,
+                  senderPeerId: transaction.senderPeerId,
+                },
+                priority: Notifications.AndroidNotificationPriority.HIGH,
+                sound: true,
+                badge: 1,
+                categoryIdentifier: "transaction-alerts",
+              },
+              trigger: null, // Show immediately
+            });
+
+            console.log(
+              `[MeshChat] 🔔 Push notification sent for transaction request`,
+            );
+          } catch (err) {
+            console.warn(`[MeshChat] Failed to send push notification:`, err);
+          }
+        })();
+      }
     },
     [], // No dependencies - uses refs for mutable data
   );
@@ -612,14 +657,17 @@ https://explorer.solana.com/tx/${signature}`,
               `[MeshChat] Failed to co-sign/submit transaction:`,
               err,
             );
-            
+
             // Parse the error to provide user-friendly messages
-            let errorMessage = err instanceof Error ? err.message : "Unknown error";
+            let errorMessage =
+              err instanceof Error ? err.message : "Unknown error";
             let userFriendlyMessage = errorMessage;
-            
+
             // Check for insufficient funds error
             if (errorMessage.includes("insufficient lamports")) {
-              const match = errorMessage.match(/insufficient lamports (\d+), need (\d+)/);
+              const match = errorMessage.match(
+                /insufficient lamports (\d+), need (\d+)/,
+              );
               if (match) {
                 const has = parseInt(match[1]);
                 const needs = parseInt(match[2]);
@@ -627,22 +675,32 @@ https://explorer.solana.com/tx/${signature}`,
                 const solShortfall = (shortfall / 1_000_000_000).toFixed(9);
                 userFriendlyMessage = `Insufficient funds: Account needs ${solShortfall} more SOL to complete this transaction.`;
               } else {
-                userFriendlyMessage = "Insufficient funds: The sender's account doesn't have enough SOL for this transaction.";
+                userFriendlyMessage =
+                  "Insufficient funds: The sender's account doesn't have enough SOL for this transaction.";
               }
             }
             // Check for blockhash errors
-            else if (errorMessage.includes("Blockhash not found") || errorMessage.includes("blockhash")) {
-              userFriendlyMessage = "Transaction expired: The transaction took too long and needs to be recreated.";
+            else if (
+              errorMessage.includes("Blockhash not found") ||
+              errorMessage.includes("blockhash")
+            ) {
+              userFriendlyMessage =
+                "Transaction expired: The transaction took too long and needs to be recreated.";
             }
             // Check for invalid signature errors
             else if (errorMessage.includes("signature verification failed")) {
-              userFriendlyMessage = "Invalid signature: The transaction signature is invalid.";
+              userFriendlyMessage =
+                "Invalid signature: The transaction signature is invalid.";
             }
             // Check for account not found
-            else if (errorMessage.includes("AccountNotFound") || errorMessage.includes("could not find account")) {
-              userFriendlyMessage = "Account not found: One of the accounts in this transaction doesn't exist.";
+            else if (
+              errorMessage.includes("AccountNotFound") ||
+              errorMessage.includes("could not find account")
+            ) {
+              userFriendlyMessage =
+                "Account not found: One of the accounts in this transaction doesn't exist.";
             }
-            
+
             submissionResult = { error: userFriendlyMessage };
           }
         } else {
@@ -651,8 +709,10 @@ https://explorer.solana.com/tx/${signature}`,
 
         // If submission failed, mark as declined and notify user
         if (submissionResult?.error) {
-          console.log(`[MeshChat] ❌ Transaction failed: ${submissionResult.error}`);
-          
+          console.log(
+            `[MeshChat] ❌ Transaction failed: ${submissionResult.error}`,
+          );
+
           // Send error response to sender
           if (chunkerRef.current) {
             await chunkerRef.current.sendDeclineResponse(
@@ -661,9 +721,13 @@ https://explorer.solana.com/tx/${signature}`,
               submissionResult.error,
             );
           } else {
-            await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
-              error: submissionResult.error,
-            });
+            await bleMesh.respondToTransaction(
+              requestId,
+              request.senderPeerId,
+              {
+                error: submissionResult.error,
+              },
+            );
           }
 
           // Update state to declined with error
@@ -694,28 +758,24 @@ https://explorer.solana.com/tx/${signature}`,
           }
 
           // Show error to beacon user
-          Alert.alert(
-            "Transaction Failed",
-            submissionResult.error,
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  // Move to next pending request if any
-                  const nextPending = pendingTransactionRequests.find(
-                    (r) => r.requestId !== requestId && r.decision === "pending",
-                  );
-                  if (nextPending) {
-                    setCurrentTransactionRequest(nextPending);
-                  } else {
-                    setShowTransactionModal(false);
-                    setCurrentTransactionRequest(null);
-                  }
-                },
-                style: "default",
+          Alert.alert("Transaction Failed", submissionResult.error, [
+            {
+              text: "OK",
+              onPress: () => {
+                // Move to next pending request if any
+                const nextPending = pendingTransactionRequests.find(
+                  (r) => r.requestId !== requestId && r.decision === "pending",
+                );
+                if (nextPending) {
+                  setCurrentTransactionRequest(nextPending);
+                } else {
+                  setShowTransactionModal(false);
+                  setCurrentTransactionRequest(null);
+                }
               },
-            ]
-          );
+              style: "default",
+            },
+          ]);
 
           console.log(`[MeshChat] ❌ Transaction declined due to error`);
           return;
@@ -734,7 +794,6 @@ https://explorer.solana.com/tx/${signature}`,
           // Fallback to native method if chunker not initialized
           await bleMesh.respondToTransaction(requestId, request.senderPeerId, {
             signedTransaction,
-            signature: submissionResult?.signature,
           });
         }
 
@@ -769,12 +828,14 @@ https://explorer.solana.com/tx/${signature}`,
         // Get user-friendly error message
         let errorMessage = err instanceof Error ? err.message : "Unknown error";
         let displayMessage = "Failed to approve transaction. Please try again.";
-        
+
         // Check if this is a submission error with our custom message
-        if (errorMessage.includes("Insufficient funds:") || 
-            errorMessage.includes("Transaction expired:") ||
-            errorMessage.includes("Invalid signature:") ||
-            errorMessage.includes("Account not found:")) {
+        if (
+          errorMessage.includes("Insufficient funds:") ||
+          errorMessage.includes("Transaction expired:") ||
+          errorMessage.includes("Invalid signature:") ||
+          errorMessage.includes("Account not found:")
+        ) {
           displayMessage = errorMessage;
         }
 
@@ -796,16 +857,12 @@ https://explorer.solana.com/tx/${signature}`,
           );
         }
 
-        Alert.alert(
-          "Transaction Failed",
-          displayMessage,
-          [
-            {
-              text: "OK",
-              style: "default",
-            },
-          ]
-        );
+        Alert.alert("Transaction Failed", displayMessage, [
+          {
+            text: "OK",
+            style: "default",
+          },
+        ]);
       }
     },
     [
