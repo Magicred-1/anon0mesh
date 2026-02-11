@@ -34,6 +34,7 @@ import EditNicknameModal from "@/components/modals/EditNicknameModal";
 import TransactionApprovalModal from "@/src/components/TransactionApprovalModal";
 
 import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
+import PigeonSprite from "@/components/PigeonSprite";
 import { useMeshChat } from "@/src/contexts/MeshBLEContext";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
@@ -120,7 +121,7 @@ function PigeonTxNotification({ txCount, onPress }: PigeonTxNotificationProps) {
           {/* Retro LCD-style border */}
           <View style={pigeonStyles.lcdBorder}>
             <View style={pigeonStyles.lcdScreen}>
-              {/* Animated Pigeon */}
+              {/* Animated Pigeon Sprite */}
               <Animated.View
                 style={[
                   pigeonStyles.pigeonContainer,
@@ -129,7 +130,11 @@ function PigeonTxNotification({ txCount, onPress }: PigeonTxNotificationProps) {
                   },
                 ]}
               >
-                <Text style={pigeonStyles.pigeonEmoji}>🕊️</Text>
+                <PigeonSprite
+                  isActive={txCount > 0}
+                  size={50}
+                  animationSpeed={150}
+                />
               </Animated.View>
 
               {/* Transaction Info */}
