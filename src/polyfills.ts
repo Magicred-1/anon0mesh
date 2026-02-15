@@ -16,6 +16,19 @@ import 'fast-text-encoding';
 import { Buffer } from 'buffer';
 global.Buffer = Buffer;
 
+// Configure tweetnacl PRNG to use crypto.getRandomValues
+// This prevents "no PRNG" errors on mobile
+import nacl from 'tweetnacl';
+if (typeof nacl.setPRNG === 'function' && typeof crypto !== 'undefined' && crypto.getRandomValues) {
+  nacl.setPRNG((x: Uint8Array, n: number) => {
+    const randomBytes = crypto.getRandomValues(new Uint8Array(n));
+    for (let i = 0; i < n; i++) {
+      x[i] = randomBytes[i];
+    }
+  });
+  console.log('✅ tweetnacl PRNG configured');
+}
+
 
 // MessageChannel polyfill for nostr-tools
 // React Native doesn't have MessageChannel, so we provide a simple implementation

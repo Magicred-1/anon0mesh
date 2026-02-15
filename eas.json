@@ -19,6 +19,12 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "seeker-build": {
+      "channel": "development",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

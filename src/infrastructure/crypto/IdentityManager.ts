@@ -3,6 +3,16 @@ import * as Crypto from 'expo-crypto';
 import nacl from 'tweetnacl';
 import { Identity, KeyPair } from '../../domain/entities/Identity';
 
+// Ensure nacl uses crypto.getRandomValues for PRNG
+if (typeof nacl.setPRNG === 'function' && typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    nacl.setPRNG((x: Uint8Array, n: number) => {
+        const randomBytes = crypto.getRandomValues(new Uint8Array(n));
+        for (let i = 0; i < n; i++) {
+            x[i] = randomBytes[i];
+        }
+    });
+}
+
 export class IdentityManager {
     /**
      * Generate a random nickname
