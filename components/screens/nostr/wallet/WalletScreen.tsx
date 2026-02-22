@@ -1,21 +1,21 @@
+import { useStealthWallet } from "@/hooks/useStealthWallet";
 import { useWallet } from "@/src/contexts/WalletContext";
 import "@/src/polyfills";
 import { createSolanaConnection } from "@/src/utils/solana";
-import { useStealthWallet } from "@/hooks/useStealthWallet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Clipboard,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Clipboard,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // QR code
@@ -38,14 +38,12 @@ export default function WalletScreen() {
     connect,
     isLoading: isWalletLoading,
   } = useWallet();
-  
+
   // Initialize stealth wallet
   const connection = createSolanaConnection({ network: "devnet" });
-  const {
-    isInitialized: stealthInitialized,
-    metaAddress,
-  } = useStealthWallet(connection);
-  
+  const { isInitialized: stealthInitialized, metaAddress } =
+    useStealthWallet(connection);
+
   const [publicKey, setPublicKey] = useState<string>("");
   const [displayAddress, setDisplayAddress] = useState<string>("");
   const [isAirdropping, setIsAirdropping] = useState(false);
@@ -97,12 +95,24 @@ export default function WalletScreen() {
     return () => {
       mounted = false;
     };
-  }, [isConnected, isWalletLoading, walletPublicKey, connect, fetchBalances, stealthInitialized, metaAddress, useStealthMode]);
+  }, [
+    isConnected,
+    isWalletLoading,
+    walletPublicKey,
+    connect,
+    fetchBalances,
+    stealthInitialized,
+    metaAddress,
+    useStealthMode,
+  ]);
 
   const handleCopyAddress = () => {
     if (displayAddress) {
       Clipboard.setString(displayAddress);
-      const addressType = displayAddress === metaAddress ? "Stealth meta-address" : "Wallet address";
+      const addressType =
+        displayAddress === metaAddress
+          ? "Stealth meta-address"
+          : "Wallet address";
       Alert.alert("Copied!", `${addressType} copied to clipboard`);
     }
   };
@@ -171,15 +181,16 @@ export default function WalletScreen() {
   };
 
   // Determine if showing stealth address
-  const isShowingStealth = useStealthMode && displayAddress === metaAddress && stealthInitialized;
-  
+  const isShowingStealth =
+    useStealthMode && displayAddress === metaAddress && stealthInitialized;
+
   // Handler for toggling stealth mode
   const handleToggleStealth = (value: boolean) => {
     if (value && !stealthInitialized) {
       Alert.alert(
         "Stealth Not Available",
         "Stealth wallet is still initializing. Please wait a moment.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
       return;
     }
@@ -225,7 +236,9 @@ export default function WalletScreen() {
               <View>
                 <Text style={styles.stealthToggleTitle}>Stealth Mode</Text>
                 <Text style={styles.stealthToggleSubtitle}>
-                  {stealthInitialized ? "Enhanced privacy for receiving funds" : "Initializing..."}
+                  {stealthInitialized
+                    ? "Enhanced privacy for receiving funds"
+                    : "Initializing..."}
                 </Text>
               </View>
               <Switch
@@ -263,9 +276,13 @@ export default function WalletScreen() {
             onPress={handleCopyAddress}
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.addressText}>{formatAddress(displayAddress)}</Text>
+              <Text style={styles.addressText}>
+                {formatAddress(displayAddress)}
+              </Text>
               {isShowingStealth && (
-                <Text style={styles.addressSubtext}>Private deposits enabled</Text>
+                <Text style={styles.addressSubtext}>
+                  Private deposits enabled
+                </Text>
               )}
             </View>
             <Copy size={24} color="#9CA3AF" weight="regular" />

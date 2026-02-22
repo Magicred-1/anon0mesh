@@ -27,6 +27,10 @@ import React, {
   useState,
 } from "react";
 import { Alert, Platform } from "react-native";
+import {
+  getAutoSubmitPreference,
+  setAutoSubmitPreference,
+} from "../../lib/txAutoSubmitPreferences";
 import { identityStateManager } from "../infrastructure/identity";
 import {
   clearAllUnreadMessages,
@@ -175,6 +179,10 @@ interface MeshChatContextType {
   showTransactionApprovalModal: () => void; // Manually show the modal for first pending transaction
   clearTransactionHistory: () => void;
 
+  // Auto-submit preferences
+  autoSubmitEnabled: boolean;
+  setAutoSubmitEnabled: (enabled: boolean) => Promise<void>;
+
   // Peer management
   getPeerById: (peerId: string) => Peer | undefined;
   connectedPeerCount: number;
@@ -224,6 +232,7 @@ export const MeshChatProvider: React.FC<MeshChatProviderProps> = ({
   const [currentTransactionRequest, setCurrentTransactionRequest] =
     useState<TransactionRequestWithDecision | null>(null);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [autoSubmitEnabled, setAutoSubmitEnabledState] = useState(false);
 
   const bleMesh = BleMesh;
   const unsubscribers = useRef<(() => void)[]>([]);
@@ -395,6 +404,13 @@ https://explorer.solana.com/tx/${signature}`,
         // Setup event listeners
         setupEventListeners();
         console.log("[MeshChat] Event listeners setup complete");
+
+        // Load auto-submit preference
+        const autoSubmit = await getAutoSubmitPreference();
+        setAutoSubmitEnabledState(autoSubmit);
+        console.log(
+          `[MeshChat] Auto-submit preference loaded: ${autoSubmit ? "ENABLED" : "DISABLED"}`,
+        );
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "Unknown error";
@@ -414,7 +430,7 @@ https://explorer.solana.com/tx/${signature}`,
   // Handle incoming transaction requests from peers
   // Aligned with @magicred-1/ble-mesh SolanaTransaction type
   const handleIncomingTransactionRequest = useCallback(
-    (transaction: SolanaTransaction) => {
+    async (transaction: SolanaTransaction) => {
       console.log(`[MeshChat] 🔥🔥🔥 handleIncomingTransactionRequest CALLED`, {
         requestId: transaction.id,
         senderPeerId: transaction.senderPeerId,
@@ -487,7 +503,30 @@ https://explorer.solana.com/tx/${signature}`,
       // Add to pending requests
       setPendingTransactionRequests((prev) => [txRequest, ...prev]);
 
-      // Show as current request if no other modal is open
+      // Check if auto-submit is enabled
+      const shouldAutoSubmit = await getAutoSubmitPreference();
+      console.log(
+        `[MeshChat] Auto-submit is ${shouldAutoSubmit ? "ENABLED" : "DISABLED"}`,
+      );
+
+      if (shouldAutoSubmit) {
+        // Auto-approve the transaction without showing modal
+        console.log(
+          `[MeshChat] 🤖 Auto-submitting transaction ${txRequest.requestId}`,
+        );
+
+        // Delay slightly to ensure state is updated
+        setTimeout(() => {
+          approveTransactionRequest(txRequest.requestId).catch((err) => {
+            console.error(`[MeshChat] Auto-submit failed:`, err);
+          });
+        }, 100);
+
+        // Don't show modal for auto-submitted transactions
+        return;
+      }
+
+      // Show as current request if no other modal is open (manual approval mode)
       setCurrentTransactionRequest((current) => {
         if (!current || current.decision !== "pending") {
           setShowTransactionModal(true);
@@ -932,6 +971,18 @@ https://explorer.solana.com/tx/${signature}`,
   const dismissTransactionModal = useCallback(() => {
     setShowTransactionModal(false);
     // Don't clear current request, just hide the modal
+  }, []);
+
+  // Set auto-submit preference
+  const setAutoSubmitEnabled = useCallback(async (enabled: boolean) => {
+    try {
+      await setAutoSubmitPreference(enabled);
+      setAutoSubmitEnabledState(enabled);
+      console.log(`[MeshChat] Auto-submit ${enabled ? "ENABLED" : "DISABLED"}`);
+    } catch (err) {
+      console.error("[MeshChat] Failed to set auto-submit preference:", err);
+      throw err;
+    }
   }, []);
 
   // Manually show the transaction approval modal with the first pending transaction
@@ -1877,6 +1928,8 @@ https://explorer.solana.com/tx/${signature}`,
     dismissTransactionModal,
     showTransactionApprovalModal,
     clearTransactionHistory,
+    autoSubmitEnabled,
+    setAutoSubmitEnabled,
     getPeerById,
     connectedPeerCount,
     markPeerAsRead,

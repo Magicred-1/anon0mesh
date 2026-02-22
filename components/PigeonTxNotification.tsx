@@ -3,19 +3,22 @@
  *
  * Shows a retro LCD-style notification with animated pigeon sprite
  * that indicates pending offline transactions ready to be delivered.
+ * Includes toggle for auto-submitting received BLE transactions.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Platform,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 
 import PigeonSprite from "@/components/PigeonSprite";
+import { useMeshChat } from "@/src/contexts/MeshBLEContext";
 
 interface PigeonTxNotificationProps {
   txCount: number;
@@ -28,6 +31,22 @@ export default function PigeonTxNotification({
 }: PigeonTxNotificationProps) {
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const { autoSubmitEnabled, setAutoSubmitEnabled } = useMeshChat();
+  const [isTogglingAutoSubmit, setIsTogglingAutoSubmit] = useState(false);
+
+  const handleAutoSubmitToggle = async (value: boolean) => {
+    try {
+      setIsTogglingAutoSubmit(true);
+      await setAutoSubmitEnabled(value);
+    } catch (err) {
+      console.error(
+        "[PigeonTxNotification] Failed to toggle auto-submit:",
+        err,
+      );
+    } finally {
+      setIsTogglingAutoSubmit(false);
+    }
+  };
 
   // Bounce animation for the pigeon - only bounce when there are TXs
   useEffect(() => {
@@ -115,6 +134,27 @@ export default function PigeonTxNotification({
                 </Text>
               </View>
             </View>
+
+            {/* Auto-Submit Toggle */}
+            <View style={styles.autoSubmitSection}>
+              <View style={styles.autoSubmitLabelContainer}>
+                <Text style={styles.autoSubmitLabel}>Auto-Submit BLE TXs</Text>
+                <Text style={styles.autoSubmitSubLabel}>
+                  {autoSubmitEnabled
+                    ? "🤖 Auto-approve enabled"
+                    : "✋ Manual approval"}
+                </Text>
+              </View>
+              <Switch
+                value={autoSubmitEnabled}
+                onValueChange={handleAutoSubmitToggle}
+                disabled={isTogglingAutoSubmit}
+                trackColor={{ false: "#555", true: "#22D3EE" }}
+                thumbColor={autoSubmitEnabled ? "#00CED1" : "#f4f3f4"}
+                ios_backgroundColor="#555"
+                style={styles.switch}
+              />
+            </View>
           </View>
 
           {/* Pixel-art style corner decorations */}
@@ -191,6 +231,37 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginTop: 2,
     letterSpacing: 0.5,
+  },
+  // Auto-submit section
+  autoSubmitSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.2)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  autoSubmitLabelContainer: {
+    flex: 1,
+  },
+  autoSubmitLabel: {
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  autoSubmitSubLabel: {
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontSize: 10,
+    color: "#fff",
+    opacity: 0.8,
+    marginTop: 2,
+  },
+  switch: {
+    marginLeft: 12,
+    transform: [{ scale: 0.9 }],
   },
   // Pixel-art corner decorations
   cornerTL: {

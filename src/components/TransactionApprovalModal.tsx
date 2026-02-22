@@ -26,6 +26,7 @@ export const TransactionApprovalModal: React.FC = () => {
     dismissTransactionModal,
     approveTransactionRequest,
     declineTransactionRequest,
+    autoSubmitEnabled,
   } = useMeshChat();
 
   if (!showTransactionModal || !currentTransactionRequest) {
@@ -97,6 +98,16 @@ export const TransactionApprovalModal: React.FC = () => {
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Auto-Submit Banner */}
+          {autoSubmitEnabled && request.decision === "pending" && (
+            <View style={styles.autoSubmitBanner}>
+              <Text style={styles.autoSubmitBannerIcon}>🤖</Text>
+              <Text style={styles.autoSubmitBannerText}>
+                Auto-submit is enabled - This transaction will be automatically approved
+              </Text>
+            </View>
+          )}
 
           <ScrollView
             style={styles.content}
@@ -348,6 +359,27 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: "#9CA3AF",
     fontSize: 20,
+  },
+  autoSubmitBanner: {
+    backgroundColor: "#22D3EE20",
+    borderColor: "#22D3EE",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  autoSubmitBannerIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  autoSubmitBannerText: {
+    flex: 1,
+    color: "#22D3EE",
+    fontSize: 13,
+    fontWeight: "500",
   },
   content: {
     padding: 20,
