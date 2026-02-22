@@ -13,15 +13,12 @@ import * as SecureStore from "expo-secure-store";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
-  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -34,7 +31,7 @@ import EditNicknameModal from "@/components/modals/EditNicknameModal";
 import TransactionApprovalModal from "@/src/components/TransactionApprovalModal";
 
 import PaymentRequestModal from "@/components/modals/PaymentRequestModal";
-import PigeonSprite from "@/components/PigeonSprite";
+import PigeonTxNotification from "@/components/PigeonTxNotification";
 import { useMeshChat } from "@/src/contexts/MeshBLEContext";
 import { useWallet } from "@/src/contexts/WalletContext";
 import { identityStateManager } from "@/src/infrastructure/identity";
@@ -52,247 +49,6 @@ interface Peer {
 interface MeshChatScreenProps {
   initialSelectedPeer?: string | null;
 }
-
-// ============================================
-// PIGEON TX NOTIFICATION COMPONENT (INLINE)
-// ============================================
-interface PigeonTxNotificationProps {
-  txCount: number;
-  onPress?: () => void;
-}
-
-function PigeonTxNotification({ txCount, onPress }: PigeonTxNotificationProps) {
-  const bounceAnim = useRef(new Animated.Value(0)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-
-  // Bounce animation for the pigeon - only bounce when there are TXs
-  useEffect(() => {
-    // Always show the component (fade in on mount)
-    Animated.timing(opacityAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-
-    if (txCount > 0) {
-      // Continuous bounce when there are transactions
-      const bounce = Animated.loop(
-        Animated.sequence([
-          Animated.timing(bounceAnim, {
-            toValue: -8,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(bounceAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-        ]),
-      );
-      bounce.start();
-
-      return () => bounce.stop();
-    } else {
-      // Reset to resting position when no transactions
-      Animated.timing(bounceAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [txCount, bounceAnim, opacityAnim]);
-
-  return (
-    <Animated.View
-      style={[
-        pigeonStyles.container,
-        {
-          opacity: opacityAnim,
-        },
-      ]}
-    >
-      <TouchableOpacity
-        style={pigeonStyles.touchable}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
-        <View style={pigeonStyles.content}>
-          {/* Retro LCD-style border */}
-          <View style={pigeonStyles.lcdBorder}>
-            <View style={pigeonStyles.lcdScreen}>
-              {/* Animated Pigeon Sprite */}
-              <Animated.View
-                style={[
-                  pigeonStyles.pigeonContainer,
-                  {
-                    transform: [{ translateY: bounceAnim }],
-                  },
-                ]}
-              >
-                <PigeonSprite
-                  isActive={txCount > 0}
-                  size={50}
-                  animationSpeed={150}
-                />
-              </Animated.View>
-
-              {/* Transaction Info */}
-              <View style={pigeonStyles.textContainer}>
-                <Text style={pigeonStyles.mainText}>
-                  {txCount > 0
-                    ? `${txCount} Offline TX${txCount > 1 ? "s" : ""}`
-                    : "No Pending TXs"}
-                </Text>
-                <Text style={pigeonStyles.subText}>
-                  {txCount > 0
-                    ? "📦 Tap to view pending transactions"
-                    : "🕊️ Ready to deliver transactions"}
-                </Text>
-              </View>
-
-              {/* Retro dots decoration */}
-              <View style={pigeonStyles.dotsContainer}>
-                {[...Array(3)].map((_, i) => (
-                  <View key={i} style={pigeonStyles.dot} />
-                ))}
-              </View>
-            </View>
-          </View>
-
-          {/* Pixel-art style corner decorations */}
-          <View style={pigeonStyles.cornerTL} />
-          <View style={pigeonStyles.cornerTR} />
-          <View style={pigeonStyles.cornerBL} />
-          <View style={pigeonStyles.cornerBR} />
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-const pigeonStyles = StyleSheet.create({
-  container: {
-    width: "100%",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "transparent",
-  },
-  touchable: {
-    width: "100%",
-  },
-  content: {
-    position: "relative",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  lcdBorder: {
-    backgroundColor: "#00CED1",
-    padding: 3,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  lcdScreen: {
-    backgroundColor: "#089092",
-    borderRadius: 9,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 60,
-    // Retro LCD dot matrix pattern effect
-    shadowColor: "#0d8688",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  pigeonContainer: {
-    marginRight: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pigeonEmoji: {
-    fontSize: 32,
-    // Add a slight pixel-art style shadow
-    textShadowColor: "rgba(0, 0, 0, 0.3)",
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 0,
-  },
-  textContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  mainText: {
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#fff",
-    letterSpacing: 1,
-    textShadowColor: "rgba(255, 255, 255, 0.3)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 0,
-  },
-  subText: {
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    fontSize: 11,
-    color: "#fff",
-    marginTop: 2,
-    letterSpacing: 0.5,
-  },
-  dotsContainer: {
-    flexDirection: "column",
-    justifyContent: "space-around",
-    marginLeft: 8,
-    height: 30,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#8B4513",
-    marginVertical: 2,
-  },
-  // Pixel-art corner decorations
-  cornerTL: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: 8,
-    height: 8,
-    backgroundColor: "#00CED1",
-    opacity: 0.3,
-  },
-  cornerTR: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    backgroundColor: "#FFD700",
-    opacity: 0.3,
-  },
-  cornerBL: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    width: 8,
-    height: 8,
-    backgroundColor: "#FFD700",
-    opacity: 0.3,
-  },
-  cornerBR: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    backgroundColor: "#FFD700",
-    opacity: 0.3,
-  },
-});
 
 // ============================================
 // MAIN MESH CHAT SCREEN

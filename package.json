@@ -12,13 +12,15 @@
     "postinstall": "patch-package && chmod a+x ./scripts/sodium-framework.sh && ./scripts/sodium-framework.sh"
   },
   "dependencies": {
+    "@arcium-hq/client": "^0.8.5",
     "@bonfida/spl-name-service": "^3.0.16",
+    "@coral-xyz/anchor": "^0.32.1",
     "@expo/html-elements": "^0.10.1",
     "@expo/vector-icons": "^15.0.3",
     "@gluestack-ui/core": "^3.0.12",
     "@gluestack-ui/utils": "^3.0.12",
     "@legendapp/motion": "^2.5.3",
-    "@magicred-1/ble-mesh": "^1.3.9",
+    "@magicred-1/ble-mesh": "1.4.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/bottom-tabs": "^7.4.0",
@@ -27,6 +29,8 @@
     "@rust-nostr/nostr-sdk": "^0.44.0",
     "@solana-mobile/mobile-wallet-adapter-protocol": "^2.2.5",
     "@solana-mobile/mobile-wallet-adapter-protocol-web3js": "^2.2.5",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/web3.js": "^1.98.4",
     "babel-plugin-module-resolver": "^5.0.2",
     "buffer": "^6.0.3",
@@ -78,10 +82,12 @@
     "stream-browserify": "^3.0.0",
     "tailwind-variants": "^0.1.20",
     "tailwindcss": "^3.4.18",
-    "tweetnacl": "^1.0.3"
+    "tweetnacl": "^1.0.3",
+    "values": "^0.2.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "@types/react-native-get-random-values": "^1.8.2",
     "baseline-browser-mapping": "^2.9.15",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",

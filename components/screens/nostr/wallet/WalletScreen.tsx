@@ -1,5 +1,7 @@
 import { useWallet } from "@/src/contexts/WalletContext";
 import "@/src/polyfills";
+import { createSolanaConnection } from "@/src/utils/solana";
+import { useStealthWallet } from "@/hooks/useStealthWallet";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -10,6 +12,7 @@ import {
     Image,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TouchableOpacity,
     View,
@@ -35,8 +38,18 @@ export default function WalletScreen() {
     connect,
     isLoading: isWalletLoading,
   } = useWallet();
+  
+  // Initialize stealth wallet
+  const connection = createSolanaConnection({ network: "devnet" });
+  const {
+    isInitialized: stealthInitialized,
+    metaAddress,
+  } = useStealthWallet(connection);
+  
   const [publicKey, setPublicKey] = useState<string>("");
+  const [displayAddress, setDisplayAddress] = useState<string>("");
   const [isAirdropping, setIsAirdropping] = useState(false);
+  const [useStealthMode, setUseStealthMode] = useState(false);
   const { balances, isRefreshing, fetchBalances } = useWalletBalances();
 
   // Initialize wallet and fetch balances
@@ -61,6 +74,17 @@ export default function WalletScreen() {
             pubKeyString.slice(0, 8) + "...",
           );
 
+          // Use stealth meta-address if available and enabled, otherwise use regular public key
+          if (useStealthMode && stealthInitialized && metaAddress) {
+            setDisplayAddress(metaAddress);
+            console.log(
+              "[Wallet] Using stealth meta-address:",
+              metaAddress.slice(0, 8) + "...",
+            );
+          } else {
+            setDisplayAddress(pubKeyString);
+          }
+
           // Fetch real balances from Devnet
           await fetchBalances(walletPublicKey);
         }
@@ -73,12 +97,13 @@ export default function WalletScreen() {
     return () => {
       mounted = false;
     };
-  }, [isConnected, isWalletLoading, walletPublicKey, connect, fetchBalances]);
+  }, [isConnected, isWalletLoading, walletPublicKey, connect, fetchBalances, stealthInitialized, metaAddress, useStealthMode]);
 
   const handleCopyAddress = () => {
-    if (publicKey) {
-      Clipboard.setString(publicKey);
-      Alert.alert("Copied!", "Wallet address copied to clipboard");
+    if (displayAddress) {
+      Clipboard.setString(displayAddress);
+      const addressType = displayAddress === metaAddress ? "Stealth meta-address" : "Wallet address";
+      Alert.alert("Copied!", `${addressType} copied to clipboard`);
     }
   };
 
@@ -145,6 +170,22 @@ export default function WalletScreen() {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
+  // Determine if showing stealth address
+  const isShowingStealth = useStealthMode && displayAddress === metaAddress && stealthInitialized;
+  
+  // Handler for toggling stealth mode
+  const handleToggleStealth = (value: boolean) => {
+    if (value && !stealthInitialized) {
+      Alert.alert(
+        "Stealth Not Available",
+        "Stealth wallet is still initializing. Please wait a moment.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    setUseStealthMode(value);
+  };
+
   return (
     <LinearGradient
       colors={["#0D0D0D", "#06181B", "#072B31"]}
@@ -173,15 +214,36 @@ export default function WalletScreen() {
             <View style={styles.networkIcon}>
               <SolanaIcon size={16} color="#22D3EE" />
             </View>
-            <Text style={styles.networkText}>Solana Network</Text>
+            <Text style={styles.networkText}>
+              {isShowingStealth ? "🕵️ Stealth Address" : "Solana Network"}
+            </Text>
+          </View>
+
+          {/* Stealth Mode Toggle */}
+          <View style={styles.stealthToggleContainer}>
+            <View style={styles.stealthToggleContent}>
+              <View>
+                <Text style={styles.stealthToggleTitle}>Stealth Mode</Text>
+                <Text style={styles.stealthToggleSubtitle}>
+                  {stealthInitialized ? "Enhanced privacy for receiving funds" : "Initializing..."}
+                </Text>
+              </View>
+              <Switch
+                value={useStealthMode}
+                onValueChange={handleToggleStealth}
+                trackColor={{ false: "#374151", true: "#22D3EE" }}
+                thumbColor={useStealthMode ? "#D4F9FF" : "#9CA3AF"}
+                disabled={!stealthInitialized}
+              />
+            </View>
           </View>
 
           {/* QR Code */}
           <View style={styles.qrContainer}>
             <View style={styles.qrWrapper}>
-              {publicKey ? (
+              {displayAddress ? (
                 <QRCode
-                  value={publicKey}
+                  value={displayAddress}
                   size={320}
                   backgroundColor="transparent"
                   color="#D4F9FF"
@@ -200,7 +262,12 @@ export default function WalletScreen() {
             style={styles.addressContainer}
             onPress={handleCopyAddress}
           >
-            <Text style={styles.addressText}>{formatAddress(publicKey)}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.addressText}>{formatAddress(displayAddress)}</Text>
+              {isShowingStealth && (
+                <Text style={styles.addressSubtext}>Private deposits enabled</Text>
+              )}
+            </View>
             <Copy size={24} color="#9CA3AF" weight="regular" />
           </TouchableOpacity>
 
@@ -347,6 +414,31 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     fontWeight: "500",
   },
+  stealthToggleContainer: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 10,
+    backgroundColor: "#06181B",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#22D3EE",
+    padding: 16,
+  },
+  stealthToggleContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  stealthToggleTitle: {
+    fontSize: 16,
+    color: "#FFFFFF",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  stealthToggleSubtitle: {
+    fontSize: 12,
+    color: "#9CA3AF",
+  },
   qrContainer: {
     alignItems: "center",
     paddingVertical: 20,
@@ -385,6 +477,12 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
     letterSpacing: 2,
     fontWeight: "600",
+  },
+  addressSubtext: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 4,
+    fontStyle: "italic",
   },
   actionsContainer: {
     flexDirection: "row",

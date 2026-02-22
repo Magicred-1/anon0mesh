@@ -16,6 +16,7 @@
     },
     "dapp-store": {
       "channel": "production",
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
       }

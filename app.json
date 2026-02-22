@@ -52,9 +52,9 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/icons/anonmesh_icon.png",
-        "backgroundImage": "./assets/images/icons/anonmesh_icon.png",
-        "monochromeImage": "./assets/images/icons/anonmesh_icon.png"
+        "foregroundImage": "./assets/images/favicon.png",
+        "backgroundImage": "./assets/images/favicon.png",
+        "monochromeImage": "./assets/images/favicon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -84,12 +84,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icons/anonmesh_icon.png",
+          "image": "./assets/images/favicon.png",
           "imageWidth": 300,
           "resizeMode": "contain",
           "backgroundColor": "#E6F4FE",
           "dark": {
-            "image": "./assets/images/icons/anonmesh_icon.png",
+            "image": "./assets/images/favicon.png",
             "backgroundColor": "#000000"
           }
         }
