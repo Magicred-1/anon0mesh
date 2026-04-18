@@ -11,12 +11,12 @@ interface RNGetRandomValuesModule extends TurboModule {
 // react-native-get-random-values registers this TurboModule — already linked, no rebuild needed
 const RNGetRandomValues = TurboModuleRegistry.get<RNGetRandomValuesModule>('RNGetRandomValues');
 
-// SECRET_KEY: biometric-gated — stores AES-GCM ciphertext (or legacy plain JSON array)
-// AES_KEY_STORE: OS-encrypted only (no biometric) — stores AES-256 key
-// MARKER_KEY: no auth — existence check only, avoids biometric on startup check
-const SECRET_KEY    = 'anon_wallet_secret_v1';
-const AES_KEY_STORE = 'anon_wallet_aes_v1';
-const MARKER_KEY    = 'anon_wallet_marker_v1';
+// All keys are OS-encrypted by Android Keystore. Only SECRET_KEY is also biometric-gated.
+// PUBLIC_KEY_STORE lets connect() restore the public key without biometric on every startup.
+const SECRET_KEY      = 'anon_wallet_secret_v1';   // biometric-gated — AES-GCM ciphertext
+const AES_KEY_STORE   = 'anon_wallet_aes_v1';      // OS-encrypted — AES-256 key
+const PUBLIC_KEY_STORE = 'anon_wallet_pubkey_v1';  // OS-encrypted — base58 public key
+const MARKER_KEY      = 'anon_wallet_marker_v1';   // no auth — existence check only
 
 const AUTH_OPTS: SecureStore.SecureStoreOptions = {
   requireAuthentication: true,
@@ -57,8 +57,7 @@ function aesDecrypt(aesKey: Uint8Array, payload: StoredPayload): Uint8Array {
   return gcm(aesKey, iv).decrypt(ct);
 }
 
-// Single biometric op (SECRET_KEY). AES_KEY_STORE is OS-encrypted but not biometric-gated
-// to avoid double-biometric prompt rejection on Android Keystore.
+// Requires biometric. Only called for export — NOT for normal connect().
 async function readAndDecrypt(opts: SecureStore.SecureStoreOptions): Promise<Keypair> {
   const rawPayload = await SecureStore.getItemAsync(SECRET_KEY, opts);
   if (!rawPayload) throw new Error('Wallet not found in secure storage');
@@ -79,21 +78,24 @@ async function readAndDecrypt(opts: SecureStore.SecureStoreOptions): Promise<Key
 }
 
 export class LocalWallet implements IWalletAdapter {
-  private keypair: Keypair | null = null;
+  private _publicKey: PublicKey | null = null;
 
   getMode(): WalletMode { return 'local'; }
-  getPublicKey(): PublicKey | null { return this.keypair?.publicKey ?? null; }
-  isConnected(): boolean { return this.keypair !== null; }
+  getPublicKey(): PublicKey | null { return this._publicKey; }
+  isConnected(): boolean { return this._publicKey !== null; }
 
+  // No biometric — reads public key only. Biometric fires only on exportSecretKey().
   async connect(): Promise<void> {
-    this.keypair = await readAndDecrypt(AUTH_OPTS);
+    const stored = await SecureStore.getItemAsync(PUBLIC_KEY_STORE);
+    if (!stored) throw new Error('No local wallet found — please recreate your wallet');
+    this._publicKey = new PublicKey(stored);
   }
 
   async disconnect(): Promise<void> {
-    this.keypair = null;
+    this._publicKey = null;
   }
 
-  // Re-reads from SecureStore so export triggers a fresh biometric prompt
+  // Triggers fresh biometric prompt — intentional, keeps secret key out of memory at rest
   async exportSecretKey(): Promise<Uint8Array> {
     return (await readAndDecrypt(EXPORT_OPTS)).secretKey;
   }
@@ -112,13 +114,14 @@ export class LocalWallet implements IWalletAdapter {
     const keypair = Keypair.fromSeed(seed);
     const payload = aesEncrypt(aesKey, keypair.secretKey);
 
-    // AES_KEY_STORE first (no auth) — then single biometric op for SECRET_KEY
+    // AES key and public key first (no auth), then single biometric op for secret payload
     await SecureStore.setItemAsync(AES_KEY_STORE, Buffer.from(aesKey).toString('base64'));
+    await SecureStore.setItemAsync(PUBLIC_KEY_STORE, keypair.publicKey.toBase58());
     await SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload), AUTH_OPTS);
     await SecureStore.setItemAsync(MARKER_KEY, 'true');
 
     const w = new LocalWallet();
-    w.keypair = keypair;
+    w._publicKey = keypair.publicKey;
     return w;
   }
 
@@ -126,6 +129,7 @@ export class LocalWallet implements IWalletAdapter {
     await Promise.allSettled([
       SecureStore.deleteItemAsync(SECRET_KEY),
       SecureStore.deleteItemAsync(AES_KEY_STORE),
+      SecureStore.deleteItemAsync(PUBLIC_KEY_STORE),
       SecureStore.deleteItemAsync(MARKER_KEY),
     ]);
   }
