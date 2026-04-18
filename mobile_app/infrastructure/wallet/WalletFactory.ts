@@ -1,44 +1,25 @@
-import { Platform } from 'react-native';
+import { DeviceDetector } from './DeviceDetector';
 import { LocalWallet } from './LocalWallet';
 import { MWAWallet } from './MWAWallet';
 import type { IWalletAdapter, WalletMode } from './types';
 
-// Solana Saga is manufactured by HMD Global for Solana Mobile
-const SAGA_MANUFACTURERS = ['HMD Global'];
-
-function detectSolanaMobile(): boolean {
-  if (Platform.OS !== 'android') return false;
-  const manufacturer = (Platform.constants as Record<string, unknown>).Manufacturer as string ?? '';
-  return SAGA_MANUFACTURERS.some(m => manufacturer.toLowerCase().includes(m.toLowerCase()));
-}
-
 export const WalletFactory = {
   isSolanaMobile(): boolean {
-    return detectSolanaMobile();
+    return DeviceDetector.isSolanaMobileDevice();
   },
 
   getDeviceInfo() {
-    const manufacturer = Platform.OS === 'android'
-      ? (Platform.constants as Record<string, unknown>).Manufacturer as string ?? ''
-      : '';
-    const model = Platform.OS === 'android'
-      ? (Platform.constants as Record<string, unknown>).Model as string ?? ''
-      : '';
-    return {
-      device: Platform.OS,
-      model,
-      manufacturer,
-      isSolanaMobile: detectSolanaMobile(),
-    };
+    return DeviceDetector.getDeviceInfo();
   },
 
   async hasLocalWallet(): Promise<boolean> {
-    if (detectSolanaMobile()) return MWAWallet.hasCachedToken();
-    return LocalWallet.exists();
+    return DeviceDetector.isSolanaMobileDevice()
+      ? MWAWallet.hasCachedToken()
+      : LocalWallet.exists();
   },
 
   async createAuto(): Promise<IWalletAdapter> {
-    if (detectSolanaMobile()) {
+    if (DeviceDetector.isSolanaMobileDevice()) {
       const w = new MWAWallet();
       await w.connect();
       return w;

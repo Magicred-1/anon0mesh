@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import { Alert } from 'react-native';
 import {
+  DeviceInfo,
   IWalletAdapter,
   WalletFactory,
   WalletMode,
@@ -21,12 +22,7 @@ interface WalletContextValue {
   walletMode: WalletMode | null;
   publicKey: PublicKey | null;
   isSolanaMobile: boolean;
-  deviceInfo: {
-    device: string;
-    model: string;
-    manufacturer: string;
-    isSolanaMobile: boolean;
-  } | null;
+  deviceInfo: DeviceInfo | null;
   isLoading: boolean;
   isInitialized: boolean;
   isConnected: boolean;
@@ -82,16 +78,8 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       setWalletMode(mode);
       setIsInitialized(true);
 
-      if (mode === 'mwa') {
-        // MWA already connected via createAuto
-        const pk = walletAdapter.getPublicKey();
-        setPublicKey(pk);
-        setIsConnected(true);
-      } else {
-        const pk = walletAdapter.getPublicKey();
-        setPublicKey(pk);
-        setIsConnected(true);
-      }
+      setPublicKey(walletAdapter.getPublicKey());
+      setIsConnected(true);
 
       setIsLoading(false);
     } catch (err) {
