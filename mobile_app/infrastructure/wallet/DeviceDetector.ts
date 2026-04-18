@@ -37,10 +37,13 @@ export class DeviceDetector {
 
     console.log('[DeviceDetector] Checking device:', { manufacturer, brand, model, allConstants: constants });
 
+    // Saga: Brand="solanamobile", Manufacturer="HMD Global" (NOT "solana")
+    // Seeker: Brand="solanamobile" (expected)
+    // Model-based checks in isSeekerDevice/isSagaDevice are the primary path;
+    // this brand check is a forward-compat fallback for future Solana Mobile devices.
     const isSolana = (
-      manufacturer.includes('solana') ||
-      brand.includes('solana')        ||
-      brand.includes('solanamobile')
+      brand.includes('solanamobile') ||
+      brand.includes('solana mobile')
     );
 
     console.log('[DeviceDetector] isSolanaMobileDevice returning:', isSolana);
