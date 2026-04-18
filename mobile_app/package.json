@@ -11,6 +11,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",

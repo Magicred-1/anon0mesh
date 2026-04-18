@@ -8,8 +8,9 @@ import Reanimated, {
   withRepeat, withTiming, withSequence, Easing, FadeIn,
 } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
+import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
+import { useWallet } from '@/context/WalletContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,15 +38,14 @@ function useGlass(variant: 'base' | 'soft' | 'accent' | 'strong' = 'base') {
 
 // ── QRCode ────────────────────────────────────────────────────────────────────
 
-function QRCode({ size = 180 }: { size?: number }) {
+function QRCode({ size = 180, data = 'ed25519_sol_7xKq9hF2p' }: Readonly<{ size?: number; data?: string }>) {
   const { colors } = useTheme();
   const CELLS = 25;
   const cs = size / CELLS;
 
   const bits = useMemo(() => {
-    const seed = 'ed25519_sol_7xKq9hF2p';
     let h = 0;
-    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+    for (let i = 0; i < data.length; i++) h = (h * 31 + data.charCodeAt(i)) | 0;
     const arr: boolean[][] = [];
     for (let y = 0; y < CELLS; y++) {
       const row: boolean[] = [];
@@ -56,7 +56,7 @@ function QRCode({ size = 180 }: { size?: number }) {
       arr.push(row);
     }
     return arr;
-  }, []);
+  }, [data]);
 
   const isFinder = (x: number, y: number) => {
     const inBox = (cx: number, cy: number) => x >= cx && x < cx + 7 && y >= cy && y < cy + 7;
@@ -194,6 +194,205 @@ function RadarScan() {
   );
 }
 
+// ── QRModal ───────────────────────────────────────────────────────────────────
+
+type QRTab = 'wallet' | 'reticulum';
+
+const RETICULUM_HASH = '7xKq9hF2p3aL8m';
+const RETICULUM_HANDLE = '@node_7f3a';
+
+function QRModal({ onClose }: { onClose: () => void }) {
+  const { colors } = useTheme();
+  const softGlass   = useGlass('soft');
+  const baseGlass   = useGlass();
+  const accentGlass = useGlass('accent');
+  const { publicKey } = useWallet();
+  const [tab, setTab] = useState<QRTab>('reticulum');
+  const scaleAnim   = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim,   { toValue: 1, useNativeDriver: true, bounciness: 6 }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
+  }, [scaleAnim, opacityAnim]);
+
+  const dismiss = () => {
+    Animated.parallel([
+      Animated.timing(scaleAnim,   { toValue: 0.88, duration: 160, useNativeDriver: true }),
+      Animated.timing(opacityAnim, { toValue: 0,    duration: 160, useNativeDriver: true }),
+    ]).start(onClose);
+  };
+
+  const walletPubkey = publicKey?.toBase58() ?? null;
+  const walletLabel  = walletPubkey ? walletPubkey.slice(0, 8) + '..' + walletPubkey.slice(-6) : 'not connected';
+  const qrData   = tab === 'wallet' ? (walletPubkey ?? 'no-wallet') : RETICULUM_HASH;
+  const label    = tab === 'wallet' ? walletLabel : RETICULUM_HANDLE;
+  const sublabel = tab === 'wallet' ? (walletPubkey ?? '—') : RETICULUM_HASH;
+
+  return (
+    <Modal transparent animationType="none" onRequestClose={dismiss}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.86)', opacity: opacityAnim, alignItems: 'center', justifyContent: 'center' }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
+
+        <Animated.View style={[S.qrCard, baseGlass, { transform: [{ scale: scaleAnim }] }]}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 16 }}>
+            {/* Tab switcher */}
+            <View style={[S.qrTabRow, softGlass]}>
+              {(['reticulum', 'wallet'] as QRTab[]).map(t => (
+                <Pressable
+                  key={t}
+                  onPress={() => setTab(t)}
+                  style={[S.qrTabBtn, tab === t && accentGlass, tab === t && { borderRadius: 8 }]}
+                >
+                  <Text style={[S.qrTabText, { color: tab === t ? colors.primary : colors.textTertiary }]}>
+                    {t.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]}>
+              <Feather name="x" size={14} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          {/* QR */}
+          <View style={[S.qrLargeWrap, { backgroundColor: colors.surface2, borderColor: tab === 'wallet' ? colors.primary + '40' : colors.border }]}>
+            <QRCode size={220} data={qrData} />
+          </View>
+
+          {/* Identity info */}
+          <View style={{ alignItems: 'center', marginTop: 16, gap: 4, width: '100%' }}>
+            <Text style={[S.qrModalHandle, { color: colors.textPrimary }]}>{label}</Text>
+            {/* <Text style={[S.qrModalHash, { color: colors.textTertiary }]} numberOfLines={1}>{sublabel}</Text> */}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            {tab === 'reticulum'
+              ? <Pill label="reticulum · ed25519" variant="default" dot />
+              : <Pill label="solana · ed25519" variant="primary" dot />
+            }
+          </View>
+
+          <Text style={[S.qrModalHint, { color: colors.textTertiary, marginTop: 14 }]}>
+            TAP OUTSIDE TO CLOSE
+          </Text>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
+// ── ExportWalletModal ─────────────────────────────────────────────────────────
+
+function ExportWalletModal({ onClose }: { onClose: () => void }) {
+  const { colors } = useTheme();
+  const softGlass   = useGlass('soft');
+  const { walletMode, exportPrivateKey } = useWallet();
+  const [secretKey, setSecretKey] = useState<string | null>(null);
+  const [revealed,  setRevealed]  = useState(false);
+  const [loading,   setLoading]   = useState(false);
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
+    if (walletMode === 'local') {
+      setLoading(true);
+      exportPrivateKey().then(key => { setSecretKey(key); setLoading(false); }).catch(() => setLoading(false));
+    }
+  }, [sheetAnim, walletMode, exportPrivateKey]);
+
+  const dismiss = () => {
+    Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(onClose);
+  };
+
+  const sheetY        = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [600, 0], extrapolate: 'clamp' });
+  const overlayOp     = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
+  const masked        = secretKey ? '·'.repeat(secretKey.length) : '';
+
+  return (
+    <Modal transparent animationType="none" onRequestClose={dismiss}>
+      <View style={StyleSheet.absoluteFill}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
+        </Animated.View>
+
+        <Animated.View style={[S.sheet, { backgroundColor: colors.glass, borderColor: colors.border, transform: [{ translateY: sheetY }] }]}>
+          <View style={[S.grabHandle, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
+
+          <View style={S.sheetHeader}>
+            <View>
+              <Text style={[S.sheetTag,  { color: colors.textTertiary }]}>EXPORT WALLET</Text>
+              <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>
+                {walletMode === 'mwa' ? 'not available' : 'secret key'}
+              </Text>
+            </View>
+            <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]}>
+              <Feather name="x" size={14} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          {walletMode === 'mwa' ? (
+            <View style={S.phaseCenter}>
+              <View style={[S.successIcon, { backgroundColor: colors.surface1, borderWidth: 0.5, borderColor: colors.border }]}>
+                <Feather name="lock" size={28} color={colors.textSecondary} />
+              </View>
+              <View style={{ alignItems: 'center', gap: 6 }}>
+                <Text style={[S.successTitle, { color: colors.textPrimary }]}>MWA wallet</Text>
+                <Text style={[S.exportSubText, { color: colors.textSecondary }]}>
+                  Keys are secured by your Solana Mobile device.{'\n'}Private key export is not available.
+                </Text>
+              </View>
+              <Pressable onPress={dismiss} style={[S.doneBtn, softGlass]}>
+                <Text style={[S.doneBtnText, { color: colors.textSecondary }]}>CLOSE</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ gap: 14 }}>
+              <View style={[S.exportWarn, { backgroundColor: colors.error + '14', borderColor: colors.error + '38' }]}>
+                <Feather name="alert-triangle" size={14} color={colors.error} style={{ marginTop: 1 }} />
+                <Text style={[S.exportWarnText, { color: colors.error }]}>
+                  Never share this key. Store offline only. Anyone with this key controls your wallet.
+                </Text>
+              </View>
+
+              {loading ? (
+                <View style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
+                  <Text style={[S.exportHint, { color: colors.textTertiary }]}>LOADING…</Text>
+                </View>
+              ) : secretKey ? (
+                <Pressable
+                  onPressIn={() => setRevealed(true)}
+                  onPressOut={() => setRevealed(false)}
+                  style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: revealed ? colors.primary + '60' : colors.border }]}
+                >
+                  <Text style={[S.keyText, { color: revealed ? colors.textPrimary : colors.textTertiary, letterSpacing: revealed ? 0 : 2 }]}>
+                    {revealed ? secretKey : masked.slice(0, 44) + '\n' + masked.slice(44)}
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
+                  <Text style={[S.exportHint, { color: colors.error }]}>FAILED TO LOAD KEY</Text>
+                </View>
+              )}
+
+              <Text style={[S.exportHint, { color: colors.textTertiary, textAlign: 'center' }]}>
+                HOLD TO REVEAL · BASE58 ENCODED
+              </Text>
+
+              <Pressable onPress={dismiss} style={[S.doneBtn, softGlass]}>
+                <Text style={[S.doneBtnText, { color: colors.textSecondary }]}>DONE</Text>
+              </Pressable>
+            </View>
+          )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── RNodePairModal ─────────────────────────────────────────────────────────────
 
 const HANDSHAKE_LINES = ['connecting over ble…', 'negotiating keys…', 'verifying reticulum identity…'];
@@ -263,7 +462,7 @@ function RNodePairModal({ onClose, onPaired }: { onClose: () => void; onPaired: 
           {phase === 0 && (
             <View style={S.phaseCenter}>
               <RadarScan />
-              <Text style={[S.scanSubText, { color: colors.textSecondary }]}>BLE · LORA · SERIAL</Text>
+              <Text style={[S.scanSubText, { color: colors.textSecondary }]}>BLE · LoRa · SERIAL</Text>
             </View>
           )}
 
@@ -382,6 +581,8 @@ export default function SettingsScreen() {
   const softGlass   = useGlass('soft');
 
   const [pairOpen,       setPairOpen]       = useState(false);
+  const [exportOpen,     setExportOpen]     = useState(false);
+  const [qrOpen,         setQrOpen]         = useState(false);
   const [copied,         setCopied]         = useState(false);
   const [paired,         setPaired]         = useState<PairedDevice>({ id: 'rnode_001', name: 'RNode · 410MHz', rssi: -42, serial: 'RN-914-4f2a' });
   const [notifications,  setNotifications]  = useState(true);
@@ -403,9 +604,9 @@ export default function SettingsScreen() {
           {/* ── Identity card ── */}
           <View style={{ padding: 16, paddingBottom: 8 }}>
             <View style={[S.identityCard, baseGlass]}>
-              <View style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+              <Pressable onPress={() => setQrOpen(true)} style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
                 <QRCode size={72} />
-              </View>
+              </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[S.idLabel, { color: colors.textTertiary }]}>YOUR IDENTITY</Text>
                 <Text style={[S.idHandle, { color: colors.textPrimary }]}>@node_7f3a</Text>
@@ -416,7 +617,6 @@ export default function SettingsScreen() {
                       {copied ? '✓ copied' : 'copy'}
                     </Text>
                   </Pressable>
-                  <Pill label="ed25519" variant="primary" dot />
                 </View>
               </View>
             </View>
@@ -444,7 +644,7 @@ export default function SettingsScreen() {
                     <Text style={[S.hwSerial, { color: colors.textTertiary }]}>{paired.serial}</Text>
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                       <Pill label="CONNECTED" variant="success" dot />
-                      <Pill label="LORA"      variant="default" />
+                      <Pill label="LoRa"      variant="default" />
                       <Pill label="78% BATT"  variant="default" />
                     </View>
                   </View>
@@ -467,7 +667,7 @@ export default function SettingsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[S.hwName, { color: colors.textPrimary }]}>pair an rnode</Text>
-                  <Text style={[S.hwSerial, { color: colors.textTertiary }]}>EXTEND RANGE WITH LORA HARDWARE</Text>
+                  <Text style={[S.hwSerial, { color: colors.textTertiary }]}>EXTEND RANGE WITH LoRa HARDWARE</Text>
                 </View>
                 <Feather name="chevron-right" size={13} color={colors.textTertiary} />
               </Pressable>
@@ -480,7 +680,7 @@ export default function SettingsScreen() {
             <View style={[S.section, baseGlass]}>
               <SettingsRow icon="lock"      label="biometric unlock" sub="face id · required for transactions" right={<Toggle on={biometric}  onChange={setBiometric}  />} />
               <SettingsRow icon="refresh-cw"label="rotate keypair"   sub="generate new ed25519 · keeps handle" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => {}} />
-              <SettingsRow icon="upload"    label="export seed phrase" sub="24 words · bip-39 · offline only"   right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => {}} last/>
+              <SettingsRow icon="upload"    label="export secret key"  sub="bs58 · ed25519 · offline only"     right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last/>
             </View>
           </View>
 
@@ -508,7 +708,9 @@ export default function SettingsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {pairOpen && <RNodePairModal onClose={() => setPairOpen(false)} onPaired={onPaired} />}
+      {qrOpen     && <QRModal           onClose={() => setQrOpen(false)} />}
+      {pairOpen   && <RNodePairModal   onClose={() => setPairOpen(false)}   onPaired={onPaired} />}
+      {exportOpen && <ExportWalletModal onClose={() => setExportOpen(false)} />}
     </View>
   );
 }
@@ -521,16 +723,16 @@ const S = StyleSheet.create({
   // Identity card
   identityCard: { borderRadius: 18, padding: 16, flexDirection: 'row', gap: 14, alignItems: 'center' },
   qrWrap:       { padding: 6, borderRadius: 10, borderWidth: 0.5, overflow: 'hidden' },
-  idLabel:      { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  idHandle:     { fontFamily: 'monospace', fontSize: 13, marginTop: 4, letterSpacing: 0.5 },
-  idHash:       { fontFamily: 'monospace', fontSize: 10.5, marginTop: 3 },
+  idLabel:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
+  idHandle:     { fontFamily: fontFamily.sansMd, fontSize: 13, marginTop: 4, letterSpacing: 0.5 },
+  idHash:       { fontFamily: fontFamily.sansMd, fontSize: 10.5, marginTop: 3 },
   copyBtn:      { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99 },
-  copyBtnText:  { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
+  copyBtnText:  { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
 
   // Section label
   sectionRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },
-  sectionText:      { fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  sectionActionText:{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
+  sectionText:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  sectionActionText:{ fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
 
   // Section card
   section: { borderRadius: 16, overflow: 'hidden' },
@@ -539,8 +741,8 @@ const S = StyleSheet.create({
   rowBase:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14 },
   rowIconBox: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   rowLabel:   { fontSize: 13.5, letterSpacing: -0.2 },
-  rowSub:     { fontFamily: 'monospace', fontSize: 10, letterSpacing: 0.5, marginTop: 2 },
-  valueText:  { fontFamily: 'monospace', fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
+  rowSub:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5, marginTop: 2 },
+  valueText:  { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   // Toggle
   toggleTrack: { width: 40, height: 24, borderRadius: 12, borderWidth: 0.5, overflow: 'hidden', justifyContent: 'center' },
@@ -550,36 +752,54 @@ const S = StyleSheet.create({
   hardwareCard: { borderRadius: 16, padding: 14 },
   hwIcon:       { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   hwName:       { fontSize: 14, letterSpacing: -0.2 },
-  hwSerial:     { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
+  hwSerial:     { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
   hwActions:    { flexDirection: 'row', gap: 6, marginTop: 12 },
   hwActionBtn:  { flex: 1, padding: 9, borderRadius: 10, alignItems: 'center' },
-  hwActionText: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
+  hwActionText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
   addHwBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16 },
   addHwIcon:    { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
 
   // Sign out
   signOutBtn:  { marginTop: 10, padding: 13, borderRadius: 12, borderWidth: 0.5, alignItems: 'center', backgroundColor: 'transparent' },
-  signOutText: { fontFamily: 'monospace', fontSize: 11, fontWeight: '500', letterSpacing: 3, textTransform: 'uppercase' },
+  signOutText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '500', letterSpacing: 3, textTransform: 'uppercase' },
 
   // Modal sheet
   sheet:       { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 28, borderWidth: 0.5 },
   grabHandle:  { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
   sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sheetTag:    { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
+  sheetTag:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   sheetTitle:  { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
   closeBtn:    { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
 
   // Modal phases
   phaseCenter:  { paddingVertical: 24, alignItems: 'center', gap: 16 },
-  scanSubText:  { fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  scanSubText:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
   deviceRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14, borderRadius: 14 },
   deviceIcon:   { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   deviceName:   { fontSize: 14, letterSpacing: -0.2 },
-  deviceSerial: { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3 },
-  handshakeLine:{ fontFamily: 'monospace', fontSize: 11.5, letterSpacing: 0.3 },
+  deviceSerial: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3 },
+  handshakeLine:{ fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.3 },
   successIcon:  { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   successTitle: { fontSize: 17, letterSpacing: -0.3, textAlign: 'center' },
-  successSub:   { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6 },
+  successSub:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6 },
   doneBtn:      { width: '100%', padding: 13, borderRadius: 12, alignItems: 'center', marginTop: 4 },
-  doneBtnText:  { fontFamily: 'monospace', fontSize: 11, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
+  doneBtnText:  { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
+
+  // Export wallet modal
+  exportWarn:     { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, borderWidth: 0.5 },
+  exportWarnText: { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 11, lineHeight: 17, letterSpacing: 0.2 },
+  exportSubText:  { fontFamily: fontFamily.sansMd, fontSize: 11.5, lineHeight: 18, textAlign: 'center' as const },
+  keyBox:         { padding: 14, borderRadius: 14, borderWidth: 0.5, alignItems: 'center' as const },
+  keyText:        { fontFamily: fontFamily.mono, fontSize: 11, lineHeight: 20 },
+  exportHint:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
+
+  // QR modal
+  qrTabRow:      { flexDirection: 'row' as const, borderRadius: 10, padding: 3, gap: 2 },
+  qrTabBtn:      { paddingHorizontal: 12, paddingVertical: 6 },
+  qrTabText:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' as const },
+  qrCard:        { borderRadius: 24, padding: 20, alignItems: 'center' as const, marginHorizontal: 32 },
+  qrLargeWrap:   { padding: 10, borderRadius: 14, borderWidth: 0.5, overflow: 'hidden' as const },
+  qrModalHandle: { fontFamily: fontFamily.sansMd, fontSize: 16, letterSpacing: -0.3 },
+  qrModalHash:   { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5 },
+  qrModalHint:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' as const },
 });

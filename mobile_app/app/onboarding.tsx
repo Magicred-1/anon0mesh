@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useWallet } from '@/context/WalletContext';
+import { fontFamily } from '@/theme';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -213,12 +214,12 @@ const S = StyleSheet.create({
 
   logoContainer:    { alignItems: 'center', marginBottom: 80 },
   logoImage:        { width: 320, height: 76, marginBottom: 20 },
-  tagline:          { fontFamily: 'monospace', fontSize: 14, color: CYAN, letterSpacing: 3 },
-  generatedNickname:{ fontFamily: 'monospace', fontSize: 16, color: CYAN, letterSpacing: 2, marginTop: 20, opacity: 0.8 },
+  tagline:          { fontFamily: fontFamily.sansMd, fontSize: 14, color: CYAN, letterSpacing: 3 },
+  generatedNickname:{ fontFamily: fontFamily.sansMd, fontSize: 16, color: CYAN, letterSpacing: 2, marginTop: 20, opacity: 0.8 },
 
   instructionsContainer: { alignItems: 'center', marginBottom: 80, paddingHorizontal: 20 },
   instructionsText: {
-    fontFamily: 'monospace', fontSize: 13, color: '#8fa9a9',
+    fontFamily: fontFamily.sansMd, fontSize: 13, color: '#8fa9a9',
     textAlign: 'center', lineHeight: 24, letterSpacing: 2,
   },
 
@@ -237,7 +238,7 @@ const S = StyleSheet.create({
   },
   btnSecondary: { opacity: 0.6, shadowOpacity: 0.3 },
   btnText: {
-    fontFamily: 'monospace', fontSize: 20, fontWeight: '700',
+    fontFamily: fontFamily.sansMd, fontSize: 20, fontWeight: '700',
     color: CYAN, letterSpacing: 4,
     textShadowColor: CYAN, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
   },
@@ -248,10 +249,10 @@ const S = StyleSheet.create({
     alignItems: 'center', justifyContent: 'space-between',
     paddingTop: 80, paddingBottom: 100, paddingHorizontal: 20,
   },
-  enteringText:    { fontFamily: 'monospace', fontSize: 14, color: '#8fa9a9', letterSpacing: 3 },
+  enteringText:    { fontFamily: fontFamily.sansMd, fontSize: 14, color: '#8fa9a9', letterSpacing: 3 },
   overlayMid:      { alignItems: 'center', flex: 1, justifyContent: 'center' },
-  overlayStatus:   { fontFamily: 'monospace', fontSize: 14, color: CYAN, letterSpacing: 3 },
-  overlayNickname: { fontFamily: 'monospace', fontSize: 16, color: CYAN, letterSpacing: 2, marginTop: 12 },
+  overlayStatus:   { fontFamily: fontFamily.sansMd, fontSize: 14, color: CYAN, letterSpacing: 3 },
+  overlayNickname: { fontFamily: fontFamily.sansMd, fontSize: 16, color: CYAN, letterSpacing: 2, marginTop: 12 },
   overlayBtnWrap:  { width: '100%', alignItems: 'center', gap: 16 },
-  overlayDetail:   { fontFamily: 'monospace', fontSize: 12, color: '#8fa9a9', letterSpacing: 2, textAlign: 'center' },
+  overlayDetail:   { fontFamily: fontFamily.sansMd, fontSize: 12, color: '#8fa9a9', letterSpacing: 2, textAlign: 'center' },
 });

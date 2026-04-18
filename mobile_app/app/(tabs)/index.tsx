@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
+import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -245,7 +245,7 @@ function InlineTxCard({ m }: { m: TxMsg }) {
             <View key={i} style={S.txRoutingRow}>
               <Text style={[S.txRoutingKey, { color: colors.textTertiary }]}>shard·{i + 1}</Text>
               <Text style={[S.txRoutingVal, { color: colors.textTertiary }]}>{s}</Text>
-              <Text style={{ color: colors.primary, fontFamily: 'monospace', fontSize: 11 }}>✓</Text>
+              <Text style={{ color: colors.primary, fontFamily: fontFamily.sansMd, fontSize: 11 }}>✓</Text>
             </View>
           ))} */}
         </View>
@@ -558,13 +558,13 @@ const S = StyleSheet.create({
   // System line
   sysRow:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, paddingTop: 10, paddingBottom: 18 },
   sysDash: { flex: 1, height: 0.5 },
-  sysText: { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2, marginHorizontal: 10 },
+  sysText: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, marginHorizontal: 10 },
 
   // Bubble meta
   metaRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  metaFrom:  { fontFamily: 'monospace', fontSize: 10, letterSpacing: 0.5 },
-  metaTime:  { fontFamily: 'monospace', fontSize: 10, letterSpacing: 0.5 },
-  metaLabel: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 1.5 },
+  metaFrom:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5 },
+  metaTime:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5 },
+  metaLabel: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5 },
 
   // Chat bubble
   bubbleWrap: { paddingHorizontal: 16, marginBottom: 14 },
@@ -575,38 +575,38 @@ const S = StyleSheet.create({
   specialBubble: { maxWidth: '82%', padding: 14, borderRadius: 16 },
   assetRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   assetDot:   { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  assetDotText: { fontFamily: 'monospace', fontSize: 11, fontWeight: '600' },
+  assetDotText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600' },
   assetDotSm:   { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  assetDotSmText: { fontFamily: 'monospace', fontSize: 10, fontWeight: '600' },
-  reqLabel:     { fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
-  reqAmount:    { fontFamily: 'monospace', fontSize: 20, fontWeight: '500' },
-  reqAssetText: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 0.5 },
+  assetDotSmText: { fontFamily: fontFamily.sansMd, fontSize: 10, fontWeight: '600' },
+  reqLabel:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
+  reqAmount:    { fontFamily: fontFamily.sansMd, fontSize: 20, fontWeight: '500' },
+  reqAssetText: { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5 },
   noteText:     { fontSize: 12.5, fontStyle: 'italic', lineHeight: 18, marginBottom: 10 },
   payBtn:       { flex: 1, padding: 9, borderRadius: 10, alignItems: 'center' },
   declineBtn:   { padding: 9, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center' },
-  actionBtnText:{ fontFamily: 'monospace', fontSize: 10, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
+  actionBtnText:{ fontFamily: fontFamily.sansMd, fontSize: 10, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
   sentFooter:   { borderTopWidth: 0.5, paddingTop: 6 },
-  sentFooterText: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
+  sentFooterText: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
   qrIconBox:    { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   addrAskText:  { fontSize: 13.5, lineHeight: 19 },
   fullBtn:      { padding: 9, borderRadius: 10, alignItems: 'center' },
-  sharedLabel:  { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
+  sharedLabel:  { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   addrChip:     { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 9, paddingHorizontal: 11, borderRadius: 10 },
-  addrChipText: { flex: 1, fontFamily: 'monospace', fontSize: 11.5, letterSpacing: 0.3 },
+  addrChipText: { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.3 },
 
   // Tx card
   txWrap:       { paddingHorizontal: 16, paddingBottom: 14 },
   txCard:       { padding: 12, paddingHorizontal: 14, borderRadius: 14 },
   txCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  txConfText:   { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
+  txConfText:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
   txAmountRow:  { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 },
-  txAmount:     { fontFamily: 'monospace', fontSize: 26, fontWeight: '500' },
-  txAsset:      { fontFamily: 'monospace', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
+  txAmount:     { fontFamily: fontFamily.sansMd, fontSize: 26, fontWeight: '500' },
+  txAsset:      { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
   txRoutingRow: { flexDirection: 'row', gap: 6 },
-  txRoutingKey: { fontFamily: 'monospace', fontSize: 11, width: 52 },
-  txRoutingVal: { fontFamily: 'monospace', fontSize: 11, flex: 1 },
+  txRoutingKey: { fontFamily: fontFamily.sansMd, fontSize: 11, width: 52 },
+  txRoutingVal: { fontFamily: fontFamily.sansMd, fontSize: 11, flex: 1 },
   txFooter:     { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 0.5 },
-  txFooterText: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 0.5 },
+  txFooterText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5 },
 
   // Composer
   composer:       { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, paddingHorizontal: 14, paddingBottom: 12, borderTopWidth: 0.5 },
@@ -619,27 +619,27 @@ const S = StyleSheet.create({
   threadHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 0.5 },
   hamburger:    { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
   onlineDot:    { width: 6, height: 6, borderRadius: 3 },
-  threadHandle: { fontFamily: 'monospace', fontSize: 14 },
-  threadMeta:   { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 1.5 },
+  threadHandle: { fontFamily: fontFamily.sansMd, fontSize: 14 },
+  threadMeta:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5 },
 
   // Peers drawer
   drawerHeader:  { padding: 16, paddingBottom: 10 },
-  drawerLabel:   { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
+  drawerLabel:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
   drawerTitle:   { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
-  drawerSubtitle:{ fontFamily: 'monospace', fontSize: 10.5 },
+  drawerSubtitle:{ fontFamily: fontFamily.sansMd, fontSize: 10.5 },
   searchBox:     { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, paddingHorizontal: 11, borderRadius: 10 },
-  searchInput:   { flex: 1, fontSize: 12, fontFamily: 'monospace' },
+  searchInput:   { flex: 1, fontSize: 12, fontFamily: fontFamily.sansMd },
   peerRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, marginBottom: 2, borderWidth: 0.5 },
   peerAvatarWrap:{ position: 'relative', width: 34, height: 34 },
   peerAvatar:    { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
-  peerAvatarText:{ fontFamily: 'monospace', fontSize: 11 },
+  peerAvatarText:{ fontFamily: fontFamily.sansMd, fontSize: 11 },
   peerDot:       { position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5 },
   peerInfo:      { flex: 1, minWidth: 0 },
   peerInfoRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
-  peerHandle:    { fontFamily: 'monospace', fontSize: 12, flex: 1, letterSpacing: 0.3 },
-  peerTime:      { fontFamily: 'monospace', fontSize: 9 },
+  peerHandle:    { fontFamily: fontFamily.sansMd, fontSize: 12, flex: 1, letterSpacing: 0.3 },
+  peerTime:      { fontFamily: fontFamily.sansMd, fontSize: 9 },
   peerLast:      { fontSize: 11, flex: 1 },
-  peerMeta:      { fontFamily: 'monospace', fontSize: 8.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
+  peerMeta:      { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
   newThreadBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 11, borderRadius: 12 },
-  newThreadText: { fontFamily: 'monospace', fontSize: 10.5, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
+  newThreadText: { fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
 });

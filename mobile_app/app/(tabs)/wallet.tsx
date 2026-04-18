@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
+import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui';
 
 // ── useGlass ──────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ type Tab   = 'send' | 'swap' | 'yield';
 function AssetDot({ asset, size = 28 }: { asset: Pick<Asset, 'sym' | 'color'>; size?: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: asset.color, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <Text style={{ fontFamily: 'monospace', fontSize: size * 0.32, fontWeight: '600', color: '#fff' }}>
+      <Text style={{ fontFamily: fontFamily.sansMd, fontSize: size * 0.32, fontWeight: '600', color: '#fff' }}>
         {asset.sym[0]}
       </Text>
     </View>
@@ -190,7 +190,7 @@ function SendPanel() {
             const active  = phase === i + 1;
             return (
               <View key={i} style={S.progressLine}>
-                <Text style={{ color: reached ? colors.primary : colors.textTertiary, width: 14, fontFamily: 'monospace' }}>
+                <Text style={{ color: reached ? colors.primary : colors.textTertiary, width: 14, fontFamily: fontFamily.sansMd }}>
                   {reached ? '✓' : active ? '›' : '·'}
                 </Text>
                 <Text style={[S.progressText, { color: reached ? colors.textPrimary : active ? colors.textSecondary : colors.textTertiary }]}>
@@ -486,65 +486,65 @@ const S = StyleSheet.create({
   // Hero
   hero:       { padding: 20, paddingTop: 16, paddingBottom: 18 },
   heroTop:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 2.5 },
+  totalLabel: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2.5 },
   hideBtn:    { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  balanceAmt: { fontFamily: 'monospace', fontSize: 42, fontWeight: '500', letterSpacing: -1.5 },
-  heroGain:   { fontFamily: 'monospace', fontSize: 10.5, letterSpacing: 0.5 },
+  balanceAmt: { fontFamily: fontFamily.sansMd, fontSize: 42, fontWeight: '500', letterSpacing: -1.5 },
+  heroGain:   { fontFamily: fontFamily.sansMd, fontSize: 10.5, letterSpacing: 0.5 },
 
   // Tabs
   tabBar:   { flexDirection: 'row', padding: 4, marginHorizontal: 20, borderRadius: 12, gap: 2 },
   tabBtn:   { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
-  tabLabel: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' },
+  tabLabel: { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' },
 
   // Panel / shared
   panel:    { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16, gap: 12 },
   card:     { borderRadius: 16, padding: 12 },
-  cardLabel:{ fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  privLabel:{ fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
+  cardLabel:{ fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
+  privLabel:{ fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
 
   // Send — asset picker
   assetBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, paddingHorizontal: 11, borderRadius: 10, borderWidth: 0.5, borderColor: 'transparent' },
-  assetSym: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 0.5 },
-  assetBal: { fontFamily: 'monospace', fontSize: 9 },
+  assetSym: { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5 },
+  assetBal: { fontFamily: fontFamily.sansMd, fontSize: 9 },
   privDot:  { width: 5, height: 5, borderRadius: 3 },
 
   // Send — recipient
-  textField:     { fontSize: 14, fontFamily: 'monospace', letterSpacing: 0.5, padding: 0 },
-  resolvedBadge: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 },
+  textField:     { fontSize: 14, fontFamily: fontFamily.sansMd, letterSpacing: 0.5, padding: 0 },
+  resolvedBadge: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2 },
 
   // Send — amount
   amountHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  maxBtn:       { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
+  maxBtn:       { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   amountInput:  { fontSize: 40, fontWeight: '500', letterSpacing: -1.5, padding: 0 },
-  amountSym:    { fontFamily: 'monospace', fontSize: 13, letterSpacing: 1.5 },
-  usdHint:      { fontFamily: 'monospace', fontSize: 11, marginTop: 4 },
+  amountSym:    { fontFamily: fontFamily.sansMd, fontSize: 13, letterSpacing: 1.5 },
+  usdHint:      { fontFamily: fontFamily.sansMd, fontSize: 11, marginTop: 4 },
 
   // Progress
   progressLine: { flexDirection: 'row', gap: 10, paddingVertical: 3 },
-  progressText: { fontFamily: 'monospace', fontSize: 11, letterSpacing: 0.5, flex: 1 },
+  progressText: { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, flex: 1 },
 
   // Action
   actionBtn:   { padding: 15, borderRadius: 14, alignItems: 'center' },
-  actionLabel: { fontFamily: 'monospace', fontSize: 12, letterSpacing: 3.5, textTransform: 'uppercase', fontWeight: '600' },
+  actionLabel: { fontFamily: fontFamily.sansMd, fontSize: 12, letterSpacing: 3.5, textTransform: 'uppercase', fontWeight: '600' },
 
   // Swap
   swapInput:     { fontSize: 30, fontWeight: '500', letterSpacing: -0.5, padding: 0 },
   assetPill:     { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, paddingHorizontal: 11, borderRadius: 99 },
-  assetPillLabel:{ fontFamily: 'monospace', fontSize: 12, letterSpacing: 0.5 },
-  balHint:       { fontFamily: 'monospace', fontSize: 10.5, marginTop: 4 },
+  assetPillLabel:{ fontFamily: fontFamily.sansMd, fontSize: 12, letterSpacing: 0.5 },
+  balHint:       { fontFamily: fontFamily.sansMd, fontSize: 10.5, marginTop: 4 },
   flipWrap:      { alignItems: 'center', marginVertical: -20, zIndex: 2 },
   flipBtn:       { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   rateRow:       { flexDirection: 'row', justifyContent: 'space-between' },
-  rateKey:       { fontFamily: 'monospace', fontSize: 11 },
-  rateVal:       { fontFamily: 'monospace', fontSize: 11 },
+  rateKey:       { fontFamily: fontFamily.sansMd, fontSize: 11 },
+  rateVal:       { fontFamily: fontFamily.sansMd, fontSize: 11 },
 
   // Yield
-  earningsAmt:  { fontFamily: 'monospace', fontSize: 28, fontWeight: '500', letterSpacing: -0.5 },
+  earningsAmt:  { fontFamily: fontFamily.sansMd, fontSize: 28, fontWeight: '500', letterSpacing: -0.5 },
   vaultHeader:  { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   vaultName:    { fontSize: 14, letterSpacing: -0.2 },
-  vaultMeta:    { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
-  vaultApy:     { fontFamily: 'monospace', fontSize: 16, fontWeight: '500', letterSpacing: -0.2 },
+  vaultMeta:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
+  vaultApy:     { fontFamily: fontFamily.sansMd, fontSize: 16, fontWeight: '500', letterSpacing: -0.2 },
   vaultExpanded:{ padding: 14, paddingTop: 2, borderTopWidth: 0.5 },
   vaultBtn:     { padding: 11, borderRadius: 10, alignItems: 'center' },
-  vaultBtnLabel:{ fontFamily: 'monospace', fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+  vaultBtnLabel:{ fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
 });

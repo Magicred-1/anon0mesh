@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
+import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ function MeshMap({ selected, onSelect }: Readonly<{
               }}>
                 <Text style={{
                   position: 'absolute', top: 4 * scale, left: 6 * scale,
-                  fontFamily: 'monospace', fontSize: Math.max(5, 6.5 * scale),
+                  fontFamily: fontFamily.sansMd, fontSize: Math.max(5, 6.5 * scale),
                   letterSpacing: 1.5,
                   color: isCyan ? 'rgba(0,229,255,0.45)' : 'rgba(122,157,181,0.38)',
                 }}>{c.label}</Text>
@@ -379,35 +379,35 @@ const S = StyleSheet.create({
 
   header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 },
   headerTitle: { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
-  headerSub:   { fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginTop: 2 },
+  headerSub:   { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginTop: 2 },
 
   mapOuter:       { borderWidth: 0.5, overflow: 'hidden' },
   mapHeader:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 9, borderBottomWidth: 0.5, gap: 8 },
-  mapHeaderLabel: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', flex: 1 },
-  mapLive:        { fontFamily: 'monospace', fontSize: 9, letterSpacing: 2 },
-  mapLabel:       { position: 'absolute', width: 44, textAlign: 'center', fontFamily: 'monospace', letterSpacing: 0.5 },
+  mapHeaderLabel: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', flex: 1 },
+  mapLive:        { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2 },
+  mapLabel:       { position: 'absolute', width: 44, textAlign: 'center', fontFamily: fontFamily.sansMd, letterSpacing: 0.5 },
   pulseDot:       { position: 'absolute', width: 7.2, height: 7.2, borderRadius: 3.6, shadowRadius: 6, shadowOpacity: 0.8, shadowOffset: { width: 0, height: 0 } },
 
   nodeInfoBar:    { position: 'absolute', bottom: 28, left: 12, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, borderWidth: 0.5 },
-  nodeInfoHandle: { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 },
-  nodeInfoMeta:   { fontFamily: 'monospace', fontSize: 9, letterSpacing: 1 },
+  nodeInfoHandle: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1 },
+  nodeInfoMeta:   { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1 },
 
   filterBar:   { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2, gap: 6 },
   filterChip:  { paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: 4 },
-  filterText:  { fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  filterText:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
 
   sectionRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  sectionText: { fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  sectionCount:{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 1 },
+  sectionText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  sectionCount:{ fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
 
   nodeList: { marginHorizontal: 20, borderRadius: 16, overflow: 'hidden' },
 
   nodeRow:      { flexDirection: 'row', alignItems: 'center', padding: 12, paddingHorizontal: 20, gap: 12, borderBottomWidth: 0.5 },
   hopBadge:     { width: 28, height: 28, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  hopNum:       { fontFamily: 'monospace', fontSize: 11 },
+  hopNum:       { fontFamily: fontFamily.sansMd, fontSize: 11 },
   nodeHandleRow:{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  nodeHandle:   { fontFamily: 'monospace', fontSize: 13, letterSpacing: 0.2, flexShrink: 1 },
+  nodeHandle:   { fontFamily: fontFamily.sansMd, fontSize: 13, letterSpacing: 0.2, flexShrink: 1 },
   nodeMeta:     { flexDirection: 'row', gap: 10, marginTop: 4 },
-  nodeMetaText: { fontFamily: 'monospace', fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
+  nodeMetaText: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
   nodeRight:    { flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 },
 });
