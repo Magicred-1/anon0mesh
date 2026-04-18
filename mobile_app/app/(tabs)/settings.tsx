@@ -11,6 +11,7 @@ import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { useWallet } from '@/context/WalletContext';
+import { useRouter } from 'expo-router';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -589,6 +590,14 @@ export default function SettingsScreen() {
   const [meshOnCell,     setMeshOnCell]     = useState(false);
   const [biometric,      setBiometric]      = useState(true);
 
+  const router = useRouter();
+  const { disconnect, isLoading: walletLoading } = useWallet();
+
+  const handleSignOut = useCallback(async () => {
+    await disconnect();
+    router.replace('/onboarding');
+  }, [disconnect, router]);
+
   const copyHandle = useCallback(() => {
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
@@ -701,8 +710,14 @@ export default function SettingsScreen() {
               <SettingsRow label="app version"    right={<Text style={[S.valueText, { color: colors.textSecondary }]}>0.4.1 · build 2026.04</Text>} last/>
             </View>
 
-            <Pressable style={[S.signOutBtn, { borderColor: colors.error + '38' }]}>
-              <Text style={[S.signOutText, { color: colors.error }]}>SIGN OUT · BURN SESSION</Text>
+            <Pressable
+              onPress={handleSignOut}
+              disabled={walletLoading}
+              style={[S.signOutBtn, { borderColor: colors.error + '38', opacity: walletLoading ? 0.5 : 1 }]}
+            >
+              <Text style={[S.signOutText, { color: colors.error }]}>
+                {walletLoading ? 'DISCONNECTING…' : 'SIGN OUT · BURN SESSION'}
+              </Text>
             </Pressable>
           </View>
         </ScrollView>

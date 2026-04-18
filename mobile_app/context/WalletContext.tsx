@@ -84,9 +84,10 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
 
       setIsLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to initialize wallet');
+      const msg = err instanceof Error ? err.message : 'Failed to initialize wallet';
+      setError(msg);
       setIsLoading(false);
-      Alert.alert('Wallet Error', 'Failed to initialize wallet. Please try again.');
+      Alert.alert('Wallet Error', msg);
     }
   }, [router]);
 
@@ -106,9 +107,10 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       setError(null);
       finalize(await WalletFactory.createLocal());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create wallet');
+      const msg = err instanceof Error ? err.message : 'Failed to create wallet';
+      setError(msg);
       setIsLoading(false);
-      Alert.alert('Wallet Error', 'Failed to create wallet. Please try again.');
+      Alert.alert('Wallet Error', msg);
     }
   }, [finalize]);
 
