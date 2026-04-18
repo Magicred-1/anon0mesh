@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
-import { useGlass } from './useGlass';
+import { useGlass } from '../../hooks/useGlass';
 import type { ChatMsg } from './types';
 
 interface Props { m: ChatMsg }

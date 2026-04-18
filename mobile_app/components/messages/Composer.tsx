@@ -2,7 +2,7 @@ import React, { memo, useState } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
-import { useGlass } from './useGlass';
+import { useGlass } from '../../hooks/useGlass';
 
 interface Props { onSend: (text: string) => void }
 

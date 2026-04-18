@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
-import { useGlass } from './useGlass';
+import { useGlass } from '../../hooks/useGlass';
 import { BLUE } from './constants';
 import type { TxMsg } from './types';
 

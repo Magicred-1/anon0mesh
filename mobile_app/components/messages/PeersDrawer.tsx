@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
-import { useGlass } from './useGlass';
+import { useGlass } from '../../hooks/useGlass';
 import { PEERS, type Peer } from './constants';
 
 interface Props {
@@ -23,9 +23,9 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick }: Props) 
     <View style={{ flex: 1 }}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: 'transparent' }}>
         <View style={S.header}>
-          <Text style={[S.label, { color: colors.textTertiary }]}>PEERS</Text>
+          <Text style={[S.label, { color: colors.textTertiary }]}>anonmesh</Text>
           <View style={S.titleRow}>
-            <Text style={[S.title, { color: colors.textPrimary }]}>mesh</Text>
+            <Text style={[S.title, { color: colors.textPrimary }]}>connected peers</Text>
             <Text style={[S.subtitle, { color: colors.textTertiary }]}>{onlineCount}/{PEERS.length} online</Text>
           </View>
         </View>
@@ -87,7 +87,7 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick }: Props) 
       <View style={S.footer}>
         <Pressable style={[S.newBtn, accentGlass]}>
           <Feather name="plus" size={13} color={colors.primary} />
-          <Text style={[S.newBtnText, { color: colors.primary }]}>NEW THREAD</Text>
+          <Text style={[S.newBtnText, { color: colors.primary }]}>NEW MESSAGE</Text>
         </Pressable>
       </View>
     </View>

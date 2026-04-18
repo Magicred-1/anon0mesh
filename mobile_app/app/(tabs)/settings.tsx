@@ -197,10 +197,10 @@ function RadarScan() {
 
 // ── QRModal ───────────────────────────────────────────────────────────────────
 
-type QRTab = 'wallet' | 'reticulum';
+type QRTab = 'wallet' | 'anonmesh';
 
-const RETICULUM_HASH = '7xKq9hF2p3aL8m';
-const RETICULUM_HANDLE = '@node_7f3a';
+const ANONMESH_HASH = '7xKq9hF2p3aL8m';
+const ANONMESH_HANDLE = '@node_7f3a';
 
 function QRModal({ onClose }: { onClose: () => void }) {
   const { colors } = useTheme();
@@ -208,7 +208,7 @@ function QRModal({ onClose }: { onClose: () => void }) {
   const baseGlass   = useGlass();
   const accentGlass = useGlass('accent');
   const { publicKey } = useWallet();
-  const [tab, setTab] = useState<QRTab>('reticulum');
+  const [tab, setTab] = useState<QRTab>('anonmesh');
   const scaleAnim   = useRef(new Animated.Value(0.85)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -228,9 +228,9 @@ function QRModal({ onClose }: { onClose: () => void }) {
 
   const walletPubkey = publicKey?.toBase58() ?? null;
   const walletLabel  = walletPubkey ? walletPubkey.slice(0, 8) + '..' + walletPubkey.slice(-6) : 'not connected';
-  const qrData   = tab === 'wallet' ? (walletPubkey ?? 'no-wallet') : RETICULUM_HASH;
-  const label    = tab === 'wallet' ? walletLabel : RETICULUM_HANDLE;
-  const sublabel = tab === 'wallet' ? (walletPubkey ?? '—') : RETICULUM_HASH;
+  const qrData   = tab === 'wallet' ? (walletPubkey ?? 'no-wallet') : ANONMESH_HASH;
+  const label    = tab === 'wallet' ? walletLabel : ANONMESH_HANDLE;
+  const sublabel = tab === 'wallet' ? (walletPubkey ?? '—') : ANONMESH_HASH;
 
   return (
     <Modal transparent animationType="none" onRequestClose={dismiss}>
@@ -242,7 +242,7 @@ function QRModal({ onClose }: { onClose: () => void }) {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 16 }}>
             {/* Tab switcher */}
             <View style={[S.qrTabRow, softGlass]}>
-              {(['reticulum', 'wallet'] as QRTab[]).map(t => (
+              {(['anonmesh', 'wallet'] as QRTab[]).map(t => (
                 <Pressable
                   key={t}
                   onPress={() => setTab(t)}
@@ -271,9 +271,9 @@ function QRModal({ onClose }: { onClose: () => void }) {
           </View>
 
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            {tab === 'reticulum'
-              ? <Pill label="reticulum · ed25519" variant="default" dot />
-              : <Pill label="solana · ed25519" variant="primary" dot />
+            {tab === 'anonmesh'
+              ? <Pill label="anonmesh" variant="default" dot />
+              : <Pill label="solana" variant="primary" dot />
             }
           </View>
 

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
-import { Pill } from '@/components/ui/Pill';
 import { useGlass } from '@/hooks/useGlass';
 import { MeshMap }  from '@/components/nodes/MeshMap';
 import { NodeRow }  from '@/components/nodes/NodeRow';
@@ -27,7 +26,6 @@ export default function NodesScreen() {
               <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
               <Text style={[S.sub,   { color: colors.textTertiary }]}>ANONMESH</Text>
             </View>
-            <Pill label="CONNECTED" variant="success" dot />
           </View>
 
           <View style={{ paddingTop: 14, paddingHorizontal: 20 }}>

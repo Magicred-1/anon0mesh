@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
-import { useGlass } from './useGlass';
+import { useGlass } from '../../hooks/useGlass';
 
 interface Props {
   peer: string;

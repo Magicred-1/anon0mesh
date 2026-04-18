@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { fontFamily, useTheme } from '@/theme';
-import { useGlass } from './useGlass';
+import { useGlass } from '../../hooks/useGlass';
 import { BubbleHeader } from './BubbleHeader';
 import { ASSET_COLORS, BLUE } from './constants';
 import type { ReqMoneyMsg } from './types';

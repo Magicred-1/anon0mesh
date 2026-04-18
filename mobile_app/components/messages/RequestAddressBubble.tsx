@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
-import { useGlass } from './useGlass';
+import { useGlass } from '../../hooks/useGlass';
 import { BubbleHeader } from './BubbleHeader';
 import type { ReqAddrMsg } from './types';
 
