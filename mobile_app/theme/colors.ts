@@ -1,117 +1,128 @@
 export const palette = {
-  // Neutrals
-  black: '#000000',
-  grey950: '#090A0C',
-  grey900: '#0E1015',
-  grey850: '#141720',
-  grey800: '#1C2030',
-  grey700: '#2A2F42',
-  grey600: '#3D4460',
-  grey500: '#5A6380',
-  grey400: '#8A94B0',
-  grey300: '#B0B8D0',
-  grey200: '#CDD3E2',
-  grey100: '#E8EBEE',
-  white: '#FFFFFF',
+  black:   '#000000',
+  white:   '#ffffff',
 
-  // Primary — teal/cyan
-  teal900: '#003D36',
-  teal700: '#007A6A',
-  teal500: '#00C4A7',
-  teal400: '#00E0BF',
-  teal300: '#4DEFD9',
-  teal200: '#A0F5EA',
+  // Void — dark navy-teal backgrounds (anonme.sh base)
+  void950: '#00080c',
+  void900: '#030c12',
+  void850: '#071520',
+  void800: '#0c1e2e',
+  void700: '#12263c',
+  void600: '#1b3550',
+  void500: '#2d4f68',
+  void400: '#527090',
+  void300: '#7a9db5',
+  void200: '#aac8da',
+  void100: '#daeaf3',
 
-  // Accent — violet
-  violet900: '#1A0033',
-  violet700: '#4B00A0',
-  violet500: '#7B2FBE',
-  violet400: '#9B4FDE',
-  violet300: '#C090F0',
+  // Text grays — from anonme.sh carbon design system
+  gray90:  '#c6c6c6',
+  gray70:  '#8d8d8d',
+  gray50:  '#525252',
+  gray30:  '#393939',
+
+  // Cyan — anonme.sh primary (#00e5ff)
+  cyan900: '#001520',
+  cyan700: '#004d66',
+  cyan500: '#00a8c4',
+  cyan400: '#00cde8',
+  cyan300: '#00e5ff',
+  cyan200: '#66eeff',
+  cyan100: '#ccf9ff',
+
+  // Neon green — anonme.sh success / accent
+  neon900: '#0a2c02',
+  neon700: '#106b02',
+  neon500: '#009f00',
+  neon400: '#00cf00',
+  neon300: '#5cff3b',
+  neon200: '#b2ff94',
 
   // Semantic
-  red500: '#FF4D4D',
-  red300: '#FF9090',
-  yellow500: '#FFB800',
-  yellow300: '#FFDA70',
-  green500: '#00D46A',
-  green300: '#7AEFB0',
+  red500:    '#da1e28',
+  red300:    '#ff6b6b',
+  yellow500: '#f1c21b',
+  yellow300: '#f7d872',
+  green500:  '#198038',
+  green300:  '#42be65',
 } as const;
 
 export type ColorPalette = typeof palette;
 
 export const darkColors = {
   // Surfaces
-  background: palette.grey950,
-  surface0: palette.grey900,
-  surface1: palette.grey850,
-  surface2: palette.grey800,
-  surface3: palette.grey700,
+  background: palette.void950,
+  surface0:   palette.void900,
+  surface1:   palette.void850,
+  surface2:   palette.void800,
+  surface3:   palette.void700,
 
   // Text
-  textPrimary: palette.white,
-  textSecondary: palette.grey300,
-  textTertiary: palette.grey400,
-  textDisabled: palette.grey500,
-  textInverse: palette.grey950,
+  textPrimary:   palette.white,
+  textSecondary: palette.gray90,
+  textTertiary:  palette.gray70,
+  textDisabled:  palette.gray50,
+  textInverse:   palette.void950,
 
   // Brand
-  primary: palette.teal400,
-  primaryDim: palette.teal500,
-  primarySubtle: palette.teal900,
-  accent: palette.violet400,
-  accentSubtle: palette.violet900,
+  primary:       palette.cyan300,
+  primaryDim:    palette.cyan500,
+  primarySubtle: 'rgba(0,229,255,0.08)',
+
+  accent:        palette.neon300,
+  accentSubtle:  'rgba(0,207,0,0.10)',
 
   // Semantic
-  error: palette.red500,
-  errorSubtle: '#330000',
-  warning: palette.yellow500,
-  warningSubtle: '#332500',
-  success: palette.green500,
-  successSubtle: '#003320',
+  error:         palette.red500,
+  errorSubtle:   '#330008',
+  warning:       palette.yellow500,
+  warningSubtle: '#2c2200',
+  success:       palette.neon300,
+  successSubtle: palette.neon900,
 
-  // Borders
-  borderSubtle: palette.grey800,
-  border: palette.grey700,
-  borderStrong: palette.grey600,
+  // Borders — cyan-glow tinted
+  borderSubtle: 'rgba(0,229,255,0.06)',
+  border:       'rgba(0,229,255,0.13)',
+  borderStrong: 'rgba(0,229,255,0.28)',
 
   // Overlays
-  overlay: 'rgba(0,0,0,0.6)',
-  glass: 'rgba(14,16,21,0.85)',
+  overlay: 'rgba(0,0,0,0.72)',
+  glass:   'rgba(0,8,12,0.92)',
 } as const;
 
 export const lightColors = {
-  background: '#F0F4F8',
-  surface0: '#FFFFFF',
-  surface1: '#F5F7FA',
-  surface2: '#EAF0F7',
-  surface3: '#DDE5F0',
+  background: '#f0f8fc',
+  surface0:   palette.white,
+  surface1:   '#e8f4fa',
+  surface2:   '#d0e8f4',
+  surface3:   '#b8dced',
 
-  textPrimary: palette.grey900,
-  textSecondary: palette.grey700,
-  textTertiary: palette.grey500,
-  textDisabled: palette.grey300,
-  textInverse: palette.white,
+  textPrimary:   palette.void950,
+  textSecondary: palette.void700,
+  textTertiary:  palette.void500,
+  textDisabled:  palette.void300,
+  textInverse:   palette.white,
 
-  primary: palette.teal700,
-  primaryDim: palette.teal500,
-  primarySubtle: palette.teal200,
-  accent: palette.violet500,
-  accentSubtle: palette.violet300,
+  primary:       '#0070b8',
+  primaryDim:    '#005590',
+  primarySubtle: 'rgba(0,112,184,0.10)',
 
-  error: '#CC0000',
-  errorSubtle: '#FFEAEA',
-  warning: '#996000',
-  warningSubtle: '#FFF8E0',
-  success: '#007A3A',
-  successSubtle: '#E0FAF0',
+  accent:        palette.neon500,
+  accentSubtle:  'rgba(0,159,0,0.10)',
 
-  borderSubtle: palette.grey100,
-  border: palette.grey200,
-  borderStrong: palette.grey300,
+  error:         '#c01020',
+  errorSubtle:   '#fff0f0',
+  warning:       '#7a5400',
+  warningSubtle: '#fff8e0',
+  success:       palette.green500,
+  successSubtle: '#e8f9ee',
 
-  overlay: 'rgba(0,0,0,0.4)',
-  glass: 'rgba(255,255,255,0.85)',
+  borderSubtle: '#d0e8f4',
+  border:       '#a8d0e4',
+  borderStrong: '#80b8d0',
+
+  overlay: 'rgba(0,0,0,0.40)',
+  glass:   'rgba(240,248,252,0.92)',
 } as const;
 
 export type AppColors = typeof darkColors;

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, ScrollView, Pressable,
-  StyleSheet, Animated, KeyboardAvoidingView, Platform,
+  StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -21,17 +21,17 @@ type AnyMsg      = SysMsg | TxMsg | ReqMoneyMsg | ReqAddrMsg | ShareAddrMsg | Ch
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 const MESSAGES_SEED: AnyMsg[] = [
-  { id: 1,  kind: 'sys',             text: 'mesh route established · 3 hops via @node_a1b2' },
-  { id: 2,  from: '@node_7f3a', me: false, time: '02:41:07', text: 'package at dead drop. coords in next msg.', enc: true },
-  { id: 3,  from: '@node_7f3a', me: false, time: '02:41:22', text: '48.8584°N 2.2945°E — 04:00 window', enc: true },
+  { id: 1,  kind: 'sys',             text: 'Successfully connected to anonmesh network' },
+  { id: 2,  from: 'node_7f3a', me: false, time: '02:41:07', text: 'package at dead drop. coords in next msg.', enc: true },
+  { id: 3,  from: 'node_7f3a', me: false, time: '02:41:22', text: '48.8584°N 2.2945°E — 04:00 window', enc: true },
   { id: 4,  from: 'me',         me: true,  time: '02:42:05', text: 'received. confirming on-site relay is up.', enc: true },
-  { id: 9,  kind: 'request-address', from: '@node_7f3a', me: false, time: '02:42:28', asset: 'USDC', note: 'for the relay fee' },
+  { id: 9,  kind: 'request-address', from: 'node_7f3a', me: false, time: '02:42:28', asset: 'USDC', note: 'for the relay fee' },
   { id: 10, kind: 'share-address',   from: 'me',         me: true,  time: '02:42:34', asset: 'USDC', address: '7xKq9...3hF2p' },
-  { id: 11, kind: 'request-money',   from: '@node_7f3a', me: false, time: '02:42:40', asset: 'SOL',  amount: '2.50', note: 'drop fee + relay' },
-  { id: 5,  kind: 'tx',              time: '02:42:48', txid: '5Qf9g..c2a1', to: '@node_7f3a', amount: '2.50', asset: 'SOL', shards: 3, total: 3 },
+  { id: 11, kind: 'request-money',   from: 'node_7f3a', me: false, time: '02:42:40', asset: 'SOL',  amount: '2.50', note: 'drop fee + relay' },
+  { id: 5,  kind: 'tx',              time: '02:42:48', txid: '5Qf9g..c2a1', to: 'node_7f3a', amount: '2.50', asset: 'SOL', shards: 3, total: 3 },
   { id: 6,  from: 'me',         me: true,  time: '02:42:51', text: 'escrow posted. release on drop confirmation.', enc: true },
-  { id: 7,  from: '@node_7f3a', me: false, time: '02:44:12', text: 'ack. relay node_c91d just came online. going dark.', enc: true },
-  { id: 8,  kind: 'sys',             text: '@node_7f3a went dark · last seen 02:44' },
+  { id: 7,  from: 'node_7f3a', me: false, time: '02:44:12', text: 'ack. relay node_c91d just came online. going dark.', enc: true },
+  { id: 8,  kind: 'sys',             text: 'node_7f3a went dark · last seen 02:44' },
 ];
 
 const ASSET_COLORS: Record<string, string> = {
@@ -39,13 +39,13 @@ const ASSET_COLORS: Record<string, string> = {
 };
 
 const PEERS = [
-  { handle: '@node_7f3a',    hops: 3, iface: 'RNode', online: true,  unread: 0, last: 'going dark. relay is up.',     time: '02:44', beacon: false },
-  { handle: '@beacon_prime', hops: 0, iface: 'TCP',   online: true,  unread: 2, last: 'beacon broadcast · t+47min',  time: '02:41', beacon: true  },
-  { handle: '@node_a1b2',    hops: 1, iface: 'TCP',   online: true,  unread: 0, last: 'route table synced.',          time: '02:18', beacon: false },
-  { handle: '@node_c91d',    hops: 2, iface: 'BLE',   online: false, unread: 1, last: 'dropped. retrying via rnode…', time: '01:52', beacon: false },
-  { handle: '@node_44ab',    hops: 2, iface: 'BLE',   online: true,  unread: 0, last: '0.5 sol received',             time: '23:41', beacon: false },
-  { handle: '@relay_e2f0',   hops: 4, iface: 'RNode', online: false, unread: 0, last: 'sleeping · wakes 04:00',       time: 'yday',  beacon: false },
-  { handle: '@sensor_9812',  hops: 5, iface: 'RNode', online: false, unread: 0, last: 'telemetry batch · 412B',       time: '3d',    beacon: false },
+  { handle: 'node_7f3a',    hops: 3, iface: 'RNode', online: true,  unread: 0, last: 'going dark. relay is up.',     time: '02:44', beacon: false },
+  { handle: 'beacon_prime', hops: 0, iface: 'TCP',   online: true,  unread: 2, last: 'beacon broadcast · t+47min',  time: '02:41', beacon: true  },
+  { handle: 'node_a1b2',    hops: 1, iface: 'TCP',   online: true,  unread: 0, last: 'route table synced.',          time: '02:18', beacon: false },
+  { handle: 'node_c91d',    hops: 2, iface: 'BLE',   online: false, unread: 1, last: 'dropped. retrying via rnode…', time: '01:52', beacon: false },
+  { handle: 'node_44ab',    hops: 2, iface: 'BLE',   online: true,  unread: 0, last: '0.5 sol received',             time: '23:41', beacon: false },
+  { handle: 'relay_e2f0',   hops: 4, iface: 'RNode', online: true,  unread: 0, last: 'relay for node_7f3a',         time: '02:44', beacon: false },
+  { handle: 'sensor_9812',  hops: 5, iface: 'RNode', online: false, unread: 0, last: 'telemetry batch · 412B',       time: '3d',    beacon: false },
 ] as const;
 
 const DRAWER_W = 290;
@@ -242,13 +242,13 @@ function InlineTxCard({ m }: { m: TxMsg }) {
             <Text style={[S.txRoutingKey, { color: colors.textTertiary }]}>to    </Text>
             <Text style={[S.txRoutingVal, { color: colors.textSecondary }]}>{m.to}</Text>
           </View>
-          {SHARD_ADDRS.map((s, i) => (
+          {/* {SHARD_ADDRS.map((s, i) => (
             <View key={i} style={S.txRoutingRow}>
               <Text style={[S.txRoutingKey, { color: colors.textTertiary }]}>shard·{i + 1}</Text>
               <Text style={[S.txRoutingVal, { color: colors.textTertiary }]}>{s}</Text>
               <Text style={{ color: colors.primary, fontFamily: 'monospace', fontSize: 11 }}>✓</Text>
             </View>
-          ))}
+          ))} */}
         </View>
         <View style={[S.txFooter, { borderTopColor: colors.borderSubtle }]}>
           <Text style={[S.txFooterText, { color: colors.textTertiary }]}>tx · {m.txid}</Text>
@@ -324,7 +324,7 @@ function ThreadHeader({ peer, onOpen }: { peer: string; onOpen: () => void }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}>
           <View style={[S.onlineDot, { backgroundColor: colors.primary }]} />
           <Text style={[S.threadMeta, { color: colors.primary }]}>ONLINE</Text>
-          <Text style={[S.threadMeta, { color: colors.textTertiary }]}> · E2EE · 3 HOPS · RNS</Text>
+          <Text style={[S.threadMeta, { color: colors.textTertiary }]}> · 3 HOPS</Text>
         </View>
       </View>
       <Pill label="SECURE" variant="success" dot />
@@ -426,23 +426,49 @@ function PeersDrawer({
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const [msgs,        setMsgs]        = useState<AnyMsg[]>(MESSAGES_SEED);
-  const [activePeer,  setActivePeer]  = useState('@node_7f3a');
+  const [activePeer,  setActivePeer]  = useState('node_7f3a');
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const scrollRef  = useRef<ScrollView>(null);
-  const drawerAnim = useRef(new Animated.Value(-DRAWER_W)).current;
+  const scrollRef    = useRef<ScrollView>(null);
+  const drawerAnim   = useRef(new Animated.Value(-DRAWER_W)).current;
+  const drawerOpenRef = useRef(false);
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
 
   const openDrawer = useCallback(() => {
+    drawerOpenRef.current = true;
     setDrawerVisible(true);
     Animated.spring(drawerAnim, { toValue: 0,        useNativeDriver: true, overshootClamping: true }).start();
   }, [drawerAnim]);
 
   const closeDrawer = useCallback(() => {
+    drawerOpenRef.current = false;
     Animated.spring(drawerAnim, { toValue: -DRAWER_W, useNativeDriver: true, overshootClamping: true })
       .start(({ finished }) => { if (finished) setDrawerVisible(false); });
   }, [drawerAnim]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        !drawerOpenRef.current && dx > 10 && Math.abs(dx) > Math.abs(dy) * 1.5,
+      onPanResponderGrant: () => {
+        drawerOpenRef.current = true;
+        setDrawerVisible(true);
+      },
+      onPanResponderMove: (_, { dx }) => {
+        drawerAnim.setValue(Math.min(0, Math.max(-DRAWER_W, -DRAWER_W + dx)));
+      },
+      onPanResponderRelease: (_, { dx, vx }) => {
+        if (dx > DRAWER_W / 3 || vx > 0.5) {
+          Animated.spring(drawerAnim, { toValue: 0,        useNativeDriver: true, overshootClamping: true }).start();
+        } else {
+          drawerOpenRef.current = false;
+          Animated.spring(drawerAnim, { toValue: -DRAWER_W, useNativeDriver: true, overshootClamping: true })
+            .start(({ finished }) => { if (finished) setDrawerVisible(false); });
+        }
+      },
+    })
+  ).current;
 
   const overlayOpacity = drawerAnim.interpolate({
     inputRange: [-DRAWER_W, 0], outputRange: [0, 0.55], extrapolate: 'clamp',
@@ -468,6 +494,7 @@ export default function MessagesScreen() {
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ThreadHeader peer={activePeer} onOpen={openDrawer} />
           <ScrollView
@@ -489,6 +516,7 @@ export default function MessagesScreen() {
           </ScrollView>
           <Composer onSend={sendMsg} />
         </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
 
       {/* Dimming overlay — renders only while drawer is visible */}
