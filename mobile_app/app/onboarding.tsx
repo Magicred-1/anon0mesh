@@ -26,7 +26,7 @@ function generateNickname() {
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { createWallet, isSolanaMobile, isLoading, isConnected, publicKey } = useWallet();
+  const { createWallet, connectMWA, isSolanaMobile, isLoading, isConnected, publicKey } = useWallet();
 
   const [nickname, setNickname] = useState('');
 
@@ -81,12 +81,16 @@ export default function OnboardingScreen() {
     }
   }, [isConnected, publicKey, router]);
 
-  const handleOnboard = useCallback(async () => {
+  const handleCreate = useCallback(async () => {
     if (isLoading) return;
     await createWallet();
   }, [isLoading, createWallet]);
 
-  const btnLabel = isSolanaMobile ? 'CONNECT_WALLET' : 'CREATE_WALLET';
+  const handleConnect = useCallback(async () => {
+    if (isLoading) return;
+    await connectMWA();
+  }, [isLoading, connectMWA]);
+
   const statusLabel = isSolanaMobile ? '[ WALLET_CONNECTED ]' : '[ WALLET_CREATED ]';
 
   return (
@@ -121,15 +125,28 @@ export default function OnboardingScreen() {
           </View>
 
           {/* CTA */}
-          <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%', alignItems: 'center' }}>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%', alignItems: 'center', gap: 12 }}>
+            {isSolanaMobile && (
+              <Pressable
+                onPress={handleConnect}
+                disabled={isLoading}
+                style={({ pressed }) => [S.btn, pressed && { opacity: 0.8 }]}
+              >
+                <View style={S.btnInner}>
+                  <Text style={[S.btnText, isLoading && { color: '#6a7a7a' }]}>
+                    {isLoading ? 'LOADING...' : 'CONNECT_WALLET'}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
             <Pressable
-              onPress={handleOnboard}
+              onPress={handleCreate}
               disabled={isLoading}
-              style={({ pressed }) => [S.btn, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [S.btn, isSolanaMobile && S.btnSecondary, pressed && { opacity: 0.8 }]}
             >
               <View style={S.btnInner}>
-                <Text style={[S.btnText, isLoading && { color: '#6a7a7a' }]}>
-                  {isLoading ? 'LOADING...' : btnLabel}
+                <Text style={[S.btnText, S.btnTextSm, isLoading && { color: '#6a7a7a' }]}>
+                  {isLoading ? 'LOADING...' : 'CREATE_WALLET'}
                 </Text>
               </View>
             </Pressable>
@@ -218,11 +235,13 @@ const S = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(0,229,255,0.04)',
   },
+  btnSecondary: { opacity: 0.6, shadowOpacity: 0.3 },
   btnText: {
     fontFamily: 'monospace', fontSize: 20, fontWeight: '700',
     color: CYAN, letterSpacing: 4,
     textShadowColor: CYAN, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
   },
+  btnTextSm: { fontSize: 15, letterSpacing: 3 },
 
   overlay: {
     zIndex: 20, backgroundColor: BG,

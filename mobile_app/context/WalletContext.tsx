@@ -15,7 +15,7 @@ import {
   IWalletAdapter,
   WalletFactory,
   WalletMode,
-} from '../infrastructure/wallet';
+} from '../src/infrastructure/wallet';
 
 interface WalletContextValue {
   wallet: IWalletAdapter | null;
@@ -27,7 +27,8 @@ interface WalletContextValue {
   isInitialized: boolean;
   isConnected: boolean;
   initialize: () => Promise<void>;
-  createWallet: () => Promise<void>;
+  createWallet: () => Promise<void>;   // local keypair — always available
+  connectMWA: () => Promise<void>;     // MWA flow — Seeker / Saga only
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -89,36 +90,40 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
     }
   }, [router]);
 
-  // Called from onboarding to create a brand-new wallet
+  const finalize = useCallback((adapter: IWalletAdapter) => {
+    setWallet(adapter);
+    setWalletMode(adapter.getMode());
+    setPublicKey(adapter.getPublicKey());
+    setIsInitialized(true);
+    setIsConnected(true);
+    setIsLoading(false);
+  }, []);
+
+  // Creates a new local ed25519 keypair — works on any device
   const createWallet = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
-
-      const info = WalletFactory.getDeviceInfo();
-      const isSolana = WalletFactory.isSolanaMobile();
-      setDeviceInfo(info);
-      setIsSolanaMobile(isSolana);
-
-      const walletAdapter = isSolana
-        ? await WalletFactory.createMWA()
-        : await WalletFactory.createLocal();
-
-      const mode = walletAdapter.getMode();
-      const pk = walletAdapter.getPublicKey();
-
-      setWallet(walletAdapter);
-      setWalletMode(mode);
-      setPublicKey(pk);
-      setIsInitialized(true);
-      setIsConnected(true);
-      setIsLoading(false);
+      finalize(await WalletFactory.createLocal());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create wallet');
       setIsLoading(false);
       Alert.alert('Wallet Error', 'Failed to create wallet. Please try again.');
     }
-  }, []);
+  }, [finalize]);
+
+  // Opens MWA flow — Seeker / Saga only
+  const connectMWA = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      finalize(await WalletFactory.createMWA());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
+      setIsLoading(false);
+      Alert.alert('Connection Error', 'Failed to connect wallet. Please try again.');
+    }
+  }, [finalize]);
 
   const connect = useCallback(async () => {
     if (!wallet) return;
@@ -176,7 +181,7 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
   const value: WalletContextValue = {
     wallet, walletMode, publicKey, isSolanaMobile, deviceInfo,
     isLoading, isInitialized, isConnected,
-    initialize, createWallet, connect, disconnect, refresh, exportPrivateKey,
+    initialize, createWallet, connectMWA, connect, disconnect, refresh, exportPrivateKey,
     error,
   };
 
