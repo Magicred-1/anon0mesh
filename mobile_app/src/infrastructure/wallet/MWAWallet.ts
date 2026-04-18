@@ -6,7 +6,7 @@ import type { IWalletAdapter, WalletMode } from './types';
 const TOKEN_KEY = 'anon_mwa_auth_token_v1';
 
 const APP_IDENTITY = {
-  name: 'AnonMesh',
+  name: 'anonmesh',
   uri: 'https://anonme.sh',
   icon: '/favicon.ico',
 };
@@ -34,7 +34,7 @@ export class MWAWallet implements IWalletAdapter {
         }
       }
       return wallet.authorize({
-        cluster: 'devnet',
+        cluster: 'mainnet-beta',
         identity: APP_IDENTITY,
       });
     });

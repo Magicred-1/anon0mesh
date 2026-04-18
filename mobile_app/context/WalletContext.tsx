@@ -119,9 +119,11 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       setError(null);
       finalize(await WalletFactory.createMWA());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[connectMWA] error:', msg, err);
+      setError(msg);
       setIsLoading(false);
-      Alert.alert('Connection Error', 'Failed to connect wallet. Please try again.');
+      Alert.alert('MWA Error', msg);
     }
   }, [finalize]);
 
