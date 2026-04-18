@@ -32,7 +32,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="index"    options={{ title: 'Messages', tabBarIcon: MessagesIcon }} />
       <Tabs.Screen name="wallet"   options={{ title: 'Wallet',   tabBarIcon: WalletIcon }}   />
-      <Tabs.Screen name="nodes"    options={{ title: 'Nodes',    tabBarIcon: NodesIcon }}    />
+      <Tabs.Screen name="nodes"    options={{ title: 'Peers',    tabBarIcon: NodesIcon }}    />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: SettingsIcon }} />
     </Tabs>
   );

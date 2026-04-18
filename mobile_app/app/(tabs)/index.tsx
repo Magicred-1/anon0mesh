@@ -50,7 +50,6 @@ const PEERS = [
 
 const DRAWER_W = 290;
 const BLUE     = '#2775CA';
-const SHARD_ADDRS = ['7xKq9..8e1c', 'Hn4vR..21f7', 'Cp3aL..55a0'];
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 

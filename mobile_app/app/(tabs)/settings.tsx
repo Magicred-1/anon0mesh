@@ -480,8 +480,7 @@ export default function SettingsScreen() {
             <View style={[S.section, baseGlass]}>
               <SettingsRow icon="lock"      label="biometric unlock" sub="face id · required for transactions" right={<Toggle on={biometric}  onChange={setBiometric}  />} />
               <SettingsRow icon="refresh-cw"label="rotate keypair"   sub="generate new ed25519 · keeps handle" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => {}} />
-              <SettingsRow icon="upload"    label="export seed phrase" sub="24 words · bip-39 · offline only"   right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => {}} />
-              <SettingsRow icon="credit-card" label="link verifiable credential" sub="eidas 2.0 · optional"    right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => {}} last />
+              <SettingsRow icon="upload"    label="export seed phrase" sub="24 words · bip-39 · offline only"   right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => {}} last/>
             </View>
           </View>
 
@@ -499,7 +498,7 @@ export default function SettingsScreen() {
           <SectionLabel>about</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
-              <SettingsRow label="app version"    right={<Text style={[S.valueText, { color: colors.textSecondary }]}>0.4.1 · build 2026.04</Text>} />
+              <SettingsRow label="app version"    right={<Text style={[S.valueText, { color: colors.textSecondary }]}>0.4.1 · build 2026.04</Text>} last/>
             </View>
 
             <Pressable style={[S.signOutBtn, { borderColor: colors.error + '38' }]}>

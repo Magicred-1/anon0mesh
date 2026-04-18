@@ -134,7 +134,7 @@ function SendPanel() {
       <View style={[S.card, glass]}>
         <Text style={[S.cardLabel, { color: colors.textTertiary }]}>TO</Text>
         <View style={[S.row, { marginTop: 8 }]}>
-          <Feather name="maximize" size={16} color={colors.textSecondary} />
+          <Feather name="camera" size={16} color={colors.textSecondary} />
           <TextInput
             style={[S.textField, { color: colors.textPrimary, flex: 1 }]}
             value={recipient}
