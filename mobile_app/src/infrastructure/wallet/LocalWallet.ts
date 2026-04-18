@@ -1,4 +1,4 @@
-import { gcm } from '@noble/ciphers/aes';
+import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as SecureStore from 'expo-secure-store';
 import { TurboModuleRegistry, type TurboModule } from 'react-native';
