@@ -127,7 +127,7 @@ export default function MessagesScreen() {
         { backgroundColor: colors.glass, borderRightColor: colors.border },
         { transform: [{ translateX: drawerAnim }] },
       ]}>
-        <PeersDrawer active={activePeer} onPick={pickPeer} onClose={closeDrawer} />
+        <PeersDrawer active={activePeer} onPick={pickPeer} />
       </Animated.View>
     </View>
   );

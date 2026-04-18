@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "magicred1.anonmesh.app"
+      "bundleIdentifier": "magicred1.anonmesh.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "magicred1.anonmesh.app",
@@ -45,6 +48,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "95ef0c98-5a9e-4bb6-9568-cf1e2677db73"
+      }
     }
   }
 }

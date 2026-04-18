@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -8,16 +8,26 @@ import { useGlass } from '../../hooks/useGlass';
 import { PEERS, type Peer } from './constants';
 
 interface Props {
-  active: string;
-  onPick: (p: Peer) => void;
-  onClose: () => void;
+  readonly active:      string;
+  readonly onPick:      (p: Peer) => void;
+
+  readonly onNewHash?:  (hash: string) => void;
 }
 
-export const PeersDrawer = memo(function PeersDrawer({ active, onPick }: Props) {
-  const { colors }   = useTheme();
-  const softGlass    = useGlass('soft');
-  const accentGlass  = useGlass('accent');
-  const onlineCount  = PEERS.filter(p => p.online).length;
+// ── Peer list (default view) ─────────────────────────────────────────────────
+
+function PeerList({
+  active, onPick, onNew,
+}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void }) {
+  const { colors }  = useTheme();
+  const softGlass   = useGlass('soft');
+  const accentGlass = useGlass('accent');
+  const onlineCount = PEERS.filter(p => p.online).length;
+
+  const [query, setQuery] = useState('');
+  const filtered = query
+    ? PEERS.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
+    : PEERS;
 
   return (
     <View style={{ flex: 1 }}>
@@ -38,12 +48,20 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick }: Props) 
             placeholder="search peers"
             placeholderTextColor={colors.textTertiary}
             style={[S.searchInput, { color: colors.textPrimary }]}
+            value={query}
+            onChangeText={setQuery}
+            autoCorrect={false}
           />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery('')}>
+              <Feather name="x" size={12} color={colors.textTertiary} />
+            </Pressable>
+          )}
         </View>
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={S.listContent}>
-        {PEERS.map(p => {
+        {filtered.map(p => {
           const isActive = active === p.handle;
           return (
             <Pressable
@@ -85,37 +103,191 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick }: Props) 
       </ScrollView>
 
       <View style={S.footer}>
-        <Pressable style={[S.newBtn, accentGlass]}>
+        <Pressable onPress={onNew} style={[S.newBtn, accentGlass]}>
           <Feather name="plus" size={13} color={colors.primary} />
           <Text style={[S.newBtnText, { color: colors.primary }]}>NEW MESSAGE</Text>
         </Pressable>
       </View>
     </View>
   );
+}
+
+// ── New conversation view ────────────────────────────────────────────────────
+
+function NewConvoView({
+  onPick, onBack, onNewHash,
+}: { readonly onPick: (p: Peer) => void; readonly onBack: () => void; readonly onNewHash?: (h: string) => void }) {
+  const { colors }  = useTheme();
+  const glass       = useGlass();
+  const softGlass   = useGlass('soft');
+
+  const [hash, setHash] = useState('');
+
+  const onlinePeers = PEERS.filter(p => p.online);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: 'transparent' }}>
+        <View style={S.header}>
+          <Pressable onPress={onBack} style={S.backBtn}>
+            <Feather name="arrow-left" size={18} color={colors.textPrimary} />
+          </Pressable>
+          <View style={{ marginTop: 6 }}>
+            <Text style={[S.label, { color: colors.textTertiary }]}>anonmesh</Text>
+            <Text style={[S.title, { color: colors.textPrimary, marginTop: 4 }]}>new conversation</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+        {/* Connected peers */}
+        <View style={S.section}>
+          <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>CONNECTED PEERS</Text>
+          <View style={[S.sectionCard, glass]}>
+            {onlinePeers.map((p, i) => (
+              <Pressable
+                key={p.handle}
+                onPress={() => { onPick(p); onBack(); }}
+                style={({ pressed }) => [
+                  S.convoRow,
+                  pressed && { backgroundColor: colors.surface2 },
+                  i < onlinePeers.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle },
+                ]}
+              >
+                <View style={S.avatarWrap}>
+                  <View style={[S.avatar, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                    {p.beacon
+                      ? <Feather name="radio" size={14} color={colors.primary} />
+                      : <Text style={[S.avatarText, { color: colors.textSecondary }]}>{p.handle.slice(6, 10)}</Text>
+                    }
+                  </View>
+                  <View style={[S.statusDot, { backgroundColor: colors.primary, borderColor: colors.background }]} />
+                </View>
+                <View style={S.info}>
+                  <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{p.handle}</Text>
+                  <Text style={[S.meta, { color: colors.textTertiary, marginTop: 1 }]}>
+                    {p.iface} · {String(p.hops).padStart(2, '0')} HOPS
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={14} color={colors.textTertiary} />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* Divider */}
+        <View style={S.dividerRow}>
+          <View style={[S.dividerLine, { backgroundColor: colors.borderSubtle }]} />
+          <Text style={[S.dividerText, { color: colors.textTertiary }]}>OR</Text>
+          <View style={[S.dividerLine, { backgroundColor: colors.borderSubtle }]} />
+        </View>
+
+        {/* Identity hash */}
+        <View style={S.section}>
+          <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>IDENTITY HASH</Text>
+          <View style={[S.hashRow, softGlass]}>
+            <TextInput
+              style={[S.hashInput, { color: colors.textPrimary, flex: 1 }]}
+              placeholder="paste or type hash…"
+              placeholderTextColor={colors.textTertiary}
+              value={hash}
+              onChangeText={setHash}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Pressable onPress={() => {/* scanner */}} style={S.scanBtn}>
+              <Feather name="camera" size={16} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          <Pressable
+            disabled={hash.trim().length === 0}
+            onPress={() => { onNewHash?.(hash.trim()); onBack(); }}
+            style={[
+              S.startBtn,
+              { backgroundColor: hash.trim().length > 0 ? colors.primary : colors.surface2 },
+            ]}
+          >
+            <Text style={[S.startBtnText, { color: hash.trim().length > 0 ? '#08080A' : colors.textTertiary }]}>
+              START CONVERSATION
+            </Text>
+          </Pressable>
+        </View>
+
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── PeersDrawer ──────────────────────────────────────────────────────────────
+
+export const PeersDrawer = memo(function PeersDrawer({ active, onPick, onNewHash }: Props) {
+  const [newMsg, setNewMsg] = useState(false);
+
+  if (newMsg) {
+    return (
+      <NewConvoView
+        onPick={onPick}
+        onBack={() => setNewMsg(false)}
+        onNewHash={onNewHash}
+      />
+    );
+  }
+
+  return (
+    <PeerList
+      active={active}
+      onPick={onPick}
+      onNew={() => setNewMsg(true)}
+    />
+  );
 });
 
+// ── Styles ───────────────────────────────────────────────────────────────────
+
 const S = StyleSheet.create({
-  header:      { padding: 16, paddingBottom: 10 },
-  label:       { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  titleRow:    { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 4 },
-  title:       { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
-  subtitle:    { fontFamily: fontFamily.sansMd, fontSize: 10.5 },
-  searchWrap:  { paddingHorizontal: 14, paddingBottom: 10 },
-  searchBox:   { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, paddingHorizontal: 11, borderRadius: 10 },
-  searchInput: { flex: 1, fontSize: 12, fontFamily: fontFamily.sansMd },
-  listContent: { paddingHorizontal: 10, paddingBottom: 12 },
-  row:         { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, marginBottom: 2, borderWidth: 0.5 },
-  avatarWrap:  { position: 'relative', width: 34, height: 34 },
-  avatar:      { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
-  avatarText:  { fontFamily: fontFamily.sansMd, fontSize: 11 },
-  statusDot:   { position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5 },
-  info:        { flex: 1, minWidth: 0 },
-  infoRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
-  handle:      { fontFamily: fontFamily.sansMd, fontSize: 12, flex: 1, letterSpacing: 0.3 },
-  time:        { fontFamily: fontFamily.sansMd, fontSize: 9 },
-  last:        { fontSize: 11, flex: 1 },
-  meta:        { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
-  footer:      { padding: 14, paddingBottom: 20 },
-  newBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 11, borderRadius: 12 },
-  newBtnText:  { fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
+  header:       { padding: 16, paddingBottom: 10 },
+  backBtn:      { marginBottom: 4 },
+  label:        { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
+  titleRow:     { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 4 },
+  title:        { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
+  subtitle:     { fontFamily: fontFamily.sansMd, fontSize: 10.5 },
+
+  searchWrap:   { paddingHorizontal: 14, paddingBottom: 10 },
+  searchBox:    { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, paddingHorizontal: 11, borderRadius: 10 },
+  searchInput:  { flex: 1, fontSize: 12, fontFamily: fontFamily.sansMd },
+
+  listContent:  { paddingHorizontal: 10, paddingBottom: 12 },
+  row:          { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, marginBottom: 2, borderWidth: 0.5 },
+  avatarWrap:   { position: 'relative', width: 34, height: 34 },
+  avatar:       { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
+  avatarText:   { fontFamily: fontFamily.sansMd, fontSize: 11 },
+  statusDot:    { position: 'absolute', bottom: -1, right: -1, width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5 },
+  info:         { flex: 1, minWidth: 0 },
+  infoRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
+  handle:       { fontFamily: fontFamily.sansMd, fontSize: 12, flex: 1, letterSpacing: 0.3 },
+  time:         { fontFamily: fontFamily.sansMd, fontSize: 9 },
+  last:         { fontSize: 11, flex: 1 },
+  meta:         { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
+
+  footer:       { padding: 14, paddingBottom: 20 },
+  newBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 11, borderRadius: 12 },
+  newBtnText:   { fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
+
+  // New convo view
+  section:      { paddingHorizontal: 14, marginBottom: 4 },
+  sectionLabel: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8 },
+  sectionCard:  { borderRadius: 14, overflow: 'hidden' },
+  convoRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+
+  dividerRow:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 16, gap: 10 },
+  dividerLine:  { flex: 1, height: 0.5 },
+  dividerText:  { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2 },
+
+  hashRow:      { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
+  hashInput:    { fontFamily: fontFamily.sansMd, fontSize: 12, padding: 0 },
+  scanBtn:      { padding: 4 },
+  startBtn:     { marginTop: 10, padding: 13, borderRadius: 12, alignItems: 'center' },
+  startBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
 });
