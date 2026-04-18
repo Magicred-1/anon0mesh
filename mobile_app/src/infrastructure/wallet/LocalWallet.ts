@@ -114,11 +114,17 @@ export class LocalWallet implements IWalletAdapter {
     const keypair = Keypair.fromSeed(seed);
     const payload = aesEncrypt(aesKey, keypair.secretKey);
 
-    // AES key and public key first (no auth), then single biometric op for secret payload
+    // Write marker and pubkey FIRST (no auth) so wallet persists even if biometric op fails.
+    // Biometric failure only disables export — connect() reads PUBLIC_KEY_STORE, never SECRET_KEY.
     await SecureStore.setItemAsync(AES_KEY_STORE, Buffer.from(aesKey).toString('base64'));
     await SecureStore.setItemAsync(PUBLIC_KEY_STORE, keypair.publicKey.toBase58());
-    await SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload), AUTH_OPTS);
     await SecureStore.setItemAsync(MARKER_KEY, 'true');
+    try {
+      await SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload), AUTH_OPTS);
+    } catch {
+      // Biometric key setup failed (no enrollment, emulator, etc.) — export will be unavailable
+      // until the user sets up device biometrics and recreates. Wallet identity persists.
+    }
 
     const w = new LocalWallet();
     w._publicKey = keypair.publicKey;

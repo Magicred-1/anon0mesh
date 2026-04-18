@@ -24,16 +24,19 @@ export const WalletFactory = {
       await w.connect();
       return w;
     }
-    const exists = await LocalWallet.exists();
-    if (exists) {
+    // initialize() already verified exists() — just connect, never create here
+    const w = new LocalWallet();
+    await w.connect();
+    return w;
+  },
+
+  async createLocal(): Promise<LocalWallet> {
+    // Guard: reconnect if wallet already exists rather than overwriting keypair
+    if (await LocalWallet.exists()) {
       const w = new LocalWallet();
       await w.connect();
       return w;
     }
-    return LocalWallet.create();
-  },
-
-  async createLocal(): Promise<LocalWallet> {
     return LocalWallet.create();
   },
 
