@@ -51,10 +51,9 @@ function aesDecrypt(aesKey: Uint8Array, payload: StoredPayload): Uint8Array {
 }
 
 async function readAndDecrypt(opts: SecureStore.SecureStoreOptions): Promise<Keypair> {
-  const [rawPayload, rawAesKey] = await Promise.all([
-    SecureStore.getItemAsync(SECRET_KEY, opts),
-    SecureStore.getItemAsync(AES_KEY_STORE, opts),
-  ]);
+  // Sequential: Android Keystore rejects concurrent requireAuthentication key ops
+  const rawPayload = await SecureStore.getItemAsync(SECRET_KEY, opts);
+  const rawAesKey  = await SecureStore.getItemAsync(AES_KEY_STORE, opts);
   if (!rawPayload || !rawAesKey) throw new Error('Wallet not found in secure storage');
   const aesKey    = new Uint8Array(Buffer.from(rawAesKey, 'base64'));
   const secretKey = aesDecrypt(aesKey, JSON.parse(rawPayload) as StoredPayload);
@@ -95,11 +94,10 @@ export class LocalWallet implements IWalletAdapter {
     const keypair = Keypair.fromSeed(seed);
     const payload = aesEncrypt(aesKey, keypair.secretKey);
 
-    await Promise.all([
-      SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload), AUTH_OPTS),
-      SecureStore.setItemAsync(AES_KEY_STORE, Buffer.from(aesKey).toString('base64'), AUTH_OPTS),
-      SecureStore.setItemAsync(MARKER_KEY, 'true'),
-    ]);
+    // Sequential: Android Keystore rejects concurrent requireAuthentication key ops
+    await SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload), AUTH_OPTS);
+    await SecureStore.setItemAsync(AES_KEY_STORE, Buffer.from(aesKey).toString('base64'), AUTH_OPTS);
+    await SecureStore.setItemAsync(MARKER_KEY, 'true');
 
     const w = new LocalWallet();
     w.keypair = keypair;
