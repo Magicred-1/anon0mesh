@@ -3,8 +3,9 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
-import { MeshMap }  from '@/components/nodes/MeshMap';
-import { NodeRow }  from '@/components/nodes/NodeRow';
+import { MeshMap }        from '@/components/nodes/MeshMap';
+import { NodeRow }        from '@/components/nodes/NodeRow';
+import { BeaconRegistry } from '@/components/nodes/BeaconRegistry';
 import { NODES, FILTERS } from '@/components/nodes/constants';
 import type { Filter } from '@/components/nodes/types';
 
@@ -52,6 +53,8 @@ export default function NodesScreen() {
               </Pressable>
             ))}
           </ScrollView>
+
+          <BeaconRegistry />
 
           <View style={S.sectionRow}>
             <Text style={[S.sectionText,  { color: colors.textTertiary }]}>LINKED PEERS</Text>
