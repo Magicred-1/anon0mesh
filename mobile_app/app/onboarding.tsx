@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useWallet } from '@/context/WalletContext';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -25,9 +26,9 @@ function generateNickname() {
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { createWallet, isSolanaMobile, isLoading, isConnected, publicKey } = useWallet();
 
   const [nickname, setNickname] = useState('');
-  const [loading,  setLoading]  = useState(false);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -56,7 +57,7 @@ export default function OnboardingScreen() {
   }, [fadeAnim, slideAnim, pulseAnim]);
 
   useEffect(() => {
-    if (loading) {
+    if (isLoading) {
       Animated.sequence([
         Animated.timing(overlayOpacity,  { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.timing(enteringOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
@@ -71,16 +72,22 @@ export default function OnboardingScreen() {
       nicknameOpacity.setValue(0);
       btnOpacity     .setValue(0);
     }
-  }, [loading, overlayOpacity, enteringOpacity, statusOpacity, nicknameOpacity, btnOpacity]);
+  }, [isLoading, overlayOpacity, enteringOpacity, statusOpacity, nicknameOpacity, btnOpacity]);
+
+  // Navigate once wallet is ready
+  useEffect(() => {
+    if (isConnected && publicKey) {
+      router.replace('/(tabs)');
+    }
+  }, [isConnected, publicKey, router]);
 
   const handleOnboard = useCallback(async () => {
-    if (loading) return;
-    setLoading(true);
-    // Stub: replace with real wallet init
-    await new Promise(r => setTimeout(r, 1800));
-    setLoading(false);
-    router.replace('/(tabs)');
-  }, [loading, router]);
+    if (isLoading) return;
+    await createWallet();
+  }, [isLoading, createWallet]);
+
+  const btnLabel = isSolanaMobile ? 'CONNECT_WALLET' : 'CREATE_WALLET';
+  const statusLabel = isSolanaMobile ? '[ WALLET_CONNECTED ]' : '[ WALLET_CREATED ]';
 
   return (
     <View style={S.root}>
@@ -99,7 +106,7 @@ export default function OnboardingScreen() {
               resizeMode="contain"
             />
             <Text style={S.tagline}>[ OFF-GRID COLD WALLET ]</Text>
-            {loading && (
+            {isLoading && (
               <Text style={S.generatedNickname}>{`( @${nickname} )`}</Text>
             )}
           </View>
@@ -107,7 +114,9 @@ export default function OnboardingScreen() {
           {/* Instructions */}
           <View style={S.instructionsContainer}>
             <Text style={S.instructionsText}>
-              {'TO GET STARTED\nCREATE A SECURE WALLET\nYOUR NICKNAME WILL BE GENERATED\nAUTOMATICALLY'}
+              {isSolanaMobile
+                ? 'TO GET STARTED\nCONNECT YOUR SOLANA WALLET\nVIA MOBILE WALLET ADAPTER'
+                : 'TO GET STARTED\nCREATE A SECURE WALLET\nYOUR NICKNAME WILL BE GENERATED\nAUTOMATICALLY'}
             </Text>
           </View>
 
@@ -115,12 +124,12 @@ export default function OnboardingScreen() {
           <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%', alignItems: 'center' }}>
             <Pressable
               onPress={handleOnboard}
-              disabled={loading}
+              disabled={isLoading}
               style={({ pressed }) => [S.btn, pressed && { opacity: 0.8 }]}
             >
               <View style={S.btnInner}>
-                <Text style={[S.btnText, loading && { color: '#6a7a7a' }]}>
-                  {loading ? 'LOADING...' : 'CREATE_WALLET'}
+                <Text style={[S.btnText, isLoading && { color: '#6a7a7a' }]}>
+                  {isLoading ? 'LOADING...' : btnLabel}
                 </Text>
               </View>
             </Pressable>
@@ -130,31 +139,30 @@ export default function OnboardingScreen() {
       </SafeAreaView>
 
       {/* Loading overlay */}
-      {loading && (
+      {isLoading && (
         <Animated.View style={[StyleSheet.absoluteFill, S.overlay, { opacity: overlayOpacity }]}>
-          {/* Entering text */}
           <Animated.Text style={[S.enteringText, { opacity: enteringOpacity }]}>
-            ENTERING...
+            {isSolanaMobile ? 'CONNECTING...' : 'ENTERING...'}
           </Animated.Text>
 
-          {/* Status + nickname */}
           <View style={S.overlayMid}>
             <Animated.Text style={[S.overlayStatus, { opacity: statusOpacity }]}>
-              [ WALLET_CREATED ]
+              {statusLabel}
             </Animated.Text>
             <Animated.Text style={[S.overlayNickname, { opacity: nicknameOpacity }]}>
               {`( @${nickname} )`}
             </Animated.Text>
           </View>
 
-          {/* Loading button */}
           <Animated.View style={[S.overlayBtnWrap, { opacity: btnOpacity }]}>
             <View style={[S.btn, { opacity: 0.6 }]}>
               <View style={S.btnInner}>
                 <Text style={[S.btnText, { color: '#6a7a7a' }]}>LOADING...</Text>
               </View>
             </View>
-            <Text style={S.overlayDetail}>GENERATING SECURE KEYPAIR</Text>
+            <Text style={S.overlayDetail}>
+              {isSolanaMobile ? 'AWAITING WALLET APPROVAL' : 'GENERATING SECURE KEYPAIR'}
+            </Text>
           </Animated.View>
         </Animated.View>
       )}
@@ -186,20 +194,17 @@ const S = StyleSheet.create({
     paddingVertical: 60,
   },
 
-  // Logo
   logoContainer:    { alignItems: 'center', marginBottom: 80 },
   logoImage:        { width: 320, height: 76, marginBottom: 20 },
   tagline:          { fontFamily: 'monospace', fontSize: 14, color: CYAN, letterSpacing: 3 },
   generatedNickname:{ fontFamily: 'monospace', fontSize: 16, color: CYAN, letterSpacing: 2, marginTop: 20, opacity: 0.8 },
 
-  // Instructions
   instructionsContainer: { alignItems: 'center', marginBottom: 80, paddingHorizontal: 20 },
   instructionsText: {
     fontFamily: 'monospace', fontSize: 13, color: '#8fa9a9',
     textAlign: 'center', lineHeight: 24, letterSpacing: 2,
   },
 
-  // Button
   btn: {
     width: 388, height: 64,
     borderRadius: 12, overflow: 'hidden',
@@ -219,7 +224,6 @@ const S = StyleSheet.create({
     textShadowColor: CYAN, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
   },
 
-  // Loading overlay
   overlay: {
     zIndex: 20, backgroundColor: BG,
     alignItems: 'center', justifyContent: 'space-between',

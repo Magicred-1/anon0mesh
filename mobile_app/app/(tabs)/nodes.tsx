@@ -282,7 +282,6 @@ function NodeRow({ n, selected }: Readonly<{ n: NodeData; selected?: boolean }>)
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={S.nodeHandleRow}>
           <Text style={[S.nodeHandle, { color: selected ? colors.primary : colors.textPrimary }]} numberOfLines={1}>{n.handle}</Text>
-          {'cosigner' in n && n.cosigner && <Pill label="CO-SIGNER" variant="success" />}
           {'online'   in n && n.online   && <Pill label="ONLINE"    variant="success" dot />}
         </View>
         <View style={S.nodeMeta}>
