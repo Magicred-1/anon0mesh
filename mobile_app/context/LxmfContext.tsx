@@ -19,6 +19,8 @@ interface LxmfCtxValue {
   error: string | null;
   /** destHash → displayName from appData of announces/beacons */
   nameMap: Record<string, string>;
+  /** this node's own display name broadcast in announces */
+  displayName: string;
   start: (overrides?: {
     identityHex?: string;
     lxmfAddressHex?: string;
@@ -38,12 +40,14 @@ const LxmfCtx = createContext<LxmfCtxValue | null>(null);
 /* TODO:
   Persist identity and display name in SecureStore and load on init.
 */
+const OWN_DISPLAY_NAME = 'magic-mobile';
+
 export function LxmfProvider({ children }: { readonly children: React.ReactNode }) {
   const lxmf = useLxmf({
     identityHex:    'new',
     lxmfAddressHex: 'new',
     logLevel:       2,
-    displayName:    'magic-mobile',
+    displayName:    OWN_DISPLAY_NAME,
     mode:           LxmfNodeMode.Reticulum,
     tcpInterfaces:  [G00N_HUB],
   });
@@ -71,6 +75,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     events:            lxmf.events,
     error:             lxmf.error,
     nameMap,
+    displayName:       OWN_DISPLAY_NAME,
     start:             lxmf.start,
     stop:              lxmf.stop,
     send:              lxmf.send,
