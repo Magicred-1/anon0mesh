@@ -11,6 +11,7 @@ import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { useWallet } from '@/context/WalletContext';
+import { useLxmfContext } from '@/context/LxmfContext';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
@@ -200,16 +201,17 @@ function RadarScan() {
 
 type QRTab = 'wallet' | 'anonmesh';
 
-const ANONMESH_HASH = '7xKq9hF2p3aL8m';
-const ANONMESH_HANDLE = '@node_7f3a';
-
 function QRModal({ onClose }: { onClose: () => void }) {
   const { colors } = useTheme();
   const softGlass   = useGlass('soft');
   const baseGlass   = useGlass();
   const accentGlass = useGlass('accent');
   const { publicKey } = useWallet();
+  const { status }    = useLxmfContext();
   const [tab, setTab] = useState<QRTab>('anonmesh');
+
+  const meshAddress = status?.addressHex ?? '';
+  const meshHandle  = meshAddress ? `@${meshAddress.slice(0, 8)}` : '@——';
   const scaleAnim   = useRef(new Animated.Value(0.85)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -229,9 +231,9 @@ function QRModal({ onClose }: { onClose: () => void }) {
 
   const walletPubkey = publicKey?.toBase58() ?? null;
   const walletLabel  = walletPubkey ? walletPubkey.slice(0, 8) + '..' + walletPubkey.slice(-6) : 'not connected';
-  const qrData   = tab === 'wallet' ? (walletPubkey ?? 'no-wallet') : ANONMESH_HASH;
-  const label    = tab === 'wallet' ? walletLabel : ANONMESH_HANDLE;
-  const sublabel = tab === 'wallet' ? (walletPubkey ?? '—') : ANONMESH_HASH;
+  const qrData   = tab === 'wallet' ? (walletPubkey ?? 'no-wallet') : (meshAddress || 'no-identity');
+  const label    = tab === 'wallet' ? walletLabel : meshHandle;
+  const sublabel = tab === 'wallet' ? (walletPubkey ?? '—') : meshAddress;
 
   return (
     <Modal transparent animationType="none" onRequestClose={dismiss}>
@@ -658,6 +660,13 @@ export default function SettingsScreen() {
 
   const router = useRouter();
   const { disconnect, isLoading: walletLoading } = useWallet();
+  const { status } = useLxmfContext();
+
+  const meshAddress = status?.addressHex ?? '';
+  const meshHandle  = meshAddress ? `@${meshAddress.slice(0, 8)}` : '@——';
+  const shortHash   = meshAddress
+    ? `${meshAddress.slice(0, 6)}..${meshAddress.slice(-6)}`
+    : '——';
 
   const handleSignOut = useCallback(async () => {
     await disconnect();
@@ -665,10 +674,10 @@ export default function SettingsScreen() {
   }, [disconnect, router]);
 
   const copyHandle = useCallback(async () => {
-    await Clipboard.setStringAsync(ANONMESH_HASH);
+    if (meshAddress) await Clipboard.setStringAsync(meshAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
-  }, []);
+  }, [meshAddress]);
 
   const onPaired = useCallback((d: NonNullable<PairedDevice>) => setPaired(d), []);
 
@@ -682,11 +691,11 @@ export default function SettingsScreen() {
             <View style={[S.identityCard, baseGlass]}>
               <Text style={[S.idLabel, { color: colors.textTertiary, alignSelf: 'center' }]}>YOUR IDENTITY</Text>
               <Pressable onPress={() => setQrOpen(true)} style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border, alignSelf: 'center' }]}>
-                <QRCode size={120} />
+                <QRCode size={120} data={meshAddress || 'no-identity'} />
               </Pressable>
               <View style={{ alignItems: 'center', gap: 3 }}>
-                <Text style={[S.idHandle, { color: colors.textPrimary }]}>@node_7f3a</Text>
-                <Text style={[S.idHash, { color: colors.textSecondary }]}>7xKq9h..F2p3aL8m</Text>
+                <Text style={[S.idHandle, { color: colors.textPrimary }]}>{meshHandle}</Text>
+                <Text style={[S.idHash, { color: colors.textSecondary }]}>{shortHash}</Text>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
                 <Pressable onPress={copyHandle} style={[S.copyBtn, softGlass]}>
