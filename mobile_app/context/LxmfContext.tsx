@@ -8,6 +8,8 @@ import {
   type TcpInterface,
 } from '@magicred-1/react-native-lxmf';
 
+export const G00N_HUB: TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 };
+
 interface LxmfCtxValue {
   isRunning: boolean;
   isNativeAvailable: boolean;
@@ -25,6 +27,8 @@ interface LxmfCtxValue {
   stop: () => Promise<void>;
   send: (destHex: string, bodyBase64: string) => Promise<number>;
   broadcast: (destsHex: string[], bodyBase64: string) => Promise<number>;
+  startBLE: () => void;
+  stopBLE: () => void;
 }
 
 const LxmfCtx = createContext<LxmfCtxValue | null>(null);
@@ -34,7 +38,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     identityHex:    'new',
     lxmfAddressHex: 'new',
     logLevel:       2,
-    mode:           LxmfNodeMode.BleOnly,
+    mode:           LxmfNodeMode.Reticulum,
+    tcpInterfaces:  [G00N_HUB],
   });
 
   return (
@@ -49,6 +54,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       stop:              lxmf.stop,
       send:              lxmf.send,
       broadcast:         lxmf.broadcast,
+      startBLE:          lxmf.startBLE,
+      stopBLE:           lxmf.stopBLE,
     }}>
       {children}
     </LxmfCtx.Provider>

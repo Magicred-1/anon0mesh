@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LxmfNodeMode, type Beacon } from '@magicred-1/react-native-lxmf';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
-import { useLxmfContext } from '@/context/LxmfContext';
+import { useLxmfContext, G00N_HUB } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { NodeRow }         from '@/components/nodes/NodeRow';
 import { NodeRowSkeleton } from '@/components/nodes/NodeRowSkeleton';
@@ -31,7 +31,7 @@ function beaconToNode(b: Beacon): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const glass = useGlass();
-  const { isRunning, isNativeAvailable, beacons, start } = useLxmfContext();
+  const { isRunning, isNativeAvailable, beacons, start, startBLE } = useLxmfContext();
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
@@ -49,8 +49,9 @@ export default function NodesScreen() {
       const denied  = Object.values(results).some(r => r !== PermissionsAndroid.RESULTS.GRANTED);
       if (denied) return;
     }
-    start({ mode: LxmfNodeMode.BleOnly });
-  }, [start]);
+    await start({ mode: LxmfNodeMode.Reticulum, tcpInterfaces: [G00N_HUB] });
+    startBLE();
+  }, [start, startBLE]);
 
   useEffect(() => {
     if (isNativeAvailable && !isRunning) startMesh();

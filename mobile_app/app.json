@@ -45,8 +45,7 @@
           }
         }
       ],
-      "expo-secure-store",
-      "@magicred-1/react-native-lxmf"
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
