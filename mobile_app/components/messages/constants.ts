@@ -21,7 +21,19 @@ export const MESSAGES_SEED: AnyMsg[] = [
   { id: 8,  kind: 'sys',             text: 'node_7f3a went dark · last seen 02:44' },
 ];
 
-export const PEERS = [
+export interface Peer {
+  handle: string;
+  hops: number;
+  iface: string;
+  online: boolean;
+  unread: number;
+  last: string;
+  time: string;
+  beacon: boolean;
+  destHash?: string;
+}
+
+export const PEERS: Peer[] = [
   { handle: 'node_7f3a',    hops: 3, iface: 'RNode', online: true,  unread: 0, last: 'going dark. relay is up.',     time: '02:44', beacon: false },
   { handle: 'beacon_prime', hops: 0, iface: 'TCP',   online: true,  unread: 2, last: 'beacon broadcast · t+47min',  time: '02:41', beacon: true  },
   { handle: 'node_a1b2',    hops: 1, iface: 'TCP',   online: true,  unread: 0, last: 'route table synced.',          time: '02:18', beacon: false },
@@ -29,6 +41,4 @@ export const PEERS = [
   { handle: 'node_44ab',    hops: 2, iface: 'BLE',   online: true,  unread: 0, last: '0.5 sol received',             time: '23:41', beacon: false },
   { handle: 'relay_e2f0',   hops: 4, iface: 'RNode', online: true,  unread: 0, last: 'relay for node_7f3a',         time: '02:44', beacon: false },
   { handle: 'sensor_9812',  hops: 5, iface: 'RNode', online: false, unread: 0, last: 'telemetry batch · 412B',       time: '3d',    beacon: false },
-] as const;
-
-export type Peer = typeof PEERS[number];
+];

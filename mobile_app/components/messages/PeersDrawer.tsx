@@ -13,6 +13,7 @@ interface Props {
   readonly onPick:      (p: Peer) => void;
   readonly syncing?:    boolean;
   readonly onNewHash?:  (hash: string) => void;
+  readonly peers?:      Peer[];
 }
 
 // ── Skeleton peer row ────────────────────────────────────────────────────────
@@ -36,17 +37,18 @@ function PeerRowSkeleton() {
 // ── Peer list (default view) ─────────────────────────────────────────────────
 
 function PeerList({
-  active, onPick, onNew, syncing,
-}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void; readonly syncing?: boolean }) {
+  active, onPick, onNew, syncing, peers: peersProp,
+}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void; readonly syncing?: boolean; readonly peers?: Peer[] }) {
   const { colors }  = useTheme();
   const softGlass   = useGlass('soft');
   const accentGlass = useGlass('accent');
-  const onlineCount = PEERS.filter(p => p.online).length;
+  const peers = peersProp ?? PEERS;
+  const onlineCount = peers.filter(p => p.online).length;
 
   const [query, setQuery] = useState('');
   const filtered = query
-    ? PEERS.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
-    : PEERS;
+    ? peers.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
+    : peers;
 
   return (
     <View style={{ flex: 1 }}>
@@ -57,7 +59,7 @@ function PeerList({
             <Text style={[S.title, { color: colors.textPrimary }]}>connected peers</Text>
             {syncing
               ? <Text style={[S.subtitle, { color: colors.primary }]}>syncing…</Text>
-              : <Text style={[S.subtitle, { color: colors.textTertiary }]}>{onlineCount}/{PEERS.length} online</Text>
+              : <Text style={[S.subtitle, { color: colors.textTertiary }]}>{onlineCount}/{peers.length} online</Text>
             }
           </View>
         </View>
@@ -139,15 +141,15 @@ function PeerList({
 // ── New conversation view ────────────────────────────────────────────────────
 
 function NewConvoView({
-  onPick, onBack, onNewHash,
-}: { readonly onPick: (p: Peer) => void; readonly onBack: () => void; readonly onNewHash?: (h: string) => void }) {
+  onPick, onBack, onNewHash, peers: peersProp,
+}: { readonly onPick: (p: Peer) => void; readonly onBack: () => void; readonly onNewHash?: (h: string) => void; readonly peers?: Peer[] }) {
   const { colors }  = useTheme();
   const glass       = useGlass();
   const softGlass   = useGlass('soft');
 
   const [hash, setHash] = useState('');
 
-  const onlinePeers = PEERS.filter(p => p.online);
+  const onlinePeers = (peersProp ?? PEERS).filter(p => p.online);
 
   return (
     <View style={{ flex: 1 }}>
@@ -246,7 +248,7 @@ function NewConvoView({
 
 // ── PeersDrawer ──────────────────────────────────────────────────────────────
 
-export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, onNewHash }: Props) {
+export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, onNewHash, peers }: Props) {
   const [newMsg, setNewMsg] = useState(false);
 
   if (newMsg) {
@@ -255,6 +257,7 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, 
         onPick={onPick}
         onBack={() => setNewMsg(false)}
         onNewHash={onNewHash}
+        peers={peers}
       />
     );
   }
@@ -265,6 +268,7 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, 
       onPick={onPick}
       onNew={() => setNewMsg(true)}
       syncing={syncing}
+      peers={peers}
     />
   );
 });

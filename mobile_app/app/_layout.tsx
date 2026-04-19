@@ -15,6 +15,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
+import { LxmfProvider }  from '@/context/LxmfContext';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -34,16 +35,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <WalletProvider autoInitialize>
-        <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack initialRouteName="index">
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </NavThemeProvider>
-      </WalletProvider>
+      <LxmfProvider>
+        <WalletProvider autoInitialize>
+          <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack initialRouteName="index">
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </NavThemeProvider>
+        </WalletProvider>
+      </LxmfProvider>
     </ThemeProvider>
   );
 }

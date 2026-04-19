@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, ScrollView, Pressable,
   StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
+import { useLxmfContext } from '@/context/LxmfContext';
 import { SystemLine }            from '@/components/messages/SystemLine';
 import { MessageBubble }         from '@/components/messages/MessageBubble';
 import { RequestMoneyBubble }    from '@/components/messages/RequestMoneyBubble';
@@ -16,24 +17,64 @@ import { ThreadHeader }          from '@/components/messages/ThreadHeader';
 import { PeersDrawer }           from '@/components/messages/PeersDrawer';
 import { MESSAGES_SEED, DRAWER_W, type Peer } from '@/components/messages/constants';
 import type { AnyMsg, ChatMsg }  from '@/components/messages/types';
+import type { Beacon } from '@magicred-1/react-native-lxmf';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+function bytesToBase64(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i] ?? 0, b1 = bytes[i+1] ?? 0, b2 = bytes[i+2] ?? 0;
+    const t = (b0 << 16) | (b1 << 8) | b2;
+    out += B64[(t >> 18) & 63] + B64[(t >> 12) & 63];
+    out += i+1 < bytes.length ? B64[(t >> 6) & 63] : '=';
+    out += i+2 < bytes.length ? B64[t & 63] : '=';
+  }
+  return out;
+}
+function utf8ToBase64(s: string): string {
+  return bytesToBase64(new TextEncoder().encode(s));
+}
+
+function beaconToPeer(b: Beacon): Peer {
+  const now = Math.floor(Date.now() / 1000);
+  const ago = b.lastAnnounce > 0 ? `${Math.round(now - b.lastAnnounce)}s ago` : '—';
+  return {
+    handle:   b.destHash.slice(0, 8),
+    hops:     0,
+    iface:    'BLE',
+    online:   b.state === 'active',
+    unread:   0,
+    last:     `lxmf beacon · ${b.state}`,
+    time:     ago,
+    beacon:   false,
+    destHash: b.destHash,
+  };
+}
+
+// ── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
+  const { isRunning, beacons, send } = useLxmfContext();
+
   const [msgs,          setMsgs]          = useState<AnyMsg[]>(MESSAGES_SEED);
   const [activePeer,    setActivePeer]    = useState('node_7f3a');
+  const [activePeerHex, setActivePeerHex] = useState<string | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [peersSyncing,  setPeersSyncing]  = useState(true);
 
-  useEffect(() => {
-    const t = setTimeout(() => setPeersSyncing(false), 2500);
-    return () => clearTimeout(t);
-  }, []);
   const scrollRef     = useRef<ScrollView>(null);
   const drawerAnim    = useRef(new Animated.Value(-DRAWER_W)).current;
   const drawerOpenRef = useRef(false);
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
+
+  const livePeers: Peer[] = useMemo(
+    () => beacons.length > 0 ? beacons.map(beaconToPeer) : [],
+    [beacons],
+  );
 
   const openDrawer = useCallback(() => {
     drawerOpenRef.current = true;
@@ -77,13 +118,14 @@ export default function MessagesScreen() {
   const sendMsg = useCallback((text: string) => {
     const t = () => new Date().toTimeString().slice(0, 8);
     setMsgs(m => [...m, { id: Date.now(), from: 'me', me: true, time: t(), text, enc: true }]);
-    setTimeout(() => {
-      setMsgs(m => [...m, { id: Date.now() + 1, from: activePeer, me: false, time: t(), text: 'ack. routing via bd_mesh_02.', enc: true }]);
-    }, 1600);
-  }, [activePeer]);
+    if (activePeerHex && isRunning) {
+      send(activePeerHex, utf8ToBase64(text));
+    }
+  }, [activePeerHex, isRunning, send]);
 
   const pickPeer = useCallback((p: Peer) => {
     setActivePeer(p.handle);
+    setActivePeerHex(p.destHash ?? null);
     closeDrawer();
     setMsgs([
       { id: 1, kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` },
@@ -133,7 +175,12 @@ export default function MessagesScreen() {
         { backgroundColor: colors.glass, borderRightColor: colors.border },
         { transform: [{ translateX: drawerAnim }] },
       ]}>
-        <PeersDrawer active={activePeer} onPick={pickPeer} syncing={peersSyncing} />
+        <PeersDrawer
+          active={activePeer}
+          onPick={pickPeer}
+          syncing={!isRunning}
+          peers={livePeers.length > 0 ? livePeers : undefined}
+        />
       </Animated.View>
     </View>
   );

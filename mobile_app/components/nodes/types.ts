@@ -1,4 +1,14 @@
-import { NODES, FILTERS } from './constants';
+import { FILTERS } from './constants';
 
-export type NodeData = typeof NODES[number];
-export type Filter   = typeof FILTERS[number];
+export interface NodeData {
+  handle: string;
+  hops: number;
+  iface: 'TCP' | 'BLE' | 'RNode';
+  signal: number;
+  latency: string;
+  beacon?: boolean;
+  online?: boolean;
+  weak?: boolean;
+}
+
+export type Filter = typeof FILTERS[number];

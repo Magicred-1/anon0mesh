@@ -1,28 +1,64 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet, Platform, PermissionsAndroid } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LxmfNodeMode, type Beacon } from '@magicred-1/react-native-lxmf';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
-import { MeshMap }          from '@/components/nodes/MeshMap';
-import { NodeRow }          from '@/components/nodes/NodeRow';
-import { NodeRowSkeleton }  from '@/components/nodes/NodeRowSkeleton';
-import { BeaconRegistry }   from '@/components/nodes/BeaconRegistry';
-import { NODES, FILTERS }   from '@/components/nodes/constants';
-import type { Filter } from '@/components/nodes/types';
+import { useLxmfContext } from '@/context/LxmfContext';
+import { MeshMap }         from '@/components/nodes/MeshMap';
+import { NodeRow }         from '@/components/nodes/NodeRow';
+import { NodeRowSkeleton } from '@/components/nodes/NodeRowSkeleton';
+import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
+import { NODES, FILTERS }  from '@/components/nodes/constants';
+import type { NodeData, Filter } from '@/components/nodes/types';
+
+function beaconToNode(b: Beacon): NodeData {
+  const active = b.state === 'active';
+  const ago    = b.lastAnnounce > 0
+    ? `${Math.round(Date.now() / 1000 - b.lastAnnounce)}s`
+    : '—';
+  return {
+    handle:  `@${b.destHash.slice(0, 8)}`,
+    hops:    0,
+    iface:   'BLE',
+    signal:  active ? 4 : 2,
+    latency: ago,
+    online:  active,
+    weak:    b.reconnectAttempts > 2,
+  };
+}
 
 export default function NodesScreen() {
   const { colors } = useTheme();
   const glass = useGlass();
+  const { isRunning, isNativeAvailable, beacons, start } = useLxmfContext();
+
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
-  const [announcing,     setAnnouncing]     = useState(true);
+
+  const startMesh = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      const perms = Platform.Version >= 31
+        ? [
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          ]
+        : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
+      const results = await PermissionsAndroid.requestMultiple(perms);
+      const denied  = Object.values(results).some(r => r !== PermissionsAndroid.RESULTS.GRANTED);
+      if (denied) return;
+    }
+    start({ mode: LxmfNodeMode.BleOnly });
+  }, [start]);
 
   useEffect(() => {
-    const t = setTimeout(() => setAnnouncing(false), 3000);
-    return () => clearTimeout(t);
-  }, []);
+    if (isNativeAvailable && !isRunning) startMesh();
+  }, [isNativeAvailable, isRunning, startMesh]);
 
-  const shown = filter === 'all' ? NODES : NODES.filter(n => n.iface === filter);
+  const liveNodes: NodeData[] = beacons.length > 0 ? beacons.map(beaconToNode) : NODES;
+  const announcing = !isRunning;
+  const shown = filter === 'all' ? liveNodes : liveNodes.filter(n => n.iface === filter);
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
@@ -67,7 +103,7 @@ export default function NodesScreen() {
             <Text style={[S.sectionText,  { color: colors.textTertiary }]}>LINKED PEERS</Text>
             {announcing
               ? <Text style={[S.sectionCount, { color: colors.primary }]}>awaiting announces…</Text>
-              : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>{shown.length} of {NODES.length}</Text>
+              : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>{shown.length} of {liveNodes.length}</Text>
             }
           </View>
 
