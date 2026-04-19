@@ -105,54 +105,56 @@ export default function WalletScreen() {
             {/* ── Quick actions ── */}
             <WalletTabs tab={tab} onTab={toggleTab} />
 
-            {/* ── Portfolio ── */}
-            <View style={S.section}>
-              <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>PORTFOLIO</Text>
-              <View style={[S.assetList, glass]}>
-                {ASSETS.map((a, i) => {
-                  const ch = ASSET_CHANGE[a.sym];
-                  return (
-                    <View
-                      key={a.sym}
-                      style={[
-                        S.assetRow,
-                        i < ASSETS.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle },
-                      ]}
-                    >
-                      <AssetDot asset={a} size={38} />
-                      <View style={S.assetMid}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                          <Text style={[S.assetSym, { color: colors.textPrimary }]}>{a.sym}</Text>
-                          {a.priv && <Feather name="lock" size={9} color={colors.primary} />}
-                        </View>
-                        <Text style={[S.assetName, { color: colors.textTertiary }]}>{a.name}</Text>
-                      </View>
-                      <View style={S.assetRight}>
-                        <Text style={[S.assetUsd, { color: colors.textPrimary }]}>
-                          {balHidden ? '••••' : `$${a.usd.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          <Text style={[S.assetBal, { color: colors.textTertiary }]}>
-                            {balHidden ? '•••' : a.bal}
-                          </Text>
-                          {!balHidden && ch && (
-                            <Text style={[S.assetChange, { color: ch.up ? colors.primary : colors.error }]}>
-                              {ch.up ? '↑' : '↓'}{Math.abs(ch.pct)}%
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* ── Active panel ── */}
+            {/* ── Active panel (immediately after tabs) ── */}
             {tab === 'send'    && <SendPanel />}
             {tab === 'receive' && <ReceivePanel />}
             {tab === 'swap'    && <SwapPanel />}
             {tab === 'yield'   && <YieldPanel />}
+
+            {/* ── Portfolio (hidden when panel active) ── */}
+            {!tab && (
+              <View style={S.section}>
+                <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>PORTFOLIO</Text>
+                <View style={[S.assetList, glass]}>
+                  {ASSETS.map((a, i) => {
+                    const ch = ASSET_CHANGE[a.sym];
+                    return (
+                      <View
+                        key={a.sym}
+                        style={[
+                          S.assetRow,
+                          i < ASSETS.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle },
+                        ]}
+                      >
+                        <AssetDot asset={a} size={38} />
+                        <View style={S.assetMid}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <Text style={[S.assetSym, { color: colors.textPrimary }]}>{a.sym}</Text>
+                            {a.priv && <Feather name="lock" size={9} color={colors.primary} />}
+                          </View>
+                          <Text style={[S.assetName, { color: colors.textTertiary }]}>{a.name}</Text>
+                        </View>
+                        <View style={S.assetRight}>
+                          <Text style={[S.assetUsd, { color: colors.textPrimary }]}>
+                            {balHidden ? '••••' : `$${a.usd.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <Text style={[S.assetBal, { color: colors.textTertiary }]}>
+                              {balHidden ? '•••' : a.bal}
+                            </Text>
+                            {!balHidden && ch && ch.pct !== 0 && (
+                              <Text style={[S.assetChange, { color: ch.up ? colors.primary : colors.error }]}>
+                                {ch.up ? '↑' : '↓'}{Math.abs(ch.pct)}%
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
           </ScrollView>
         </KeyboardAvoidingView>

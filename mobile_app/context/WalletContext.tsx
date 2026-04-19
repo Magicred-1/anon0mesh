@@ -173,7 +173,14 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       const secretKey = await wallet.exportSecretKey();
       return bs58.encode(secretKey);
     } catch (err) {
-      Alert.alert('Error', 'Failed to export secret key.');
+      const msg = err instanceof Error ? err.message : String(err);
+      const isNotFound = msg.includes('not found') || msg.includes('Not Found');
+      Alert.alert(
+        'Export failed',
+        isNotFound
+          ? 'Secret key was never stored (biometric setup failed at wallet creation). Sign out and recreate your wallet to fix this.'
+          : `Could not read key: ${msg}`,
+      );
       return null;
     }
   }, [wallet]);

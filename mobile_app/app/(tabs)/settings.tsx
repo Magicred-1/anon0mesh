@@ -12,6 +12,7 @@ import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { useWallet } from '@/context/WalletContext';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -286,6 +287,64 @@ function QRModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ── KeyBox ────────────────────────────────────────────────────────────────────
+
+interface KeyBoxProps {
+  loading: boolean;
+  secretKey: string | null;
+  revealed: boolean;
+  copied: boolean;
+  failed: boolean;
+  masked: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+  onAuthenticate: () => void;
+  onRevealIn: () => void;
+  onRevealOut: () => void;
+  onCopy: () => void;
+}
+
+function KeyBox({ loading, secretKey, revealed, copied, failed, masked, colors, onAuthenticate, onRevealIn, onRevealOut, onCopy }: Readonly<KeyBoxProps>) {
+  if (loading) {
+    return (
+      <View style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
+        <Text style={[S.exportHint, { color: colors.textTertiary }]}>AUTHENTICATING…</Text>
+      </View>
+    );
+  }
+  if (secretKey) {
+    return (
+      <View style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: revealed ? colors.primary + '60' : colors.border }]}>
+        <Pressable onPressIn={onRevealIn} onPressOut={onRevealOut} style={{ width: '100%', alignItems: 'center' }}>
+          <Text style={[S.keyText, { color: revealed ? colors.textPrimary : colors.textTertiary, letterSpacing: revealed ? 0 : 2 }]}>
+            {revealed ? secretKey : masked.slice(0, 44) + '\n' + masked.slice(44)}
+          </Text>
+        </Pressable>
+        <Pressable onPress={onCopy} style={[S.copyKeyBtn, { borderColor: colors.border, backgroundColor: colors.surface1 }]}>
+          <Feather name={copied ? 'check' : 'copy'} size={11} color={copied ? colors.primary : colors.textTertiary} />
+          <Text style={[S.exportHint, { color: copied ? colors.primary : colors.textTertiary }]}>
+            {copied ? 'COPIED' : 'COPY'}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (failed) {
+    return (
+      <View style={[S.keyBox, { backgroundColor: colors.error + '0D', borderColor: colors.error + '38' }]}>
+        <Text style={[S.exportHint, { color: colors.error, textAlign: 'center', lineHeight: 18 }]}>
+          KEY NOT FOUND{'\n'}Sign out and recreate wallet to fix
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <Pressable onPress={onAuthenticate} style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
+      <Feather name="lock" size={16} color={colors.textTertiary} style={{ marginBottom: 6 }} />
+      <Text style={[S.exportHint, { color: colors.textTertiary }]}>TAP TO AUTHENTICATE</Text>
+    </Pressable>
+  );
+}
+
 // ── ExportWalletModal ─────────────────────────────────────────────────────────
 
 function ExportWalletModal({ onClose }: { onClose: () => void }) {
@@ -295,15 +354,28 @@ function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [revealed,  setRevealed]  = useState(false);
   const [loading,   setLoading]   = useState(false);
+  const [failed,    setFailed]    = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
-    if (walletMode === 'local') {
-      setLoading(true);
-      exportPrivateKey().then(key => { setSecretKey(key); setLoading(false); }).catch(() => setLoading(false));
-    }
-  }, [sheetAnim, walletMode, exportPrivateKey]);
+  }, [sheetAnim]);
+
+  const authenticate = useCallback(async () => {
+    setLoading(true);
+    setFailed(false);
+    const key = await exportPrivateKey();
+    if (key) { setSecretKey(key); } else { setFailed(true); }
+    setLoading(false);
+  }, [exportPrivateKey]);
+
+  const copyKey = useCallback(async () => {
+    if (!secretKey) return;
+    await Clipboard.setStringAsync(secretKey);
+    setKeyCopied(true);
+    setTimeout(() => setKeyCopied(false), 1400);
+  }, [secretKey]);
 
   const dismiss = () => {
     Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(onClose);
@@ -359,29 +431,23 @@ function ExportWalletModal({ onClose }: { onClose: () => void }) {
                 </Text>
               </View>
 
-              {loading ? (
-                <View style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
-                  <Text style={[S.exportHint, { color: colors.textTertiary }]}>LOADING…</Text>
-                </View>
-              ) : secretKey ? (
-                <Pressable
-                  onPressIn={() => setRevealed(true)}
-                  onPressOut={() => setRevealed(false)}
-                  style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: revealed ? colors.primary + '60' : colors.border }]}
-                >
-                  <Text style={[S.keyText, { color: revealed ? colors.textPrimary : colors.textTertiary, letterSpacing: revealed ? 0 : 2 }]}>
-                    {revealed ? secretKey : masked.slice(0, 44) + '\n' + masked.slice(44)}
-                  </Text>
-                </Pressable>
-              ) : (
-                <View style={[S.keyBox, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
-                  <Text style={[S.exportHint, { color: colors.error }]}>FAILED TO LOAD KEY</Text>
-                </View>
-              )}
+              <KeyBox
+                loading={loading}
+                secretKey={secretKey}
+                revealed={revealed}
+                copied={keyCopied}
+                failed={failed}
+                masked={masked}
+                colors={colors}
+                onAuthenticate={authenticate}
+                onRevealIn={() => setRevealed(true)}
+                onRevealOut={() => setRevealed(false)}
+                onCopy={copyKey}
+              />
 
-              <Text style={[S.exportHint, { color: colors.textTertiary, textAlign: 'center' }]}>
+              {!!secretKey && <Text style={[S.exportHint, { color: colors.textTertiary, textAlign: 'center' }]}>
                 HOLD TO REVEAL · BASE58 ENCODED
-              </Text>
+              </Text>}
 
               <Pressable onPress={dismiss} style={[S.doneBtn, softGlass]}>
                 <Text style={[S.doneBtnText, { color: colors.textSecondary }]}>DONE</Text>
@@ -598,7 +664,8 @@ export default function SettingsScreen() {
     router.replace('/onboarding');
   }, [disconnect, router]);
 
-  const copyHandle = useCallback(() => {
+  const copyHandle = useCallback(async () => {
+    await Clipboard.setStringAsync(ANONMESH_HASH);
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
   }, []);
@@ -613,20 +680,20 @@ export default function SettingsScreen() {
           {/* ── Identity card ── */}
           <View style={{ padding: 16, paddingBottom: 8 }}>
             <View style={[S.identityCard, baseGlass]}>
-              <Pressable onPress={() => setQrOpen(true)} style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-                <QRCode size={72} />
+              <Text style={[S.idLabel, { color: colors.textTertiary, alignSelf: 'center' }]}>YOUR IDENTITY</Text>
+              <Pressable onPress={() => setQrOpen(true)} style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border, alignSelf: 'center' }]}>
+                <QRCode size={120} />
               </Pressable>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[S.idLabel, { color: colors.textTertiary }]}>YOUR IDENTITY</Text>
+              <View style={{ alignItems: 'center', gap: 3 }}>
                 <Text style={[S.idHandle, { color: colors.textPrimary }]}>@node_7f3a</Text>
                 <Text style={[S.idHash, { color: colors.textSecondary }]}>7xKq9h..F2p3aL8m</Text>
-                <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, alignItems: 'center' }}>
-                  <Pressable onPress={copyHandle} style={[S.copyBtn, softGlass]}>
-                    <Text style={[S.copyBtnText, { color: copied ? colors.primary : colors.textSecondary }]}>
-                      {copied ? '✓ copied' : 'copy'}
-                    </Text>
-                  </Pressable>
-                </View>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                <Pressable onPress={copyHandle} style={[S.copyBtn, softGlass]}>
+                  <Text style={[S.copyBtnText, { color: copied ? colors.primary : colors.textSecondary }]}>
+                    {copied ? '✓ copied' : 'copy hash'}
+                  </Text>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -736,12 +803,13 @@ const S = StyleSheet.create({
   root: { flex: 1 },
 
   // Identity card
-  identityCard: { borderRadius: 18, padding: 16, flexDirection: 'row', gap: 14, alignItems: 'center' },
-  qrWrap:       { padding: 6, borderRadius: 10, borderWidth: 0.5, overflow: 'hidden' },
+  identityCard: { borderRadius: 18, padding: 20, flexDirection: 'column', gap: 14, alignItems: 'stretch' },
+  qrWrap:       { padding: 8, borderRadius: 12, borderWidth: 0.5, overflow: 'hidden' },
   idLabel:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  idHandle:     { fontFamily: fontFamily.sansMd, fontSize: 13, marginTop: 4, letterSpacing: 0.5 },
-  idHash:       { fontFamily: fontFamily.sansMd, fontSize: 10.5, marginTop: 3 },
+  idHandle:     { fontFamily: fontFamily.sansMd, fontSize: 16, letterSpacing: 0.3 },
+  idHash:       { fontFamily: fontFamily.sansMd, fontSize: 11, marginTop: 2 },
   copyBtn:      { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99 },
+  copyKeyBtn:   { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, marginTop: 10, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 0.5 },
   copyBtnText:  { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
 
   // Section label
