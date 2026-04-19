@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import {
   useLxmf,
   LxmfNodeMode,
@@ -17,6 +17,8 @@ interface LxmfCtxValue {
   beacons: Beacon[];
   events: LxmfEvent[];
   error: string | null;
+  /** destHash → displayName from appData of announces/beacons */
+  nameMap: Record<string, string>;
   start: (overrides?: {
     identityHex?: string;
     lxmfAddressHex?: string;
@@ -33,30 +35,52 @@ interface LxmfCtxValue {
 
 const LxmfCtx = createContext<LxmfCtxValue | null>(null);
 
+/* TODO:
+  Persist identity and display name in SecureStore and load on init.
+*/
 export function LxmfProvider({ children }: { readonly children: React.ReactNode }) {
   const lxmf = useLxmf({
     identityHex:    'new',
     lxmfAddressHex: 'new',
     logLevel:       2,
+    displayName:    'magic-mobile',
     mode:           LxmfNodeMode.Reticulum,
     tcpInterfaces:  [G00N_HUB],
   });
 
+  const nameMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const e of lxmf.events) {
+      if (
+        (e.type === 'announceReceived' || e.type === 'beaconDiscovered') &&
+        typeof e.destHash === 'string' &&
+        typeof e.appData === 'string' &&
+        e.appData.trim().length > 0
+      ) {
+        m[e.destHash] = e.appData.trim();
+      }
+    }
+    return m;
+  }, [lxmf.events]);
+
+  const value = useMemo(() => ({
+    isRunning:         lxmf.isRunning,
+    isNativeAvailable: lxmf.isNativeAvailable,
+    status:            lxmf.status,
+    beacons:           lxmf.beacons,
+    events:            lxmf.events,
+    error:             lxmf.error,
+    nameMap,
+    start:             lxmf.start,
+    stop:              lxmf.stop,
+    send:              lxmf.send,
+    broadcast:         lxmf.broadcast,
+    startBLE:          lxmf.startBLE,
+    stopBLE:           lxmf.stopBLE,
+  }), [nameMap, lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons, lxmf.events, lxmf.error, lxmf.start, lxmf.stop, lxmf.send, lxmf.broadcast, lxmf.startBLE, lxmf.stopBLE]);
+
   return (
-    <LxmfCtx.Provider value={{
-      isRunning:         lxmf.isRunning,
-      isNativeAvailable: lxmf.isNativeAvailable,
-      status:            lxmf.status,
-      beacons:           lxmf.beacons,
-      events:            lxmf.events,
-      error:             lxmf.error,
-      start:             lxmf.start,
-      stop:              lxmf.stop,
-      send:              lxmf.send,
-      broadcast:         lxmf.broadcast,
-      startBLE:          lxmf.startBLE,
-      stopBLE:           lxmf.stopBLE,
-    }}>
+    <LxmfCtx.Provider value={value}>
       {children}
     </LxmfCtx.Provider>
   );

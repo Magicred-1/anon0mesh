@@ -37,11 +37,12 @@ function utf8ToBase64(s: string): string {
   return bytesToBase64(new TextEncoder().encode(s));
 }
 
-function beaconToPeer(b: Beacon): Peer {
-  const now = Math.floor(Date.now() / 1000);
-  const ago = b.lastAnnounce > 0 ? `${Math.round(now - b.lastAnnounce)}s ago` : '—';
+function beaconToPeer(b: Beacon, nameMap: Record<string, string>): Peer {
+  const now  = Math.floor(Date.now() / 1000);
+  const ago  = b.lastAnnounce > 0 ? `${Math.round(now - b.lastAnnounce)}s ago` : '—';
+  const name = nameMap[b.destHash];
   return {
-    handle:   b.destHash.slice(0, 8),
+    handle:   name || b.destHash.slice(0, 8),
     hops:     0,
     iface:    'BLE',
     online:   b.state === 'active',
@@ -57,7 +58,7 @@ function beaconToPeer(b: Beacon): Peer {
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
-  const { isRunning, beacons, send } = useLxmfContext();
+  const { isRunning, beacons, nameMap, send } = useLxmfContext();
 
   const [msgs,          setMsgs]          = useState<AnyMsg[]>(MESSAGES_SEED);
   const [activePeer,    setActivePeer]    = useState('node_7f3a');
@@ -72,8 +73,8 @@ export default function MessagesScreen() {
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
 
   const livePeers: Peer[] = useMemo(
-    () => beacons.length > 0 ? beacons.map(beaconToPeer) : [],
-    [beacons],
+    () => beacons.length > 0 ? beacons.map(b => beaconToPeer(b, nameMap)) : [],
+    [beacons, nameMap],
   );
 
   const openDrawer = useCallback(() => {

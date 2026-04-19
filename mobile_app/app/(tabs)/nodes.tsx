@@ -12,13 +12,15 @@ import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
 
-function beaconToNode(b: Beacon): NodeData {
+function beaconToNode(b: Beacon, nameMap: Record<string, string>): NodeData {
   const active = b.state === 'active';
   const ago    = b.lastAnnounce > 0
     ? `${Math.round(Date.now() / 1000 - b.lastAnnounce)}s`
     : '—';
+  const name   = nameMap[b.destHash];
+  const handle = name ? `@${name.slice(0, 16)}` : `@${b.destHash.slice(0, 8)}`;
   return {
-    handle:  `@${b.destHash.slice(0, 8)}`,
+    handle,
     hops:    0,
     iface:   'BLE',
     signal:  active ? 4 : 2,
@@ -31,7 +33,7 @@ function beaconToNode(b: Beacon): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const glass = useGlass();
-  const { isRunning, isNativeAvailable, beacons, start, startBLE } = useLxmfContext();
+  const { isRunning, isNativeAvailable, beacons, nameMap, start, startBLE } = useLxmfContext();
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export default function NodesScreen() {
     if (isNativeAvailable && !isRunning) startMesh();
   }, [isNativeAvailable, isRunning, startMesh]);
 
-  const liveNodes: NodeData[] = beacons.length > 0 ? beacons.map(beaconToNode) : NODES;
+  const liveNodes: NodeData[] = beacons.length > 0 ? beacons.map(b => beaconToNode(b, nameMap)) : NODES;
   const announcing = !isRunning;
   const shown = filter === 'all' ? liveNodes : liveNodes.filter(n => n.iface === filter);
 
