@@ -22,6 +22,12 @@ export default function MessagesScreen() {
   const [msgs,          setMsgs]          = useState<AnyMsg[]>(MESSAGES_SEED);
   const [activePeer,    setActivePeer]    = useState('node_7f3a');
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [peersSyncing,  setPeersSyncing]  = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setPeersSyncing(false), 2500);
+    return () => clearTimeout(t);
+  }, []);
   const scrollRef     = useRef<ScrollView>(null);
   const drawerAnim    = useRef(new Animated.Value(-DRAWER_W)).current;
   const drawerOpenRef = useRef(false);
@@ -127,7 +133,7 @@ export default function MessagesScreen() {
         { backgroundColor: colors.glass, borderRightColor: colors.border },
         { transform: [{ translateX: drawerAnim }] },
       ]}>
-        <PeersDrawer active={activePeer} onPick={pickPeer} />
+        <PeersDrawer active={activePeer} onPick={pickPeer} syncing={peersSyncing} />
       </Animated.View>
     </View>
   );

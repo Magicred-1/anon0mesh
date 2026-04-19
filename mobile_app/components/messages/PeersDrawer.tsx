@@ -4,21 +4,40 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useGlass } from '../../hooks/useGlass';
 import { PEERS, type Peer } from './constants';
 
 interface Props {
   readonly active:      string;
   readonly onPick:      (p: Peer) => void;
-
+  readonly syncing?:    boolean;
   readonly onNewHash?:  (hash: string) => void;
+}
+
+// ── Skeleton peer row ────────────────────────────────────────────────────────
+
+function PeerRowSkeleton() {
+  return (
+    <View style={[S.row, { borderColor: 'transparent' }]}>
+      <Skeleton width={34} height={34} radius={10} />
+      <View style={[S.info, { gap: 6 }]}>
+        <View style={S.infoRow}>
+          <Skeleton width="55%" height={10} />
+          <Skeleton width={24} height={8} />
+        </View>
+        <Skeleton width="80%" height={9} />
+        <Skeleton width="40%" height={8} />
+      </View>
+    </View>
+  );
 }
 
 // ── Peer list (default view) ─────────────────────────────────────────────────
 
 function PeerList({
-  active, onPick, onNew,
-}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void }) {
+  active, onPick, onNew, syncing,
+}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void; readonly syncing?: boolean }) {
   const { colors }  = useTheme();
   const softGlass   = useGlass('soft');
   const accentGlass = useGlass('accent');
@@ -36,7 +55,10 @@ function PeerList({
           <Text style={[S.label, { color: colors.textTertiary }]}>anonmesh</Text>
           <View style={S.titleRow}>
             <Text style={[S.title, { color: colors.textPrimary }]}>connected peers</Text>
-            <Text style={[S.subtitle, { color: colors.textTertiary }]}>{onlineCount}/{PEERS.length} online</Text>
+            {syncing
+              ? <Text style={[S.subtitle, { color: colors.primary }]}>syncing…</Text>
+              : <Text style={[S.subtitle, { color: colors.textTertiary }]}>{onlineCount}/{PEERS.length} online</Text>
+            }
           </View>
         </View>
       </SafeAreaView>
@@ -61,7 +83,9 @@ function PeerList({
       </View>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={S.listContent}>
-        {filtered.map(p => {
+        {syncing ? (
+          [0,1,2,3,4].map(i => <PeerRowSkeleton key={i} />)
+        ) : filtered.map(p => {
           const isActive = active === p.handle;
           return (
             <Pressable
@@ -100,7 +124,7 @@ function PeerList({
             </Pressable>
           );
         })}
-      </ScrollView>
+        </ScrollView>
 
       <View style={S.footer}>
         <Pressable onPress={onNew} style={[S.newBtn, accentGlass]}>
@@ -222,7 +246,7 @@ function NewConvoView({
 
 // ── PeersDrawer ──────────────────────────────────────────────────────────────
 
-export const PeersDrawer = memo(function PeersDrawer({ active, onPick, onNewHash }: Props) {
+export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, onNewHash }: Props) {
   const [newMsg, setNewMsg] = useState(false);
 
   if (newMsg) {
@@ -240,6 +264,7 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick, onNewHash
       active={active}
       onPick={onPick}
       onNew={() => setNewMsg(true)}
+      syncing={syncing}
     />
   );
 });

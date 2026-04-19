@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
-import { MeshMap }        from '@/components/nodes/MeshMap';
-import { NodeRow }        from '@/components/nodes/NodeRow';
-import { BeaconRegistry } from '@/components/nodes/BeaconRegistry';
-import { NODES, FILTERS } from '@/components/nodes/constants';
+import { MeshMap }          from '@/components/nodes/MeshMap';
+import { NodeRow }          from '@/components/nodes/NodeRow';
+import { NodeRowSkeleton }  from '@/components/nodes/NodeRowSkeleton';
+import { BeaconRegistry }   from '@/components/nodes/BeaconRegistry';
+import { NODES, FILTERS }   from '@/components/nodes/constants';
 import type { Filter } from '@/components/nodes/types';
 
 export default function NodesScreen() {
@@ -14,6 +15,12 @@ export default function NodesScreen() {
   const glass = useGlass();
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
+  const [announcing,     setAnnouncing]     = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnnouncing(false), 3000);
+    return () => clearTimeout(t);
+  }, []);
 
   const shown = filter === 'all' ? NODES : NODES.filter(n => n.iface === filter);
 
@@ -58,13 +65,19 @@ export default function NodesScreen() {
 
           <View style={S.sectionRow}>
             <Text style={[S.sectionText,  { color: colors.textTertiary }]}>LINKED PEERS</Text>
-            <Text style={[S.sectionCount, { color: colors.textTertiary }]}>{shown.length} of {NODES.length}</Text>
+            {announcing
+              ? <Text style={[S.sectionCount, { color: colors.primary }]}>awaiting announces…</Text>
+              : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>{shown.length} of {NODES.length}</Text>
+            }
           </View>
 
           <View style={[S.list, glass]}>
-            {shown.map(n => (
-              <NodeRow key={n.handle} n={n} selected={n.handle === selectedHandle} />
-            ))}
+            {announcing
+              ? [0,1,2,3,4].map(i => <NodeRowSkeleton key={i} />)
+              : shown.map(n => (
+                  <NodeRow key={n.handle} n={n} selected={n.handle === selectedHandle} />
+                ))
+            }
           </View>
 
         </ScrollView>
