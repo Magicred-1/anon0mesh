@@ -122,9 +122,12 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       finalize(await WalletFactory.createMWA());
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      setIsLoading(false);
+      if (msg.includes('CancellationException') || msg.toLowerCase().includes('cancelled')) {
+        return;
+      }
       console.error('[connectMWA] error:', msg, err);
       setError(msg);
-      setIsLoading(false);
       Alert.alert('MWA Error', msg);
     }
   }, [finalize]);

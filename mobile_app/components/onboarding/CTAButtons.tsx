@@ -1,7 +1,7 @@
-import React, { memo, useEffect, useRef } from 'react';
-import { Animated, Pressable, Text, View, StyleSheet } from 'react-native';
+import React, { memo } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { fontFamily } from '@/theme';
-import { CYAN, DARK } from './constants';
 import { SolanaIcon } from './SolanaIcon';
 
 interface Props {
@@ -10,119 +10,82 @@ interface Props {
   onCreate:  () => void;
 }
 
-export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCreate }: Props) {
-  const pulse = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.012, duration: 2400, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1,     duration: 2400, useNativeDriver: true }),
-      ])
-    );
-    anim.start();
-    return () => anim.stop();
-  }, [pulse]);
-
-  const dim = isLoading ? '#6a7a7a' : CYAN;
-
+export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCreate }: Readonly<Props>) {
   return (
     <View style={S.wrap}>
-      <Animated.View style={{ transform: [{ scale: pulse }], gap: 14 }}>
 
-        {/* CREATE_WALLET */}
-        <Pressable
-          onPress={onCreate}
-          disabled={isLoading}
-          style={({ pressed }) => [S.btn, pressed && S.pressed]}
+      {/* CREATE IDENTITY — cyan gradient pill + glow */}
+      <Pressable
+        onPress={onCreate}
+        disabled={isLoading}
+        style={({ pressed }) => [S.primaryShell, isLoading && S.dim, pressed && S.pressed]}
+      >
+        <LinearGradient
+          colors={['#00e5ff', '#0099bb']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={S.primary}
         >
-          <View style={S.btnInner}>
-            <Text style={[S.btnText, { color: dim }]}>
-              {isLoading ? 'LOADING...' : 'CREATE_WALLET'}
-            </Text>
-          </View>
-        </Pressable>
+          <Text style={S.primaryText}>
+            {isLoading ? 'CONNECTING...' : 'CREATE IDENTITY'}
+          </Text>
+        </LinearGradient>
+      </Pressable>
 
-        {/* CONNECT_WALLET */}
+      {/* CONNECT WALLET — Android only, cyan outline pill */}
+      {Platform.OS === 'android' && (
         <Pressable
           onPress={onConnect}
           disabled={isLoading}
-          style={({ pressed }) => [S.btn, pressed && S.pressed]}
+          style={({ pressed }) => [
+            S.secondary,
+            isLoading && S.dim,
+            pressed && S.pressed,
+          ]}
         >
-          <View style={[S.btnInner, S.btnRow]}>
-            <Text style={[S.btnText, { color: dim }]}>
-              {isLoading ? 'LOADING...' : 'CONNECT_WALLET'}
-            </Text>
-            <View style={S.iconWrap}>
-              <SolanaIcon size={28} color={dim} />
-            </View>
-          </View>
+          <SolanaIcon size={16} color="#00c8e0" />
+          <Text style={S.secondaryText}>CONNECT WALLET</Text>
         </Pressable>
+      )}
 
-      </Animated.View>
-
-      <Text style={S.footer}>🔒 OPEN SOURCE • PRIVATE • DECENTRALIZED</Text>
     </View>
   );
 });
 
 const S = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    paddingTop: 8,
-    gap: 14,
-  },
+  wrap: { paddingHorizontal: 24, gap: 14 },
 
-  btn: {
-    height: 64,
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: CYAN,
-    backgroundColor: DARK,
-    shadowColor: CYAN,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 10,
-    elevation: 6,
+  // Outer shell carries the shadow / glow
+  primaryShell: {
+    borderRadius: 32,
+    shadowColor: '#00e5ff',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 18,
+    elevation: 10,
   },
-  pressed: { opacity: 0.72 },
-
-  btnInner: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,229,255,0.03)',
+  primary: {
+    height: 60, borderRadius: 32,
+    alignItems: 'center', justifyContent: 'center',
   },
-  btnRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-  },
-
-  btnText: {
+  primaryText: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 3,
-    textShadowColor: CYAN,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
+    fontSize: 14, fontWeight: '800',
+    color: '#001820', letterSpacing: 3,
   },
 
-  iconWrap: {
-    position: 'absolute',
-    right: 20,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
+  secondary: {
+    height: 54, borderRadius: 27,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: 'rgba(0,229,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(0,229,255,0.22)',
   },
-
-  footer: {
+  secondaryText: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 10,
-    color: '#3a6060',
-    letterSpacing: 1.5,
-    textAlign: 'center',
+    fontSize: 13, fontWeight: '600',
+    color: 'rgba(0,229,255,0.65)', letterSpacing: 2.5,
   },
+
+  dim:     { opacity: 0.45 },
+  pressed: { opacity: 0.8 },
 });
