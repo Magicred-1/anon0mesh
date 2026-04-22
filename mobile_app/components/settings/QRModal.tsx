@@ -16,11 +16,13 @@ export function QRModal({ onClose }: { onClose: () => void }) {
   const baseGlass   = useGlass();
   const accentGlass = useGlass('accent');
   const { publicKey } = useWallet();
-  const { status }    = useLxmfContext();
+  const { status, displayName }    = useLxmfContext();
   const [tab, setTab] = useState<QRTab>('anonmesh');
 
   const meshAddress = status?.addressHex ?? '';
-  const meshHandle  = meshAddress ? `@${meshAddress.slice(0, 8)}` : '@——';
+  const meshIdentity =  displayName || meshAddress || 'unknown';
+  
+  const meshHandle  = meshAddress ? `@${meshIdentity}` : '@——';
   const scaleAnim   = useRef(new Animated.Value(0.85)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 

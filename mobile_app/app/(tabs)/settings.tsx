@@ -64,8 +64,7 @@ export default function SettingsScreen() {
                 <QRCode size={120} data={meshAddress || 'no-identity'} />
               </Pressable>
               <View style={{ alignItems: 'center', gap: 3 }}>
-                <Text style={[S.idHandle,      { color: colors.textPrimary }]}>{meshHandle}</Text>
-                <Text style={[S.idDisplayName, { color: colors.primary }]}>{displayName}</Text>
+                <Text style={[S.idHandle,      { color: colors.textPrimary }]}>@{displayName}</Text>
                 <Text style={[S.idHash,        { color: colors.textSecondary }]}>{shortHash}</Text>
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
