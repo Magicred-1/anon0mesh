@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Platform, PermissionsAndroid } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LxmfNodeMode, type Beacon } from '@magicred-1/react-native-lxmf';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
-import { useLxmfContext, G00N_HUB } from '@/context/LxmfContext';
+import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { NodeRow }         from '@/components/nodes/NodeRow';
 import { NodeRowSkeleton } from '@/components/nodes/NodeRowSkeleton';
@@ -12,33 +11,36 @@ import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
 
-function beaconToNode(b: Beacon, nameMap: Record<string, string>): NodeData {
-  const active = b.state === 'active';
-  const ago    = b.lastAnnounce > 0
-    ? `${Math.round(Date.now() / 1000 - b.lastAnnounce)}s`
-    : '—';
-  const name   = nameMap[b.destHash];
-  const handle = name ? `@${name.slice(0, 16)}` : `@${b.destHash.slice(0, 8)}`;
+function peerToNode(p: LxmfPeer, nowSec: number): NodeData {
+  const ago = p.lastSeen > 0 ? `${Math.round(nowSec - p.lastSeen)}s` : '—';
   return {
-    handle,
-    hops:    0,
-    iface:   'BLE',
-    signal:  active ? 4 : 2,
-    latency: ago,
-    online:  active,
-    weak:    b.reconnectAttempts > 2,
+    handle:   `@${p.displayName.slice(0, 16)}`,
+    hops:     p.hops,
+    iface:    p.via === 'ble' ? 'BLE' : 'TCP',
+    signal:   p.online ? 4 : 2,
+    latency:  ago,
+    online:   p.online,
+    weak:     false,
+    destHash: p.destHash,
   };
 }
 
 export default function NodesScreen() {
   const { colors } = useTheme();
   const glass = useGlass();
-  const { isRunning, isNativeAvailable, beacons, nameMap, start, startBLE } = useLxmfContext();
+  const { isRunning, isNativeAvailable, peers, startBLE } = useLxmfContext();
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
+  const [nowSec, setNowSec] = useState(() => Date.now() / 1000);
 
-  const startMesh = useCallback(async () => {
+  useEffect(() => {
+    const id = setInterval(() => setNowSec(Date.now() / 1000), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // TCP/Reticulum auto-starts in LxmfProvider. Only BLE needs explicit start + Android permissions.
+  const enableBle = useCallback(async () => {
     if (Platform.OS === 'android') {
       const perms = Platform.Version >= 31
         ? [
@@ -51,17 +53,16 @@ export default function NodesScreen() {
       const denied  = Object.values(results).some(r => r !== PermissionsAndroid.RESULTS.GRANTED);
       if (denied) return;
     }
-    await start({ mode: LxmfNodeMode.Reticulum, tcpInterfaces: [G00N_HUB] });
     startBLE();
-  }, [start, startBLE]);
+  }, [startBLE]);
 
   useEffect(() => {
-    if (isNativeAvailable && !isRunning) startMesh();
-  }, [isNativeAvailable, isRunning, startMesh]);
+    if (isNativeAvailable) enableBle();
+  }, [isNativeAvailable, enableBle]);
 
-  const liveNodes: NodeData[] = beacons.length > 0 ? beacons.map(b => beaconToNode(b, nameMap)) : NODES;
-  const announcing = !isRunning;
-  const shown = filter === 'all' ? liveNodes : liveNodes.filter(n => n.iface === filter);
+  const liveNodes: NodeData[] = isRunning ? peers.map(p => peerToNode(p, nowSec)) : NODES;
+  const loading   = !isRunning || (isRunning && peers.length === 0);
+  const shown     = filter === 'all' ? liveNodes : liveNodes.filter(n => n.iface === filter);
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
@@ -70,13 +71,13 @@ export default function NodesScreen() {
 
           <View style={S.header}>
             <View style={{ flex: 1 }}>
-              <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
               <Text style={[S.sub,   { color: colors.textTertiary }]}>ANONMESH</Text>
+              <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
             </View>
           </View>
 
           <View style={{ paddingTop: 14, paddingHorizontal: 20 }}>
-            <MeshMap selected={selectedHandle} onSelect={setSelectedHandle} />
+            <MeshMap nodes={liveNodes} selected={selectedHandle} onSelect={setSelectedHandle} />
           </View>
 
           <ScrollView
@@ -104,17 +105,17 @@ export default function NodesScreen() {
 
           <View style={S.sectionRow}>
             <Text style={[S.sectionText,  { color: colors.textTertiary }]}>LINKED PEERS</Text>
-            {announcing
+            {loading
               ? <Text style={[S.sectionCount, { color: colors.primary }]}>awaiting announces…</Text>
               : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>{shown.length} of {liveNodes.length}</Text>
             }
           </View>
 
           <View style={[S.list, glass]}>
-            {announcing
+            {loading
               ? [0,1,2,3,4].map(i => <NodeRowSkeleton key={i} />)
               : shown.map(n => (
-                  <NodeRow key={n.handle} n={n} selected={n.handle === selectedHandle} />
+                  <NodeRow key={n.destHash ?? n.handle} n={n} selected={n.handle === selectedHandle} />
                 ))
             }
           </View>

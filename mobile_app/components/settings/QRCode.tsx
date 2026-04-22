@@ -3,11 +3,17 @@ import { View } from 'react-native';
 import { useTheme } from '@/theme';
 
 const CELLS = 25;
-const FINDER_ORIGINS: [number, number][] = [[0, 0], [CELLS - 7, 0], [0, CELLS - 7]];
+const BG    = '#0B0C10';
+const FG    = '#EEEEF0';
 
 function isFinder(x: number, y: number) {
   const inBox = (cx: number, cy: number) => x >= cx && x < cx + 7 && y >= cy && y < cy + 7;
   return inBox(0, 0) || inBox(CELLS - 7, 0) || inBox(0, CELLS - 7);
+}
+
+function isCenterZone(x: number, y: number, cells: number) {
+  const mid = Math.floor(cells / 2);
+  return x >= mid - 2 && x <= mid + 2 && y >= mid - 2 && y <= mid + 2;
 }
 
 export function QRCode({ size = 180, data = 'ed25519_sol_7xKq9hF2p' }: Readonly<{ size?: number; data?: string }>) {
@@ -29,38 +35,70 @@ export function QRCode({ size = 180, data = 'ed25519_sol_7xKq9hF2p' }: Readonly<
     return arr;
   }, [data]);
 
+  const fr = cs * 1.2; // finder border radius
+
   return (
-    <View style={{ width: size, height: size, backgroundColor: '#0E0E12', overflow: 'hidden', position: 'relative' }}>
+    <View style={{ width: size, height: size, backgroundColor: BG, position: 'relative' }}>
+      {/* Data bits — skip finder zones and center logo zone */}
       {bits.map((row, y) => (
         <View key={y} style={{ flexDirection: 'row', height: cs }}>
-          {row.map((on, x) => (
-            <View
-              key={x}
-              style={{ width: cs, height: cs, backgroundColor: isFinder(x, y) ? 'transparent' : on ? '#E8E8EA' : 'transparent' }}
-            />
-          ))}
+          {row.map((on, x) => {
+            const skip  = isFinder(x, y) || isCenterZone(x, y, CELLS);
+            const color = !skip && on ? FG : 'transparent';
+            return <View key={x} style={{ width: cs, height: cs, backgroundColor: color }} />;
+          })}
         </View>
       ))}
 
-      {FINDER_ORIGINS.map(([cx, cy], i) => (
-        <View key={i} style={{ position: 'absolute', left: cx * cs, top: cy * cs, width: 7 * cs, height: 7 * cs }}>
-          <View style={{ width: 7 * cs, height: 7 * cs, backgroundColor: '#E8E8EA' }} />
-          <View style={{ position: 'absolute', left: cs, top: cs, width: 5 * cs, height: 5 * cs, backgroundColor: '#0E0E12' }} />
-          <View style={{ position: 'absolute', left: 2 * cs, top: 2 * cs, width: 3 * cs, height: 3 * cs, backgroundColor: '#E8E8EA' }} />
+      {/* Finder patterns — rounded modern style */}
+      {([[0, 0], [CELLS - 7, 0], [0, CELLS - 7]] as [number, number][]).map(([cx, cy]) => (
+        <View key={`${cx}-${cy}`} style={{ position: 'absolute', left: cx * cs, top: cy * cs, width: 7 * cs, height: 7 * cs }}>
+          <View style={{
+            position: 'absolute', top: 0, left: 0, width: 7 * cs, height: 7 * cs,
+            backgroundColor: FG, borderRadius: fr,
+          }} />
+          <View style={{
+            position: 'absolute', top: cs, left: cs, width: 5 * cs, height: 5 * cs,
+            backgroundColor: BG, borderRadius: fr * 0.65,
+          }} />
+          <View style={{
+            position: 'absolute', top: 2 * cs, left: 2 * cs, width: 3 * cs, height: 3 * cs,
+            backgroundColor: FG, borderRadius: fr * 0.4,
+          }} />
         </View>
       ))}
 
-      <View style={{
-        position: 'absolute',
-        left: size / 2 - cs * 2, top: size / 2 - cs * 2,
-        width: cs * 4, height: cs * 4,
-        backgroundColor: '#0E0E12',
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <View style={{ width: cs * 3, height: cs * 3, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-          <View style={{ width: cs * 1.6, height: cs * 1.6, backgroundColor: '#0E0E12' }} />
-        </View>
-      </View>
+      {/* Center logo mark */}
+      {(() => {
+        const logoSize  = cs * 5;
+        const logoOff   = (size - logoSize) / 2;
+        const innerSize = cs * 3.6;
+        const innerOff  = (logoSize - innerSize) / 2;
+        const dotSize   = cs * 1.4;
+        const dotOff    = (innerSize - dotSize) / 2;
+        return (
+          <View style={{
+            position: 'absolute', left: logoOff, top: logoOff,
+            width: logoSize, height: logoSize,
+            backgroundColor: BG, borderRadius: cs * 1.1,
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            {/* Primary rounded square */}
+            <View style={{
+              position: 'absolute', left: innerOff, top: innerOff,
+              width: innerSize, height: innerSize,
+              backgroundColor: colors.primary, borderRadius: cs * 0.9,
+            }} />
+            {/* Dark center dot — creates ring/eye look */}
+            <View style={{
+              position: 'absolute',
+              left: innerOff + dotOff, top: innerOff + dotOff,
+              width: dotSize, height: dotSize,
+              backgroundColor: BG, borderRadius: cs * 0.4,
+            }} />
+          </View>
+        );
+      })()}
     </View>
   );
 }

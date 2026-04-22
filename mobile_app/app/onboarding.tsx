@@ -1,30 +1,27 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useWallet } from '@/context/WalletContext';
+import { useLxmfContext } from '@/context/LxmfContext';
 import {
   GlowOrbs,
   LogoBlock,
   CTAButtons,
   LoadingOverlay,
-  generateNickname,
 } from '@/components/onboarding';
 import { BG } from '@/components/onboarding/constants';
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { createWallet, connectMWA, isSolanaMobile, isLoading, isConnected, publicKey } = useWallet();
-
-  const [nickname, setNickname] = useState('');
+  const { displayName: nickname } = useLxmfContext();
 
   const overlayOpacity   = useRef(new Animated.Value(0)).current;
   const enteringOpacity  = useRef(new Animated.Value(0)).current;
   const statusOpacity    = useRef(new Animated.Value(0)).current;
   const nicknameOpacity  = useRef(new Animated.Value(0)).current;
   const btnOpacity       = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => { setNickname(generateNickname()); }, []);
 
   useEffect(() => {
     if (isLoading) {
