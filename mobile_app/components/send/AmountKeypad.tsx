@@ -4,8 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { DepthButton, Icon, NumericKeypad } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
-import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
-import type { TokenOption } from "@/components/send/TokenPicker";
+import { tokenByName } from "@/components/send/TokenPicker";
 import { useGlass } from "@/hooks/useGlass";
 import { useTheme } from "@/theme";
 
@@ -25,11 +24,11 @@ export function AmountKeypad() {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const glass = useGlass("accent");
-  const { to } = useLocalSearchParams<{ to: string }>();
+  const { to, symbol: symbolParam } = useLocalSearchParams<{ to: string; symbol?: string }>();
 
-  const [token, setToken] = useState<TokenOption>(() => tokenByName("SOL"));
+  const symbol = (symbolParam === "USDC" ? "USDC" : "SOL") as "SOL" | "USDC";
+  const token = tokenByName(symbol);
   const [amount, setAmount] = useState("0");
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   const recipient = typeof to === "string" ? to : "";
 
@@ -43,12 +42,6 @@ export function AmountKeypad() {
   const amountNum = parseFloat(amount) || 0;
   const usdEquiv = (amountNum * rateFor(token.sym)).toFixed(2);
   const isValid = amountNum > 0 && amountNum <= balanceNum && Boolean(recipient);
-
-  function handleSelectToken(next: TokenOption) {
-    setToken(next);
-    setAmount("0"); // reset when token changes
-    setPickerOpen(false);
-  }
 
   function handleNext() {
     if (!isValid) return;
@@ -170,7 +163,6 @@ export function AmountKeypad() {
             maxAmount={balanceNum.toString()}
             maxDecimals={token.maxDecimals}
             onChangeValue={setAmount}
-            onPressCurrency={() => setPickerOpen(true)}
             showMaxChip
             value={amount}
           />
@@ -193,13 +185,6 @@ export function AmountKeypad() {
           </View>
         ) : null}
       </View>
-
-      <TokenPicker
-        visible={pickerOpen}
-        selected={token.sym}
-        onSelect={handleSelectToken}
-        onClose={() => setPickerOpen(false)}
-      />
     </SendScaffold>
   );
 }

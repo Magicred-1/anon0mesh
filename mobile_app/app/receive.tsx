@@ -17,8 +17,15 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Icon, IconButton, SegmentedControl, TokenLogo } from "@/components/primitives";
-import { QRCode } from "@/components/settings/QRCode";
+import QRCodeSvg from "react-native-qrcode-svg";
+
+import {
+  Icon,
+  IconButton,
+  SegmentedControl,
+  SwipeDismissHandle,
+  TokenLogo,
+} from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import { useGlass } from "@/hooks/useGlass";
 import { useLxmfContext } from "@/context/LxmfContext";
@@ -48,6 +55,11 @@ export default function ReceiveScreen() {
   const { publicKey } = useWallet();
   const { displayName } = useLxmfContext();
   const [mode, setMode] = useState<string>("standard");
+  const dragY = useSharedValue(0);
+
+  const contentStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+  }));
 
   const walletAddress = publicKey?.toBase58() ?? "";
   const alias = displayName || (walletAddress ? shortAddress(walletAddress) : "—");
@@ -63,7 +75,9 @@ export default function ReceiveScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <Animated.View style={[styles.safeArea, contentStyle]}>
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <SwipeDismissHandle translateY={dragY} />
         <View
           style={{
             alignItems: "center",
@@ -127,10 +141,21 @@ export default function ReceiveScreen() {
             style={{
               backgroundColor: "#FFFFFF",
               borderRadius: radii.lg,
-              padding: 8,
+              padding: 10,
             }}
           >
-            <QRCode size={200} data={qrValue} />
+            <QRCodeSvg
+              backgroundColor="#FFFFFF"
+              color={isStealth ? "#00940b" : "#001520"}
+              ecl="H"
+              logo={require("@/assets/images/logos/anonmesh_logo.png")}
+              logoBackgroundColor="#FFFFFF"
+              logoBorderRadius={4}
+              logoMargin={2}
+              logoSize={40}
+              size={200}
+              value={qrValue}
+            />
           </View>
 
           <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}>
@@ -164,6 +189,7 @@ export default function ReceiveScreen() {
 
         <ActionBar address={activeAddress} />
       </SafeAreaView>
+      </Animated.View>
     </View>
   );
 }

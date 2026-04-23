@@ -14,7 +14,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { DepthButton, Icon, IconButton, PressSurface } from "@/components/primitives";
+import { DepthButton, Icon, IconButton, PressSurface, TokenLogo } from "@/components/primitives";
+import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
+import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
 import { useTheme } from "@/theme";
 
@@ -37,6 +39,8 @@ export function RecipientPicker() {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const [address, setAddress] = useState("");
+  const [token, setToken] = useState<TokenOption>(() => tokenByName("SOL"));
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const trimmedAddress = address.trim();
   const isValid = isValidSolanaAddress(trimmedAddress);
@@ -46,8 +50,13 @@ export function RecipientPicker() {
     haptics.confirm();
     router.push({
       pathname: "/send/amount",
-      params: { to: trimmedAddress },
+      params: { to: trimmedAddress, symbol: token.sym },
     });
+  }
+
+  function handleSelectToken(next: TokenOption) {
+    setToken(next);
+    setPickerOpen(false);
   }
 
   async function handlePaste() {
@@ -105,6 +114,68 @@ export function RecipientPicker() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Token selector — tap to change BEFORE entering address. */}
+            <PressSurface
+              accessibilityLabel={`Sending ${token.sym}. Tap to choose a different token.`}
+              onPress={() => {
+                haptics.tap();
+                setPickerOpen(true);
+              }}
+              style={{
+                backgroundColor: colors.primarySubtle,
+                borderColor: "rgba(0,229,255,0.32)",
+                borderRadius: radii.lg,
+                borderWidth: 1,
+              }}
+              variant="row"
+            >
+              <View
+                style={{
+                  alignItems: "center",
+                  flexDirection: "row",
+                  gap: spacing[4],
+                  paddingHorizontal: spacing[4],
+                  paddingVertical: spacing[4],
+                }}
+              >
+                <TokenLogo size={36} symbol={token.sym} />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: colors.textTertiary,
+                      fontFamily: fontFamily.sansMd,
+                      fontSize: fontSize.xs,
+                      letterSpacing: 0.8,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Sending
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontFamily: fontFamily.sansSb,
+                      fontSize: fontSize.lg,
+                    }}
+                  >
+                    {token.sym} · {token.name}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text
+                    style={{
+                      color: colors.textSecondary,
+                      fontFamily: fontFamily.mono,
+                      fontSize: fontSize.sm,
+                    }}
+                  >
+                    {token.balance}
+                  </Text>
+                  <Icon color={colors.primary} name="chevron-down" size={14} />
+                </View>
+              </View>
+            </PressSurface>
+
             <View
               style={{
                 alignItems: "center",
@@ -273,6 +344,13 @@ export function RecipientPicker() {
           />
         </View>
       </SafeAreaView>
+
+      <TokenPicker
+        visible={pickerOpen}
+        selected={token.sym}
+        onSelect={handleSelectToken}
+        onClose={() => setPickerOpen(false)}
+      />
     </View>
   );
 }

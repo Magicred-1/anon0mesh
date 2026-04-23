@@ -28,5 +28,7 @@ export type { SegmentedControlTone } from "./SegmentedControl";
 
 export { default as SlideToConfirm } from "./SlideToConfirm";
 
+export { SwipeDismissHandle } from "./SwipeDismissHandle";
+
 export { TokenLogo } from "./TokenLogo";
 export type { TokenSymbol } from "./TokenLogo";
