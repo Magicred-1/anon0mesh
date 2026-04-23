@@ -1,0 +1,366 @@
+import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
+import {
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { Icon, IconButton, SegmentedControl, TokenLogo } from "@/components/primitives";
+import { QRCode } from "@/components/settings/QRCode";
+import * as haptics from "@/src/design-system/haptics";
+import { useGlass } from "@/hooks/useGlass";
+import { useLxmfContext } from "@/context/LxmfContext";
+import { useWallet } from "@/context/WalletContext";
+import { useTheme } from "@/theme";
+
+const ADDRESS_MODES = [
+  { id: "standard", label: "Standard" },
+  { id: "stealth", label: "Stealth" },
+];
+
+function shortAddress(addr: string | null | undefined): string {
+  if (!addr) return "—";
+  if (addr.length <= 16) return addr;
+  return `${addr.slice(0, 8)}…${addr.slice(-4)}`;
+}
+
+// Placeholder stealth meta-address until real derivation wires (Phase 7).
+function previewStealthAddress(walletAddress: string | null | undefined): string {
+  if (!walletAddress) return "";
+  return `stealth_${walletAddress.slice(0, 4)}${walletAddress.slice(-6)}`;
+}
+
+export default function ReceiveScreen() {
+  const router = useRouter();
+  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const { publicKey } = useWallet();
+  const { displayName } = useLxmfContext();
+  const [mode, setMode] = useState<string>("standard");
+
+  const walletAddress = publicKey?.toBase58() ?? "";
+  const alias = displayName || (walletAddress ? shortAddress(walletAddress) : "—");
+
+  const stealthAddress = useMemo(
+    () => previewStealthAddress(walletAddress),
+    [walletAddress],
+  );
+
+  const isStealth = mode === "stealth";
+  const activeAddress = isStealth ? stealthAddress : walletAddress;
+  const qrValue = activeAddress || "anon";
+
+  return (
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <View
+          style={{
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "space-between",
+            paddingHorizontal: spacing[5],
+            paddingVertical: spacing[4],
+          }}
+        >
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamily.sansBold,
+              fontSize: 32,
+              letterSpacing: -0.5,
+            }}
+          >
+            Receive
+          </Text>
+          <IconButton
+            accessibilityLabel="Close receive"
+            name="x"
+            onPress={() => router.back()}
+            size="md"
+            tone="neutral"
+            variant="contained"
+          />
+        </View>
+
+        <View style={{ paddingHorizontal: spacing[5], paddingTop: spacing[2] }}>
+          <SegmentedControl
+            onSelect={setMode}
+            segments={ADDRESS_MODES}
+            selected={mode}
+            tone={isStealth ? "purple" : "cyan"}
+          />
+          {isStealth ? (
+            <View style={{ alignSelf: "center", marginTop: spacing[3] }}>
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: colors.accentSubtle,
+                  borderColor: "rgba(92,255,59,0.32)",
+                  borderRadius: radii.full,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  gap: spacing[2],
+                  paddingHorizontal: spacing[3],
+                  paddingVertical: spacing[1],
+                }}
+              >
+                <Icon color={colors.accent} name="eye-off" size={12} />
+                <Text
+                  style={{
+                    color: colors.accent,
+                    fontFamily: fontFamily.sansMd,
+                    fontSize: fontSize.xs,
+                  }}
+                >
+                  Preview — stealth wiring lands in Phase 7
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <View
+          style={{
+            alignItems: "center",
+            flex: 1,
+            gap: spacing[4],
+            justifyContent: "center",
+            paddingHorizontal: spacing[5],
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{
+              color: colors.textPrimary,
+              fontFamily: fontFamily.sansSb,
+              fontSize: fontSize.lg,
+            }}
+          >
+            {alias}
+          </Text>
+
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderColor: isStealth ? colors.accent : colors.primary,
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              padding: spacing[4],
+            }}
+          >
+            <QRCode size={220} data={qrValue} />
+          </View>
+
+          <View style={{ alignItems: "center", gap: spacing[2] }}>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}>
+              <TokenLogo size={18} symbol="SOL" />
+              <TokenLogo size={18} symbol="USDC" />
+            </View>
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontFamily: fontFamily.sansMd,
+                fontSize: fontSize.xs,
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+              }}
+            >
+              Supported on Solana
+            </Text>
+          </View>
+
+          <Text
+            numberOfLines={1}
+            style={{
+              color: colors.textSecondary,
+              fontFamily: fontFamily.mono,
+              fontSize: fontSize.sm,
+            }}
+          >
+            {shortAddress(activeAddress)}
+          </Text>
+        </View>
+
+        <ActionBar address={activeAddress} />
+      </SafeAreaView>
+    </View>
+  );
+}
+
+interface ActionBarProps {
+  address: string;
+}
+
+function ActionBar({ address }: ActionBarProps) {
+  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const glass = useGlass("soft");
+  const [copied, setCopied] = useState(false);
+  const pulse = useSharedValue(0);
+
+  async function handleCopy() {
+    if (!address) return;
+    haptics.confirm();
+    await Clipboard.setStringAsync(address);
+    setCopied(true);
+    pulse.value = withSequence(
+      withTiming(1, { duration: 180 }),
+      withTiming(1, { duration: 900 }),
+      withTiming(0, { duration: 280 }),
+    );
+    setTimeout(() => setCopied(false), 1400);
+  }
+
+  async function handleShare() {
+    if (!address) return;
+    haptics.select();
+    try {
+      await Share.share({ message: `AnonMesh address\n${address}` });
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0, 0.6]),
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.12]) }],
+  }));
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        gap: spacing[3],
+        paddingBottom: spacing[5],
+        paddingHorizontal: spacing[5],
+        paddingTop: spacing[4],
+      }}
+    >
+      <CircleButton
+        glass={glass}
+        iconName="share"
+        iconColor={colors.textPrimary}
+        label="Share"
+        labelColor={colors.textSecondary}
+        onPress={handleShare}
+        radii={radii}
+        spacing={spacing}
+        fontFamily={fontFamily}
+        fontSize={fontSize}
+      />
+      <View style={{ flex: 1, position: "relative" }}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              backgroundColor: colors.primarySubtle,
+              borderRadius: radii.lg,
+              ...StyleSheet.absoluteFillObject,
+            },
+            pulseStyle,
+          ]}
+        />
+        <CircleButton
+          glass={glass}
+          iconName={copied ? "check" : "copy"}
+          iconColor={copied ? colors.success : colors.primary}
+          label={copied ? "Copied" : "Copy"}
+          labelColor={copied ? colors.success : colors.textPrimary}
+          onPress={handleCopy}
+          radii={radii}
+          spacing={spacing}
+          fontFamily={fontFamily}
+          fontSize={fontSize}
+        />
+      </View>
+    </View>
+  );
+}
+
+function CircleButton({
+  glass,
+  iconName,
+  iconColor,
+  label,
+  labelColor,
+  onPress,
+  radii,
+  spacing,
+  fontFamily,
+  fontSize,
+}: {
+  glass: ReturnType<typeof useGlass>;
+  iconName: React.ComponentProps<typeof Icon>["name"];
+  iconColor: string;
+  label: string;
+  labelColor: string;
+  onPress: () => void;
+  radii: ReturnType<typeof useTheme>["radii"];
+  spacing: ReturnType<typeof useTheme>["spacing"];
+  fontFamily: ReturnType<typeof useTheme>["fontFamily"];
+  fontSize: ReturnType<typeof useTheme>["fontSize"];
+}) {
+  const pressed = useSharedValue(0);
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(pressed.value, [0, 1], [1, 0.96]) }],
+  }));
+
+  return (
+    <Pressable
+      onPressIn={() => {
+        pressed.value = withTiming(1, { duration: 80 });
+        haptics.select();
+      }}
+      onPressOut={() => {
+        pressed.value = withTiming(0, { duration: 160 });
+      }}
+      onPress={onPress}
+      style={{ flex: 1 }}
+    >
+      <Animated.View
+        style={[
+          glass,
+          {
+            alignItems: "center",
+            borderRadius: radii.lg,
+            flexDirection: "row",
+            gap: spacing[2],
+            justifyContent: "center",
+            minHeight: 56,
+          },
+          scaleStyle,
+        ]}
+      >
+        <Icon color={iconColor} name={iconName} size={18} />
+        <Text
+          style={{
+            color: labelColor,
+            fontFamily: fontFamily.sansMd,
+            fontSize: fontSize.md,
+          }}
+        >
+          {label}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+});
