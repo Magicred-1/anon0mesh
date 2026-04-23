@@ -3,6 +3,12 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { fontFamily } from '@/theme';
 import { CYAN, BG } from './constants';
 
+// Palette values (dark theme) — keeps component self-contained without useTheme
+const SURFACE  = '#071520'; // void850 / surface1
+const BORDER   = 'rgba(0,229,255,0.13)';
+const BORDER_S = 'rgba(0,229,255,0.28)';
+const DIM      = 'rgba(0,229,255,0.35)';
+
 interface Props {
   isLoading:       boolean;
   isConnected:     boolean;
@@ -54,7 +60,7 @@ export const LoadingOverlay = memo(function LoadingOverlay({
   isLoading, isConnected, isSolanaMobile, nickname,
   overlayOpacity, enteringOpacity, statusOpacity, nicknameOpacity, btnOpacity,
 }: Readonly<Props>) {
-  const stampScale   = useRef(new Animated.Value(1.18)).current;
+  const stampScale   = useRef(new Animated.Value(1.14)).current;
   const stampOpacity = useRef(new Animated.Value(0)).current;
   const cursorAnim   = useRef(new Animated.Value(1)).current;
 
@@ -73,10 +79,10 @@ export const LoadingOverlay = memo(function LoadingOverlay({
   useEffect(() => {
     if (isConnected && !isLoading) {
       overlayOpacity.setValue(1);
-      stampScale.setValue(1.18);
+      stampScale.setValue(1.14);
       stampOpacity.setValue(0);
       Animated.parallel([
-        Animated.spring(stampScale,  { toValue: 1, friction: 7, tension: 90, useNativeDriver: true }),
+        Animated.spring(stampScale,   { toValue: 1, friction: 7, tension: 90, useNativeDriver: true }),
         Animated.timing(stampOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
       ]).start();
     } else {
@@ -89,60 +95,63 @@ export const LoadingOverlay = memo(function LoadingOverlay({
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    // Solid bg wrapper — covers GLView regardless of content animation state
     <View style={S.bg}>
 
-      {/* ── Loading phase ───────────────────────────────────────────── */}
+      {/* ── Loading phase ─────────────────────────────────────────────── */}
       {isLoading && (
-        <Animated.View style={[S.content, { opacity: overlayOpacity }]}>
+        <Animated.View style={[S.center, { opacity: overlayOpacity }]}>
+          <View style={S.card}>
 
-          <Animated.Text style={[S.entering, { opacity: enteringOpacity }]}>
-            {isSolanaMobile ? 'CONNECTING' : 'ENTERING MESH'}
-          </Animated.Text>
+            <Animated.Text style={[S.entering, { opacity: enteringOpacity }]}>
+              {isSolanaMobile ? 'CONNECTING' : 'ENTERING MESH'}
+            </Animated.Text>
 
-          <View style={S.mid}>
             <Animated.Text style={[S.statusText, { opacity: statusOpacity }]}>
               {isSolanaMobile ? '[ WALLET ]' : '[ IDENTITY ]'}
             </Animated.Text>
+
             <View style={S.handleRow}>
               <Animated.Text style={[S.nickname, { opacity: nicknameOpacity }]}>
                 @{nickname}
               </Animated.Text>
               <Animated.Text style={[S.cursor, { opacity: cursorAnim }]}>_</Animated.Text>
             </View>
+
+            <View style={S.divider} />
+
+            <Animated.View style={[S.bottomRow, { opacity: btnOpacity }]}>
+              <LoadingDots />
+              <Text style={S.detail}>
+                {isSolanaMobile ? 'AWAITING WALLET APPROVAL' : 'GENERATING SECURE KEYPAIR'}
+              </Text>
+            </Animated.View>
+
           </View>
-
-          <Animated.View style={[S.bottom, { opacity: btnOpacity }]}>
-            <LoadingDots />
-            <Text style={S.detail}>
-              {isSolanaMobile ? 'AWAITING WALLET APPROVAL' : 'GENERATING SECURE KEYPAIR'}
-            </Text>
-          </Animated.View>
-
         </Animated.View>
       )}
 
-      {/* ── Passport stamp phase ────────────────────────────────────── */}
+      {/* ── Passport stamp phase ──────────────────────────────────────── */}
       {!isLoading && isConnected && (
-        <View style={S.content}>
+        <View style={S.center}>
+          <Animated.View style={[
+            S.stamp,
+            { opacity: stampOpacity, transform: [{ scale: stampScale }, { rotate: '-4deg' }] },
+          ]}>
 
-          <Animated.View style={[S.stampOuter, { opacity: stampOpacity, transform: [{ scale: stampScale }] }]}>
-            <View style={S.stampInner}>
+            <Text style={S.stampNetwork}>ANONMESH NETWORK</Text>
+            <View style={S.stampLine} />
 
-              <Text style={S.stampNetwork}>ANON0MESH NETWORK</Text>
-              <View style={S.stampLine} />
+            <Text style={S.stampStatus}>MESH JOINED</Text>
+            <Text style={S.stampHandle}>@{nickname}</Text>
 
-              <Text style={S.stampStatus}>MESH JOINED</Text>
-              <Text style={S.stampHandle}>@{nickname}</Text>
+            <View style={S.stampLine} />
+            <Text style={S.stampMeta}>{today} · IDENTITY VERIFIED</Text>
 
-              <View style={S.stampLine} />
-              <Text style={S.stampMeta}>{today} · IDENTITY VERIFIED</Text>
-
-            </View>
           </Animated.View>
 
-          <Text style={S.subText}>entering the network...</Text>
-
+          <Animated.Text style={[S.subText, { opacity: stampOpacity }]}>
+            entering the network...
+          </Animated.Text>
         </View>
       )}
 
@@ -150,97 +159,102 @@ export const LoadingOverlay = memo(function LoadingOverlay({
   );
 });
 
-const STAMP_CYAN = 'rgba(0,229,255,0.82)';
-const STAMP_DIM  = 'rgba(0,229,255,0.28)';
-
 const S = StyleSheet.create({
-  // Solid background — covers GLView at all times (no opacity on this layer)
   bg: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: BG,
     zIndex: 50,
   },
-  content: {
+
+  center: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 80,
-    paddingBottom: 100,
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    gap: 20,
   },
 
-  // ── Loading ──────────────────────────────────────────────────────────
+  // ── Loading card — matches onboarding panel radius/surface ─────────────
+  card: {
+    width: '100%',
+    backgroundColor: SURFACE,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 44,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    gap: 16,
+  },
+
   entering: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 11, color: '#2e5a5a', letterSpacing: 4,
+    fontSize: 10, color: DIM, letterSpacing: 4, textTransform: 'uppercase',
   },
-  mid: { alignItems: 'center', flex: 1, justifyContent: 'center', gap: 18 },
   statusText: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 10, color: CYAN, letterSpacing: 4, opacity: 0.45,
+    fontSize: 10, color: CYAN, letterSpacing: 4, opacity: 0.5,
   },
-  handleRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  handleRow: {
+    flexDirection: 'row', alignItems: 'flex-end', marginTop: 4,
+  },
   nickname: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 26, color: CYAN, letterSpacing: 2, fontWeight: '700',
+    fontSize: 28, color: CYAN, letterSpacing: 2, fontWeight: '700',
   },
   cursor: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 26, color: CYAN, fontWeight: '700', marginBottom: 2,
+    fontSize: 28, color: CYAN, fontWeight: '700', marginBottom: 3,
   },
-  bottom: { width: '100%', alignItems: 'center', gap: 18 },
+  divider: {
+    width: 40, height: 0.5, backgroundColor: BORDER_S, marginVertical: 4,
+  },
+  bottomRow: {
+    alignItems: 'center', gap: 14,
+  },
   dotsRow: { flexDirection: 'row', gap: 10 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: CYAN },
   detail: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 10, color: '#2e5a5a', letterSpacing: 2.5, textAlign: 'center',
+    fontSize: 10, color: DIM, letterSpacing: 2.5, textAlign: 'center',
   },
 
-  // ── Passport stamp ───────────────────────────────────────────────────
-  stampOuter: {
+  // ── Stamp card — rounded, same surface, strong cyan border ─────────────
+  stamp: {
     alignSelf: 'center',
-    borderWidth: 2,
-    borderColor: STAMP_CYAN,
-    padding: 6,
-    transform: [{ rotate: '-6deg' }],
-    marginTop: 'auto',
-    marginBottom: 'auto',
-  },
-  stampInner: {
-    borderWidth: 1,
-    borderColor: STAMP_DIM,
-    paddingVertical: 22,
-    paddingHorizontal: 32,
+    backgroundColor: SURFACE,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: BORDER_S,
+    paddingVertical: 32,
+    paddingHorizontal: 40,
     alignItems: 'center',
     gap: 12,
   },
   stampNetwork: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 8, color: STAMP_CYAN, letterSpacing: 5,
+    fontSize: 8, color: CYAN, letterSpacing: 5, opacity: 0.7,
   },
   stampLine: {
-    height: 1,
-    alignSelf: 'stretch',
-    backgroundColor: STAMP_DIM,
+    height: 1, alignSelf: 'stretch', backgroundColor: BORDER_S,
   },
   stampStatus: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 11, color: STAMP_CYAN, letterSpacing: 6, opacity: 0.7,
-    marginBottom: -4,
+    fontSize: 11, color: CYAN, letterSpacing: 6, opacity: 0.6, marginBottom: -4,
   },
   stampHandle: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 32, fontWeight: '800', color: STAMP_CYAN, letterSpacing: 1,
+    fontSize: 32, fontWeight: '800', color: CYAN, letterSpacing: 1,
     textShadowColor: CYAN,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 14,
   },
   stampMeta: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 8, color: STAMP_CYAN, letterSpacing: 3, opacity: 0.55,
+    fontSize: 8, color: CYAN, letterSpacing: 3, opacity: 0.45,
   },
   subText: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 10, color: '#2a5252', letterSpacing: 3,
+    fontSize: 10, color: DIM, letterSpacing: 3,
   },
 });

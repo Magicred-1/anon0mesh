@@ -13,6 +13,12 @@ import { generateNickname } from '@/components/onboarding/constants';
 
 const PEERS_CACHE_KEY = 'lxmf_peers_cache';
 
+// Strip emoji and non-ASCII printable chars from peer-supplied display names
+function sanitizeName(raw: string, fallback: string): string {
+  const cleaned = raw.replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '_').trim();
+  return cleaned.length >= 2 ? cleaned.slice(0, 32) : fallback.slice(0, 8);
+}
+
 export const G00N_HUB: TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 };
 
 export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net', port: 4242 };
@@ -104,7 +110,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         typeof e.appData === 'string' &&
         e.appData.trim().length > 0
       ) {
-        m[e.destHash] = e.appData.trim();
+        m[e.destHash] = sanitizeName(e.appData, e.destHash);
       }
     }
     return m;
@@ -145,7 +151,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       const existing = map.get(e.destHash);
       map.set(e.destHash, {
         destHash:    e.destHash,
-        displayName: appData || existing?.displayName || e.destHash.slice(0, 8),
+        displayName: appData ? sanitizeName(appData, e.destHash) : (existing?.displayName ?? e.destHash.slice(0, 8)),
         hops:        typeof (e as any).hops === 'number' ? (e as any).hops : (existing?.hops ?? 0),
         lastSeen:    now,
         online:      true,
