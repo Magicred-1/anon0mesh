@@ -21,12 +21,15 @@ const KEYS = [
   [".", "0", "⌫"],
 ] as const;
 
-const MAX_DIGITS = 10;
+const MAX_DIGITS = 18;
+const DEFAULT_MAX_DECIMALS = 6;
 
 interface NumericKeypadProps {
   accessory?: React.ReactNode;
   currency: string;
   fiatLabel?: string;
+  /** Max decimal places allowed after the point. SOL=9, USDC=6, BTC=8 etc. */
+  maxDecimals?: number;
   maxAmount?: string;
   onChangeValue: (value: string) => void;
   onPressCurrency?: () => void;
@@ -38,6 +41,7 @@ export default function NumericKeypad({
   accessory,
   currency,
   fiatLabel,
+  maxDecimals = DEFAULT_MAX_DECIMALS,
   maxAmount,
   onChangeValue,
   onPressCurrency,
@@ -66,14 +70,14 @@ export default function NumericKeypad({
         return;
       }
 
-      if (value.length >= MAX_DIGITS) return;
+      if (value.replace(/[^0-9]/g, "").length >= MAX_DIGITS) return;
 
       const parts = (value + key).split(".");
-      if (parts[1] && parts[1].length > 2) return;
+      if (parts[1] && parts[1].length > maxDecimals) return;
 
       onChangeValue(value + key);
     },
-    [onChangeValue, value],
+    [onChangeValue, value, maxDecimals],
   );
 
   function handleUseMax() {
