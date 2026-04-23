@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Platform, PermissionsAndroid } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  View, Text, FlatList, ScrollView, Pressable, StyleSheet,
+  Platform, PermissionsAndroid,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
@@ -11,14 +14,15 @@ import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
 
-function peerToNode(p: LxmfPeer, nowSec: number): NodeData {
-  const ago = p.lastSeen > 0 ? `${Math.round(nowSec - p.lastSeen)}s` : '—';
+// Converts a peer to NodeData WITHOUT latency — stable identity for MeshMap.
+// Latency is added separately for the list so MeshMap topology doesn't re-layout on every timer tick.
+function peerToMapNode(p: LxmfPeer): NodeData {
   return {
     handle:   `@${p.displayName.slice(0, 16)}`,
     hops:     p.hops,
     iface:    p.via === 'ble' ? 'BLE' : 'TCP',
     signal:   p.online ? 4 : 2,
-    latency:  ago,
+    latency:  '—',
     online:   p.online,
     weak:     false,
     destHash: p.destHash,
@@ -32,14 +36,13 @@ export default function NodesScreen() {
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
+  // 15s tick — enough precision for "Xs ago" labels, 15× fewer re-renders than 1s
   const [nowSec, setNowSec] = useState(() => Date.now() / 1000);
-
   useEffect(() => {
-    const id = setInterval(() => setNowSec(Date.now() / 1000), 1000);
+    const id = setInterval(() => setNowSec(Date.now() / 1000), 15_000);
     return () => clearInterval(id);
   }, []);
 
-  // TCP/Reticulum auto-starts in LxmfProvider. Only BLE needs explicit start + Android permissions.
   const enableBle = useCallback(async () => {
     if (Platform.OS === 'android') {
       const perms = Platform.Version >= 31
@@ -50,8 +53,7 @@ export default function NodesScreen() {
           ]
         : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
       const results = await PermissionsAndroid.requestMultiple(perms);
-      const denied  = Object.values(results).some(r => r !== PermissionsAndroid.RESULTS.GRANTED);
-      if (denied) return;
+      if (Object.values(results).some(r => r !== PermissionsAndroid.RESULTS.GRANTED)) return;
     }
     startBLE();
   }, [startBLE]);
@@ -60,9 +62,39 @@ export default function NodesScreen() {
     if (isNativeAvailable) enableBle();
   }, [isNativeAvailable, enableBle]);
 
-  const liveNodes: NodeData[] = isRunning ? peers.map(p => peerToNode(p, nowSec)) : NODES;
-  const loading   = !isRunning || (isRunning && peers.length === 0);
-  const shown     = filter === 'all' ? liveNodes : liveNodes.filter(n => n.iface === filter);
+  // Stable node identity: only re-creates when peers change, not on timer ticks.
+  // MeshMap receives this — topology layout only runs when peer set actually changes.
+  const meshNodes = useMemo<NodeData[]>(
+    () => isRunning ? peers.map(peerToMapNode) : NODES,
+    [peers, isRunning],
+  );
+
+  // Fast lookup by destHash for latency enrichment
+  const peerMap = useMemo(
+    () => new Map(peers.map(p => [p.destHash, p])),
+    [peers],
+  );
+
+  // List nodes: meshNodes + live latency strings. Re-creates on timer, but meshNodes
+  // objects are reused by reference when latency didn't change (avoids NodeRow memo miss).
+  const listNodes = useMemo<NodeData[]>(() => {
+    return meshNodes.map(n => {
+      const p   = peerMap.get(n.destHash ?? '');
+      const ago = p && p.lastSeen > 0 ? `${Math.round(nowSec - p.lastSeen)}s` : '—';
+      if (ago === n.latency) return n; // reuse same ref — NodeRow memo bails out
+      return { ...n, latency: ago };
+    });
+  }, [meshNodes, peerMap, nowSec]);
+
+  const filtered = useMemo(
+    () => filter === 'all' ? listNodes : listNodes.filter(n => n.iface === filter),
+    [listNodes, filter],
+  );
+  // Cap rendered rows — beyond 80 the ScrollView frame budget breaks on low-end devices
+  const MAX_ROWS = 80;
+  const shown    = useMemo(() => filtered.slice(0, MAX_ROWS), [filtered]);
+
+  const loading = !isRunning || (isRunning && peers.length === 0);
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
@@ -77,17 +109,17 @@ export default function NodesScreen() {
           </View>
 
           <View style={{ paddingTop: 14, paddingHorizontal: 20 }}>
-            <MeshMap nodes={liveNodes} selected={selectedHandle} onSelect={setSelectedHandle} />
+            <MeshMap nodes={meshNodes} selected={selectedHandle} onSelect={setSelectedHandle} />
           </View>
 
-          <ScrollView
+          <FlatList
             horizontal
+            data={FILTERS}
+            keyExtractor={f => f}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={S.filterBar}
-          >
-            {FILTERS.map(f => (
+            renderItem={({ item: f }) => (
               <Pressable
-                key={f}
                 onPress={() => setFilter(f)}
                 style={[S.chip, {
                   borderColor:     f === filter ? colors.primary + '80' : colors.border,
@@ -98,25 +130,36 @@ export default function NodesScreen() {
                   {f.toUpperCase()}
                 </Text>
               </Pressable>
-            ))}
-          </ScrollView>
+            )}
+          />
 
           <BeaconRegistry />
 
           <View style={S.sectionRow}>
-            <Text style={[S.sectionText,  { color: colors.textTertiary }]}>LINKED PEERS</Text>
+            <Text style={[S.sectionText, { color: colors.textTertiary }]}>LINKED PEERS</Text>
             {loading
               ? <Text style={[S.sectionCount, { color: colors.primary }]}>awaiting announces…</Text>
-              : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>{shown.length} of {liveNodes.length}</Text>
+              : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>
+                  {shown.length}{filtered.length > MAX_ROWS ? `+` : ''} of {listNodes.length}
+                </Text>
             }
           </View>
 
-          <View style={[S.list, glass]}>
+          {/* Bounded scrollable peer box — ScrollView is safe to nest inside ScrollView */}
+          <View style={[S.peerBox, glass]}>
             {loading
               ? [0,1,2,3,4].map(i => <NodeRowSkeleton key={i} />)
-              : shown.map(n => (
-                  <NodeRow key={n.destHash ?? n.handle} n={n} selected={n.handle === selectedHandle} />
-                ))
+              : (
+                <ScrollView
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                  style={S.peerScroll}
+                >
+                  {shown.map(n => (
+                    <NodeRow key={n.destHash ?? n.handle} n={n} selected={n.handle === selectedHandle} />
+                  ))}
+                </ScrollView>
+              )
             }
           </View>
 
@@ -137,5 +180,8 @@ const S = StyleSheet.create({
   sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
   sectionText:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
   sectionCount: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
-  list:         { marginHorizontal: 20, borderRadius: 16, overflow: 'hidden' },
+  list:         { flexGrow: 1 },
+  peerBox:      { marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', maxHeight: 340 },
+  peerScroll:   { flexGrow: 0 },
+  listContent:  { flexGrow: 1 },
 });
