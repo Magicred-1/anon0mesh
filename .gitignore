@@ -1,0 +1,17 @@
+# Environment files — never commit secrets.
+# App-level env lives in mobile_app/.env (also gitignored via
+# mobile_app/.gitignore when named *.local).
+.env
+.env.*
+!.env.example
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Backup files from repo reorganisation
+*.backup
+*.backup-*

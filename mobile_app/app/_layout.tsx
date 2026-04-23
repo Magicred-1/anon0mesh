@@ -17,6 +17,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider }  from '@/context/LxmfContext';
+import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -39,14 +40,21 @@ export default function RootLayout() {
       <ThemeProvider>
         <LxmfProvider>
           <WalletProvider autoInitialize>
-            <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <Stack initialRouteName="index">
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              </Stack>
-              <StatusBar style="auto" />
-            </NavThemeProvider>
+            <HideBalanceProvider>
+              <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack initialRouteName="index" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="onboarding" />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="receive" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                  <Stack.Screen name="send/recipient" />
+                  <Stack.Screen name="send/amount" />
+                  <Stack.Screen name="send/review" />
+                  <Stack.Screen name="send/success" options={{ gestureEnabled: false }} />
+                </Stack>
+                <StatusBar style="auto" />
+              </NavThemeProvider>
+            </HideBalanceProvider>
           </WalletProvider>
         </LxmfProvider>
       </ThemeProvider>

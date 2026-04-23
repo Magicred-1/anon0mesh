@@ -3,6 +3,11 @@
 # dependencies
 node_modules/
 
+# Build outputs
+build-*/
+build-*.apk
+build-*.aab
+
 # Expo
 .expo/
 dist/
@@ -30,8 +35,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files — never commit any variant
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
