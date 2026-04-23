@@ -7,27 +7,37 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": {
-        "image": "macos-ventura-13.6-xcode-15.2"
-      }
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "ios": {}
     },
     "preview": {
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "ios": {
-        "resourceClass": "m-medium",
-        "image": "macos-ventura-13.6-xcode-15.2"
+        "resourceClass": "m-medium"
       }
     },
     "production": {
       "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "ios": {
-        "resourceClass": "m-medium",
-        "image": "macos-ventura-13.6-xcode-15.2"
+        "resourceClass": "m-medium"
       }
     }
   },
   "submit": {
     "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
+      },
       "ios": {
         "appleId": "djasongadiou@gmail.com"
       }
