@@ -186,10 +186,18 @@ d7d841a docs(port): PORT_LOG for epic/wallet-ui-port         # mine
 | Seeker baseline build | ✅ done | Green with gesture fix; MeshMap duplicate-key warnings teammate's lane |
 | Read teammate theme files | ✅ done | Rewire map verified above |
 | **Commit A — primitives port** | ✅ done | `7088f13` — 17 files, 10 primitives + tokens + utils |
-| Commit B — wallet tab rebuild | ⏭ next | Use Commit A primitives + his WalletContext |
-| Commit C — send routes | ⏭ | |
-| Commit D — receive route | ⏭ | |
+| **Commit B — wallet tab rebuild** | ✅ done | `8265b31` — 12 files, 691+/204−, home composition + AsyncStorage |
+| Commit C — send routes | ⏭ next | `/send/{recipient,amount,review,success}` |
+| Commit D — receive route | ⏭ | `/receive` with stealth toggle |
 | Commit E — optional polish sweep | ⏭ | |
+
+## Commit B data wiring notes
+
+- `ASSETS` + `TOTAL_USD` from `@/components/wallet/constants` — his fixture. Matches current visible behavior. Replace with real balance hook in Phase 7.
+- `useLxmfContext().peers` with `{destHash, displayName, online, ...}` — deduped BLE + Reticulum list, filtered to `online` for NearbyPeersCard.
+- `useLxmfContext().displayName` — identity from SecureStore announce appData.
+- `useWallet().publicKey` — PublicKey object, consumed by QRModal for wallet QR rendering.
+- `HideBalanceProvider` mounted inside `WalletProvider` in root `_layout.tsx`. Persistent under `anonmesh:hide-balance` AsyncStorage key.
 
 ## Planned follow-up commits (not in A–E yet)
 
