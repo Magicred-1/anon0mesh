@@ -10,12 +10,14 @@ import {
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider }  from '@/context/LxmfContext';
+import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -34,19 +36,28 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <ThemeProvider>
-      <LxmfProvider>
-        <WalletProvider autoInitialize>
-          <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack initialRouteName="index">
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </NavThemeProvider>
-        </WalletProvider>
-      </LxmfProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <LxmfProvider>
+          <WalletProvider autoInitialize>
+            <HideBalanceProvider>
+              <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack initialRouteName="index" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="onboarding" />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="receive" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+                  <Stack.Screen name="send/recipient" />
+                  <Stack.Screen name="send/amount" />
+                  <Stack.Screen name="send/review" />
+                  <Stack.Screen name="send/success" options={{ gestureEnabled: false }} />
+                </Stack>
+                <StatusBar style="auto" />
+              </NavThemeProvider>
+            </HideBalanceProvider>
+          </WalletProvider>
+        </LxmfProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
