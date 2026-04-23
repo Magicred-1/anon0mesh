@@ -180,15 +180,27 @@ d7d841a docs(port): PORT_LOG for epic/wallet-ui-port         # mine
 | Remove v3-latest worktree | ✅ done | Branch `origin/v3-latest` kept as backup with postinstall fix |
 | Cut `epic/wallet-ui-port` from `upstream/v3` | ✅ done | Pushed to `origin/epic/wallet-ui-port` |
 | Cherry-pick postinstall fix | ✅ done | 038364a |
-| PORT_LOG committed + pushed | ✅ done | d7d841a |
-| **Gesture root fix committed locally** | 🟡 local only | ef1567a — awaiting device verify before push |
-| Seeker baseline build | 🟡 in progress | builds, MeshMap crash (fixed by ef1567a, pending verify) |
+| PORT_LOG committed + pushed | ✅ done | `d7d841a` |
+| Gesture root fix | ✅ done + PR | `ef1567a` on port branch; `d997855` on `fix/gesture-root`; PR #3 on upstream |
+| Lockfile sync | ✅ done | `8ae2c9f` — postinstall flag |
+| Seeker baseline build | ✅ done | Green with gesture fix; MeshMap duplicate-key warnings teammate's lane |
 | Read teammate theme files | ✅ done | Rewire map verified above |
-| **Commit A — primitives port** | ⏭ next | After gesture fix pushed |
-| Commit B — wallet tab rebuild | ⏭ | |
+| **Commit A — primitives port** | ✅ done | `7088f13` — 17 files, 10 primitives + tokens + utils |
+| Commit B — wallet tab rebuild | ⏭ next | Use Commit A primitives + his WalletContext |
 | Commit C — send routes | ⏭ | |
 | Commit D — receive route | ⏭ | |
 | Commit E — optional polish sweep | ⏭ | |
+
+## Commit A deliberate scope cuts (revisit later)
+
+- **`useHideBalance` is in-memory only.** Persistence needs `@react-native-async-storage/async-storage` — add dep then restore AsyncStorage.
+- **`devReset` not ported.** Depends on `LocalWallet.delete()` — not yet reconciled with teammate's wallet context. Port after Commit B clarifies wallet data wiring.
+- **`sound.ts` not ported.** Sound system deferred; haptics carry feedback. Can add if polish allows.
+- **`GlassSurface` primitive not ported.** His `useGlass()` hook replaces it.
+- **`tokens/component.ts` not ported.** Button sizes, slider track/knob dims inlined per-primitive. Centralize back if Commit B/C/D reveal repeated hardcoded values.
+- **`SwipeDismissView` retired.** Future swipe-dismiss uses gorhom BottomSheet.
+- **Legacy `purple` tone → `colors.accent` (neon).** Dedicated stealth palette TBD with teammate.
+- **Phosphor icons swapped for Feather** (ArrowRight → arrow-right, Backspace → delete, CaretDown → chevron-down).
 
 ## Discovered gotchas (for later)
 
