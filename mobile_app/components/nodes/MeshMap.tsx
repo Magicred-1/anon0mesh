@@ -13,15 +13,16 @@ import { fontFamily, useTheme } from '@/theme';
 import type { NodeData } from './types';
 
 // ── Canvas ────────────────────────────────────────────────────────────────────
-const CANVAS_W   = 700;
-const CANVAS_H   = 560;
-const ME_X       = 350;
-const ME_Y       = 280;
+const CANVAS_W   = 900;
+const CANVAS_H   = 700;
+const ME_X       = 450;
+const ME_Y       = 350;
 const VIEWPORT_H = 256;
-const ME_R       = 8;
+const ME_R       = 9;
+const NODE_R     = 12; // fixed peer node radius
 
-const RING: Record<number, number> = { 1: 80, 2: 150, 3: 215 };
-const RING_DEFAULT = 270;
+const RING: Record<number, number> = { 1: 90, 2: 165, 3: 235 };
+const RING_DEFAULT = 305;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -43,18 +44,25 @@ function layout(nodes: NodeData[]): Placed[] {
   }
   const out: Placed[] = [];
   for (const [h, grp] of byHop) {
-    const rad = RING[h] ?? RING_DEFAULT;
+    const baseRad = RING[h] ?? RING_DEFAULT;
+    // Expand radius so node circles never touch (diameter + 8px gap per slot)
+    const minRad = grp.length > 1
+      ? (grp.length * (NODE_R * 2 + 8)) / (2 * Math.PI)
+      : 0;
+    const rad = Math.max(baseRad, minRad);
+    // Stagger starting angle per ring so adjacent rings don't stack vertically
+    const phase = (h * 23 - 90) * (Math.PI / 180);
+    const step  = (2 * Math.PI) / grp.length;
     grp.forEach((node, i) => {
-      const a = ((360 / grp.length) * i - 90) * (Math.PI / 180);
-      out.push({
-        node,
-        x: ME_X + rad * Math.cos(a),
-        y: ME_Y + rad * Math.sin(a),
-        r: Math.min(14, Math.max(10, 8 + (node.signal ?? 2) * 0.8)),
-      });
+      const a = phase + step * i;
+      out.push({ node, x: ME_X + rad * Math.cos(a), y: ME_Y + rad * Math.sin(a), r: NODE_R });
     });
   }
   return out;
+}
+
+function nodeId(n: NodeData): string {
+  return n.destHash ?? n.handle;
 }
 
 function edges(placed: Placed[]): Edge[] {
@@ -62,7 +70,7 @@ function edges(placed: Placed[]): Edge[] {
   for (const p of placed) {
     const h = Math.max(1, p.node.hops);
     if (h === 1) {
-      out.push({ x1: ME_X, y1: ME_Y, x2: p.x, y2: p.y, key: `me-${p.node.handle}` });
+      out.push({ x1: ME_X, y1: ME_Y, x2: p.x, y2: p.y, key: `me-${nodeId(p.node)}` });
     } else {
       const parents = placed.filter(q => Math.max(1, q.node.hops) === h - 1);
       const from = parents.length === 0 ? null : parents.reduce((best, c) => {
@@ -73,8 +81,8 @@ function edges(placed: Placed[]): Edge[] {
         if (bd > Math.PI) bd = 2 * Math.PI - bd;
         return d < bd ? c : best;
       });
-      const src = from ?? { x: ME_X, y: ME_Y, node: { handle: 'me' } as NodeData };
-      out.push({ x1: src.x, y1: src.y, x2: p.x, y2: p.y, key: `${src.node.handle}-${p.node.handle}` });
+      const src = from ?? { x: ME_X, y: ME_Y, node: { handle: 'me', destHash: 'me' } as NodeData };
+      out.push({ x1: src.x, y1: src.y, x2: p.x, y2: p.y, key: `${nodeId(src.node)}-${nodeId(p.node)}` });
     }
   }
   return out;
@@ -196,7 +204,16 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Prop
   }, [tx, ty, stx, sty, sc, ssc]);
 
   // ── Layout computation ────────────────────────────────────────────────────
-  const placed   = useMemo(() => layout(nodes), [nodes]);
+  const placed   = useMemo(() => {
+    const seen = new Set<string>();
+    const unique = nodes.filter(n => {
+      const id = n.destHash ?? n.handle;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return layout(unique);
+  }, [nodes]);
   const edgeList = useMemo(() => edges(placed),  [placed]);
 
   const placedRef   = useRef(placed);
@@ -303,31 +320,61 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Prop
 
       {/* Peer nodes */}
       {placed.map(({ node: n, x, y, r }) => {
-        const isSel   = n.handle === selected;
-        const ifcClr  = ic(n.iface);
-        const faded   = n.online === false;
-        const avatar  = nodeAvatar(n.handle);
+        const isSel  = n.handle === selected;
+        const ifcClr = ic(n.iface);
+        const online = n.online !== false;
+        const avatar = nodeAvatar(n.handle);
+        const D = r * 2;
         return (
-          <View key={n.destHash ?? n.handle} style={{ position: 'absolute', left: x - r, top: y - r, opacity: faded ? 0.35 : 1 }}>
+          <View
+            key={n.destHash ?? n.handle}
+            style={{ position: 'absolute', left: x - r - 6, top: y - r - 6, padding: 6, opacity: online ? 1 : 0.32 }}
+          >
+            {/* Selection ring */}
             {isSel && (
               <View style={{
-                position: 'absolute', left: -4, top: -4,
-                width: r * 2 + 8, height: r * 2 + 8, borderRadius: r + 4,
+                position: 'absolute', left: 2, top: 2,
+                width: D + 8, height: D + 8, borderRadius: r + 4,
                 borderWidth: 1.5, borderColor: ifcClr,
               }} />
             )}
+            {/* Glow halo for online nodes */}
+            {online && (
+              <View style={{
+                position: 'absolute', left: 3, top: 3,
+                width: D + 6, height: D + 6, borderRadius: r + 3,
+                backgroundColor: avatar.color,
+                opacity: 0.18,
+              }} />
+            )}
+            {/* Avatar circle */}
             <View style={{
-              width: r * 2, height: r * 2, borderRadius: r,
+              width: D, height: D, borderRadius: r,
               backgroundColor: avatar.color,
-              borderWidth: 1, borderColor: ifcClr,
+              borderWidth: online ? 1.5 : 1,
+              borderColor: online ? ifcClr : 'rgba(255,255,255,0.12)',
               alignItems: 'center', justifyContent: 'center',
+              elevation: online ? 4 : 0,
+              shadowColor: avatar.color,
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: online ? 0.5 : 0,
+              shadowRadius: 5,
             }}>
-              <Text style={{ fontSize: r * 0.85, color: '#fff', fontWeight: '700', includeFontPadding: false }}>
+              <Text style={{ fontSize: r * 0.9, color: '#fff', fontWeight: '700', includeFontPadding: false }}>
                 {avatar.initial}
               </Text>
             </View>
-            <Text style={[S.label, { color: isSel ? ifcClr : colors.textTertiary, left: r - 18, top: r * 2 + 3 }]}>
-              {n.handle.replace('@', '').slice(0, 9)}
+            {/* Online dot */}
+            {online && (
+              <View style={{
+                position: 'absolute', right: 4, top: 4,
+                width: 5, height: 5, borderRadius: 2.5,
+                backgroundColor: ifcClr,
+                borderWidth: 1, borderColor: '#000c14',
+              }} />
+            )}
+            <Text style={[S.label, { color: isSel ? ifcClr : colors.textTertiary, left: -2, top: D + 7, width: D + 12, textAlign: 'center' }]}>
+              {n.handle.replace('@', '').slice(0, 10)}
             </Text>
           </View>
         );

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useLxmf,
   LxmfNodeMode,
@@ -10,7 +11,11 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { generateNickname } from '@/components/onboarding/constants';
 
+const PEERS_CACHE_KEY = 'lxmf_peers_cache';
+
 export const G00N_HUB: TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 };
+
+export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net', port: 4242 };
 
 export interface LxmfPeer {
   destHash:    string;
@@ -73,7 +78,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     logLevel:       2,
     displayName:    displayName ?? '',
     mode:           LxmfNodeMode.Reticulum,
-    tcpInterfaces:  [G00N_HUB],
+    tcpInterfaces:  [G00N_HUB, BELETH_HUB],
   });
 
   const { isNativeAvailable, isRunning, start } = lxmf;
@@ -85,7 +90,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   useEffect(() => {
     if (isNativeAvailable && !isRunning && !startingRef.current && displayName !== null) {
       startingRef.current = true;
-      start({ mode: LxmfNodeMode.Reticulum, tcpInterfaces: [G00N_HUB], displayName })
+      start({ mode: LxmfNodeMode.Reticulum, tcpInterfaces: [G00N_HUB, BELETH_HUB], displayName })
         .finally(() => { startingRef.current = false; });
     }
   }, [isNativeAvailable, isRunning, start, displayName]);
@@ -108,6 +113,21 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   // Persistent accumulator — peers never disappear between announces.
   const knownPeersRef = useRef<Map<string, LxmfPeer>>(new Map());
   const [peers, setPeers] = useState<LxmfPeer[]>([]);
+
+  // Restore peer cache from previous session so peers show immediately on launch.
+  useEffect(() => {
+    AsyncStorage.getItem(PEERS_CACHE_KEY).then(raw => {
+      if (!raw) return;
+      try {
+        const cached: LxmfPeer[] = JSON.parse(raw);
+        const map = knownPeersRef.current;
+        for (const p of cached) {
+          if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false });
+        }
+        setPeers(Array.from(map.values()));
+      } catch { /* ignore corrupt cache */ }
+    });
+  }, []);
 
   // useEffect (not useMemo) — side-effecting a ref is not safe in useMemo.
   // Iterate events oldest-to-newest (library stores newest-first) so the
@@ -147,7 +167,9 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       });
     }
 
-    setPeers(Array.from(map.values()));
+    const updated = Array.from(map.values());
+    setPeers(updated);
+    AsyncStorage.setItem(PEERS_CACHE_KEY, JSON.stringify(updated)).catch(() => {});
   }, [lxmf.events, lxmf.beacons, lxmf.status, nameMap]);
 
   const value = useMemo(() => ({
