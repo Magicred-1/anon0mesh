@@ -66,22 +66,61 @@ Each commit:
   }
 ```
 
-Color map (verify against `mobile_app/theme/colors.ts`):
+Color map — **verified against `mobile_app/theme/colors.ts`**:
+
+| Archive | Port | Value |
+|---|---|---|
+| `theme.colors.cyan` | `colors.primary` | `#00e5ff` (cyan300) |
+| `theme.colors.cyanSoft` | `colors.primarySubtle` | `rgba(0,229,255,0.08)` |
+| `theme.colors.cyanGlow` | `colors.borderStrong` | `rgba(0,229,255,0.28)` |
+| `theme.colors.purple` | `colors.accent` (stealth tentative) | `#5cff3b` (neon300) — confirm with teammate |
+| `theme.colors.textPrimary` | `colors.textPrimary` | `#ffffff` |
+| `theme.colors.textSecondary` | `colors.textSecondary` | `#c6c6c6` (gray90) |
+| `theme.colors.textMuted` | `colors.textTertiary` | `#8d8d8d` (gray70) |
+| `theme.colors.red` | `colors.error` | `#da1e28` |
+| `theme.colors.green` | `colors.success` | `#5cff3b` (neon300) |
+| `theme.colors.line` | `colors.border` | `rgba(0,229,255,0.13)` |
+| `theme.colors.surfaceContainerLowest` | `colors.surface0` | `#030c12` (void900) |
+| `theme.colors.background` | `colors.background` | `#00080c` (void950) |
+
+Spacing map — **verified**:
+
+| Archive | Port | Value |
+|---|---|---|
+| `theme.spacing.xxs` | `spacing[1]` | 2 |
+| `theme.spacing.xs` | `spacing[2]` | 4 |
+| `theme.spacing.sm` | `spacing[3]` | 8 |
+| `theme.spacing.md` | `spacing[4]` | 12 |
+| `theme.spacing.lg` | `spacing[5]` | 16 |
+| `theme.spacing.xl` | `spacing[7]` | 24 |
+| `theme.spacing.xxl` | `spacing[8]` | 32 |
+
+Radii — **same keys**: `xs/sm/md/lg/xl/2xl/full`. Zero-conflict.
+
+Font map — **verified**:
 
 | Archive | Port |
 |---|---|
-| `theme.colors.cyan` | `colors.primary` (`#00e5ff`) |
-| `theme.colors.cyanSoft` | `useGlass('accent')` |
-| `theme.colors.purple` | **GONE** — stealth = `colors.primary` + neon accent, or ask for new color key |
-| `theme.colors.textPrimary` | `colors.textPrimary` |
-| `theme.colors.textMuted` | `colors.textTertiary` |
-| `theme.colors.red` | `colors.error` (verify key) |
-| `theme.colors.green` | `colors.success` (verify key) |
-| `theme.colors.line` / `.surfaceContainerLowest` | `colors.border` / `colors.surface0` |
-| `theme.spacing.*` | `spacing.*` (scale likely matches) |
-| `theme.radius.*` | `radii.*` |
-| `theme.fonts.body` | `fontFamily.body` |
-| `theme.type.body` | `fontSize.base` |
+| `theme.fonts.body` | `fontFamily.sans` |
+| `theme.fonts.bodyMedium` | `fontFamily.sansMd` |
+| `theme.fonts.heading` | `fontFamily.sansSb` |
+| `theme.fonts.display` | `fontFamily.sansBold` |
+| `theme.fonts.monoJetBrains` | `fontFamily.mono` (system fallback — ask for JetBrains) |
+
+Font size map — **verified**:
+
+| Archive | Port | Value |
+|---|---|---|
+| `theme.type.hero` | `fontSize['4xl']` | 38 |
+| `theme.type.displayLg` | `fontSize['3xl']` | 30 |
+| `theme.type.bodyLg` | `fontSize.lg` | 17 |
+| `theme.type.body` | `fontSize.md` | 15 |
+| `theme.type.caption` | `fontSize.sm` | 13 |
+| `theme.type.micro` | `fontSize.xs` | 11 |
+
+Shadows: his has `sm/md/lg/glow(color)`. Use `shadows.glow(colors.primary)` for cyan glow accents.
+
+Text variants (alternative to building from parts): `textVariants.displayLg/headingLg/bodyMd/labelMd/codeSm/...` preset combos available.
 
 ## What ports
 
@@ -123,13 +162,44 @@ Send when convenient, don't wait:
 ## Commits on this branch so far
 
 ```
-038364a chore(build): postinstall patch for lxmf 0.1.6 gradle   # cherry-picked from v3-latest
-6fa1c1b feat(onboarding): ASCII WebGL background, redesigned CTA buttons, welcome screen  # teammate
-9479e5d feat(mesh): real-time peer sync + UI polish  # teammate
-6e5a03b fix(build): pin Xcode image + bump lxmf to 0.1.6; show displayName in identity card  # teammate
-2dd5437 refactor(settings): split monolithic screen into standalone components  # teammate
+ef1567a fix(gestures): wrap root in GestureHandlerRootView   # mine — MeshMap + SlideToConfirm need it
+d7d841a docs(port): PORT_LOG for epic/wallet-ui-port         # mine
+038364a chore(build): postinstall patch for lxmf 0.1.6 gradle  # cherry-picked from v3-latest
+6fa1c1b feat(onboarding): ASCII WebGL background, CTA buttons  # teammate
+9479e5d feat(mesh): real-time peer sync + UI polish           # teammate
+6e5a03b fix(build): xcode + lxmf 0.1.6 bump                   # teammate
+2dd5437 refactor(settings): split monolithic screen           # teammate
 ...
 ```
+
+## Progress tracker
+
+| Step | Status | Notes |
+|---|---|---|
+| Archive v3-full + tag + push | ✅ done | `origin/archive/hunter-v3-full` + `origin/v3-full` + tag `v3-full-archive-2026-04-22` |
+| Remove v3-latest worktree | ✅ done | Branch `origin/v3-latest` kept as backup with postinstall fix |
+| Cut `epic/wallet-ui-port` from `upstream/v3` | ✅ done | Pushed to `origin/epic/wallet-ui-port` |
+| Cherry-pick postinstall fix | ✅ done | 038364a |
+| PORT_LOG committed + pushed | ✅ done | d7d841a |
+| **Gesture root fix committed locally** | 🟡 local only | ef1567a — awaiting device verify before push |
+| Seeker baseline build | 🟡 in progress | builds, MeshMap crash (fixed by ef1567a, pending verify) |
+| Read teammate theme files | ✅ done | Rewire map verified above |
+| **Commit A — primitives port** | ⏭ next | After gesture fix pushed |
+| Commit B — wallet tab rebuild | ⏭ | |
+| Commit C — send routes | ⏭ | |
+| Commit D — receive route | ⏭ | |
+| Commit E — optional polish sweep | ⏭ | |
+
+## Discovered gotchas (for later)
+
+- **Pre-existing tsc errors on upstream/v3 (not mine):**
+  - `app/(tabs)/nodes.tsx:24,118` — `destHash` missing on `NodeData` type
+  - `components/nodes/MeshMap.tsx:311` — same
+  - `theme/ThemeContext.tsx:20` — light/dark color shape mismatch (`#f0f8fc` not assignable to `#00080c`)
+  - Flag to teammate async. Our commits still need `tsc --noEmit` green for NEW code; his pre-existing errors are noise.
+- **MeshMap runtime warning (not mine):** `components/nodes/MeshMap.tsx:280` fires "Encountered two children with the same key" repeatedly — `<View key={e.key}>` in edgeList map has collisions. Yellow warning only, does not block render. Teammate's lane. Flag async, don't fix.
+- **`.env` at repo root not gitignored.** Root has no `.gitignore`. Expo reads from `mobile_app/.env`, so root `.env` is stranded. User to delete or move.
+- **`mobile_app/package-lock.json` churns on `npm install`** because postinstall runs. Expected. Commit lockfile only if intentional bump.
 
 ## If context is lost
 
