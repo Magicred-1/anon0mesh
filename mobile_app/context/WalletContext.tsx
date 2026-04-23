@@ -85,8 +85,9 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       setIsLoading(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to initialize wallet';
-      setError(msg);
       setIsLoading(false);
+      if (msg === 'Authentication cancelled') return;
+      setError(msg);
       Alert.alert('Wallet Error', msg);
     }
   }, [router]);
@@ -108,8 +109,9 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       finalize(await WalletFactory.createLocal());
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create wallet';
-      setError(msg);
       setIsLoading(false);
+      if (msg === 'Authentication cancelled') return;
+      setError(msg);
       Alert.alert('Wallet Error', msg);
     }
   }, [finalize]);
@@ -142,9 +144,11 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       setIsConnected(true);
       setIsLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
+      const msg = err instanceof Error ? err.message : 'Failed to connect wallet';
       setIsLoading(false);
-      Alert.alert('Connection Error', 'Failed to connect wallet. Please try again.');
+      if (msg === 'Authentication cancelled') return;
+      setError(msg);
+      Alert.alert('Connection Error', msg);
     }
   }, [wallet]);
 
@@ -178,10 +182,11 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const isNotFound = msg.includes('not found') || msg.includes('Not Found');
+      if (msg === 'Authentication cancelled') return null;
       Alert.alert(
         'Export failed',
         isNotFound
-          ? 'Secret key was never stored (biometric setup failed at wallet creation). Sign out and recreate your wallet to fix this.'
+          ? 'Secret key was never stored. Sign out and recreate your wallet to fix this.'
           : `Could not read key: ${msg}`,
       );
       return null;
