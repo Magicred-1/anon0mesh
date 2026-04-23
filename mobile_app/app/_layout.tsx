@@ -1,5 +1,5 @@
 import '@/polyfills';
-import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import {
   SpaceGrotesk_300Light,
   SpaceGrotesk_400Regular,
@@ -13,7 +13,6 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider }  from '@/context/LxmfContext';
@@ -24,7 +23,6 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_300Light,
     SpaceGrotesk_400Regular,
@@ -41,7 +39,7 @@ export default function RootLayout() {
         <LxmfProvider>
           <WalletProvider autoInitialize>
             <HideBalanceProvider>
-              <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+              <NavThemeProvider value={DarkTheme}>
                 <Stack initialRouteName="index" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
                   <Stack.Screen name="index" />
                   <Stack.Screen name="onboarding" />
@@ -52,7 +50,7 @@ export default function RootLayout() {
                   <Stack.Screen name="send/review" />
                   <Stack.Screen name="send/success" options={{ gestureEnabled: false }} />
                 </Stack>
-                <StatusBar style="auto" />
+                <StatusBar style="light" />
               </NavThemeProvider>
             </HideBalanceProvider>
           </WalletProvider>
