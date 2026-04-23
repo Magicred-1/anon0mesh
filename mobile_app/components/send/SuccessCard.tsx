@@ -61,7 +61,8 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
 
   function handleExplorer() {
     haptics.tap();
-    const url = `https://explorer.solana.com/tx/${txId}?cluster=devnet`;
+    const encodedTxId = encodeURIComponent(txId);
+    const url = `https://explorer.solana.com/tx/${encodedTxId}?cluster=devnet`;
     Linking.openURL(url).catch(() => undefined);
   }
 
