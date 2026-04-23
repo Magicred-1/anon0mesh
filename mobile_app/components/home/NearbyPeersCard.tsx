@@ -29,39 +29,54 @@ export function NearbyPeersCard() {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const { peers, isRunning } = useLxmfContext();
 
-  const { previewPeers, extraCount, freshCount } = useMemo(() => {
+  const { previewPeers, extraCount, freshCount, hubCount } = useMemo(() => {
     const nowSec = Date.now() / 1000;
-    // Peers aren't pruned from the LxmfContext accumulator, so filter
-    // by recent lastSeen to avoid showing hundreds of stale announces
-    // as "nearby."
-    const fresh = peers
-      .filter((p) => p.online && nowSec - p.lastSeen < FRESH_WINDOW_SEC)
+    // Physical proximity = BLE only. Reticulum/TCP-hub peers are
+    // "on mesh" not "nearby" — they could be anywhere on the internet.
+    const bleFresh = peers
+      .filter(
+        (p) =>
+          p.online &&
+          p.via === "ble" &&
+          nowSec - p.lastSeen < FRESH_WINDOW_SEC,
+      )
       .sort((a, b) => b.lastSeen - a.lastSeen);
+    const hubFresh = peers.filter(
+      (p) =>
+        p.online &&
+        p.via === "reticulum" &&
+        nowSec - p.lastSeen < FRESH_WINDOW_SEC,
+    );
     return {
-      previewPeers: fresh.slice(0, AVATAR_PREVIEW_COUNT),
-      extraCount: Math.max(0, fresh.length - AVATAR_PREVIEW_COUNT),
-      freshCount: fresh.length,
+      previewPeers: bleFresh.slice(0, AVATAR_PREVIEW_COUNT),
+      extraCount: Math.max(0, bleFresh.length - AVATAR_PREVIEW_COUNT),
+      freshCount: bleFresh.length,
+      hubCount: hubFresh.length,
     };
   }, [peers]);
 
   // Title adapts to state:
   //   offline     : "Mesh offline"
-  //   scanning    : "Scanning for peers…"   (running, no fresh peers)
-  //   has peers   : "N peers nearby" (fresh count)
+  //   ble peers   : "N nearby" (BLE physical proximity)
+  //   only hub    : "Connected via hub" (TCP-only fallback)
+  //   nothing     : "Scanning for peers…"
   const label = !isRunning
     ? "Mesh offline"
-    : freshCount === 0
-      ? "Scanning for peers…"
-      : `${freshCount.toLocaleString()} ${freshCount === 1 ? "peer" : "peers"} nearby`;
+    : freshCount > 0
+      ? `${freshCount.toLocaleString()} ${freshCount === 1 ? "peer" : "peers"} nearby`
+      : hubCount > 0
+        ? `Connected via hub · ${hubCount.toLocaleString()} reachable`
+        : "Scanning for peers…";
 
+  const anyLive = freshCount > 0 || hubCount > 0;
   const pillLabel: string = !isRunning
     ? "Offline"
-    : freshCount > 0
+    : anyLive
       ? "Live"
       : "Silent";
   const pillTone: PillTone = !isRunning
     ? "neutral"
-    : freshCount > 0
+    : anyLive
       ? "green"
       : "amber";
 
