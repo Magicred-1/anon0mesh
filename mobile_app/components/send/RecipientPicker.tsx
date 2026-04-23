@@ -265,7 +265,7 @@ export function RecipientPicker() {
         <View style={{ paddingBottom: spacing[5], paddingHorizontal: spacing[5], paddingTop: spacing[3] }}>
           <DepthButton
             disabled={!isValid}
-            label="Continue to amount"
+            label="Continue"
             onPress={handleNext}
             size="lg"
             tone="cyan"

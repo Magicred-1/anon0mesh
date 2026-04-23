@@ -1,5 +1,5 @@
-import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useState } from "react";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
@@ -10,6 +10,7 @@ import {
   NearbyPeersCard,
   RecentActivity,
 } from "@/components/home";
+import * as haptics from "@/src/design-system/haptics";
 import { useTheme } from "@/theme";
 
 // Staggered entrance — each section enters ~90ms after the previous.
@@ -21,6 +22,17 @@ const ENTRANCE = {
 
 export default function WalletScreen() {
   const { colors, spacing, fontFamily, fontSize } = useTheme();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh stub. Real balance refresh lands in Phase 7 when
+  // the wallet layer exposes refetch. Fires a confirm haptic so the
+  // gesture feels intentional.
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    haptics.confirm();
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    setRefreshing(false);
+  }, []);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -28,6 +40,15 @@ export default function WalletScreen() {
         <ScrollView
           contentContainerStyle={{ paddingBottom: spacing[10] }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              colors={[colors.primary]}
+              onRefresh={handleRefresh}
+              progressBackgroundColor={colors.surface1}
+              refreshing={refreshing}
+              tintColor={colors.primary}
+            />
+          }
         >
           <Animated.View entering={FadeInDown.duration(ENTRANCE.duration).delay(0)}>
             <HomeHero />

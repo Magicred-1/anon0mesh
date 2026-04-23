@@ -100,43 +100,16 @@ export default function ReceiveScreen() {
             selected={mode}
             tone={isStealth ? "purple" : "cyan"}
           />
-          {isStealth ? (
-            <View style={{ alignSelf: "center", marginTop: spacing[3] }}>
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: colors.accentSubtle,
-                  borderColor: "rgba(92,255,59,0.32)",
-                  borderRadius: radii.full,
-                  borderWidth: 1,
-                  flexDirection: "row",
-                  gap: spacing[2],
-                  paddingHorizontal: spacing[3],
-                  paddingVertical: spacing[1],
-                }}
-              >
-                <Icon color={colors.accent} name="eye-off" size={12} />
-                <Text
-                  style={{
-                    color: colors.accent,
-                    fontFamily: fontFamily.sansMd,
-                    fontSize: fontSize.xs,
-                  }}
-                >
-                  Preview — stealth wiring lands in Phase 7
-                </Text>
-              </View>
-            </View>
-          ) : null}
         </View>
 
         <View
           style={{
             alignItems: "center",
             flex: 1,
-            gap: spacing[4],
+            gap: spacing[3],
             justifyContent: "center",
             paddingHorizontal: spacing[5],
+            paddingVertical: spacing[4],
           }}
         >
           <Text
@@ -153,30 +126,27 @@ export default function ReceiveScreen() {
           <View
             style={{
               backgroundColor: "#FFFFFF",
-              borderColor: isStealth ? colors.accent : colors.primary,
-              borderRadius: radii.xl,
-              borderWidth: 1,
-              padding: spacing[4],
+              borderRadius: radii.lg,
+              padding: 8,
             }}
           >
-            <QRCode size={220} data={qrValue} />
+            <QRCode size={200} data={qrValue} />
           </View>
 
-          <View style={{ alignItems: "center", gap: spacing[2] }}>
-            <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}>
-              <TokenLogo size={18} symbol="SOL" />
-              <TokenLogo size={18} symbol="USDC" />
-            </View>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}>
+            <TokenLogo size={16} symbol="SOL" />
+            <TokenLogo size={16} symbol="USDC" />
             <Text
               style={{
                 color: colors.textTertiary,
                 fontFamily: fontFamily.sansMd,
                 fontSize: fontSize.xs,
-                letterSpacing: 0.8,
+                letterSpacing: 0.6,
+                marginLeft: spacing[1],
                 textTransform: "uppercase",
               }}
             >
-              Supported on Solana
+              On Solana {isStealth ? "(stealth)" : ""}
             </Text>
           </View>
 
@@ -241,9 +211,9 @@ function ActionBar({ address }: ActionBarProps) {
       style={{
         flexDirection: "row",
         gap: spacing[3],
-        paddingBottom: spacing[5],
+        paddingBottom: spacing[7],
         paddingHorizontal: spacing[5],
-        paddingTop: spacing[4],
+        paddingTop: spacing[3],
       }}
     >
       <CircleButton

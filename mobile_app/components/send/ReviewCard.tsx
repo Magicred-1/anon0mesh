@@ -1,9 +1,11 @@
+import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { Icon, Pill, SlideToConfirm } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
+import * as haptics from "@/src/design-system/haptics";
 import { useGlass } from "@/hooks/useGlass";
 import { useTheme } from "@/theme";
 
@@ -123,7 +125,31 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
             spacing={spacing}
             icon="user"
             label="To"
-            value={shortAddress(to)}
+            valueComponent={
+              <TouchableOpacity
+                accessibilityLabel="Copy recipient address"
+                hitSlop={6}
+                onPress={async () => {
+                  haptics.tap();
+                  await Clipboard.setStringAsync(to);
+                }}
+                style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.textPrimary,
+                    fontFamily: fontFamily.mono,
+                    fontSize: fontSize.md,
+                    maxWidth: 160,
+                    textAlign: "right",
+                  }}
+                >
+                  {shortAddress(to)}
+                </Text>
+                <Icon color={colors.textTertiary} name="copy" size={14} />
+              </TouchableOpacity>
+            }
           />
           <DetailRow
             colors={colors}
