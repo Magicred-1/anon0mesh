@@ -100,7 +100,7 @@ function ActivityRow({
 
   return (
     <PressSurface
-      accessibilityLabel={`Open ${isSend ? "sent" : "received"} transaction detail`}
+      accessibilityLabel={`${isSend ? "Sent" : "Received"} transaction`}
       style={{
         backgroundColor: colors.surface0,
         borderColor: colors.border,
