@@ -8,6 +8,7 @@ import { useLxmfContext } from "@/context/LxmfContext";
 import { useTheme } from "@/theme";
 
 const AVATAR_PREVIEW_COUNT = 3;
+const FRESH_WINDOW_SEC = 120; // peers announce-heard within 2 min count as "nearby"
 
 function initialOf(alias: string | undefined): string {
   if (!alias) return "?";
@@ -28,38 +29,39 @@ export function NearbyPeersCard() {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const { peers, isRunning } = useLxmfContext();
 
-  const { previewPeers, extraCount, onlineCount, seenCount } = useMemo(() => {
-    const online = peers.filter((p) => p.online);
+  const { previewPeers, extraCount, freshCount } = useMemo(() => {
+    const nowSec = Date.now() / 1000;
+    // Peers aren't pruned from the LxmfContext accumulator, so filter
+    // by recent lastSeen to avoid showing hundreds of stale announces
+    // as "nearby."
+    const fresh = peers
+      .filter((p) => p.online && nowSec - p.lastSeen < FRESH_WINDOW_SEC)
+      .sort((a, b) => b.lastSeen - a.lastSeen);
     return {
-      previewPeers: online.slice(0, AVATAR_PREVIEW_COUNT),
-      extraCount: Math.max(0, online.length - AVATAR_PREVIEW_COUNT),
-      onlineCount: online.length,
-      seenCount: peers.length,
+      previewPeers: fresh.slice(0, AVATAR_PREVIEW_COUNT),
+      extraCount: Math.max(0, fresh.length - AVATAR_PREVIEW_COUNT),
+      freshCount: fresh.length,
     };
   }, [peers]);
 
-  // Single-line title adapts to state:
-  //   offline  : "Mesh offline"
-  //   scanning : "Scanning for peers…"   (running, no known peers yet)
-  //   live     : "N nearby" (online count) + subtitle with total seen
+  // Title adapts to state:
+  //   offline     : "Mesh offline"
+  //   scanning    : "Scanning for peers…"   (running, no fresh peers)
+  //   has peers   : "N peers nearby" (fresh count)
   const label = !isRunning
     ? "Mesh offline"
-    : seenCount === 0
+    : freshCount === 0
       ? "Scanning for peers…"
-      : `${onlineCount} ${onlineCount === 1 ? "peer" : "peers"} nearby`;
-
-  const subtitle = isRunning && seenCount > 0
-    ? `${seenCount} seen`
-    : undefined;
+      : `${freshCount.toLocaleString()} ${freshCount === 1 ? "peer" : "peers"} nearby`;
 
   const pillLabel: string = !isRunning
     ? "Offline"
-    : onlineCount > 0
+    : freshCount > 0
       ? "Live"
       : "Silent";
   const pillTone: PillTone = !isRunning
     ? "neutral"
-    : onlineCount > 0
+    : freshCount > 0
       ? "green"
       : "amber";
 
@@ -105,18 +107,6 @@ export function NearbyPeersCard() {
             </Text>
             <Pill label={pillLabel} tone={pillTone} />
           </View>
-          {subtitle ? (
-            <Text
-              style={{
-                color: colors.textTertiary,
-                fontFamily: fontFamily.sans,
-                fontSize: fontSize.xs,
-                marginTop: 2,
-              }}
-            >
-              {subtitle}
-            </Text>
-          ) : null}
         </View>
 
         <View style={[styles.rightBlock, { gap: spacing[3] }]}>

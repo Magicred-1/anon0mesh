@@ -2,7 +2,6 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ASSETS, TOTAL_USD } from "@/components/wallet/constants";
-import { useGlass } from "@/hooks/useGlass";
 import { useHideBalance } from "@/src/hooks/useHideBalance";
 import { useTheme } from "@/theme";
 
@@ -20,9 +19,8 @@ function formatUSD(value: number): string {
 // until real balance wires in Phase 7). Long-press anywhere on the
 // card toggles hide-balance, in sync with the header eye.
 export function BalanceCard() {
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const { colors, spacing, fontFamily, fontSize } = useTheme();
   const { hidden, toggle } = useHideBalance();
-  const glass = useGlass("accent");
 
   const sol = ASSETS.find((a) => a.sym === "SOL");
   const totalUsdText = hidden ? HIDDEN_MASK : formatUSD(TOTAL_USD);
@@ -37,17 +35,10 @@ export function BalanceCard() {
         delayLongPress={260}
         style={[
           styles.hero,
-          glass,
           {
-            borderRadius: radii["2xl"],
             gap: spacing[2],
             paddingHorizontal: spacing[6],
             paddingVertical: spacing[7],
-            shadowColor: colors.primary,
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.22,
-            shadowRadius: 24,
-            elevation: 6,
           },
         ]}
       >
@@ -102,7 +93,6 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: "center",
-    borderWidth: 1,
   },
   amountRow: {
     alignItems: "center",

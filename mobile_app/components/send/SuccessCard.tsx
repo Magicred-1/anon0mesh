@@ -67,7 +67,7 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
 
   return (
     <SendScaffold
-      onBack={handleDone}
+      showBack={false}
       eyebrow="Transfer receipt"
       title="Transfer in motion"
       subtitle="Receipt below. Explorer state can lag behind settlement for a few seconds."
