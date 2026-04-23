@@ -4,11 +4,17 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { DepthButton, Icon, NumericKeypad } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
-import { ASSETS } from "@/components/wallet/constants";
+import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
+import type { TokenOption } from "@/components/send/TokenPicker";
 import { useGlass } from "@/hooks/useGlass";
 import { useTheme } from "@/theme";
 
 const SOL_USD_RATE = 160;
+const USDC_USD_RATE = 1;
+
+function rateFor(sym: "SOL" | "USDC"): number {
+  return sym === "SOL" ? SOL_USD_RATE : USDC_USD_RATE;
+}
 
 function shortAddress(addr: string) {
   if (addr.length <= 14) return addr;
@@ -20,7 +26,10 @@ export function AmountKeypad() {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const glass = useGlass("accent");
   const { to } = useLocalSearchParams<{ to: string }>();
+
+  const [token, setToken] = useState<TokenOption>(() => tokenByName("SOL"));
   const [amount, setAmount] = useState("0");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const recipient = typeof to === "string" ? to : "";
 
@@ -30,11 +39,16 @@ export function AmountKeypad() {
     }
   }, [recipient, router]);
 
-  const solBalanceStr = ASSETS.find((a) => a.sym === "SOL")?.bal ?? "0";
-  const balanceNum = parseFloat(solBalanceStr.replace(/,/g, "")) || 0;
+  const balanceNum = parseFloat(token.balance.replace(/,/g, "")) || 0;
   const amountNum = parseFloat(amount) || 0;
-  const usdEquiv = (amountNum * SOL_USD_RATE).toFixed(2);
+  const usdEquiv = (amountNum * rateFor(token.sym)).toFixed(2);
   const isValid = amountNum > 0 && amountNum <= balanceNum && Boolean(recipient);
+
+  function handleSelectToken(next: TokenOption) {
+    setToken(next);
+    setAmount("0"); // reset when token changes
+    setPickerOpen(false);
+  }
 
   function handleNext() {
     if (!isValid) return;
@@ -42,7 +56,7 @@ export function AmountKeypad() {
       pathname: "/send/review",
       params: {
         amount,
-        symbol: "SOL",
+        symbol: token.sym,
         to: recipient,
       },
     });
@@ -144,17 +158,19 @@ export function AmountKeypad() {
                 marginTop: 2,
               }}
             >
-              {balanceNum.toFixed(4)} SOL
+              {token.balance} {token.sym}
             </Text>
           </View>
         </View>
 
         <View style={{ flex: 1, justifyContent: "center", paddingTop: spacing[5] }}>
           <NumericKeypad
-            currency="SOL"
+            currency={token.sym}
             fiatLabel={`≈ $${usdEquiv}`}
-            maxAmount={balanceNum.toFixed(4)}
+            maxAmount={balanceNum.toString()}
+            maxDecimals={token.maxDecimals}
             onChangeValue={setAmount}
+            onPressCurrency={() => setPickerOpen(true)}
             showMaxChip
             value={amount}
           />
@@ -172,11 +188,18 @@ export function AmountKeypad() {
           >
             <Icon color={colors.error} name="alert-circle" size={14} />
             <Text style={{ color: colors.error, fontFamily: fontFamily.sans, fontSize: fontSize.sm }}>
-              Amount exceeds current SOL balance.
+              Amount exceeds current {token.sym} balance.
             </Text>
           </View>
         ) : null}
       </View>
+
+      <TokenPicker
+        visible={pickerOpen}
+        selected={token.sym}
+        onSelect={handleSelectToken}
+        onClose={() => setPickerOpen(false)}
+      />
     </SendScaffold>
   );
 }

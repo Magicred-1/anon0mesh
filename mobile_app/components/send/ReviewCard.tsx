@@ -5,25 +5,15 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 
 import { Icon, Pill, SlideToConfirm } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
+import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
+import { sendSolTransfer } from "@/src/services/sendTransaction";
 import { useGlass } from "@/hooks/useGlass";
 import { useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
   if (!addr || addr.length <= 14) return addr;
   return `${addr.slice(0, 8)}…${addr.slice(-4)}`;
-}
-
-// Stubbed tx id. Real signing + broadcast lands in Phase 7 when the
-// wallet adapter exposes signTransaction. For now confirm generates a
-// fake id and routes to success to exercise the full visual flow.
-function fakeTxId(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < 44; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
 }
 
 interface ReviewCardProps {
@@ -36,6 +26,7 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const glass = useGlass("strong");
+  const { wallet } = useWallet();
 
   const [stealthEnabled, setStealthEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,17 +35,45 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
 
   async function handleConfirm() {
     if (isConfirming) return;
+
+    // SOL-only for devnet path. USDC + SPL token support comes with
+    // Jupiter integration; for now any non-SOL token falls back to
+    // a simulated receipt so the UX flow is still exercised.
+    if (symbol !== "SOL") {
+      setError(null);
+      setIsConfirming(true);
+      try {
+        await new Promise((r) => setTimeout(r, 900));
+        const simulated = `sim_${Math.random().toString(36).slice(2, 12)}`;
+        router.push({
+          pathname: "/send/success",
+          params: { amount, symbol, txId: simulated, simulated: "1" },
+        });
+      } finally {
+        setIsConfirming(false);
+      }
+      return;
+    }
+
+    if (!wallet) {
+      setError("Wallet not connected");
+      setSliderResetKey((k) => k + 1);
+      return;
+    }
+
     setError(null);
     setIsConfirming(true);
 
     try {
-      // Simulated tx delay — real broadcast lands in Phase 7.
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      const txId = fakeTxId();
+      const result = await sendSolTransfer({
+        adapter: wallet,
+        recipientAddress: to,
+        amountSOL: parseFloat(amount),
+      });
 
       router.push({
         pathname: "/send/success",
-        params: { amount, symbol, txId },
+        params: { amount, symbol, txId: result.signature },
       });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Send failed");
