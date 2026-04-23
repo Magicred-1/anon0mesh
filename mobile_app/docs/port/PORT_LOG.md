@@ -186,10 +186,25 @@ d7d841a docs(port): PORT_LOG for epic/wallet-ui-port         # mine
 | Seeker baseline build | ✅ done | Green with gesture fix; MeshMap duplicate-key warnings teammate's lane |
 | Read teammate theme files | ✅ done | Rewire map verified above |
 | **Commit A — primitives port** | ✅ done | `7088f13` — 17 files, 10 primitives + tokens + utils |
-| **Commit B — wallet tab rebuild** | ✅ done | `8265b31` — 12 files, 691+/204−, home composition + AsyncStorage |
-| Commit C — send routes | ⏭ next | `/send/{recipient,amount,review,success}` |
-| Commit D — receive route | ⏭ | `/receive` with stealth toggle |
-| Commit E — optional polish sweep | ⏭ | |
+| **Commit B — wallet tab rebuild** | ✅ done | `8265b31` — 12 files, home composition + AsyncStorage |
+| Commit B.1 — wallet polish + fixes | ✅ done | `78c17f7` — hide dots, $ size, glass, mock activity, peer stability, stagger entrance |
+| **Commit C — send routes** | ✅ done | `4fc53d6` — recipient / amount / review / success + SendScaffold |
+| **Commit D — receive route** | ✅ done | `ff09b02` — stealth toggle, copy-pulse, HomeHero QR → /receive |
+| Commit E — premium polish sweep | ⏭ optional | Pull-to-refresh, extra entrance stagger, live pill pulse |
+
+## Known stubs (Commits C + D)
+
+- **Real tx broadcast** — `ReviewCard.handleConfirm` fakes a tx id + 1.2s delay. Wire `WalletAdapter.signTransaction` in Phase 7.
+- **QR scanner** — stub Alert in RecipientPicker. Port `QrScannerModal` later.
+- **Mesh-peer → Solana-address mapping** — dropped nearby-peers picker from Send since `LxmfPeer` has no publicKey. Phase 7.
+- **Real scannable QR** — teammate's `QRCode.tsx` is a hash-based visual faux-QR, not scannable. Swap for `react-native-qrcode-svg` in a follow-up if demo needs cross-device scans.
+- **Stealth address** — still `previewStealthAddress` placeholder. Real derivation lives in `worktrees/anon0mesh-fork-ui/lib/stealth/`, wires in Phase 7.
+
+## Ask teammate async (reminder)
+
+1. Stealth color key — extend palette with `stealth` or reuse `accent` (currently using `accent` = neon)?
+2. JetBrains Mono for balance digits + addresses?
+3. Yield-soon tile OK on ActionRow? (shipped as "Soon" pill anyway)
 
 ## Commit B data wiring notes
 
