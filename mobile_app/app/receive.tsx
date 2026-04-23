@@ -71,8 +71,79 @@ export default function ReceiveScreen() {
 
   const isStealth = mode === "stealth";
   const activeAddress = isStealth ? stealthAddress : walletAddress;
-  const qrValue = activeAddress || "anon";
+  const hasActiveAddress = activeAddress.length > 0;
 
+  if (!hasActiveAddress) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <Animated.View style={[styles.safeArea, contentStyle]}>
+          <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+            <SwipeDismissHandle translateY={dragY} />
+            <View
+              style={{
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingHorizontal: spacing[5],
+                paddingVertical: spacing[4],
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamily.sansBold,
+                  fontSize: 32,
+                  letterSpacing: -0.5,
+                }}
+              >
+                Receive
+              </Text>
+              <IconButton
+                accessibilityLabel="Close receive"
+                name="x"
+                onPress={() => router.back()}
+                size="md"
+                tone="neutral"
+                variant="contained"
+              />
+            </View>
+            <View
+              style={{
+                alignItems: "center",
+                flex: 1,
+                justifyContent: "center",
+                paddingHorizontal: spacing[6],
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontFamily: fontFamily.sansBold,
+                  fontSize: fontSize.lg,
+                  marginBottom: spacing[2],
+                  textAlign: "center",
+                }}
+              >
+                Connect wallet to receive
+              </Text>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontFamily: fontFamily.sans,
+                  fontSize: fontSize.md,
+                  textAlign: "center",
+                }}
+              >
+                Connect a wallet before sharing or scanning a receive address.
+              </Text>
+            </View>
+          </SafeAreaView>
+        </Animated.View>
+      </View>
+    );
+  }
+
+  const qrValue = activeAddress;
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Animated.View style={[styles.safeArea, contentStyle]}>
