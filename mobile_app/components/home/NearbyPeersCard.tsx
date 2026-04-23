@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Icon, Pill, PressSurface } from "@/components/primitives";
+import type { PillTone } from "@/components/primitives";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useTheme } from "@/theme";
 
@@ -13,30 +14,55 @@ function initialOf(alias: string | undefined): string {
   return alias.trim().charAt(0).toUpperCase() || "?";
 }
 
-// One-liner strip above Recent activity — glanceable peer count +
-// state pill + avatar stack. Tap opens teammate's MeshMap on the
-// Nodes tab (he owns peer visualization; we don't duplicate).
+// Peer presence strip above Recent.
+//
+// LxmfContext.peers is a persistent accumulator (keyed by destHash) that
+// monotonically grows as announces arrive — so on mount it's briefly
+// empty before events flush through. To avoid "0 → 6" flicker we use
+// `useMemo` + filter for stability.
+//
+// Tap opens teammate's MeshMap on the Nodes tab — he owns peer
+// visualization; we don't duplicate.
 export function NearbyPeersCard() {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const { peers, isRunning } = useLxmfContext();
 
-  const onlinePeers = peers.filter((p) => p.online);
-  const previewPeers = onlinePeers.slice(0, AVATAR_PREVIEW_COUNT);
-  const extraCount = Math.max(0, onlinePeers.length - AVATAR_PREVIEW_COUNT);
+  const { previewPeers, extraCount, onlineCount, seenCount } = useMemo(() => {
+    const online = peers.filter((p) => p.online);
+    return {
+      previewPeers: online.slice(0, AVATAR_PREVIEW_COUNT),
+      extraCount: Math.max(0, online.length - AVATAR_PREVIEW_COUNT),
+      onlineCount: online.length,
+      seenCount: peers.length,
+    };
+  }, [peers]);
 
+  // Single-line title adapts to state:
+  //   offline  : "Mesh offline"
+  //   scanning : "Scanning for peers…"   (running, no known peers yet)
+  //   live     : "N nearby" (online count) + subtitle with total seen
   const label = !isRunning
     ? "Mesh offline"
-    : `${onlinePeers.length} ${onlinePeers.length === 1 ? "peer" : "peers"} nearby`;
+    : seenCount === 0
+      ? "Scanning for peers…"
+      : `${onlineCount} ${onlineCount === 1 ? "peer" : "peers"} nearby`;
 
-  const pillLabel = !isRunning ? "Offline" : onlinePeers.length > 0 ? "Live" : "Silent";
-  const pillTone: "green" | "amber" | "neutral" = !isRunning
+  const subtitle = isRunning && seenCount > 0
+    ? `${seenCount} seen`
+    : undefined;
+
+  const pillLabel: string = !isRunning
+    ? "Offline"
+    : onlineCount > 0
+      ? "Live"
+      : "Silent";
+  const pillTone: PillTone = !isRunning
     ? "neutral"
-    : onlinePeers.length > 0
+    : onlineCount > 0
       ? "green"
       : "amber";
 
-  // Cycle four tonal avatar backgrounds.
   const avatarPaletteBg = [
     colors.primarySubtle,
     colors.successSubtle,
@@ -63,20 +89,34 @@ export function NearbyPeersCard() {
       }}
       variant="card"
     >
-      <View style={[styles.inner, { gap: spacing[4], paddingHorizontal: spacing[4], paddingVertical: spacing[4] }]}>
-        <View style={[styles.titleBlock, { gap: spacing[3] }]}>
-          <Text
-            numberOfLines={1}
-            style={{
-              color: colors.textPrimary,
-              flexShrink: 1,
-              fontFamily: fontFamily.sansMd,
-              fontSize: fontSize.md,
-            }}
-          >
-            {label}
-          </Text>
-          <Pill label={pillLabel} tone={pillTone} />
+      <View style={[styles.inner, { gap: spacing[3], paddingHorizontal: spacing[4], paddingVertical: spacing[4] }]}>
+        <View style={styles.titleBlock}>
+          <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[3], minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: colors.textPrimary,
+                flexShrink: 1,
+                fontFamily: fontFamily.sansMd,
+                fontSize: fontSize.md,
+              }}
+            >
+              {label}
+            </Text>
+            <Pill label={pillLabel} tone={pillTone} />
+          </View>
+          {subtitle ? (
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontFamily: fontFamily.sans,
+                fontSize: fontSize.xs,
+                marginTop: 2,
+              }}
+            >
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
 
         <View style={[styles.rightBlock, { gap: spacing[3] }]}>
@@ -110,11 +150,11 @@ export function NearbyPeersCard() {
                 <View
                   style={[
                     styles.avatar,
-                    styles.avatarExtra,
                     {
                       backgroundColor: colors.surface2,
                       borderColor: colors.background,
                       borderRadius: radii.full,
+                      marginLeft: -10,
                     },
                   ]}
                 >
@@ -145,9 +185,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   titleBlock: {
-    alignItems: "center",
     flex: 1,
-    flexDirection: "row",
     minWidth: 0,
   },
   rightBlock: {
@@ -163,8 +201,5 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: "center",
     width: 32,
-  },
-  avatarExtra: {
-    marginLeft: -10,
   },
 });

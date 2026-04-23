@@ -1,6 +1,7 @@
 import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 import {
   ActionRow,
@@ -11,6 +12,13 @@ import {
 } from "@/components/home";
 import { useTheme } from "@/theme";
 
+// Staggered entrance — each section enters ~90ms after the previous.
+// Feels intentional, not just "everything appears."
+const ENTRANCE = {
+  duration: 420,
+  step: 90,
+};
+
 export default function WalletScreen() {
   const { colors, spacing, fontFamily, fontSize } = useTheme();
 
@@ -18,20 +26,32 @@ export default function WalletScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <ScrollView
-          contentContainerStyle={{ paddingBottom: spacing[9] }}
+          contentContainerStyle={{ paddingBottom: spacing[10] }}
           showsVerticalScrollIndicator={false}
         >
-          <HomeHero />
-          <BalanceCard />
-          <ActionRow />
+          <Animated.View entering={FadeInDown.duration(ENTRANCE.duration).delay(0)}>
+            <HomeHero />
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(ENTRANCE.duration).delay(ENTRANCE.step * 1)}>
+            <BalanceCard />
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(ENTRANCE.duration).delay(ENTRANCE.step * 2)}>
+            <ActionRow />
+          </Animated.View>
 
           <View style={{ height: spacing[4] }} />
-          <NearbyPeersCard />
 
-          <View
+          <Animated.View entering={FadeInDown.duration(ENTRANCE.duration).delay(ENTRANCE.step * 3)}>
+            <NearbyPeersCard />
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeInDown.duration(ENTRANCE.duration).delay(ENTRANCE.step * 4)}
             style={{
               paddingHorizontal: spacing[5],
-              paddingTop: spacing[6],
+              paddingTop: spacing[7],
               paddingBottom: spacing[2],
             }}
           >
@@ -46,9 +66,11 @@ export default function WalletScreen() {
             >
               Recent
             </Text>
-          </View>
+          </Animated.View>
 
-          <RecentActivity />
+          <Animated.View entering={FadeInDown.duration(ENTRANCE.duration).delay(ENTRANCE.step * 5)}>
+            <RecentActivity />
+          </Animated.View>
         </ScrollView>
       </SafeAreaView>
     </View>
