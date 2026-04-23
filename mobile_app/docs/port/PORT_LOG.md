@@ -190,7 +190,16 @@ d7d841a docs(port): PORT_LOG for epic/wallet-ui-port         # mine
 | Commit B.1 — wallet polish + fixes | ✅ done | `78c17f7` — hide dots, $ size, glass, mock activity, peer stability, stagger entrance |
 | **Commit C — send routes** | ✅ done | `4fc53d6` — recipient / amount / review / success + SendScaffold |
 | **Commit D — receive route** | ✅ done | `ff09b02` — stealth toggle, copy-pulse, HomeHero QR → /receive |
-| Commit E — premium polish sweep | ⏭ optional | Pull-to-refresh, extra entrance stagger, live pill pulse |
+| Commit E1 — polish round 2 | ✅ done | `939a148` — gray bar, border, peer count, back arrow, Continue copy, pull-to-refresh |
+| Commit E2 — devnet + picker + decimals | ✅ done | `60f7245` — real SOL transfer on devnet, token picker sheet, dynamic decimals per token |
+
+## Devnet transaction wiring (2026-04-22)
+
+- **Archive was NOT faked.** LocalWalletAdapter.send used `https://api.devnet.solana.com` + `Keypair.fromSecretKey(await exportSecretKey())` + `Transaction.sign` + `sendRawTransaction`. This commit ports that behavior verbatim into `src/services/sendTransaction.ts`.
+- **MWA signing not wired yet** — Seeker/Seed Vault path throws a clear error. Port MWA flow via `@solana-mobile/mobile-wallet-adapter-protocol-web3js` when ready.
+- **Devnet only, hardcoded.** Mainnet must be a deliberate separate commit with explicit gating. Never switch silently.
+- **Test with local wallet:** reset via onboarding to create a fresh local wallet, fund with `solana airdrop 2 <your-address> --url devnet`, then send. Real signature + biometric prompt expected.
+- **SOL-only.** USDC + other tokens fall back to simulated receipt (`simulated: "1"` param) until SPL / Jupiter integration.
 
 ## Known stubs (Commits C + D)
 
