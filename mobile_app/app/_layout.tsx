@@ -17,6 +17,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ThemeProvider } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider }  from '@/context/LxmfContext';
+import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -39,14 +40,16 @@ export default function RootLayout() {
       <ThemeProvider>
         <LxmfProvider>
           <WalletProvider autoInitialize>
-            <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <Stack initialRouteName="index">
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              </Stack>
-              <StatusBar style="auto" />
-            </NavThemeProvider>
+            <HideBalanceProvider>
+              <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack initialRouteName="index">
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                </Stack>
+                <StatusBar style="auto" />
+              </NavThemeProvider>
+            </HideBalanceProvider>
           </WalletProvider>
         </LxmfProvider>
       </ThemeProvider>

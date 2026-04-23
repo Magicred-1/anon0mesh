@@ -1,6 +1,9 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import * as haptics from "@/src/design-system/haptics";
+
+const STORAGE_KEY = "anonmesh:hide-balance";
 
 interface HideBalanceValue {
   hidden: boolean;
@@ -10,17 +13,30 @@ interface HideBalanceValue {
 const HideBalanceContext = createContext<HideBalanceValue | null>(null);
 
 // Provider wraps any screen displaying a sensitive balance so the
-// header eye toggle and the balance below it stay in sync.
-//
-// NOTE: Persistence across app restart is deferred — requires
-// @react-native-async-storage/async-storage which isn't in upstream deps
-// yet. Add the dep and restore AsyncStorage hydration when port stabilizes.
+// header eye toggle and the balance below it stay in sync across
+// re-renders, and the preference survives app restart.
 export function HideBalanceProvider({ children }: { children: React.ReactNode }) {
   const [hidden, setHidden] = useState(false);
 
+  // Hydrate from AsyncStorage on mount.
+  useEffect(() => {
+    let alive = true;
+    void AsyncStorage.getItem(STORAGE_KEY).then((value) => {
+      if (!alive) return;
+      setHidden(value === "true");
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const toggle = useCallback(() => {
     haptics.select();
-    setHidden((prev) => !prev);
+    setHidden((prev) => {
+      const next = !prev;
+      void AsyncStorage.setItem(STORAGE_KEY, next ? "true" : "false");
+      return next;
+    });
   }, []);
 
   const value = useMemo(() => ({ hidden, toggle }), [hidden, toggle]);
