@@ -191,6 +191,15 @@ d7d841a docs(port): PORT_LOG for epic/wallet-ui-port         # mine
 | Commit D — receive route | ⏭ | |
 | Commit E — optional polish sweep | ⏭ | |
 
+## Planned follow-up commits (not in A–E yet)
+
+- **Commit B.5 — dev surface** (after Commit B lands, separate PR):
+  - `app/dev/index.tsx` — index of dev tools, registered only if `__DEV__` in `app/_layout.tsx`
+  - `app/dev/tokens.tsx` — token swatch preview (color, spacing, radii, typography, motion, haptic tester)
+  - `app/dev/reset.tsx` — reset wallet + restart onboarding (pairs with `devReset` port)
+  - `<DevEntryFAB>` bottom-right corner of Home, returns `null` if not `__DEV__`
+  - **Separation rule (durable):** prod components NEVER import from `src/__fixtures__/`. Only dev routes + test files may. Fixtures live in `src/__fixtures__/*.ts`.
+
 ## Commit A deliberate scope cuts (revisit later)
 
 - **`useHideBalance` is in-memory only.** Persistence needs `@react-native-async-storage/async-storage` — add dep then restore AsyncStorage.
