@@ -192,6 +192,16 @@ d7d841a docs(port): PORT_LOG for epic/wallet-ui-port         # mine
 | **Commit D — receive route** | ✅ done | `ff09b02` — stealth toggle, copy-pulse, HomeHero QR → /receive |
 | Commit E1 — polish round 2 | ✅ done | `939a148` — gray bar, border, peer count, back arrow, Continue copy, pull-to-refresh |
 | Commit E2 — devnet + picker + decimals | ✅ done | `60f7245` — real SOL transfer on devnet, token picker sheet, dynamic decimals per token |
+| Commit F — round 3 polish bundle | ✅ done | `0363888` — scannable QR + logo, MWA signing, Phantom-lite token-first flow, swipe-to-dismiss on receive, peer count fixed to BLE-only |
+
+## Still pending / Phase 7
+
+- **Real wallet token discovery** — TokenPicker currently shows a static SOL + USDC catalog. Real picker needs `connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID })` to list user's SPL holdings. When Jupiter integrates, replace catalog with live token list + search.
+- **Real SPL (USDC etc.) transfers** — `sendTransaction` only handles native SOL. Adding SPL requires the associated token account check + `createTransferInstruction` from `@solana/spl-token`. USDC + future Jupiter tokens currently fall through to a simulated receipt (`simulated: "1"` query param on /send/success).
+- **Real dynamic fee** — Review row is hardcoded `~0.000005 SOL` which is correct for a simple system transfer, but a proper impl calls `connection.getFeeForMessage(tx.compileMessage())` after building the tx. Low-impact polish (fee doesn't actually vary much for simple transfers).
+- **Route selector (on-chain vs mesh)** — Review shows static `On-chain` pill. Deferred until BLE/Reticulum transport picker lands.
+- **Stealth derivation** — /receive stealth mode shows a placeholder `stealth_...` string. Real meta-address derivation lives in `worktrees/anon0mesh-fork-ui/lib/stealth/`, wires in Phase 7.
+- **USDC SPL wire** — needed for USDC to actually land on-chain; currently only SOL does.
 
 ## Devnet transaction wiring (2026-04-22)
 
