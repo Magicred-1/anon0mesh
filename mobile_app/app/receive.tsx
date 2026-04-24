@@ -292,7 +292,7 @@ function ActionBar({ address }: ActionBarProps) {
     if (!address) return;
     haptics.select();
     try {
-      await Share.share({ message: `AnonMesh address\n${address}` });
+      await Share.share({ message: `anonmesh address\n${address}` });
     } catch {
       // non-fatal
     }
