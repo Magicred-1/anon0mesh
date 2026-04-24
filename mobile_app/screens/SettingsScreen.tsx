@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { Dimensions, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
@@ -9,13 +9,20 @@ import { useWallet } from '@/context/WalletContext';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { useNotificationEnabled } from '@/hooks/useNotificationEnabled';
 import { useBiometricEnabled } from '@/hooks/useBiometricEnabled';
+import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
+import { Icon } from '@/components/primitives/Icon';
+
 import {
   QRCode, Toggle, SectionLabel, SettingsRow,
   QRModal, ExportWalletModal, RNodePairModal, RotateKeypairModal, DisableBiometricModal,
   type PairedDevice,
 } from '@/components/settings';
+
+const SCREEN_W    = Dimensions.get('window').width;
+const CARD_OUTER  = 32; // 16px padding each side
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -27,20 +34,28 @@ export default function SettingsScreen() {
   const [rotateOpen,    setRotateOpen]    = useState(false);
   const [exportOpen,    setExportOpen]    = useState(false);
   const [qrOpen,        setQrOpen]        = useState(false);
+  const [qrTab,         setQrTab]         = useState<'anonmesh' | 'wallet'>('anonmesh');
   const [copied,        setCopied]        = useState(false);
+  const [copiedWallet,  setCopiedWallet]  = useState(false);
+  const [cardPage,      setCardPage]      = useState(0);
+  const [cardWidth,     setCardWidth]     = useState(SCREEN_W - CARD_OUTER);
   const [paired,        setPaired]        = useState<PairedDevice>({ id: 'rnode_001', name: 'RNode · 410MHz', rssi: -42, serial: 'RN-914-4f2a' });
   const [notifications,  setNotifications]  = useNotificationEnabled();
   const [biometric,      setBiometric]      = useBiometricEnabled();
   const [disableBioOpen, setDisableBioOpen] = useState(false);
   const [meshOnCell,     setMeshOnCell]     = useState(false);
 
+  const cardScrollRef = useRef<ScrollView>(null);
+
   const router = useRouter();
-  const { disconnect, isLoading: walletLoading } = useWallet();
+  const { disconnect, isLoading: walletLoading, publicKey } = useWallet();
   const { status, displayName } = useLxmfContext();
 
-  const meshAddress = status?.addressHex ?? '';
-  const meshHandle  = meshAddress ? `@${meshAddress.slice(0, 8)}` : '@——';
-  const shortHash   = meshAddress ? `${meshAddress.slice(0, 6)}..${meshAddress.slice(-6)}` : '——';
+  const meshAddress  = status?.addressHex ?? '';
+  const shortHash    = meshAddress ? `${meshAddress.slice(0, 6)}..${meshAddress.slice(-6)}` : '——';
+  const pubkeyStr    = publicKey?.toBase58() ?? '';
+  const shortPubkey  = pubkeyStr ? `${pubkeyStr.slice(0, 4)}…${pubkeyStr.slice(-4)}` : '——';
+
 
   const handleSignOut = useCallback(async () => {
     await disconnect();
@@ -53,30 +68,105 @@ export default function SettingsScreen() {
     setTimeout(() => setCopied(false), 1400);
   }, [meshAddress]);
 
+  const copyWallet = useCallback(async () => {
+    if (pubkeyStr) await Clipboard.setStringAsync(pubkeyStr);
+    setCopiedWallet(true);
+    setTimeout(() => setCopiedWallet(false), 1400);
+  }, [pubkeyStr]);
+
   const onPaired = useCallback((d: NonNullable<PairedDevice>) => setPaired(d), []);
+
+  const swipeTo = (page: number) => {
+    Haptics.selectionAsync().catch(() => {});
+    cardScrollRef.current?.scrollTo({ x: page * cardWidth, animated: true });
+    setCardPage(page);
+  };
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
-          {/* ── Identity card ── */}
-          <View style={{ padding: 16, paddingBottom: 8 }}>
-            <View style={[S.identityCard, baseGlass]}>
-              <Text style={[S.idLabel, { color: colors.textTertiary, alignSelf: 'center' }]}>YOUR IDENTITY</Text>
-              <Pressable onPress={() => setQrOpen(true)} style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border, alignSelf: 'center' }]}>
-                <QRCode size={120} data={meshAddress || 'no-identity'} />
-              </Pressable>
-              <View style={{ alignItems: 'center', gap: 3 }}>
-                <Text style={[S.idHandle,      { color: colors.textPrimary }]}>@{displayName}</Text>
-                <Text style={[S.idHash,        { color: colors.textSecondary }]}>{shortHash}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-                <Pressable onPress={copyHandle} style={[S.copyBtn, softGlass]}>
-                  <Text style={[S.copyBtnText, { color: copied ? colors.primary : colors.textSecondary }]}>
-                    {copied ? '✓ copied' : 'copy hash'}
-                  </Text>
-                </Pressable>
+          {/* ── Swipeable identity card ── */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+            <View
+              style={[S.identityCard, baseGlass]}
+              onLayout={e => setCardWidth(e.nativeEvent.layout.width)}
+            >
+              <ScrollView
+                ref={cardScrollRef}
+                horizontal
+                pagingEnabled
+                scrollEventThrottle={16}
+                showsHorizontalScrollIndicator={false}
+                onScroll={e => setCardPage(Math.round(e.nativeEvent.contentOffset.x / cardWidth))}
+              >
+                {/* ── Page 0: Anonmesh identity ── */}
+                <View style={[S.slide, { width: cardWidth }]}>
+                  <Text style={[S.idLabel, { color: colors.textTertiary }]}>YOUR IDENTITY</Text>
+                  <Pressable
+                    onPress={() => { setQrTab('anonmesh'); setQrOpen(true); }}
+                    style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+                  >
+                    <QRCode size={116} data={meshAddress || 'no-identity'} />
+                  </Pressable>
+                  <View style={{ alignItems: 'center', gap: 3 }}>
+                    <Text style={[S.idHandle, { color: colors.textPrimary }]}>@{displayName}</Text>
+                    <Text style={[S.idHash,   { color: colors.textSecondary }]}>{shortHash}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                    <Pressable onPress={copyHandle} style={[S.pill, softGlass]}>
+                      <Feather name={copied ? 'check' : 'copy'} size={9} color={copied ? colors.primary : colors.textSecondary} />
+                      <Text style={[S.pillText, { color: copied ? colors.primary : colors.textSecondary }]}>
+                        {copied ? 'copied' : 'copy hash'}
+                      </Text>
+                    </Pressable>
+                    <Pressable onPress={() => swipeTo(1)} style={[S.pill, softGlass]}>
+                      <Text style={[S.pillText, { color: colors.textSecondary }]}>identity</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* ── Page 1: Solana wallet ── */}
+                <View style={[S.slide, { width: cardWidth }]}>
+                  <View style={S.solLabel}>
+                    <SolanaIcon size={10} color={colors.textTertiary} />
+                    <Text style={[S.idLabel, { color: colors.textTertiary }]}>SOLANA WALLET</Text>
+                  </View>
+
+                  <Pressable
+                    onPress={() => { setQrTab('wallet'); setQrOpen(true); }}
+                    style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+                  >
+                    <QRCode size={116} data={pubkeyStr || 'no-wallet'} />
+                  </Pressable>
+
+                  <View style={{ alignItems: 'center', gap: 3 }}>
+                    <Text style={[S.idHandle, { color: colors.textPrimary }]}>{shortPubkey}</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                    <Pressable onPress={copyWallet} style={[S.pill, softGlass]}>
+                      <Feather name={copiedWallet ? 'check' : 'copy'} size={9} color={copiedWallet ? colors.primary : colors.textSecondary} />
+                      <Text style={[S.pillText, { color: copiedWallet ? colors.primary : colors.textSecondary }]}>
+                        {copiedWallet ? 'copied' : 'copy address'}
+                      </Text>
+                    </Pressable>
+                    <Pressable onPress={() => swipeTo(0)} style={[S.pill, softGlass]}>
+                      <Feather name="wifi" size={9} color={colors.textSecondary} />
+                      <Text style={[S.pillText, { color: colors.textSecondary }]}>Solana</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </ScrollView>
+
+              {/* ── Page dots ── */}
+              <View style={S.dots}>
+                {[0, 1].map(i => (
+                  <Pressable key={i} onPress={() => swipeTo(i)}>
+                    <View style={[S.dot, { backgroundColor: cardPage === i ? colors.primary : colors.borderSubtle, width: cardPage === i ? 16 : 6 }]} />
+                  </Pressable>
+                ))}
               </View>
             </View>
           </View>
@@ -102,7 +192,7 @@ export default function SettingsScreen() {
                     <Text style={[S.hwName,   { color: colors.textPrimary }]}>{paired.name}</Text>
                     <Text style={[S.hwSerial, { color: colors.textTertiary }]}>{paired.serial}</Text>
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                      <Pill label="CONNECTED" variant="success" dot />
+                      <Pill label="CONNECTED" variant="primary" dot />
                       <Pill label="LoRa"      variant="default" />
                       <Pill label="78% BATT"  variant="default" />
                     </View>
@@ -139,7 +229,7 @@ export default function SettingsScreen() {
             <View style={[S.section, baseGlass]}>
               <SettingsRow icon="lock" label="biometric unlock" sub="face id · required for transactions" right={<Toggle on={biometric} onChange={v => { if (v) setBiometric(true); else setDisableBioOpen(true); }} />} />
               <SettingsRow icon="refresh-cw" label="rotate keypair"    sub="generate new ed25519 · keeps handle" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setRotateOpen(true)} />
-              <SettingsRow icon="upload"     label="export secret key" sub="bs58 · ed25519 · offline only"       right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
+              <SettingsRow icon="upload"     label="export secret key" sub="wallet private key · keep it private"       right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
             </View>
           </View>
 
@@ -174,36 +264,49 @@ export default function SettingsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {qrOpen      && <QRModal             onClose={() => setQrOpen(false)}    />}
-      {pairOpen    && <RNodePairModal      onClose={() => setPairOpen(false)}   onPaired={onPaired} />}
-      {rotateOpen      && <RotateKeypairModal   onClose={() => setRotateOpen(false)} />}
-      {exportOpen      && <ExportWalletModal    onClose={() => setExportOpen(false)} />}
+      {qrOpen          && <QRModal              onClose={() => setQrOpen(false)} initialTab={qrTab} />}
+      {pairOpen        && <RNodePairModal        onClose={() => setPairOpen(false)}     onPaired={onPaired} />}
+      {rotateOpen      && <RotateKeypairModal    onClose={() => setRotateOpen(false)}   />}
+      {exportOpen      && <ExportWalletModal     onClose={() => setExportOpen(false)}   />}
       {disableBioOpen  && <DisableBiometricModal onClose={() => setDisableBioOpen(false)} onConfirm={() => setBiometric(false)} />}
     </View>
   );
 }
 
 const S = StyleSheet.create({
-  root:          { flex: 1 },
-  identityCard:  { borderRadius: 18, padding: 20, flexDirection: 'column', gap: 14, alignItems: 'stretch' },
-  qrWrap:        { padding: 8, borderRadius: 12, borderWidth: 0.5, overflow: 'hidden' },
-  idLabel:       { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  idHandle:      { fontFamily: fontFamily.sansMd, fontSize: 16, letterSpacing: 0.3 },
-  idDisplayName: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  idHash:        { fontFamily: fontFamily.sansMd, fontSize: 11, marginTop: 2 },
-  copyBtn:       { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99 },
-  copyBtnText:   { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
-  actionText:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  section:       { borderRadius: 16, overflow: 'hidden' },
-  valueText:     { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
-  hwCard:        { borderRadius: 16, padding: 14 },
-  hwIcon:        { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  hwName:        { fontSize: 14, letterSpacing: -0.2 },
-  hwSerial:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
-  hwActions:     { flexDirection: 'row', gap: 6, marginTop: 12 },
-  hwActionBtn:   { flex: 1, padding: 9, borderRadius: 10, alignItems: 'center' },
-  hwActionText:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  addHwBtn:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16 },
-  signOut:       { marginTop: 10, padding: 13, borderRadius: 12, borderWidth: 0.5, alignItems: 'center', backgroundColor: 'transparent' },
-  signOutText:   { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '500', letterSpacing: 3, textTransform: 'uppercase' },
+  root:         { flex: 1 },
+
+  // ── Identity card ────────────────────────────────────────────────────────────
+  identityCard: { borderRadius: 18, overflow: 'hidden' },
+  slide:        { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 4, gap: 14, alignItems: 'center' },
+  idLabel:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
+  qrWrap:       { padding: 8, borderRadius: 12, borderWidth: 0.5, overflow: 'hidden' },
+  idHandle:     { fontFamily: fontFamily.sansMd, fontSize: 16, letterSpacing: 0.3 },
+  idHash:       { fontFamily: fontFamily.sansMd, fontSize: 11, marginTop: 2 },
+
+  // Solana wallet slide
+  solLabel:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
+
+  // Shared pill buttons
+  pill:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99 },
+  pillText:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.2, textTransform: 'uppercase' },
+
+  // Page dots
+  dots:         { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingVertical: 12 },
+  dot:          { height: 6, borderRadius: 3 },
+
+  // ── Rest ─────────────────────────────────────────────────────────────────────
+  actionText:   { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
+  section:      { borderRadius: 16, overflow: 'hidden' },
+  valueText:    { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
+  hwCard:       { borderRadius: 16, padding: 14 },
+  hwIcon:       { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  hwName:       { fontSize: 14, letterSpacing: -0.2 },
+  hwSerial:     { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
+  hwActions:    { flexDirection: 'row', gap: 6, marginTop: 12 },
+  hwActionBtn:  { flex: 1, padding: 9, borderRadius: 10, alignItems: 'center' },
+  hwActionText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
+  addHwBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16 },
+  signOut:      { marginTop: 10, padding: 13, borderRadius: 12, borderWidth: 0.5, alignItems: 'center', backgroundColor: 'transparent' },
+  signOutText:  { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '500', letterSpacing: 3, textTransform: 'uppercase' },
 });

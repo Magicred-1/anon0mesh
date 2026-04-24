@@ -10,14 +10,14 @@ import { QRCode } from './QRCode';
 
 type QRTab = 'wallet' | 'anonmesh';
 
-export function QRModal({ onClose }: { onClose: () => void }) {
+export function QRModal({ onClose, initialTab = 'anonmesh' }: { readonly onClose: () => void; readonly initialTab?: QRTab }) {
   const { colors } = useTheme();
   const softGlass   = useGlass('soft');
   const baseGlass   = useGlass();
   const accentGlass = useGlass('accent');
   const { publicKey } = useWallet();
   const { status, displayName }    = useLxmfContext();
-  const [tab, setTab] = useState<QRTab>('anonmesh');
+  const [tab, setTab] = useState<QRTab>(initialTab);
 
   const meshAddress = status?.addressHex ?? '';
   const meshIdentity =  displayName || meshAddress || 'unknown';
