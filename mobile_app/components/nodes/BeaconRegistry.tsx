@@ -1,9 +1,12 @@
 import React, { memo, useState, useRef, useCallback } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
+import { PulseDot } from '@/components/ui/PulseDot';
+import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
 
 const ACTIVE_BEACONS = 3;
 const STAKE_SOL      = '0.5';
@@ -21,8 +24,8 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
 
   const [active,  setActive]  = useState(initialActive);
   const [modal,   setModal]   = useState(false);
-  const [cosigns]             = useState(0);
-  const [earned]              = useState(0);
+  const [cosigns]             = useState(24);
+  const [earned]              = useState(0.000312);
 
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
@@ -45,53 +48,87 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
       <View style={S.wrap}>
         <View style={S.labelRow}>
           <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>BEACON REGISTRY</Text>
-          <Pill label={active ? 'ACTIVE BEACON' : 'INACTIVE'} variant={active ? 'success' : 'default'} dot={active} />
+          <Pill label={active ? 'ACTIVE BEACON' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
         </View>
 
         <View style={[S.card, glass]}>
-          <View style={[S.statsRow, { borderBottomColor: colors.borderSubtle }]}>
-            <View style={S.stat}>
-              <Text style={[S.statVal, { color: colors.textPrimary }]}>{ACTIVE_BEACONS}</Text>
-              <Text style={[S.statKey, { color: colors.textTertiary }]}>ACTIVE BEACONS</Text>
-            </View>
-            <View style={[S.statDivider, { backgroundColor: colors.borderSubtle }]} />
-            <View style={S.stat}>
-              <Text style={[S.statVal, { color: colors.textPrimary }]}>{STAKE_SOL} SOL</Text>
-              <Text style={[S.statKey, { color: colors.textTertiary }]}>STAKE REQUIRED</Text>
-            </View>
-            {active && (
-              <>
+          {active ? (
+            <>
+              {/* ── Active hero ── */}
+              <View style={[S.activeHero, { borderBottomColor: colors.borderSubtle }]}>
+                {/* Earned SOL */}
+                <View style={S.earnedBlock}>
+                  <View style={S.earnedRow}>
+                    <SolanaIcon size={22} color={colors.primary} />
+                    <Text style={[S.earnedVal, { color: colors.textPrimary }]}>{earned.toFixed(6)}</Text>
+                  </View>
+                  <Text style={[S.earnedLabel, { color: colors.textTertiary }]}>SOL EARNED</Text>
+                </View>
+
+                {/* Vertical divider */}
+                <View style={[S.heroDivider, { backgroundColor: colors.borderSubtle }]} />
+
+                {/* Co-signs */}
+                <View style={S.cosignBlock}>
+                  <View style={S.earnedRow}>
+                    <Text style={[S.cosignVal, { color: colors.textPrimary }]}>{cosigns}</Text>
+                  </View>
+                  <Text style={[S.earnedLabel, { color: colors.textTertiary }]}>CO-SIGNS</Text>
+                </View>
+              </View>
+
+              {/* ── Status chips ── */}
+              <View style={[S.chipsRow, { borderBottomColor: colors.borderSubtle }]}>
+                <View style={[S.chip, softGlass]}>
+                  <View style={[S.chipDot, { backgroundColor: colors.primary }]} />
+                  <Text style={[S.chipText, { color: colors.textSecondary }]}>Solana Devnet</Text>
+                </View>
+                <View style={[S.chip, softGlass]}>
+                  <Feather name="lock" size={9} color={colors.textTertiary} />
+                  <Text style={[S.chipText, { color: colors.textSecondary }]}>{STAKE_SOL} SOL locked</Text>
+                </View>
+                <View style={[S.chip, softGlass]}>
+                  <PulseDot size={5} />
+                  <Text style={[S.chipText, { color: colors.primary }]}>{ACTIVE_BEACONS} reachable</Text>
+                </View>
+              </View>
+
+              {/* ── Deregister ── */}
+              <Pressable
+                onPress={openModal}
+                style={({ pressed }) => [S.deregBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Feather name="radio" size={12} color={colors.textTertiary} />
+                <Text style={[S.deregText, { color: colors.textTertiary }]}>DEREGISTER BEACON</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              {/* ── Inactive stats ── */}
+              <View style={[S.statsRow, { borderBottomColor: colors.borderSubtle }]}>
+                <View style={S.stat}>
+                  <Text style={[S.statVal, { color: colors.textPrimary }]}>{ACTIVE_BEACONS}</Text>
+                  <Text style={[S.statKey, { color: colors.textTertiary }]}>ACTIVE BEACONS</Text>
+                </View>
                 <View style={[S.statDivider, { backgroundColor: colors.borderSubtle }]} />
                 <View style={S.stat}>
-                  <Text style={[S.statVal, { color: colors.accent }]}>{cosigns}</Text>
-                  <Text style={[S.statKey, { color: colors.textTertiary }]}>CO-SIGNS</Text>
+                  <Text style={[S.statVal, { color: colors.textPrimary }]}>{STAKE_SOL} SOL</Text>
+                  <Text style={[S.statKey, { color: colors.textTertiary }]}>STAKE REQUIRED</Text>
                 </View>
-              </>
-            )}
-          </View>
+              </View>
 
-          <Text style={[S.desc, { color: colors.textSecondary }]}>
-            {active
-              ? `Earning as beacon co-signer. Stake locked: ${STAKE_SOL} SOL. Accumulated: ${earned.toFixed(6)} SOL.`
-              : 'Stake SOL to become a beacon node. Co-sign confidential transactions and earn fees from the network.'}
-          </Text>
+              <Text style={[S.desc, { color: colors.textSecondary }]}>
+                Stake SOL to become a beacon node. Co-sign confidential transactions and earn fees from the network.
+              </Text>
 
-          {active ? (
-            <Pressable
-              onPress={openModal}
-              style={({ pressed }) => [S.deregBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
-            >
-              <Feather name="radio" size={12} color={colors.textTertiary} />
-              <Text style={[S.deregText, { color: colors.textTertiary }]}>DEREGISTER BEACON</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={openModal}
-              style={({ pressed }) => [S.regBtn, accentGlass, { opacity: pressed ? 0.85 : 1 }]}
-            >
-              <Feather name="radio" size={13} color={colors.primary} />
-              <Text style={[S.regText, { color: colors.primary }]}>REGISTER AS BEACON</Text>
-            </Pressable>
+              <Pressable
+                onPress={openModal}
+                style={({ pressed }) => [S.regBtn, accentGlass, { opacity: pressed ? 0.85 : 1 }]}
+              >
+                <Feather name="radio" size={13} color={colors.primary} />
+                <Text style={[S.regText, { color: colors.primary }]}>REGISTER AS BEACON</Text>
+              </Pressable>
+            </>
           )}
         </View>
       </View>
@@ -121,30 +158,43 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
 
             {/* Fee breakdown — register only */}
             {!active && (
-              <View style={[S.feeCard, { backgroundColor: colors.surface2 + '80', borderColor: colors.border }]}>
-                <View style={S.feeRow}>
-                  <View style={[S.feeIcon, { backgroundColor: colors.primarySubtle }]}>
-                    <Feather name="lock" size={13} color={colors.primary} />
-                  </View>
-                  <Text style={[S.feeLabel, { color: colors.textSecondary }]}>Stake (locked)</Text>
-                  <Text style={[S.feeVal, { color: colors.textPrimary }]}>{STAKE_SOL} SOL</Text>
-                </View>
-                <View style={[S.feeSep, { backgroundColor: colors.borderSubtle }]} />
-                <View style={S.feeRow}>
-                  <View style={[S.feeIcon, { backgroundColor: colors.surface1 }]}>
-                    <Feather name="zap" size={13} color={colors.textTertiary} />
-                  </View>
-                  <Text style={[S.feeLabel, { color: colors.textSecondary }]}>Network fee</Text>
-                  <Text style={[S.feeVal, { color: colors.textTertiary }]}>{NETWORK_FEE} SOL</Text>
-                </View>
-                <View style={[S.feeSep, { backgroundColor: colors.borderSubtle }]} />
-                <View style={S.feeRow}>
-                  <View style={[S.feeIcon, { backgroundColor: colors.accentSubtle }]}>
-                    <Feather name="shield" size={13} color={colors.accent} />
-                  </View>
-                  <Text style={[S.feeLabel, { color: colors.textSecondary }]}>Role assigned</Text>
-                  <Text style={[S.feeVal, { color: colors.accent }]}>Co-signer</Text>
-                </View>
+              <View style={{ gap: 8 }}>
+                {([
+                  { icon: 'lock'   as const, bg: colors.primarySubtle,  iconColor: colors.primary,       label: 'Stake (locked)',  val: `${STAKE_SOL} SOL`,   valColor: colors.textPrimary  },
+                  { icon: 'zap'    as const, bg: colors.surface1,        iconColor: colors.textTertiary,  label: 'Network fee',     val: `${NETWORK_FEE} SOL`, valColor: colors.textTertiary },
+                  { icon: 'shield' as const, bg: colors.accentSubtle,    iconColor: colors.accent,        label: 'Role assigned',   val: 'Co-signer',          valColor: colors.accent       },
+                ] as const).map((row, i) => (
+                  <Reanimated.View key={row.label} entering={FadeIn.delay(i * 260).duration(280)}>
+                    <Pressable style={[S.feeRow, glass]}>
+                      <View style={[S.feeIcon, { backgroundColor: row.bg }]}>
+                        <Feather name={row.icon} size={13} color={row.iconColor} />
+                      </View>
+                      <Text style={[S.feeLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+                      <Text style={[S.feeVal, { color: row.valColor }]}>{row.val}</Text>
+                    </Pressable>
+                  </Reanimated.View>
+                ))}
+              </View>
+            )}
+
+            {/* Deregister warning rows */}
+            {active && (
+              <View style={{ gap: 8 }}>
+                {([
+                  { icon: 'trending-up' as const, bg: colors.accentSubtle, iconColor: colors.accent,       label: 'Earnings to date',  val: `◎ ${earned.toFixed(6)}`, valColor: colors.accent       },
+                  { icon: 'unlock'      as const, bg: colors.surface1,     iconColor: colors.textTertiary,  label: 'Stake returned',    val: `${STAKE_SOL} SOL`,        valColor: colors.textPrimary  },
+                  { icon: 'x-circle'   as const, bg: colors.error + '18', iconColor: colors.error,         label: 'Co-sign role lost', val: 'Immediately',             valColor: colors.error        },
+                ] as const).map((row, i) => (
+                  <Reanimated.View key={row.label} entering={FadeIn.delay(i * 260).duration(280)}>
+                    <View style={[S.feeRow, glass]}>
+                      <View style={[S.feeIcon, { backgroundColor: row.bg }]}>
+                        <Feather name={row.icon} size={13} color={row.iconColor} />
+                      </View>
+                      <Text style={[S.feeLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+                      <Text style={[S.feeVal, { color: row.valColor }]}>{row.val}</Text>
+                    </View>
+                  </Reanimated.View>
+                ))}
               </View>
             )}
 
@@ -158,10 +208,10 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
             {active ? (
               <Pressable
                 onPress={() => { setActive(false); dismiss(); }}
-                style={({ pressed }) => [S.deregModalBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
+                style={({ pressed }) => [S.deregModalBtn, { borderColor: colors.error + '40', opacity: pressed ? 0.7 : 1 }]}
               >
-                <Feather name="trash-2" size={13} color={colors.textSecondary} />
-                <Text style={[S.deregModalText, { color: colors.textSecondary }]}>CONFIRM DEREGISTER</Text>
+                <Feather name="trash-2" size={13} color={colors.error} />
+                <Text style={[S.deregModalText, { color: colors.error }]}>CONFIRM DEREGISTER</Text>
               </Pressable>
             ) : (
               <Pressable
@@ -180,47 +230,58 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
 });
 
 const S = StyleSheet.create({
-  // ── Outer card ──────────────────────────────────────────────────────────────
+  // ── Outer ───────────────────────────────────────────────────────────────────
   wrap:         { paddingHorizontal: 20, marginTop: 20 },
   labelRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sectionLabel: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-
   card:         { borderRadius: 16, overflow: 'hidden' },
+
+  // ── Active state ────────────────────────────────────────────────────────────
+  activeHero:   { flexDirection: 'row', borderBottomWidth: 0.5, paddingVertical: 20, paddingHorizontal: 18 },
+  earnedBlock:  { flex: 1, alignItems: 'center', gap: 4 },
+  cosignBlock:  { flex: 1, alignItems: 'center', gap: 4 },
+  earnedRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  earnedVal:    { fontFamily: fontFamily.sansBold, fontSize: 22, letterSpacing: -0.5, lineHeight: 30 },
+  cosignVal:    { fontFamily: fontFamily.sansBold, fontSize: 28, letterSpacing: -1, lineHeight: 34 },
+  earnedLabel:  { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
+  heroDivider:  { width: 0.5, marginVertical: 4, marginHorizontal: 16 },
+
+  chipsRow:     { flexDirection: 'row', gap: 6, padding: 12, borderBottomWidth: 0.5, justifyContent: 'space-between' },
+  chip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 99 },
+  chipDot:      { width: 6, height: 6, borderRadius: 3 },
+  chipText:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5 },
+
+  // ── Inactive state ───────────────────────────────────────────────────────────
   statsRow:     { flexDirection: 'row', borderBottomWidth: 0.5, paddingVertical: 14, paddingHorizontal: 16 },
   stat:         { flex: 1, alignItems: 'center', gap: 3 },
   statVal:      { fontFamily: fontFamily.sansMd, fontSize: 15, fontWeight: '600' },
   statKey:      { fontFamily: fontFamily.sansMd, fontSize: 8, letterSpacing: 2, textTransform: 'uppercase' },
   statDivider:  { width: 0.5, marginVertical: 4 },
-
   desc:         { fontFamily: fontFamily.sansMd, fontSize: 11, lineHeight: 17, padding: 16, paddingTop: 12 },
 
   regBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
                   margin: 12, marginTop: 0, padding: 12, borderRadius: 12 },
   regText:      { fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
-
   deregBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
                   margin: 12, marginTop: 0, padding: 11, borderRadius: 12, borderWidth: 0.5 },
   deregText:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
 
-  // ── Modal sheet (matches ExportWalletModal pattern) ──────────────────────────
+  // ── Modal ────────────────────────────────────────────────────────────────────
   sheet:        { position: 'absolute', bottom: 0, left: 0, right: 0,
                   borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
                   padding: 14, paddingBottom: 32, borderWidth: 0.5 },
   grab:         { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
   header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   tag:          { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:        { fontSize: 18, marginTop: 4, letterSpacing: -0.3, color: 'white' },
+  title:        { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
   closeBtn:     { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
 
-  feeCard:      { borderRadius: 14, borderWidth: 0.5, marginBottom: 14, overflow: 'hidden' },
-  feeRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  feeRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14, borderRadius: 14 },
   feeIcon:      { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   feeLabel:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 12 },
   feeVal:       { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600' },
-  feeSep:       { height: 0.5, marginHorizontal: 12 },
-
   sheetDesc:    { fontFamily: fontFamily.sansMd, fontSize: 12, lineHeight: 18,
-                  marginBottom: 20, opacity: 0.65 },
+                  marginTop: 12, marginBottom: 20, opacity: 0.65 },
 
   signBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
                   padding: 15, borderRadius: 14 },

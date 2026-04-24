@@ -10,9 +10,10 @@ import { useLxmfContext } from '@/context/LxmfContext';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useNotificationEnabled } from '@/hooks/useNotificationEnabled';
+import { useBiometricEnabled } from '@/hooks/useBiometricEnabled';
 import {
   QRCode, Toggle, SectionLabel, SettingsRow,
-  QRModal, ExportWalletModal, RNodePairModal, RotateKeypairModal,
+  QRModal, ExportWalletModal, RNodePairModal, RotateKeypairModal, DisableBiometricModal,
   type PairedDevice,
 } from '@/components/settings';
 
@@ -28,9 +29,10 @@ export default function SettingsScreen() {
   const [qrOpen,        setQrOpen]        = useState(false);
   const [copied,        setCopied]        = useState(false);
   const [paired,        setPaired]        = useState<PairedDevice>({ id: 'rnode_001', name: 'RNode · 410MHz', rssi: -42, serial: 'RN-914-4f2a' });
-  const [notifications, setNotifications] = useNotificationEnabled();
-  const [meshOnCell,    setMeshOnCell]    = useState(false);
-  const [biometric,     setBiometric]     = useState(true);
+  const [notifications,  setNotifications]  = useNotificationEnabled();
+  const [biometric,      setBiometric]      = useBiometricEnabled();
+  const [disableBioOpen, setDisableBioOpen] = useState(false);
+  const [meshOnCell,     setMeshOnCell]     = useState(false);
 
   const router = useRouter();
   const { disconnect, isLoading: walletLoading } = useWallet();
@@ -135,7 +137,7 @@ export default function SettingsScreen() {
           <SectionLabel>privacy & security</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
-              <SettingsRow icon="lock"       label="biometric unlock"  sub="face id · required for transactions" right={<Toggle on={biometric}  onChange={setBiometric}  />} />
+              <SettingsRow icon="lock" label="biometric unlock" sub="face id · required for transactions" right={<Toggle on={biometric} onChange={v => { if (v) setBiometric(true); else setDisableBioOpen(true); }} />} />
               <SettingsRow icon="refresh-cw" label="rotate keypair"    sub="generate new ed25519 · keeps handle" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setRotateOpen(true)} />
               <SettingsRow icon="upload"     label="export secret key" sub="bs58 · ed25519 · offline only"       right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
             </View>
@@ -174,8 +176,9 @@ export default function SettingsScreen() {
 
       {qrOpen      && <QRModal             onClose={() => setQrOpen(false)}    />}
       {pairOpen    && <RNodePairModal      onClose={() => setPairOpen(false)}   onPaired={onPaired} />}
-      {rotateOpen  && <RotateKeypairModal  onClose={() => setRotateOpen(false)} />}
-      {exportOpen  && <ExportWalletModal   onClose={() => setExportOpen(false)} />}
+      {rotateOpen      && <RotateKeypairModal   onClose={() => setRotateOpen(false)} />}
+      {exportOpen      && <ExportWalletModal    onClose={() => setExportOpen(false)} />}
+      {disableBioOpen  && <DisableBiometricModal onClose={() => setDisableBioOpen(false)} onConfirm={() => setBiometric(false)} />}
     </View>
   );
 }

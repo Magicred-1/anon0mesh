@@ -20,7 +20,7 @@ import type { NodeData, Filter } from '@/components/nodes/types';
 // Latency is added separately for the list so MeshMap topology doesn't re-layout on every timer tick.
 function peerToMapNode(p: LxmfPeer): NodeData {
   return {
-    handle:   `@${p.displayName.slice(0, 16)}`,
+    handle:   `${p.displayName.slice(0, 16)}`,
     hops:     p.hops,
     iface:    p.via === 'ble' ? 'BLE' : 'TCP',
     signal:   p.online ? 4 : 2,

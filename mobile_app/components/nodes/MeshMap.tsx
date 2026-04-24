@@ -463,11 +463,6 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
         </Pressable>
         <View style={S.headerBtns}>
           {isAnnouncing && <PulseDot size={5} />}
-          {expanded && (
-            <Pressable onPress={resetView} style={S.iconBtn} hitSlop={8}>
-              <Feather name="maximize" size={12} color={colors.textTertiary} />
-            </Pressable>
-          )}
           <Pressable onPress={enterFullscreen} style={[S.iconBtn, S.fsBtn]} hitSlop={8}>
             <Feather name="maximize-2" size={14} color={colors.primary} />
           </Pressable>
@@ -503,16 +498,14 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
 
             <View style={[S.fsHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface0, paddingTop: insets.top + 8 }]}>
               <Text style={[S.headerLabel, { flex: 1, color: colors.textTertiary }]}>
-                MESH TOPOLOGY
+                ANONMESH TOPOLOGY
                 <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
                 <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
               </Text>
               {isAnnouncing && <PulseDot size={5} />}
-              <Pressable onPress={resetView} style={S.iconBtn} hitSlop={8}>
-                <Feather name="maximize" size={13} color={colors.textTertiary} />
-              </Pressable>
               <Pressable onPress={exitFullscreen} style={[S.iconBtn, { paddingRight: 14 }]} hitSlop={8}>
-                <Feather name="x" size={18} color={colors.textSecondary} />
+                {/* Close the fullscreen view */}
+                <Feather name="minimize-2" size={18} color={colors.textSecondary} />
               </Pressable>
             </View>
 
