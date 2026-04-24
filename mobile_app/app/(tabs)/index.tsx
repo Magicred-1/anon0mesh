@@ -18,6 +18,9 @@ import { PeersDrawer }           from '@/components/messages/PeersDrawer';
 import { MESSAGES_SEED, DRAWER_W, type Peer } from '@/components/messages/constants';
 import type { AnyMsg, ChatMsg }  from '@/components/messages/types';
 import type { LxmfPeer } from '@/context/LxmfContext';
+import { activeConversationRef } from '@/hooks/activeConversation';
+import { decodeLxmfContent, decodeLxmfSender } from '@/utils/lxmfDecode';
+import { formatAgo } from '@/utils/time';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,7 +42,7 @@ function utf8ToBase64(s: string): string {
 
 function lxmfPeerToPeer(p: LxmfPeer): Peer {
   const now = Math.floor(Date.now() / 1000);
-  const ago = p.lastSeen > 0 ? `${Math.round(now - p.lastSeen)}s ago` : '—';
+  const ago = p.lastSeen > 0 ? formatAgo(now - p.lastSeen) : '—';
   return {
     handle:   p.displayName || p.destHash.slice(0, 8),
     hops:     p.hops,
@@ -57,7 +60,7 @@ function lxmfPeerToPeer(p: LxmfPeer): Peer {
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
-  const { isRunning, peers: lxmfPeers, events, send } = useLxmfContext();
+  const { isRunning, isAnnouncing, peers: lxmfPeers, events, send } = useLxmfContext();
 
   const [msgs,          setMsgs]          = useState<AnyMsg[]>(MESSAGES_SEED);
   const [activePeer,    setActivePeer]    = useState('node_7f3a');
@@ -67,12 +70,46 @@ export default function MessagesScreen() {
   const scrollRef       = useRef<ScrollView>(null);
   const drawerAnim      = useRef(new Animated.Value(-DRAWER_W)).current;
   const drawerOpenRef   = useRef(false);
-  const pendingRef      = useRef<Map<string, string[]>>(new Map());
+  const pendingRef       = useRef<Map<string, string[]>>(new Map());
   const activePeerHexRef = useRef<string | null>(null);
+  const lastEventIdxRef  = useRef(0);
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
-  useEffect(() => { activePeerHexRef.current = activePeerHex; }, [activePeerHex]);
+  useEffect(() => {
+    activePeerHexRef.current       = activePeerHex;
+    activeConversationRef.current  = activePeerHex;
+  }, [activePeerHex]);
+
+  // Incoming message handler
+  useEffect(() => {
+    if (events.length <= lastEventIdxRef.current) return;
+    const newEvents = events.slice(lastEventIdxRef.current);
+    lastEventIdxRef.current = events.length;
+
+    for (const e of newEvents) {
+      if (e.type !== 'messageReceived') continue;
+      const rawContent = e.content ?? '';
+      const srcHash: string = decodeLxmfSender(rawContent) ?? e.source ?? '';
+      const text = decodeLxmfContent(rawContent);
+      console.log('[MSG] rx hexLen:', rawContent.length, 'srcHash:', srcHash.slice(0, 8), 'text:', JSON.stringify(text.slice(0, 40)));
+      if (!text) continue;
+
+      const peer = lxmfPeers.find(p => p.destHash === srcHash);
+      const from = peer?.displayName || (srcHash ? srcHash.slice(0, 8) : 'unknown');
+      const time = new Date().toTimeString().slice(0, 8);
+
+      // Show in active thread; if from a different peer add a label
+      if (activePeerHexRef.current && srcHash !== activePeerHexRef.current) {
+        setMsgs(m => [...m,
+          { id: Date.now() - 1, kind: 'sys' as const, text: `message from ${from}` },
+          { id: Date.now(),     from, me: false, time, text, enc: true },
+        ]);
+      } else {
+        setMsgs(m => [...m, { id: Date.now(), from, me: false, time, text, enc: true }]);
+      }
+    }
+  }, [events, lxmfPeers]);
 
   // Retry queued messages when the peer's identity arrives via announce
   useEffect(() => {
@@ -138,7 +175,14 @@ export default function MessagesScreen() {
   const sendMsg = useCallback(async (text: string) => {
     const now = new Date().toTimeString().slice(0, 8);
     setMsgs(m => [...m, { id: Date.now(), from: 'me', me: true, time: now, text, enc: true }]);
-    if (!activePeerHex || !isRunning) return;
+    if (!activePeerHex) {
+      setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
+      return;
+    }
+    if (!isRunning) {
+      setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
+      return;
+    }
     try {
       await send(activePeerHex, utf8ToBase64(text));
     } catch (err: unknown) {
@@ -210,6 +254,7 @@ export default function MessagesScreen() {
           onPick={pickPeer}
           syncing={!isRunning}
           peers={livePeers.length > 0 ? livePeers : undefined}
+          isAnnouncing={isAnnouncing}
           onNewHash={hash => pickPeer({
             handle:   `@${hash.slice(0, 8)}`,
             hops:     0,
