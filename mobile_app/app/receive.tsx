@@ -84,12 +84,12 @@ export default function ReceiveScreen() {
         onPanResponderRelease: (_, g) => {
           const past = g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY;
           if (past) {
-            dragY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (done) => {
-              if (done) {
-                haptics.tap();
-                router.back();
-              }
-            });
+            // Start animation (runs on UI thread) and fire JS-side
+            // dismissal on the JS thread after matching delay. Keeps
+            // worklet callbacks pure so we avoid sync JS-from-UI errors.
+            dragY.value = withTiming(SCREEN_HEIGHT, { duration: 220 });
+            haptics.tap();
+            setTimeout(() => router.back(), 220);
           } else {
             dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
           }
