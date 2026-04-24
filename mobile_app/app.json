@@ -52,7 +52,14 @@
         }
       ],
       "expo-secure-store",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icons/anonmesh_white_icon.png",
+          "color": "#00E5FF"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

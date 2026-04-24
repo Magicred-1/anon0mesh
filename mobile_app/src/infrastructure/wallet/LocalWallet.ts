@@ -1,5 +1,6 @@
 import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
+import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { TurboModuleRegistry, type TurboModule } from 'react-native';
 import type { IWalletAdapter, WalletMode } from './types';
@@ -11,22 +12,12 @@ interface RNGetRandomValuesModule extends TurboModule {
 // react-native-get-random-values registers this TurboModule — already linked, no rebuild needed
 const RNGetRandomValues = TurboModuleRegistry.get<RNGetRandomValuesModule>('RNGetRandomValues');
 
-// All keys are OS-encrypted by Android Keystore. Only SECRET_KEY is also biometric-gated.
-// PUBLIC_KEY_STORE lets connect() restore the public key without biometric on every startup.
-const SECRET_KEY      = 'anon_wallet_secret_v1';   // biometric-gated — AES-GCM ciphertext
-const AES_KEY_STORE   = 'anon_wallet_aes_v1';      // OS-encrypted — AES-256 key
-const PUBLIC_KEY_STORE = 'anon_wallet_pubkey_v1';  // OS-encrypted — base58 public key
-const MARKER_KEY      = 'anon_wallet_marker_v1';   // no auth — existence check only
-
-const AUTH_OPTS: SecureStore.SecureStoreOptions = {
-  requireAuthentication: true,
-  authenticationPrompt: 'Authenticate to access your anonmesh wallet',
-};
-
-const EXPORT_OPTS: SecureStore.SecureStoreOptions = {
-  requireAuthentication: true,
-  authenticationPrompt: 'Authenticate to export your private key',
-};
+// All keys sit in OS Keystore (Android) / Keychain (iOS) — no biometric OS gate.
+// Export is gated by LocalAuthentication which falls back to device PIN/passcode.
+const SECRET_KEY       = 'anon_wallet_secret_v2';   // OS-encrypted — AES-GCM ciphertext
+const AES_KEY_STORE    = 'anon_wallet_aes_v1';      // OS-encrypted — AES-256 key
+const PUBLIC_KEY_STORE = 'anon_wallet_pubkey_v1';   // OS-encrypted — base58 public key
+const MARKER_KEY       = 'anon_wallet_marker_v1';   // no auth — existence check only
 
 interface StoredPayload {
   iv: string;  // base64, 12 bytes
@@ -57,10 +48,17 @@ function aesDecrypt(aesKey: Uint8Array, payload: StoredPayload): Uint8Array {
   return gcm(aesKey, iv).decrypt(ct);
 }
 
-// Requires biometric. Only called for export — NOT for normal connect().
-async function readAndDecrypt(opts: SecureStore.SecureStoreOptions): Promise<Keypair> {
-  const rawPayload = await SecureStore.getItemAsync(SECRET_KEY, opts);
-  if (!rawPayload) throw new Error('Wallet not found in secure storage');
+// Gated by device auth (biometric OR PIN fallback). Only called for export.
+async function readAndDecrypt(): Promise<Keypair> {
+  const auth = await LocalAuthentication.authenticateAsync({
+    promptMessage: 'Authenticate to export your private key',
+    disableDeviceFallback: false,
+    cancelLabel: 'Cancel',
+  });
+  if (!auth.success) throw new Error('Authentication cancelled');
+
+  const rawPayload = await SecureStore.getItemAsync(SECRET_KEY);
+  if (!rawPayload) throw new Error('Secret key was never stored — sign out and recreate your wallet to fix this');
 
   const parsed: unknown = JSON.parse(rawPayload);
 
@@ -84,8 +82,14 @@ export class LocalWallet implements IWalletAdapter {
   getPublicKey(): PublicKey | null { return this._publicKey; }
   isConnected(): boolean { return this._publicKey !== null; }
 
-  // No biometric — reads public key only. Biometric fires only on exportSecretKey().
   async connect(): Promise<void> {
+    const auth = await LocalAuthentication.authenticateAsync({
+      promptMessage: 'Unlock your anonmesh wallet',
+      disableDeviceFallback: false,
+      cancelLabel: 'Cancel',
+    });
+    if (!auth.success) throw new Error('Authentication cancelled');
+
     const stored = await SecureStore.getItemAsync(PUBLIC_KEY_STORE);
     if (!stored) throw new Error('No local wallet found — please recreate your wallet');
     this._publicKey = new PublicKey(stored);
@@ -95,17 +99,22 @@ export class LocalWallet implements IWalletAdapter {
     this._publicKey = null;
   }
 
-  // Triggers fresh biometric prompt — intentional, keeps secret key out of memory at rest
   async exportSecretKey(): Promise<Uint8Array> {
-    return (await readAndDecrypt(EXPORT_OPTS)).secretKey;
+    return (await readAndDecrypt()).secretKey;
   }
 
-  // Marker key has no auth — safe to call without triggering biometric prompt
   static async exists(): Promise<boolean> {
     return (await SecureStore.getItemAsync(MARKER_KEY)) === 'true';
   }
 
   static async create(): Promise<LocalWallet> {
+    const auth = await LocalAuthentication.authenticateAsync({
+      promptMessage: 'Authenticate to create your anonmesh wallet',
+      disableDeviceFallback: false,
+      cancelLabel: 'Cancel',
+    });
+    if (!auth.success) throw new Error('Authentication cancelled');
+
     // Bypass Keypair.generate(): nacl.randomBytes() → globalThis.crypto.getRandomValues
     // which Hermes may expose as a broken native stub that react-native-get-random-values
     // skips patching. Call the TurboModule backend directly instead.
@@ -114,17 +123,10 @@ export class LocalWallet implements IWalletAdapter {
     const keypair = Keypair.fromSeed(seed);
     const payload = aesEncrypt(aesKey, keypair.secretKey);
 
-    // Write marker and pubkey FIRST (no auth) so wallet persists even if biometric op fails.
-    // Biometric failure only disables export — connect() reads PUBLIC_KEY_STORE, never SECRET_KEY.
     await SecureStore.setItemAsync(AES_KEY_STORE, Buffer.from(aesKey).toString('base64'));
     await SecureStore.setItemAsync(PUBLIC_KEY_STORE, keypair.publicKey.toBase58());
     await SecureStore.setItemAsync(MARKER_KEY, 'true');
-    try {
-      await SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload), AUTH_OPTS);
-    } catch {
-      // Biometric key setup failed (no enrollment, emulator, etc.) — export will be unavailable
-      // until the user sets up device biometrics and recreates. Wallet identity persists.
-    }
+    await SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload));
 
     const w = new LocalWallet();
     w._publicKey = keypair.publicKey;

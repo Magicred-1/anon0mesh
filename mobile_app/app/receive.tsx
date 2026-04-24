@@ -2,7 +2,6 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-  Image,
   PanResponder,
   Pressable,
   Share,
@@ -268,57 +267,20 @@ export default function ReceiveScreen() {
               backgroundColor: "#FFFFFF",
               borderRadius: radii.lg,
               padding: 10,
-              position: "relative",
             }}
           >
             <QRCodeSvg
               backgroundColor="#FFFFFF"
-              color={isStealth ? "#00940b" : "#001520"}
+              color={isStealth ? colors.primaryDim : colors.glass}
               ecl="H"
-              logo={require("@/assets/images/logos/anonmesh_icon.png")}
-              logoBackgroundColor="#FFFFFF"
-              logoBorderRadius={4}
-              logoMargin={4}
-              logoSize={44}
+              logo={require("@/assets/icons/anonmesh_white_icon.png")}
+              logoBackgroundColor="#0B0C10"
+              logoBorderRadius={20}
+              logoMargin={3}
+              logoSize={40}
               size={200}
               value={qrValue}
             />
-            {/* QR lib renders the logo with its own tint; overlay a
-                tintColored copy so the mark reads at high contrast
-                against the white logo area. */}
-            <View
-              pointerEvents="none"
-              style={{
-                alignItems: "center",
-                bottom: 0,
-                justifyContent: "center",
-                left: 0,
-                position: "absolute",
-                right: 0,
-                top: 0,
-              }}
-            >
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: "#FFFFFF",
-                  borderRadius: 6,
-                  height: 44,
-                  justifyContent: "center",
-                  width: 44,
-                }}
-              >
-                <Image
-                  resizeMode="contain"
-                  source={require("@/assets/images/logos/anonmesh_icon.png")}
-                  style={{
-                    height: 32,
-                    tintColor: isStealth ? "#00940b" : "#001d44",
-                    width: 32,
-                  }}
-                />
-              </View>
-            </View>
           </View>
 
           <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}>
@@ -384,7 +346,7 @@ function ActionBar({ address }: ActionBarProps) {
     if (!address) return;
     haptics.select();
     try {
-      await Share.share({ message: `AnonMesh address\n${address}` });
+      await Share.share({ message: `anonmesh address\n${address}` });
     } catch {
       // non-fatal
     }
