@@ -10,5 +10,6 @@ export type { RowProps }     from './SettingsRow';
 export { QRModal }           from './QRModal';
 export { ExportWalletModal } from './ExportWalletModal';
 export { RNodePairModal }      from './RNodePairModal';
-export { RotateKeypairModal }  from './RotateKeypairModal';
+export { RotateKeypairModal }    from './RotateKeypairModal';
+export { DisableBiometricModal } from './DisableBiometricModal';
 export type { PairedDevice }   from './constants';

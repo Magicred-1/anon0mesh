@@ -49,9 +49,10 @@ function PeerList({
   const onlineCount = peers.filter(p => p.online).length;
 
   const [query, setQuery] = useState('');
-  const filtered = query
+  const filtered = (query
     ? peers.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
-    : peers;
+    : peers
+  ).slice().sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
 
   return (
     <View style={{ flex: 1 }}>
