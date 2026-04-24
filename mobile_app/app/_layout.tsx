@@ -18,6 +18,7 @@ import { ThemeProvider } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider }  from '@/context/LxmfContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
+import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -40,6 +41,7 @@ export default function RootLayout() {
       <ThemeProvider>
         <LxmfProvider>
           <WalletProvider autoInitialize>
+            <WalletBalanceProvider>
             <HideBalanceProvider>
               <NavThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
                 <Stack initialRouteName="index" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
@@ -55,6 +57,7 @@ export default function RootLayout() {
                 <StatusBar style="auto" />
               </NavThemeProvider>
             </HideBalanceProvider>
+            </WalletBalanceProvider>
           </WalletProvider>
         </LxmfProvider>
       </ThemeProvider>
