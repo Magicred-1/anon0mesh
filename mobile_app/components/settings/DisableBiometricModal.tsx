@@ -1,59 +1,54 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, Pressable, Modal, StyleSheet, Animated } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
-import { useLxmfContext } from '@/context/LxmfContext';
 
-const ROTATE_LINES = [
-  'wiping ed25519 keypair from secure store…',
-  'clearing lxmf address binding…',
-  'purging peer cache…',
-  'generating new ed25519 identity…',
-  'deriving new lxmf address…',
-  'announcing to mesh…',
+const DISABLE_LINES = [
+  'revoking biometric requirement…',
+  'writing security policy to store…',
+  'wallet unlock will bypass face id / pin…',
+  'change anytime in settings…',
 ];
 
-export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
+export function DisableBiometricModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
   const { colors } = useTheme();
-  const accentGlass = useGlass('accent');
-  const softGlass   = useGlass('soft');
+  const softGlass  = useGlass('soft');
 
-  const { resetIdentity, status } = useLxmfContext();
-
-  const [phase,   setPhase]   = useState<0 | 1 | 2>(0); // 0=confirm 1=rotating 2=done
-  const [newAddr, setNewAddr] = useState('');
+  const [phase, setPhase] = useState<0 | 1 | 2>(0);
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
   }, [sheetAnim]);
 
-  // After reset, node restarts and emits new addressHex — capture it
+  // Auto-advance from processing → done after lines finish
   useEffect(() => {
-    if (phase === 1 && status?.addressHex && status.addressHex !== '') {
-      const timer = setTimeout(() => {
-        setNewAddr(status.addressHex ?? '');
-        setPhase(2);
-      }, ROTATE_LINES.length * 320 + 400);
-      return () => clearTimeout(timer);
-    }
-  }, [phase, status?.addressHex]);
+    if (phase !== 1) return;
+    const t = setTimeout(() => setPhase(2), DISABLE_LINES.length * 320 + 400);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   const dismiss = () => {
     Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(onClose);
   };
 
-  const confirmRotate = async () => {
+  const handleConfirm = () => {
+    onConfirm();   // write flag to AsyncStorage via hook in SettingsScreen
     setPhase(1);
-    await resetIdentity();
   };
 
   const sheetY    = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [600, 0], extrapolate: 'clamp' });
   const overlayOp = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
 
-  const phaseTitle = ['rotate keypair', 'rotating…', 'new identity active'][phase];
+  const phaseTitle = ['disable biometric', 'disabling…', 'biometric disabled'][phase];
 
   return (
     <Modal transparent animationType="none" onRequestClose={dismiss}>
@@ -67,7 +62,7 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
 
           <View style={S.header}>
             <View>
-              <Text style={[S.tag,   { color: colors.textTertiary }]}>ANONMESH IDENTITY</Text>
+              <Text style={[S.tag,   { color: colors.textTertiary }]}>SECURITY SETTINGS</Text>
               <Text style={[S.title, { color: colors.textPrimary }]}>{phaseTitle}</Text>
             </View>
             {phase !== 1 && (
@@ -79,12 +74,13 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
 
           {/* Phase 0 — confirm */}
           {phase === 0 && (
-            <View style={S.confirmBody}>
+            <View style={S.body}>
               <View style={[S.warnBox, { backgroundColor: colors.error + '12', borderColor: colors.error + '30' }]}>
-                <Feather name="alert-triangle" size={18} color={colors.error} style={{ marginBottom: 10 }} />
-                <Text style={[S.warnTitle, { color: colors.error }]}>IRREVERSIBLE ACTION</Text>
-                <Text style={[S.warnText,  { color: colors.textSecondary }]}>
-                  Your current anonmesh address will be permanently discarded. Peers who know your old address will not be able to reach you. Your display name carries over.
+                <Feather name="shield-off" size={22} color={colors.error} style={{ marginBottom: 10 }} />
+                <Text style={[S.warnTitle, { color: colors.error }]}>DANGER — REDUCED SECURITY</Text>
+                <Text style={[S.warnText, { color: colors.textSecondary }]}>
+                  Disabling biometric means anyone with physical access to your unlocked device can open your wallet without authentication.{'\n\n'}
+                  Export and transaction signing will still require biometric confirmation.
                 </Text>
               </View>
 
@@ -92,21 +88,21 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
                 <Pressable onPress={dismiss} style={[S.cancelBtn, softGlass]}>
                   <Text style={[S.cancelText, { color: colors.textSecondary }]}>CANCEL</Text>
                 </Pressable>
-                <Pressable onPress={confirmRotate} style={[S.rotateBtn, { backgroundColor: colors.error }]}>
-                  <Feather name="refresh-cw" size={13} color="#fff" />
-                  <Text style={S.rotateBtnText}>ROTATE</Text>
+                <Pressable onPress={handleConfirm} style={[S.disableBtn, { backgroundColor: colors.error }]}>
+                  <Feather name="shield-off" size={13} color="#fff" />
+                  <Text style={S.disableBtnText}>DISABLE</Text>
                 </Pressable>
               </View>
             </View>
           )}
 
-          {/* Phase 1 — rotating */}
+          {/* Phase 1 — processing */}
           {phase === 1 && (
             <View style={{ padding: 20, gap: 10 }}>
-              {ROTATE_LINES.map((line, i) => (
+              {DISABLE_LINES.map((line, i) => (
                 <Reanimated.View key={i} entering={FadeIn.delay(i * 320).duration(300)}>
                   <Text style={[S.logLine, { color: colors.textSecondary }]}>
-                    <Text style={{ color: colors.primary }}>{'›  '}</Text>
+                    <Text style={{ color: colors.error }}>{'›  '}</Text>
                     {line}
                   </Text>
                 </Reanimated.View>
@@ -117,22 +113,17 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
           {/* Phase 2 — done */}
           {phase === 2 && (
             <View style={S.center}>
-              <View style={[S.iconCircle, accentGlass]}>
-                <Feather name="check" size={30} color={colors.primary} />
+              <View style={[S.iconCircle, { backgroundColor: colors.error + '18', borderColor: colors.error + '30', borderWidth: 0.5 }]}>
+                <Feather name="shield-off" size={28} color={colors.error} />
               </View>
-              <View style={{ alignItems: 'center', gap: 4 }}>
-                <Text style={[S.successTitle, { color: colors.textPrimary }]}>new identity ready</Text>
-                {newAddr !== '' && (
-                  <Text style={[S.newAddr, { color: colors.textTertiary }]}>
-                    {newAddr.slice(0, 8)}…{newAddr.slice(-6)}
-                  </Text>
-                )}
-                <Text style={[S.successSub, { color: colors.textTertiary }]}>
-                  announcing to mesh · old address gone
+              <View style={{ alignItems: 'center', gap: 6 }}>
+                <Text style={[S.doneTitle, { color: colors.textPrimary }]}>biometric disabled</Text>
+                <Text style={[S.doneSub, { color: colors.textTertiary }]}>
+                  RE-ENABLE ANYTIME IN SETTINGS · EXPORT STILL REQUIRES AUTH
                 </Text>
               </View>
-              <Pressable onPress={dismiss} style={[S.doneBtn, { backgroundColor: colors.primary }]}>
-                <Text style={[S.doneBtnText, { color: colors.background }]}>DONE</Text>
+              <Pressable onPress={dismiss} style={[S.doneBtn, { backgroundColor: colors.surface2, borderColor: colors.border, borderWidth: 0.5 }]}>
+                <Text style={[S.doneBtnText, { color: colors.textSecondary }]}>DONE</Text>
               </Pressable>
             </View>
           )}
@@ -150,23 +141,22 @@ const S = StyleSheet.create({
   title:        { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
   closeBtn:     { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
 
-  confirmBody:  { gap: 16, paddingBottom: 4 },
+  body:         { gap: 16, paddingBottom: 4 },
   warnBox:      { borderRadius: 14, borderWidth: 0.5, padding: 16, alignItems: 'center', gap: 2 },
   warnTitle:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 6 },
   warnText:     { fontFamily: fontFamily.sansMd, fontSize: 12.5, lineHeight: 19, textAlign: 'center' },
   btnRow:       { flexDirection: 'row', gap: 8 },
   cancelBtn:    { flex: 1, padding: 13, borderRadius: 12, alignItems: 'center' },
   cancelText:   { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
-  rotateBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 13, borderRadius: 12 },
-  rotateBtnText:{ fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase', color: '#fff' },
+  disableBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 13, borderRadius: 12 },
+  disableBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase', color: '#fff' },
 
   logLine:      { fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.3 },
 
   center:       { paddingVertical: 24, alignItems: 'center', gap: 16 },
   iconCircle:   { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  successTitle: { fontSize: 17, letterSpacing: -0.3, textAlign: 'center' },
-  newAddr:      { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1 },
-  successSub:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
+  doneTitle:    { fontSize: 17, letterSpacing: -0.3 },
+  doneSub:      { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', textAlign: 'center', marginTop: 2, paddingHorizontal: 20 },
   doneBtn:      { width: '100%', padding: 13, borderRadius: 12, alignItems: 'center', marginTop: 4 },
   doneBtnText:  { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
 });

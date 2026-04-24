@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -83,12 +84,17 @@ export class LocalWallet implements IWalletAdapter {
   isConnected(): boolean { return this._publicKey !== null; }
 
   async connect(): Promise<void> {
-    const auth = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Unlock your anonmesh wallet',
-      disableDeviceFallback: false,
-      cancelLabel: 'Cancel',
-    });
-    if (!auth.success) throw new Error('Authentication cancelled');
+    const biometricPref = await AsyncStorage.getItem('anonmesh:biometric-enabled');
+    const needsBiometric = biometricPref !== 'false';
+
+    if (needsBiometric) {
+      const auth = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Unlock your anonmesh wallet',
+        disableDeviceFallback: false,
+        cancelLabel: 'Cancel',
+      });
+      if (!auth.success) throw new Error('Authentication cancelled');
+    }
 
     const stored = await SecureStore.getItemAsync(PUBLIC_KEY_STORE);
     if (!stored) throw new Error('No local wallet found — please recreate your wallet');
