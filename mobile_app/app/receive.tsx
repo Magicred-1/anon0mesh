@@ -273,7 +273,7 @@ export default function ReceiveScreen() {
               backgroundColor="#FFFFFF"
               color={isStealth ? "#00940b" : "#001520"}
               ecl="H"
-              logo={require("@/assets/images/logos/anonmesh_logo.png")}
+              logo={require("@/assets/images/logos/anonmesh_icon.png")}
               logoBackgroundColor="#FFFFFF"
               logoBorderRadius={4}
               logoMargin={2}
