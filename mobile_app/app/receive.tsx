@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Dimensions,
+  Image,
   PanResponder,
   Pressable,
   Share,
@@ -267,6 +268,7 @@ export default function ReceiveScreen() {
               backgroundColor: "#FFFFFF",
               borderRadius: radii.lg,
               padding: 10,
+              position: "relative",
             }}
           >
             <QRCodeSvg
@@ -276,11 +278,47 @@ export default function ReceiveScreen() {
               logo={require("@/assets/images/logos/anonmesh_icon.png")}
               logoBackgroundColor="#FFFFFF"
               logoBorderRadius={4}
-              logoMargin={2}
-              logoSize={40}
+              logoMargin={4}
+              logoSize={44}
               size={200}
               value={qrValue}
             />
+            {/* QR lib renders the logo with its own tint; overlay a
+                tintColored copy so the mark reads at high contrast
+                against the white logo area. */}
+            <View
+              pointerEvents="none"
+              style={{
+                alignItems: "center",
+                bottom: 0,
+                justifyContent: "center",
+                left: 0,
+                position: "absolute",
+                right: 0,
+                top: 0,
+              }}
+            >
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 6,
+                  height: 44,
+                  justifyContent: "center",
+                  width: 44,
+                }}
+              >
+                <Image
+                  resizeMode="contain"
+                  source={require("@/assets/images/logos/anonmesh_icon.png")}
+                  style={{
+                    height: 32,
+                    tintColor: isStealth ? "#00940b" : "#001d44",
+                    width: 32,
+                  }}
+                />
+              </View>
+            </View>
           </View>
 
           <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}>
