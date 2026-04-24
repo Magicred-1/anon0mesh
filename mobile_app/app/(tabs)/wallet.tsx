@@ -1,3 +1,4 @@
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,10 +22,12 @@ const ENTRANCE = {
   step: 90,
 };
 
+const REFOCUS_REFETCH_MS = 5_000;
+
 export default function WalletScreen() {
   const { colors, spacing, fontFamily, fontSize } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
-  const { refetch } = useWalletBalance();
+  const { refetch, lastFetched } = useWalletBalance();
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -35,6 +38,17 @@ export default function WalletScreen() {
       setRefreshing(false);
     }
   }, [refetch]);
+
+  // Auto-refetch on tab focus so a just-sent tx surfaces in activity
+  // without forcing a pull-to-refresh. Throttled so rapid tab switches
+  // don't spam RPC.
+  useFocusEffect(
+    useCallback(() => {
+      if (!lastFetched || Date.now() - lastFetched > REFOCUS_REFETCH_MS) {
+        refetch();
+      }
+    }, [lastFetched, refetch]),
+  );
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
