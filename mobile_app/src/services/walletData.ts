@@ -1,4 +1,11 @@
-import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import {
+  Connection,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  type ParsedInstruction,
+  type ParsedTransactionWithMeta,
+  type PartiallyDecodedInstruction,
+} from "@solana/web3.js";
 
 export const SOL_DECIMALS = 9;
 
@@ -84,4 +91,104 @@ export async function fetchSplTokens(
 export function getTokenDecimals(symbol: string, fallback: number = 6): number {
   if (symbol === "SOL") return SOL_DECIMALS;
   return fallback;
+}
+
+export type ActivityDirection = "send" | "receive";
+export type ActivityStatus = "Settled" | "Failed";
+
+export interface ActivityEntry {
+  id: string;
+  signature: string;
+  direction: ActivityDirection;
+  status: ActivityStatus;
+  amountLamports: number;
+  amountSol: number;
+  symbol: "SOL";
+  counterparty: string;
+  createdAt: number;
+}
+
+interface TransferInfo {
+  source: string;
+  destination: string;
+  lamports: number;
+}
+
+function extractSystemTransfer(
+  instruction: ParsedInstruction | PartiallyDecodedInstruction,
+  walletAddress: string,
+): TransferInfo | null {
+  if (!("parsed" in instruction)) return null;
+  if (instruction.program !== "system") return null;
+  const parsed = instruction.parsed;
+  if (!parsed || typeof parsed !== "object") return null;
+  if (!("type" in parsed) || parsed.type !== "transfer") return null;
+  if (!("info" in parsed) || typeof parsed.info !== "object" || parsed.info === null) return null;
+
+  const info = parsed.info as { source?: unknown; destination?: unknown; lamports?: unknown };
+  const source = typeof info.source === "string" ? info.source : null;
+  const destination = typeof info.destination === "string" ? info.destination : null;
+  const lamports =
+    typeof info.lamports === "number"
+      ? info.lamports
+      : typeof info.lamports === "string"
+        ? Number(info.lamports)
+        : null;
+
+  if (!source || !destination || lamports === null || Number.isNaN(lamports)) return null;
+  if (source !== walletAddress && destination !== walletAddress) return null;
+
+  return { source, destination, lamports };
+}
+
+function toActivity(
+  walletAddress: string,
+  signature: string,
+  blockTime: number | null,
+  parsedTx: ParsedTransactionWithMeta | null,
+): ActivityEntry | null {
+  if (!parsedTx?.meta) return null;
+
+  const failed = parsedTx.meta.err !== null;
+  const transfer = parsedTx.transaction.message.instructions
+    .map((ix) => extractSystemTransfer(ix, walletAddress))
+    .find(Boolean);
+
+  if (!transfer) return null;
+
+  const direction: ActivityDirection = transfer.source === walletAddress ? "send" : "receive";
+  const counterparty = direction === "send" ? transfer.destination : transfer.source;
+  const createdAt = blockTime ? blockTime * 1000 : Date.now();
+
+  return {
+    id: signature,
+    signature,
+    direction,
+    status: failed ? "Failed" : "Settled",
+    amountLamports: transfer.lamports,
+    amountSol: transfer.lamports / LAMPORTS_PER_SOL,
+    symbol: "SOL",
+    counterparty,
+    createdAt,
+  };
+}
+
+export async function fetchRecentActivity(
+  connection: Connection,
+  publicKey: PublicKey,
+  limit: number = 15,
+): Promise<ActivityEntry[]> {
+  const walletAddress = publicKey.toBase58();
+  const signatures = await connection.getSignaturesForAddress(publicKey, { limit });
+
+  const parsed = await Promise.all(
+    signatures.map((entry) =>
+      connection
+        .getParsedTransaction(entry.signature, { maxSupportedTransactionVersion: 0 })
+        .then((tx) => toActivity(walletAddress, entry.signature, entry.blockTime ?? null, tx))
+        .catch(() => null),
+    ),
+  );
+
+  return parsed.filter((a): a is ActivityEntry => a !== null);
 }

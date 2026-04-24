@@ -1,22 +1,20 @@
+import * as Linking from "expo-linking";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { Icon, Pill, PressSurface } from "@/components/primitives";
 import type { PillTone } from "@/components/primitives";
-import { MOCK_ACTIVITY } from "@/src/__fixtures__/mockActivity";
-import type { MockActivity, MockActivityStatus } from "@/src/__fixtures__/mockActivity";
 import { useHideBalance } from "@/src/hooks/useHideBalance";
+import { useWalletBalance } from "@/src/hooks/useWalletBalance";
+import type { ActivityEntry } from "@/src/services/walletData";
+import * as haptics from "@/src/design-system/haptics";
 import { useTheme } from "@/theme";
 
 const DEFAULT_LIMIT = 5;
 const HIDDEN_AMOUNT = "•••";
 
-function statusTone(status: MockActivityStatus): PillTone {
-  switch (status) {
-    case "Settled":         return "green";
-    case "Handed to mesh":  return "cyan";
-    case "Queued on device": return "amber";
-  }
+function statusTone(status: ActivityEntry["status"]): PillTone {
+  return status === "Settled" ? "green" : "red";
 }
 
 function relativeTime(ms: number): string {
@@ -27,18 +25,46 @@ function relativeTime(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
+function shortAddress(addr: string): string {
+  if (addr.length <= 14) return addr;
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
+
+function formatAmount(sol: number): string {
+  if (sol === 0) return "0";
+  if (sol < 0.001) return sol.toFixed(6);
+  if (sol < 1) return sol.toFixed(4);
+  return sol.toLocaleString("en-US", { maximumFractionDigits: 3 });
+}
+
 interface RecentActivityProps {
   limit?: number;
 }
 
-// Renders mock tx history for demo + layout validation.
-// Real tx wiring lands in Phase 7 once the wallet layer emits history.
 export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const { hidden } = useHideBalance();
+  const { activity, activityLoading, lastFetched } = useWalletBalance();
 
-  const sorted = [...MOCK_ACTIVITY].sort((a, b) => b.createdAt - a.createdAt);
-  const visible = sorted.slice(0, limit);
+  const initialLoad = activityLoading && lastFetched === null;
+  const visible = activity.slice(0, limit);
+
+  if (initialLoad) {
+    return (
+      <View style={[styles.emptyState, { gap: spacing[3], paddingVertical: spacing[9] }]}>
+        <ActivityIndicator color={colors.primary} size="small" />
+        <Text
+          style={{
+            color: colors.textTertiary,
+            fontFamily: fontFamily.sans,
+            fontSize: fontSize.sm,
+          }}
+        >
+          Loading recent activity…
+        </Text>
+      </View>
+    );
+  }
 
   if (visible.length === 0) {
     return (
@@ -52,6 +78,17 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
           }}
         >
           No activity yet
+        </Text>
+        <Text
+          style={{
+            color: colors.textTertiary,
+            fontFamily: fontFamily.sans,
+            fontSize: fontSize.xs,
+            paddingHorizontal: spacing[6],
+            textAlign: "center",
+          }}
+        >
+          Sent or received SOL will show up here.
         </Text>
       </View>
     );
@@ -85,7 +122,7 @@ function ActivityRow({
   fontSize,
 }: {
   hidden: boolean;
-  tx: MockActivity;
+  tx: ActivityEntry;
   colors: ReturnType<typeof useTheme>["colors"];
   radii: ReturnType<typeof useTheme>["radii"];
   spacing: ReturnType<typeof useTheme>["spacing"];
@@ -93,14 +130,22 @@ function ActivityRow({
   fontSize: ReturnType<typeof useTheme>["fontSize"];
 }) {
   const isSend = tx.direction === "send";
-  const amountText = hidden ? HIDDEN_AMOUNT : `${isSend ? "-" : "+"}${tx.amount}`;
-  const amountColor = isSend ? colors.textPrimary : colors.success;
+  const amountText = hidden ? HIDDEN_AMOUNT : `${isSend ? "-" : "+"}${formatAmount(tx.amountSol)}`;
+  const amountColor = tx.status === "Failed" ? colors.error : isSend ? colors.textPrimary : colors.success;
   const badgeBg = isSend ? colors.primarySubtle : colors.successSubtle;
   const badgeIcon = isSend ? colors.primary : colors.success;
 
+  function handlePress() {
+    haptics.tap();
+    Linking.openURL(
+      `https://explorer.solana.com/tx/${encodeURIComponent(tx.signature)}?cluster=devnet`,
+    ).catch(() => undefined);
+  }
+
   return (
     <PressSurface
-      accessibilityLabel={`${isSend ? "Sent" : "Received"} transaction`}
+      accessibilityLabel={`${isSend ? "Sent" : "Received"} ${formatAmount(tx.amountSol)} SOL. Tap to open on explorer.`}
+      onPress={handlePress}
       style={{
         backgroundColor: colors.surface0,
         borderColor: colors.border,
@@ -144,7 +189,7 @@ function ActivityRow({
               fontSize: fontSize.md,
             }}
           >
-            {tx.counterparty}
+            {isSend ? "Sent to" : "Received from"} {shortAddress(tx.counterparty)}
           </Text>
           <Text
             style={{
@@ -166,7 +211,10 @@ function ActivityRow({
               fontSize: fontSize.md,
             }}
           >
-            {amountText} <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sans, fontSize: fontSize.xs }}>{tx.symbol}</Text>
+            {amountText}{" "}
+            <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sans, fontSize: fontSize.xs }}>
+              {tx.symbol}
+            </Text>
           </Text>
           <Pill label={tx.status} tone={statusTone(tx.status)} />
         </View>
