@@ -2,7 +2,6 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-  Dimensions,
   Image,
   PanResponder,
   Pressable,
@@ -37,7 +36,6 @@ import { useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 0.8;
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ADDRESS_MODES = [
   { id: "standard", label: "Standard" },
@@ -85,12 +83,14 @@ export default function ReceiveScreen() {
         onPanResponderRelease: (_, g) => {
           const past = g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY;
           if (past) {
-            // Start animation (runs on UI thread) and fire JS-side
-            // dismissal on the JS thread after matching delay. Keeps
-            // worklet callbacks pure so we avoid sync JS-from-UI errors.
-            dragY.value = withTiming(SCREEN_HEIGHT, { duration: 220 });
+            // Hand off to native modal exit animation instead of
+            // running our own. Double-animating (content translateY
+            // then modal frame slide) looked like two separate
+            // sheets falling. router.back() triggers the native
+            // slide_from_bottom exit; content's current translateY
+            // blends into that animation naturally.
             haptics.tap();
-            setTimeout(() => router.back(), 220);
+            router.back();
           } else {
             dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
           }
