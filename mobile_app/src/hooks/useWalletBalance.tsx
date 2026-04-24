@@ -54,17 +54,32 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setActivityLoading(true);
     try {
-      const [sol, splTokens, txs] = await Promise.all([
+      const [solResult, splResult, activityResult] = await Promise.allSettled([
         fetchSolBalance(solanaConnection, publicKey),
-        fetchSplTokens(solanaConnection, publicKey).catch(() => [] as TokenBalance[]),
-        fetchRecentActivity(solanaConnection, publicKey, 15).catch(() => [] as ActivityEntry[]),
+        fetchSplTokens(solanaConnection, publicKey),
+        fetchRecentActivity(solanaConnection, publicKey, 15),
       ]);
 
-      const solToken: TokenBalance = { ...NATIVE_SOL, uiAmount: sol };
-      setSolBalance(sol);
-      setTokens([solToken, ...splTokens]);
-      setActivity(txs);
-      setError(null);
+      if (solResult.status === "fulfilled") {
+        const sol = solResult.value;
+        const solToken: TokenBalance = { ...NATIVE_SOL, uiAmount: sol };
+        const splTokens = splResult.status === "fulfilled" ? splResult.value : [];
+        setSolBalance(sol);
+        setTokens([solToken, ...splTokens]);
+      }
+
+      if (activityResult.status === "fulfilled") {
+        setActivity(activityResult.value);
+      } else {
+        console.warn("[useWalletBalance] activity fetch failed:", activityResult.reason);
+        // Keep previous activity — better stale than empty.
+      }
+
+      const allFailed =
+        solResult.status === "rejected" &&
+        activityResult.status === "rejected" &&
+        splResult.status === "rejected";
+      setError(allFailed ? "Couldn't reach devnet" : null);
       setLastFetched(Date.now());
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to fetch balance";

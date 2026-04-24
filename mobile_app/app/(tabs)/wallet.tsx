@@ -41,12 +41,15 @@ export default function WalletScreen() {
 
   // Auto-refetch on tab focus so a just-sent tx surfaces in activity
   // without forcing a pull-to-refresh. Throttled so rapid tab switches
-  // don't spam RPC.
+  // don't spam RPC. Second refetch 4s after focus catches txs that
+  // confirmed but haven't been indexed into getSignaturesForAddress yet.
   useFocusEffect(
     useCallback(() => {
       if (!lastFetched || Date.now() - lastFetched > REFOCUS_REFETCH_MS) {
         refetch();
       }
+      const delayed = setTimeout(() => refetch(), 4_000);
+      return () => clearTimeout(delayed);
     }, [lastFetched, refetch]),
   );
 
