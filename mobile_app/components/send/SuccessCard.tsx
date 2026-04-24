@@ -26,9 +26,10 @@ interface SuccessCardProps {
   txId: string;
   amount: string;
   symbol: string;
+  simulated?: boolean;
 }
 
-export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
+export function SuccessCard({ txId, amount, symbol, simulated = false }: SuccessCardProps) {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const glass = useGlass("strong");
@@ -37,10 +38,10 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
     haptics.confirm();
   }, []);
 
-  async function handleCopyReference() {
+  async function handleCopySignature() {
     haptics.tap();
     await Clipboard.setStringAsync(txId);
-    Alert.alert("Copied", "Transfer reference copied to clipboard.");
+    Alert.alert("Copied", "Transaction signature copied to clipboard.");
   }
 
   function handleDone() {
@@ -52,7 +53,9 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
     haptics.tap();
     try {
       await Share.share({
-        message: `Sent ${amount} ${symbol}. Reference: ${txId}`,
+        message: simulated
+          ? `Sent ${amount} ${symbol} (demo transfer).`
+          : `Sent ${amount} ${symbol}. Signature: ${txId}`,
       });
     } catch {
       // non-fatal
@@ -128,24 +131,41 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
             <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
               Status
             </Text>
-            <Pill label="Handed to mesh" tone="cyan" />
+            <Pill
+              label={simulated ? "Demo transfer" : "Submitted to devnet"}
+              tone={simulated ? "amber" : "cyan"}
+            />
           </View>
-          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-            <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
-              Reference
-            </Text>
-            <TouchableOpacity onPress={handleCopyReference} hitSlop={6}>
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontFamily: fontFamily.mono,
-                  fontSize: fontSize.sm,
-                }}
-              >
-                {shortReference(txId)}
+          {!simulated ? (
+            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
+                Signature
               </Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity onPress={handleCopySignature} hitSlop={6}>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontFamily: fontFamily.mono,
+                    fontSize: fontSize.sm,
+                  }}
+                >
+                  {shortReference(txId)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text
+              style={{
+                color: colors.textTertiary,
+                fontFamily: fontFamily.sans,
+                fontSize: fontSize.xs,
+                textAlign: "center",
+                paddingTop: spacing[1],
+              }}
+            >
+              USDC and other SPL token transfers are simulated until Jupiter integration lands.
+            </Text>
+          )}
         </View>
 
         <View style={{ flexDirection: "row", gap: spacing[3] }}>
@@ -157,14 +177,16 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
             variant="secondary"
             style={{ flex: 1 }}
           />
-          <DepthButton
-            label="Explorer"
-            onPress={handleExplorer}
-            size="md"
-            tone="cyan"
-            variant="secondary"
-            style={{ flex: 1 }}
-          />
+          {!simulated ? (
+            <DepthButton
+              label="Explorer"
+              onPress={handleExplorer}
+              size="md"
+              tone="cyan"
+              variant="secondary"
+              style={{ flex: 1 }}
+            />
+          ) : null}
         </View>
       </View>
     </SendScaffold>
