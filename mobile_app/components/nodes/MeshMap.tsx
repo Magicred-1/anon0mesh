@@ -1,4 +1,5 @@
 import React, { memo, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { PulseDot } from '@/components/ui/PulseDot';
 import {
   View, Text, Pressable, StyleSheet, Animated, Easing, LayoutChangeEvent,
   Dimensions, Modal,
@@ -27,10 +28,18 @@ const RING_DEFAULT = 305;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
-  nodes:    NodeData[];
-  selected: string | null;
-  onSelect: (h: string | null) => void;
+  nodes:        NodeData[];
+  selected:     string | null;
+  onSelect:     (h: string | null) => void;
+  syncing?:     boolean;
+  isAnnouncing?: boolean;
 }
+
+// Ghost placeholder positions — 3 equidistant nodes on ring-1 (radius 90, phase -90°)
+const GHOST_POS = [0, 120, 240].map(deg => {
+  const rad = (deg - 90) * (Math.PI / 180);
+  return { x: ME_X + 90 * Math.cos(rad), y: ME_Y + 90 * Math.sin(rad) };
+});
 
 interface Placed { node: NodeData; x: number; y: number; r: number }
 interface Edge   { x1: number; y1: number; x2: number; y2: number; key: string }
@@ -155,7 +164,7 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Props) {
+export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing }: Props) {
   const { colors } = useTheme();
   const insets     = useSafeAreaInsets();
 
@@ -193,6 +202,19 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Prop
     anim.start();
     return () => anim.stop();
   }, [pulse]);
+
+  // Ghost breathe animation for skeleton placeholders
+  const ghost = useRef(new Animated.Value(0.25)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ghost, { toValue: 0.65, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(ghost, { toValue: 0.25, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [ghost]);
 
   // ── Pan + Pinch shared values ─────────────────────────────────────────────
   const tx  = useSharedValue(0); const ty  = useSharedValue(0);
@@ -366,8 +388,36 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Prop
         />
       ))}
 
-      {/* Empty state */}
-      {nodes.length === 0 && (
+      {/* Ghost skeleton nodes when syncing and no real peers yet */}
+      {syncing && nodes.length === 0 && GHOST_POS.map((pos) => {
+        const dx = pos.x - ME_X, dy = pos.y - ME_Y;
+        const len = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        return (
+          <React.Fragment key={`${pos.x}-${pos.y}`}>
+            <Animated.View style={{
+              position: 'absolute',
+              left: (ME_X + pos.x) / 2 - len / 2,
+              top:  (ME_Y + pos.y) / 2 - 0.25,
+              width: len, height: 0.5,
+              backgroundColor: 'rgba(0,229,255,0.12)',
+              transform: [{ rotate: `${angle}deg` }],
+              opacity: ghost,
+            }} />
+            <Animated.View style={{
+              position: 'absolute',
+              left: pos.x - NODE_R, top: pos.y - NODE_R,
+              width: NODE_R * 2, height: NODE_R * 2, borderRadius: NODE_R,
+              backgroundColor: 'rgba(0,229,255,0.07)',
+              borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.18)',
+              opacity: ghost,
+            }} />
+          </React.Fragment>
+        );
+      })}
+
+      {/* Empty state — no peers and not syncing */}
+      {nodes.length === 0 && !syncing && (
         <Text style={[S.empty, { color: colors.textTertiary, left: ME_X - 55, top: ME_Y + ME_R + 14 }]}>
           awaiting peers…
         </Text>
@@ -376,7 +426,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Prop
     </Reanimated.View>
   // canvasStyle is a stable Reanimated ref — Reanimated updates it on the UI thread
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [placed, edgeList, selected, colors, pulseOpacity, pulseScale, nodes.length]);
+  ), [placed, edgeList, selected, colors, pulseOpacity, pulseScale, nodes.length, syncing, ghost]);
 
   // ── Selected node strip ───────────────────────────────────────────────────
   const sel = selected ? placed.find(p => p.node.handle === selected) ?? null : null;
@@ -407,11 +457,12 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Prop
           <Text style={[S.headerLabel, { color: colors.textTertiary }]}>
             MESH TOPOLOGY
             <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
-            <Text style={{ color: colors.primary }}>{'  ● LIVE'}</Text>
+            <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
           </Text>
           <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={13} color={colors.textTertiary} />
         </Pressable>
         <View style={S.headerBtns}>
+          {isAnnouncing && <PulseDot size={5} />}
           {expanded && (
             <Pressable onPress={resetView} style={S.iconBtn} hitSlop={8}>
               <Feather name="maximize" size={12} color={colors.textTertiary} />
@@ -454,8 +505,9 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect }: Prop
               <Text style={[S.headerLabel, { flex: 1, color: colors.textTertiary }]}>
                 MESH TOPOLOGY
                 <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
-                <Text style={{ color: colors.primary }}>{'  ● LIVE'}</Text>
+                <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
               </Text>
+              {isAnnouncing && <PulseDot size={5} />}
               <Pressable onPress={resetView} style={S.iconBtn} hitSlop={8}>
                 <Feather name="maximize" size={13} color={colors.textTertiary} />
               </Pressable>

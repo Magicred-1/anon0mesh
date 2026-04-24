@@ -217,12 +217,12 @@ export default function ReceiveScreen() {
           >
             <QRCodeSvg
               backgroundColor="#FFFFFF"
-              color={isStealth ? "#00940b" : "#001520"}
+              color={isStealth ? colors.primaryDim : colors.glass}
               ecl="H"
-              logo={require("@/assets/images/logos/anonmesh_logo.png")}
-              logoBackgroundColor="#FFFFFF"
-              logoBorderRadius={4}
-              logoMargin={2}
+              logo={require("@/assets/icons/anonmesh_white_icon.png")}
+              logoBackgroundColor="#0B0C10"
+              logoBorderRadius={20}
+              logoMargin={3}
               logoSize={40}
               size={200}
               value={qrValue}
@@ -292,7 +292,7 @@ function ActionBar({ address }: ActionBarProps) {
     if (!address) return;
     haptics.select();
     try {
-      await Share.share({ message: `AnonMesh address\n${address}` });
+      await Share.share({ message: `anonmesh address\n${address}` });
     } catch {
       // non-fatal
     }
