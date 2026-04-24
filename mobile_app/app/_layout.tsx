@@ -19,8 +19,9 @@ import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider }  from '@/context/LxmfContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
-import { useMessageNotifications } from '@/hooks/useMessageNotifications';
-import { usePeerCountNotification } from '@/hooks/usePeerCountNotification';
+import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
+import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
+import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -34,8 +35,9 @@ function AppShell() {
     setActiveNotif(n);
   }, []);
 
-  useMessageNotifications(handleInApp);
-  usePeerCountNotification();
+  const [notifsEnabled] = useNotificationEnabled();
+  useMessageNotifications(handleInApp, notifsEnabled);
+  usePeerCountNotification(notifsEnabled);
 
   return (
     <>
