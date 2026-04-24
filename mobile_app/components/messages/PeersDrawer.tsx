@@ -4,17 +4,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
+import { PulseDot } from '@/components/ui/PulseDot';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useGlass } from '../../hooks/useGlass';
 import { QRScannerModal } from './QRScannerModal';
 import { type Peer } from './constants';
 
 interface Props {
-  readonly active:      string;
-  readonly onPick:      (p: Peer) => void;
-  readonly syncing?:    boolean;
-  readonly onNewHash?:  (hash: string) => void;
-  readonly peers?:      Peer[];
+  readonly active:         string;
+  readonly onPick:         (p: Peer) => void;
+  readonly syncing?:       boolean;
+  readonly isAnnouncing?:  boolean;
+  readonly onNewHash?:     (hash: string) => void;
+  readonly peers?:         Peer[];
 }
 
 // ── Skeleton peer row ────────────────────────────────────────────────────────
@@ -38,8 +40,8 @@ function PeerRowSkeleton() {
 // ── Peer list (default view) ─────────────────────────────────────────────────
 
 function PeerList({
-  active, onPick, onNew, syncing, peers: peersProp,
-}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void; readonly syncing?: boolean; readonly peers?: Peer[] }) {
+  active, onPick, onNew, syncing, isAnnouncing, peers: peersProp,
+}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void; readonly syncing?: boolean; readonly isAnnouncing?: boolean; readonly peers?: Peer[] }) {
   const { colors }  = useTheme();
   const softGlass   = useGlass('soft');
   const accentGlass = useGlass('accent');
@@ -62,6 +64,7 @@ function PeerList({
               ? <Text style={[S.subtitle, { color: colors.primary }]}>syncing…</Text>
               : <Text style={[S.subtitle, { color: colors.textTertiary }]}>{onlineCount}/{peers.length} online</Text>
             }
+            {isAnnouncing && !syncing && <PulseDot size={5} />}
           </View>
         </View>
       </SafeAreaView>
@@ -281,7 +284,7 @@ function NewConvoView({
 
 // ── PeersDrawer ──────────────────────────────────────────────────────────────
 
-export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, onNewHash, peers }: Props) {
+export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, isAnnouncing, onNewHash, peers }: Props) {
   const [newMsg, setNewMsg] = useState(false);
 
   if (newMsg) {
@@ -301,6 +304,7 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, 
       onPick={onPick}
       onNew={() => setNewMsg(true)}
       syncing={syncing}
+      isAnnouncing={isAnnouncing}
       peers={peers}
     />
   );

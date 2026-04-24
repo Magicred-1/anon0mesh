@@ -8,9 +8,11 @@ import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
+import { formatAgo }       from '@/utils/time';
 import { NodeRow }         from '@/components/nodes/NodeRow';
 import { NodeRowSkeleton } from '@/components/nodes/NodeRowSkeleton';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
+import { PulseDot }        from '@/components/ui/PulseDot';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
 
@@ -32,7 +34,7 @@ function peerToMapNode(p: LxmfPeer): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const glass = useGlass();
-  const { isRunning, isNativeAvailable, peers, startBLE } = useLxmfContext();
+  const { isRunning, isNativeAvailable, isAnnouncing, peers, startBLE } = useLxmfContext();
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export default function NodesScreen() {
   const listNodes = useMemo<NodeData[]>(() => {
     return meshNodes.map(n => {
       const p   = peerMap.get(n.destHash ?? '');
-      const ago = p && p.lastSeen > 0 ? `${Math.round(nowSec - p.lastSeen)}s` : '—';
+      const ago = p && p.lastSeen > 0 ? formatAgo(nowSec - p.lastSeen) : '—';
       if (ago === n.latency) return n; // reuse same ref — NodeRow memo bails out
       return { ...n, latency: ago };
     });
@@ -109,7 +111,7 @@ export default function NodesScreen() {
           </View>
 
           <View style={{ paddingTop: 14, paddingHorizontal: 20 }}>
-            <MeshMap nodes={meshNodes} selected={selectedHandle} onSelect={setSelectedHandle} />
+            <MeshMap nodes={meshNodes} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} />
           </View>
 
           <FlatList
@@ -137,12 +139,15 @@ export default function NodesScreen() {
 
           <View style={S.sectionRow}>
             <Text style={[S.sectionText, { color: colors.textTertiary }]}>LINKED PEERS</Text>
-            {loading
-              ? <Text style={[S.sectionCount, { color: colors.primary }]}>awaiting announces…</Text>
-              : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>
-                  {shown.length}{filtered.length > MAX_ROWS ? `+` : ''} of {listNodes.length}
-                </Text>
-            }
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {isAnnouncing && <PulseDot size={5} />}
+              {loading
+                ? <Text style={[S.sectionCount, { color: colors.primary }]}>awaiting announces…</Text>
+                : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>
+                    {shown.length}{filtered.length > MAX_ROWS ? `+` : ''} of {listNodes.length}
+                  </Text>
+              }
+            </View>
           </View>
 
           {/* Bounded scrollable peer box — ScrollView is safe to nest inside ScrollView */}
