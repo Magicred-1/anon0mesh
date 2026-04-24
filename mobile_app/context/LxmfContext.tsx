@@ -126,8 +126,9 @@ interface LxmfCtxValue {
   stop:      () => Promise<void>;
   send:      (destHex: string, bodyBase64: string) => Promise<number>;
   broadcast: (destsHex: string[], bodyBase64: string) => Promise<number>;
-  startBLE:  () => void;
-  stopBLE:   () => void;
+  startBLE:          () => void;
+  stopBLE:           () => void;
+  updateDisplayName: (name: string) => Promise<void>;
 }
 
 const LxmfCtx = createContext<LxmfCtxValue | null>(null);
@@ -286,6 +287,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     broadcast:         lxmf.broadcast,
     startBLE:          lxmf.startBLE,
     stopBLE:           lxmf.stopBLE,
+    updateDisplayName: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setDisplayName(trimmed);
+      await SecureStore.setItemAsync(DISPLAY_NAME_KEY, trimmed);
+    },
   }), [displayName, storedAddress, nameMap, peers, isAnnouncing, resetIdentity,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop, lxmf.send,

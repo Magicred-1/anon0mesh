@@ -1,16 +1,15 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { Feather }   from '@expo/vector-icons';
-import { useTheme }  from '@/theme';
-import { drawerIsOpen } from '@/hooks/drawerState';
+import { HapticTab }       from '@/components/haptic-tab';
+import { Feather }         from '@expo/vector-icons';
+import { useTheme }        from '@/theme';
+import { subscribeDrawer } from '@/hooks/drawerState';
 
 // ── Tab order ─────────────────────────────────────────────────────────────────
-// Must match the Tabs.Screen order below.
 const TABS = ['/', '/wallet', '/nodes', '/settings'] as const;
 type TabPath = typeof TABS[number];
 
@@ -31,32 +30,34 @@ export default function TabLayout() {
   const router     = useRouter();
   const pathname   = usePathname();
 
-  // Keep pathname in a ref so the stable gesture closure always reads current route.
+  // Disable tab swipe while PeersDrawer is open — prevents gesture stealing.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  useEffect(() => subscribeDrawer(setDrawerOpen), []);
+
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
 
+  const doNavigate = useCallback((tab: TabPath) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    router.navigate(tab);
+  }, [router]);
+
   const swipe = useMemo(() => Gesture.Pan()
-    // Needs ≥30px horizontal before activating — inner gestures (drawer at 10px,
-    // MeshMap at 6px) grab the touch first in their own areas, no conflict.
     .activeOffsetX([-30, 30])
-    // Fail immediately on scroll-like vertical movement.
     .failOffsetY([-20, 20])
+    .enabled(!drawerOpen)
     .runOnJS(true)
     .onEnd(e => {
-      if (drawerIsOpen.current) return;
-      // Require a deliberate swipe: 80px translation OR 400px/s velocity.
       const strong = Math.abs(e.translationX) > 80 || Math.abs(e.velocityX) > 400;
       if (!strong) return;
 
       const delta = (e.velocityX < 0 || e.translationX < -80) ? 1 : -1;
       const cur   = tabIdx(pathnameRef.current);
       const next  = Math.max(0, Math.min(TABS.length - 1, cur + delta));
-      if (next === cur) return;
 
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      router.navigate(TABS[next]);
+      if (next !== cur) doNavigate(TABS[next]);
     }),
-  [router]);
+  [drawerOpen, doNavigate]);
 
   return (
     <GestureDetector gesture={swipe}>
