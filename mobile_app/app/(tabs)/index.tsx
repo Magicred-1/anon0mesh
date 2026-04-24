@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, ScrollView, Pressable,
+  View, ScrollView,
   StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ import { MESSAGES_SEED, DRAWER_W, type Peer } from '@/components/messages/consta
 import type { AnyMsg, ChatMsg }  from '@/components/messages/types';
 import type { LxmfPeer } from '@/context/LxmfContext';
 import { activeConversationRef } from '@/hooks/activeConversation';
+import { drawerIsOpen }          from '@/hooks/drawerState';
 import { decodeLxmfContent, decodeLxmfSender } from '@/utils/lxmfDecode';
 import { formatAgo } from '@/utils/time';
 
@@ -135,12 +136,14 @@ export default function MessagesScreen() {
 
   const openDrawer = useCallback(() => {
     drawerOpenRef.current = true;
+    drawerIsOpen.current  = true;
     setDrawerVisible(true);
     Animated.spring(drawerAnim, { toValue: 0,        useNativeDriver: true, overshootClamping: true }).start();
   }, [drawerAnim]);
 
   const closeDrawer = useCallback(() => {
     drawerOpenRef.current = false;
+    drawerIsOpen.current  = false;
     Animated.spring(drawerAnim, { toValue: -DRAWER_W, useNativeDriver: true, overshootClamping: true })
       .start(({ finished }) => { if (finished) setDrawerVisible(false); });
   }, [drawerAnim]);
@@ -151,6 +154,7 @@ export default function MessagesScreen() {
         !drawerOpenRef.current && dx > 10 && Math.abs(dx) > Math.abs(dy) * 1.5,
       onPanResponderGrant: () => {
         drawerOpenRef.current = true;
+        drawerIsOpen.current  = true;
         setDrawerVisible(true);
       },
       onPanResponderMove: (_, { dx }) => {
@@ -161,9 +165,30 @@ export default function MessagesScreen() {
           Animated.spring(drawerAnim, { toValue: 0,        useNativeDriver: true, overshootClamping: true }).start();
         } else {
           drawerOpenRef.current = false;
+          drawerIsOpen.current  = false;
           Animated.spring(drawerAnim, { toValue: -DRAWER_W, useNativeDriver: true, overshootClamping: true })
             .start(({ finished }) => { if (finished) setDrawerVisible(false); });
         }
+      },
+    })
+  ).current;
+
+  const closeSwipePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, { dx }) => {
+        if (dx < 0) drawerAnim.setValue(Math.max(-DRAWER_W, dx));
+      },
+      onPanResponderRelease: (_, { dx, dy, vx }) => {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) { closeDrawer(); return; }
+        if (dx < -(DRAWER_W / 3) || vx < -0.5) {
+          closeDrawer();
+        } else {
+          Animated.spring(drawerAnim, { toValue: 0, useNativeDriver: true, overshootClamping: true }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(drawerAnim, { toValue: 0, useNativeDriver: true, overshootClamping: true }).start();
       },
     })
   ).current;
@@ -236,12 +261,12 @@ export default function MessagesScreen() {
       </SafeAreaView>
 
       {drawerVisible && (
-        <Pressable style={[StyleSheet.absoluteFill, { zIndex: 40 }]} onPress={closeDrawer}>
+        <View style={[StyleSheet.absoluteFill, { zIndex: 40 }]} {...closeSwipePanResponder.panHandlers}>
           <Animated.View
             style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: overlayOpacity }]}
             pointerEvents="none"
           />
-        </Pressable>
+        </View>
       )}
 
       <Animated.View style={[
