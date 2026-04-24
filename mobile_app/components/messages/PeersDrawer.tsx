@@ -4,16 +4,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
+import { PulseDot } from '@/components/ui/PulseDot';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useGlass } from '../../hooks/useGlass';
-import { PEERS, type Peer } from './constants';
+import { QRScannerModal } from './QRScannerModal';
+import { type Peer } from './constants';
 
 interface Props {
-  readonly active:      string;
-  readonly onPick:      (p: Peer) => void;
-  readonly syncing?:    boolean;
-  readonly onNewHash?:  (hash: string) => void;
-  readonly peers?:      Peer[];
+  readonly active:         string;
+  readonly onPick:         (p: Peer) => void;
+  readonly syncing?:       boolean;
+  readonly isAnnouncing?:  boolean;
+  readonly onNewHash?:     (hash: string) => void;
+  readonly peers?:         Peer[];
 }
 
 // ── Skeleton peer row ────────────────────────────────────────────────────────
@@ -37,12 +40,12 @@ function PeerRowSkeleton() {
 // ── Peer list (default view) ─────────────────────────────────────────────────
 
 function PeerList({
-  active, onPick, onNew, syncing, peers: peersProp,
-}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void; readonly syncing?: boolean; readonly peers?: Peer[] }) {
+  active, onPick, onNew, syncing, isAnnouncing, peers: peersProp,
+}: { readonly active: string; readonly onPick: (p: Peer) => void; readonly onNew: () => void; readonly syncing?: boolean; readonly isAnnouncing?: boolean; readonly peers?: Peer[] }) {
   const { colors }  = useTheme();
   const softGlass   = useGlass('soft');
   const accentGlass = useGlass('accent');
-  const peers = peersProp ?? PEERS;
+  const peers = peersProp ?? [];
   const onlineCount = peers.filter(p => p.online).length;
 
   const [query, setQuery] = useState('');
@@ -61,6 +64,7 @@ function PeerList({
               ? <Text style={[S.subtitle, { color: colors.primary }]}>syncing…</Text>
               : <Text style={[S.subtitle, { color: colors.textTertiary }]}>{onlineCount}/{peers.length} online</Text>
             }
+            {isAnnouncing && !syncing && <PulseDot size={5} />}
           </View>
         </View>
       </SafeAreaView>
@@ -91,7 +95,7 @@ function PeerList({
           const isActive = active === p.handle;
           return (
             <Pressable
-              key={p.handle}
+              key={p.destHash ?? p.handle}
               onPress={() => onPick(p)}
               style={({ pressed }) => [
                 S.row,
@@ -147,9 +151,11 @@ function NewConvoView({
   const glass       = useGlass();
   const softGlass   = useGlass('soft');
 
-  const [hash, setHash] = useState('');
+  const [hash,        setHash]        = useState('');
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannedContact, setScannedContact] = useState<{ hash: string } | null>(null);
 
-  const onlinePeers = (peersProp ?? PEERS).filter(p => p.online);
+  const onlinePeers = (peersProp ?? []).filter(p => p.online);
 
   return (
     <View style={{ flex: 1 }}>
@@ -173,7 +179,7 @@ function NewConvoView({
           <View style={[S.sectionCard, glass]}>
             {onlinePeers.map((p, i) => (
               <Pressable
-                key={p.handle}
+                key={p.destHash ?? p.handle}
                 onPress={() => { onPick(p); onBack(); }}
                 style={({ pressed }) => [
                   S.convoRow,
@@ -218,14 +224,32 @@ function NewConvoView({
               placeholder="paste or type hash…"
               placeholderTextColor={colors.textTertiary}
               value={hash}
-              onChangeText={setHash}
+              onChangeText={t => { setHash(t); setScannedContact(null); }}
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <Pressable onPress={() => {/* scanner */}} style={S.scanBtn}>
-              <Feather name="camera" size={16} color={colors.textSecondary} />
+            <Pressable onPress={() => setScannerOpen(true)} style={S.scanBtn} hitSlop={8}>
+              <Feather name="camera" size={16} color={colors.primary} />
             </Pressable>
           </View>
+
+          {/* Add-contact card — shown after a successful LXMF scan */}
+          {scannedContact && (
+            <View style={[S.contactCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+              <View style={[S.contactIcon, { backgroundColor: colors.primarySubtle }]}>
+                <Feather name="user-plus" size={16} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[S.contactLabel, { color: colors.textTertiary }]}>NEW CONTACT</Text>
+                <Text style={[S.contactHash, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {scannedContact.hash}
+                </Text>
+              </View>
+              <Pressable onPress={() => setScannedContact(null)} hitSlop={10}>
+                <Feather name="x" size={13} color={colors.textTertiary} />
+              </Pressable>
+            </View>
+          )}
 
           <Pressable
             disabled={hash.trim().length === 0}
@@ -236,19 +260,31 @@ function NewConvoView({
             ]}
           >
             <Text style={[S.startBtnText, { color: hash.trim().length > 0 ? '#08080A' : colors.textTertiary }]}>
-              START CONVERSATION
+              {scannedContact ? 'ADD CONTACT & MESSAGE' : 'START CONVERSATION'}
             </Text>
           </Pressable>
         </View>
 
       </ScrollView>
+
+      <QRScannerModal
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onResult={result => {
+          setScannerOpen(false);
+          if (result.type === 'lxmf') {
+            setHash(result.hash);
+            setScannedContact({ hash: result.hash });
+          }
+        }}
+      />
     </View>
   );
 }
 
 // ── PeersDrawer ──────────────────────────────────────────────────────────────
 
-export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, onNewHash, peers }: Props) {
+export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, isAnnouncing, onNewHash, peers }: Props) {
   const [newMsg, setNewMsg] = useState(false);
 
   if (newMsg) {
@@ -268,6 +304,7 @@ export const PeersDrawer = memo(function PeersDrawer({ active, onPick, syncing, 
       onPick={onPick}
       onNew={() => setNewMsg(true)}
       syncing={syncing}
+      isAnnouncing={isAnnouncing}
       peers={peers}
     />
   );
@@ -319,4 +356,10 @@ const S = StyleSheet.create({
   scanBtn:      { padding: 4 },
   startBtn:     { marginTop: 10, padding: 13, borderRadius: 12, alignItems: 'center' },
   startBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+
+  contactCard:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10,
+                  padding: 12, borderRadius: 12, borderWidth: 0.5 },
+  contactIcon:  { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  contactLabel: { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
+  contactHash:  { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.3 },
 });

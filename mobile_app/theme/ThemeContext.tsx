@@ -1,5 +1,4 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { createContext, useContext } from 'react';
 import { darkColors, lightColors, type AppColors } from './colors';
 import { spacing, radii, shadows } from './spacing';
 import { textVariants, fontFamily, fontSize, fontWeight } from './typography';
@@ -30,10 +29,10 @@ const buildTheme = (isDark: boolean): Theme => ({
 
 const ThemeContext = createContext<Theme>(buildTheme(true));
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const scheme = useColorScheme();
-  const theme = useMemo(() => buildTheme(scheme !== 'light'), [scheme]);
-  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
+const DARK_THEME = buildTheme(true);
+
+export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <ThemeContext.Provider value={DARK_THEME}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): Theme {
