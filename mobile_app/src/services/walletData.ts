@@ -176,19 +176,25 @@ function toActivity(
 export async function fetchRecentActivity(
   connection: Connection,
   publicKey: PublicKey,
-  limit: number = 15,
+  limit: number = 8,
 ): Promise<ActivityEntry[]> {
   const walletAddress = publicKey.toBase58();
   const signatures = await connection.getSignaturesForAddress(publicKey, { limit });
+  if (signatures.length === 0) return [];
 
-  const parsed = await Promise.all(
-    signatures.map((entry) =>
-      connection
-        .getParsedTransaction(entry.signature, { maxSupportedTransactionVersion: 0 })
-        .then((tx) => toActivity(walletAddress, entry.signature, entry.blockTime ?? null, tx))
-        .catch(() => null),
-    ),
+  // Single batched RPC instead of N parallel getParsedTransaction calls.
+  // Devnet public endpoint rate-limits aggressively; batching + modest
+  // limit keeps us under the 429 threshold.
+  const parsed = await connection.getParsedTransactions(
+    signatures.map((s) => s.signature),
+    { maxSupportedTransactionVersion: 0 },
   );
 
-  return parsed.filter((a): a is ActivityEntry => a !== null);
+  const activity = signatures
+    .map((entry, i) =>
+      toActivity(walletAddress, entry.signature, entry.blockTime ?? null, parsed[i] ?? null),
+    )
+    .filter((a): a is ActivityEntry => a !== null);
+
+  return activity;
 }

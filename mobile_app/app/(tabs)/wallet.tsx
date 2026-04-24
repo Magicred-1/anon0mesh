@@ -22,7 +22,8 @@ const ENTRANCE = {
   step: 90,
 };
 
-const REFOCUS_REFETCH_MS = 5_000;
+const REFOCUS_REFETCH_MS = 20_000;
+const DELAYED_REFETCH_MS = 6_000;
 
 export default function WalletScreen() {
   const { colors, spacing, fontFamily, fontSize } = useTheme();
@@ -39,17 +40,18 @@ export default function WalletScreen() {
     }
   }, [refetch]);
 
-  // Auto-refetch on tab focus so a just-sent tx surfaces in activity
-  // without forcing a pull-to-refresh. Throttled so rapid tab switches
-  // don't spam RPC. Second refetch 4s after focus catches txs that
-  // confirmed but haven't been indexed into getSignaturesForAddress yet.
+  // Auto-refetch on tab focus. Throttled harder now — public devnet RPC
+  // rate-limits aggressively, and pull-to-refresh covers the manual case.
+  // The delayed refetch catches just-sent txs that confirmed but haven't
+  // been indexed into getSignaturesForAddress yet.
   useFocusEffect(
     useCallback(() => {
-      if (!lastFetched || Date.now() - lastFetched > REFOCUS_REFETCH_MS) {
-        refetch();
-      }
-      const delayed = setTimeout(() => refetch(), 4_000);
-      return () => clearTimeout(delayed);
+      const stale = !lastFetched || Date.now() - lastFetched > REFOCUS_REFETCH_MS;
+      if (stale) refetch();
+      const delayed = stale ? setTimeout(() => refetch(), DELAYED_REFETCH_MS) : null;
+      return () => {
+        if (delayed) clearTimeout(delayed);
+      };
     }, [lastFetched, refetch]),
   );
 
