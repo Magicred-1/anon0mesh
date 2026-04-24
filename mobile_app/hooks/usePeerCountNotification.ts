@@ -4,12 +4,19 @@ import { useLxmfContext } from '@/context/LxmfContext';
 
 const NOTIF_ID = 'anonmesh-peer-count';
 
-export function usePeerCountNotification() {
+export function usePeerCountNotification(enabled = true) {
   const { peers } = useLxmfContext();
   const prevOnlineRef = useRef(-1);
   const prevTotalRef  = useRef(-1);
 
   useEffect(() => {
+    if (!enabled) {
+      Notifications.dismissNotificationAsync(NOTIF_ID).catch(() => {});
+      prevOnlineRef.current = -1;
+      prevTotalRef.current  = -1;
+      return;
+    }
+
     const online = peers.filter(p => p.online).length;
     const total  = peers.length;
 
@@ -32,5 +39,5 @@ export function usePeerCountNotification() {
       },
       trigger: null,
     }).catch(() => {});
-  }, [peers]);
+  }, [enabled, peers]);
 }

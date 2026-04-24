@@ -119,7 +119,7 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
         {hasPeer && <PeerInfo peer={peer} hops={hops} iface={iface} online={online} />}
         {!hasPeer && !editing && (
           <View style={S.nameRow}>
-            <Text style={[S.handle, { color: colors.textTertiary, fontSize: 13 }]}>{selfName ?? 'messages'}</Text>
+            <Text style={[S.handle, { color: colors.textPrimary, fontSize: 13 }]}>{selfName ?? 'messages'}</Text>
             <EditIcon onPress={startEdit} />
           </View>
         )}

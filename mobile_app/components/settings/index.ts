@@ -9,5 +9,6 @@ export { SettingsRow }       from './SettingsRow';
 export type { RowProps }     from './SettingsRow';
 export { QRModal }           from './QRModal';
 export { ExportWalletModal } from './ExportWalletModal';
-export { RNodePairModal }    from './RNodePairModal';
-export type { PairedDevice } from './constants';
+export { RNodePairModal }      from './RNodePairModal';
+export { RotateKeypairModal }  from './RotateKeypairModal';
+export type { PairedDevice }   from './constants';

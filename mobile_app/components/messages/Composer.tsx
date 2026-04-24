@@ -4,11 +4,10 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 
-interface Props { onSend: (text: string) => void }
+interface Props { onSend: (text: string) => void; onGrid?: () => void }
 
-export const Composer = memo(function Composer({ onSend }: Props) {
+export const Composer = memo(function Composer({ onSend, onGrid }: Props) {
   const { colors } = useTheme();
-  const softGlass  = useGlass('soft');
   const baseGlass  = useGlass();
   const [value, setValue] = useState('');
   const hasText = value.trim().length > 0;
@@ -21,10 +20,7 @@ export const Composer = memo(function Composer({ onSend }: Props) {
 
   return (
     <View style={[S.bar, { backgroundColor: colors.surface0, borderTopColor: colors.borderSubtle }]}>
-      <Pressable style={[S.iconBtn, baseGlass]}>
-        <Feather name="zap"  size={16} color={colors.textSecondary} />
-      </Pressable>
-      <Pressable style={[S.iconBtn, baseGlass]}>
+      <Pressable style={[S.iconBtn, baseGlass]} onPress={onGrid}>
         <Feather name="grid" size={15} color={colors.textSecondary} />
       </Pressable>
       <View style={[S.field, baseGlass]}>
