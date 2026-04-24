@@ -3,27 +3,45 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon, IconButton, TokenLogo } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
+import { useWalletBalance } from "@/src/hooks/useWalletBalance";
+import type { TokenBalance } from "@/src/services/walletData";
+import { SOL_DECIMALS, getTokenDecimals } from "@/src/services/walletData";
 import { useGlass } from "@/hooks/useGlass";
 import { useTheme } from "@/theme";
 
-export interface TokenOption {
-  sym: "SOL" | "USDC";
-  name: string;
-  balance: string;
-  usdValue: string;
-  maxDecimals: number;
+export type TokenOption = TokenBalance;
+
+function formatBalance(amount: number, maxDecimals: number): string {
+  if (amount === 0) return "0";
+  const decimals = Math.min(maxDecimals, amount < 1 ? 6 : 4);
+  return amount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  });
 }
 
-// Hardcoded catalog for now. When Jupiter integrates, this becomes
-// the live token list with search + balances from the aggregator.
-const TOKEN_CATALOG: TokenOption[] = [
-  { sym: "SOL",  name: "Solana", balance: "48.124",   usdValue: "$9,128.21", maxDecimals: 9 },
-  { sym: "USDC", name: "USDC",   balance: "2,184.50", usdValue: "$2,184.50", maxDecimals: 6 },
-];
+export const DEFAULT_SOL_TOKEN: TokenOption = {
+  symbol: "SOL",
+  name: "Solana",
+  uiAmount: 0,
+  maxDecimals: SOL_DECIMALS,
+};
+
+export function tokenByName(sym: string, tokens: TokenBalance[] = []): TokenOption {
+  const found = tokens.find((t) => t.symbol === sym);
+  if (found) return found;
+  if (sym === "SOL") return DEFAULT_SOL_TOKEN;
+  return {
+    symbol: sym,
+    name: sym,
+    uiAmount: 0,
+    maxDecimals: getTokenDecimals(sym),
+  };
+}
 
 interface TokenPickerProps {
   visible: boolean;
-  selected: "SOL" | "USDC";
+  selected: string;
   onSelect: (token: TokenOption) => void;
   onClose: () => void;
 }
@@ -31,6 +49,9 @@ interface TokenPickerProps {
 export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPickerProps) {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const sheetGlass = useGlass("strong");
+  const { tokens } = useWalletBalance();
+
+  const visibleTokens = tokens.length > 0 ? tokens : [DEFAULT_SOL_TOKEN];
 
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
@@ -51,7 +72,6 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
             },
           ]}
         >
-          {/* Grab handle */}
           <View
             style={{
               alignSelf: "center",
@@ -91,11 +111,11 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
           </View>
 
           <View style={{ gap: spacing[2] }}>
-            {TOKEN_CATALOG.map((token) => {
-              const isSelected = selected === token.sym;
+            {visibleTokens.map((token) => {
+              const isSelected = selected === token.symbol;
               return (
                 <Pressable
-                  key={token.sym}
+                  key={token.mintAddress ?? token.symbol}
                   onPress={() => {
                     haptics.select();
                     onSelect(token);
@@ -115,7 +135,7 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
                     },
                   ]}
                 >
-                  <TokenLogo size={36} symbol={token.sym} />
+                  <TokenLogo size={36} symbol={token.symbol as "SOL" | "USDC"} />
                   <View style={{ flex: 1 }}>
                     <Text
                       style={{
@@ -124,7 +144,7 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
                         fontSize: fontSize.md,
                       }}
                     >
-                      {token.sym}
+                      {token.symbol}
                     </Text>
                     <Text
                       style={{
@@ -132,6 +152,7 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
                         fontFamily: fontFamily.sans,
                         fontSize: fontSize.sm,
                       }}
+                      numberOfLines={1}
                     >
                       {token.name}
                     </Text>
@@ -144,16 +165,7 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
                         fontSize: fontSize.md,
                       }}
                     >
-                      {token.balance}
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textTertiary,
-                        fontFamily: fontFamily.sans,
-                        fontSize: fontSize.sm,
-                      }}
-                    >
-                      {token.usdValue}
+                      {formatBalance(token.uiAmount, token.maxDecimals)}
                     </Text>
                   </View>
                   {isSelected ? (
@@ -181,17 +193,13 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
                 fontSize: fontSize.xs,
               }}
             >
-              Jupiter integration brings the full token list
+              Balances pulled live from devnet
             </Text>
           </View>
         </View>
       </View>
     </Modal>
   );
-}
-
-export function tokenByName(sym: "SOL" | "USDC"): TokenOption {
-  return TOKEN_CATALOG.find((t) => t.sym === sym) ?? TOKEN_CATALOG[0];
 }
 
 const styles = StyleSheet.create({

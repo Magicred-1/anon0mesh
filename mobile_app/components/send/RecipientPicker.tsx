@@ -18,7 +18,17 @@ import { DepthButton, Icon, IconButton, PressSurface, TokenLogo } from "@/compon
 import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
+import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import { useTheme } from "@/theme";
+
+function formatBalance(amount: number, maxDecimals: number): string {
+  if (amount === 0) return "0";
+  const decimals = Math.min(maxDecimals, amount < 1 ? 6 : 4);
+  return amount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  });
+}
 
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
@@ -39,8 +49,10 @@ export function RecipientPicker() {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const [address, setAddress] = useState("");
-  const [token, setToken] = useState<TokenOption>(() => tokenByName("SOL"));
+  const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const { tokens } = useWalletBalance();
+  const token: TokenOption = tokenByName(selectedSymbol, tokens);
 
   const trimmedAddress = address.trim();
   const isValid = isValidSolanaAddress(trimmedAddress);
@@ -50,12 +62,12 @@ export function RecipientPicker() {
     haptics.confirm();
     router.push({
       pathname: "/send/amount",
-      params: { to: trimmedAddress, symbol: token.sym },
+      params: { to: trimmedAddress, symbol: token.symbol },
     });
   }
 
   function handleSelectToken(next: TokenOption) {
-    setToken(next);
+    setSelectedSymbol(next.symbol);
     setPickerOpen(false);
   }
 
@@ -116,7 +128,7 @@ export function RecipientPicker() {
           >
             {/* Token selector — tap to change BEFORE entering address. */}
             <PressSurface
-              accessibilityLabel={`Sending ${token.sym}. Tap to choose a different token.`}
+              accessibilityLabel={`Sending ${token.symbol}. Tap to choose a different token.`}
               onPress={() => {
                 haptics.tap();
                 setPickerOpen(true);
@@ -138,7 +150,7 @@ export function RecipientPicker() {
                   paddingVertical: spacing[4],
                 }}
               >
-                <TokenLogo size={36} symbol={token.sym} />
+                <TokenLogo size={36} symbol={token.symbol as "SOL" | "USDC"} />
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
@@ -158,7 +170,7 @@ export function RecipientPicker() {
                       fontSize: fontSize.lg,
                     }}
                   >
-                    {token.sym} · {token.name}
+                    {token.symbol} · {token.name}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
@@ -169,7 +181,7 @@ export function RecipientPicker() {
                       fontSize: fontSize.sm,
                     }}
                   >
-                    {token.balance}
+                    {formatBalance(token.uiAmount, token.maxDecimals)}
                   </Text>
                   <Icon color={colors.primary} name="chevron-down" size={14} />
                 </View>
@@ -347,7 +359,7 @@ export function RecipientPicker() {
 
       <TokenPicker
         visible={pickerOpen}
-        selected={token.sym}
+        selected={token.symbol}
         onSelect={handleSelectToken}
         onClose={() => setPickerOpen(false)}
       />

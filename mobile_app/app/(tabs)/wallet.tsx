@@ -11,6 +11,7 @@ import {
   RecentActivity,
 } from "@/components/home";
 import * as haptics from "@/src/design-system/haptics";
+import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import { useTheme } from "@/theme";
 
 // Staggered entrance — each section enters ~90ms after the previous.
@@ -23,16 +24,17 @@ const ENTRANCE = {
 export default function WalletScreen() {
   const { colors, spacing, fontFamily, fontSize } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+  const { refetch } = useWalletBalance();
 
-  // Pull-to-refresh stub. Real balance refresh lands in Phase 7 when
-  // the wallet layer exposes refetch. Fires a confirm haptic so the
-  // gesture feels intentional.
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     haptics.confirm();
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    setRefreshing(false);
-  }, []);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
