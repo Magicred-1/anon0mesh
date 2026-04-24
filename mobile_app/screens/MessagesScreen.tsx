@@ -16,8 +16,10 @@ import { Composer }              from '@/components/messages/Composer';
 import { ThreadHeader }          from '@/components/messages/ThreadHeader';
 import { PeersDrawer }           from '@/components/messages/PeersDrawer';
 import { DRAWER_W, type Peer } from '@/components/messages/constants';
+import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { PulseDot } from '@/components/ui/PulseDot';
 import { Feather } from '@expo/vector-icons';
+import { useWallet } from '@/context/WalletContext';
 import type { AnyMsg, ChatMsg }  from '@/components/messages/types';
 import type { LxmfPeer } from '@/context/LxmfContext';
 import { activeConversationRef } from '@/hooks/activeConversation';
@@ -74,6 +76,11 @@ function NoPeerState({ onOpen, peerCount }: { readonly onOpen: () => void; reado
     ).start();
   }, [iconOpacity]);
 
+  const peerLabel = peerCount === 1 ? 'peer' : 'peers';
+  const subtitleText = peerCount > 0
+    ? `${peerCount} ${peerLabel} in range · pick one to start`
+    : 'Waiting for peers to announce nearby';
+
   return (
     <View style={N.root}>
       <Animated.Image
@@ -85,9 +92,7 @@ function NoPeerState({ onOpen, peerCount }: { readonly onOpen: () => void; reado
       <Text style={[N.title, { color: colors.textPrimary }]}>No conversation open</Text>
 
       <Text style={[N.sub, { color: colors.textTertiary }]}>
-        {peerCount > 0
-          ? `${peerCount} peer${peerCount === 1 ? '' : 's'} in range · pick one to start`
-          : 'Waiting for peers to announce nearby'}
+        {subtitleText}
       </Text>
 
       <Pressable onPress={onOpen} style={[N.btn, { backgroundColor: colors.primarySubtle }]}>
@@ -117,16 +122,36 @@ const N = StyleSheet.create({
   hintTxt:{ fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase' },
 });
 
+// ── Incoming message parsing ──────────────────────────────────────────────────
+
+function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | null {
+  try {
+    const p = JSON.parse(text);
+    if (!p || typeof p !== 'object') return null;
+    const id = Date.now();
+    if (p.t === 'share-addr' && typeof p.addr === 'string')
+      return { id, kind: 'share-address', from, me: false, time, asset: p.asset ?? 'SOL', address: p.addr };
+    if (p.t === 'req-addr')
+      return { id, kind: 'request-address', from, me: false, time, asset: p.asset ?? 'SOL', note: p.note };
+    if (p.t === 'req-pay' && typeof p.amount === 'string')
+      return { id, kind: 'request-money', from, me: false, time, asset: p.asset ?? 'SOL', amount: p.amount, note: p.note };
+  } catch { /* plain text */ }
+  return null;
+}
+
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send } = useLxmfContext();
 
-  const [msgs,          setMsgs]          = useState<AnyMsg[]>([]);
-  const [activePeer,    setActivePeer]    = useState('');
-  const [activePeerHex, setActivePeerHex] = useState<string | null>(null);
-  const [drawerVisible, setDrawerVisible] = useState(false);
+  const { publicKey } = useWallet();
+
+  const [msgs,             setMsgs]             = useState<AnyMsg[]>([]);
+  const [activePeer,       setActivePeer]        = useState('');
+  const [activePeerHex,    setActivePeerHex]     = useState<string | null>(null);
+  const [drawerVisible,    setDrawerVisible]     = useState(false);
+  const [actionGridVisible, setActionGridVisible] = useState(false);
 
   const scrollRef       = useRef<ScrollView>(null);
   const drawerAnim      = useRef(new Animated.Value(-DRAWER_W)).current;
@@ -160,14 +185,16 @@ export default function MessagesScreen() {
       const from = peer?.displayName || (srcHash ? srcHash.slice(0, 8) : 'unknown');
       const time = new Date().toTimeString().slice(0, 8);
 
+      const msg: AnyMsg = parseStructuredMsg(text, from, time) ?? { id: Date.now(), from, me: false, time, text, enc: true };
+
       // Show in active thread; if from a different peer add a label
       if (activePeerHexRef.current && srcHash !== activePeerHexRef.current) {
         setMsgs(m => [...m,
           { id: Date.now() - 1, kind: 'sys' as const, text: `message from ${from}` },
-          { id: Date.now(),     from, me: false, time, text, enc: true },
+          msg,
         ]);
       } else {
-        setMsgs(m => [...m, { id: Date.now(), from, me: false, time, text, enc: true }]);
+        setMsgs(m => [...m, msg]);
       }
     }
   }, [events, lxmfPeers]);
@@ -175,7 +202,7 @@ export default function MessagesScreen() {
   // Retry queued messages when the peer's identity arrives via announce
   useEffect(() => {
     const last = events[events.length - 1];
-    if (!last || last.type !== 'announceReceived') return;
+    if (last?.type !== 'announceReceived') return;
     const hash: string | null = last.destHash ?? null;
     if (!hash) return;
     const queued = pendingRef.current.get(hash);
@@ -287,6 +314,33 @@ export default function MessagesScreen() {
     }
   }, [activePeerHex, isRunning, send]);
 
+  const handleGridAction = useCallback((a: GridAction) => {
+    const now  = new Date().toTimeString().slice(0, 8);
+    const addr = publicKey?.toBase58() ?? '';
+
+    let bubble: AnyMsg;
+    let payload: string;
+
+    if (a.type === 'share-address') {
+      bubble  = { id: Date.now(), kind: 'share-address', from: 'me', me: true, time: now, asset: 'SOL', address: addr };
+      payload = JSON.stringify({ t: 'share-addr', asset: 'SOL', addr });
+    } else if (a.type === 'request-address') {
+      bubble  = { id: Date.now(), kind: 'request-address', from: 'me', me: true, time: now, asset: 'SOL' };
+      payload = JSON.stringify({ t: 'req-addr', asset: 'SOL' });
+    } else {
+      bubble  = { id: Date.now(), kind: 'request-money', from: 'me', me: true, time: now, asset: a.asset, amount: a.amount };
+      payload = JSON.stringify({ t: 'req-pay', asset: a.asset, amount: a.amount });
+    }
+
+    setMsgs(m => [...m, bubble]);
+
+    if (!activePeerHex) return;
+    send(activePeerHex, utf8ToBase64(payload)).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'send error';
+      setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
+    });
+  }, [publicKey, activePeerHex, send]);
+
   const pickPeer = useCallback((p: Peer) => {
     setActivePeer(p.handle);
     setActivePeerHex(p.destHash ?? null);
@@ -329,7 +383,7 @@ export default function MessagesScreen() {
                   })}
                   <View style={{ height: 4 }} />
                 </ScrollView>
-                <Composer onSend={sendMsg} />
+                <Composer onSend={sendMsg} onGrid={() => setActionGridVisible(true)} />
               </>
             ) : (
               <NoPeerState onOpen={openDrawer} peerCount={livePeers.length} />
@@ -346,6 +400,14 @@ export default function MessagesScreen() {
           />
         </View>
       )}
+
+      <ActionGrid
+        visible={actionGridVisible}
+        hasWallet={!!publicKey}
+        walletAddress={publicKey?.toBase58()}
+        onAction={handleGridAction}
+        onClose={() => setActionGridVisible(false)}
+      />
 
       <Animated.View style={[
         S.drawer,

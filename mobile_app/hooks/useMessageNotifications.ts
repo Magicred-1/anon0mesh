@@ -31,6 +31,7 @@ if (Platform.OS === 'android') {
 
 export function useMessageNotifications(
   onInApp: (n: NotificationPayload) => void,
+  enabled = true,
 ) {
   const { events, peers, nameMap } = useLxmfContext();
   const lastCountRef = useRef(0);
@@ -58,6 +59,8 @@ export function useMessageNotifications(
     if (events.length <= lastCountRef.current) return;
     const newEvents = events.slice(lastCountRef.current);
     lastCountRef.current = events.length;
+
+    if (!enabled) return;
 
     for (const e of newEvents) {
       if (e.type !== 'messageReceived') continue;

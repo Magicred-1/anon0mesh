@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Pressable, Animated, StyleSheet } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/theme';
 
 export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
@@ -14,7 +15,7 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) =
 
   return (
     <Pressable
-      onPress={() => onChange(!on)}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onChange(!on); }}
       style={[S.track, {
         backgroundColor: on ? colors.primary : 'rgba(255,255,255,0.08)',
         borderColor: on ? 'transparent' : 'rgba(255,255,255,0.10)',
