@@ -2,17 +2,21 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
+  Dimensions,
   Pressable,
   Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,7 +27,6 @@ import {
   Icon,
   IconButton,
   SegmentedControl,
-  SwipeDismissHandle,
   TokenLogo,
 } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
@@ -31,6 +34,10 @@ import { useGlass } from "@/hooks/useGlass";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
 import { useTheme } from "@/theme";
+
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 800;
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ADDRESS_MODES = [
   { id: "standard", label: "Standard" },
@@ -61,6 +68,42 @@ export default function ReceiveScreen() {
     transform: [{ translateY: dragY.value }],
   }));
 
+  function handleDismiss() {
+    haptics.tap();
+    router.back();
+  }
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetY(10)
+    .failOffsetY(-12)
+    .onUpdate((e) => {
+      dragY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      const past = dragY.value > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY;
+      if (past) {
+        dragY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (done) => {
+          if (done) runOnJS(handleDismiss)();
+        });
+      } else {
+        dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
+      }
+    });
+
+  const GrabHandle = () => (
+    <View style={{ alignItems: "center", paddingVertical: spacing[3] }}>
+      <View
+        style={{
+          backgroundColor: colors.textTertiary,
+          borderRadius: 3,
+          height: 4,
+          opacity: 0.5,
+          width: 44,
+        }}
+      />
+    </View>
+  );
+
   const walletAddress = publicKey?.toBase58() ?? "";
   const alias = displayName || (walletAddress ? shortAddress(walletAddress) : "—");
 
@@ -76,9 +119,10 @@ export default function ReceiveScreen() {
   if (!hasActiveAddress) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <GestureDetector gesture={panGesture}>
         <Animated.View style={[styles.safeArea, contentStyle]}>
           <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-            <SwipeDismissHandle translateY={dragY} />
+            <GrabHandle />
             <View
               style={{
                 alignItems: "center",
@@ -139,6 +183,7 @@ export default function ReceiveScreen() {
             </View>
           </SafeAreaView>
         </Animated.View>
+        </GestureDetector>
       </View>
     );
   }
@@ -146,9 +191,10 @@ export default function ReceiveScreen() {
   const qrValue = activeAddress;
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <GestureDetector gesture={panGesture}>
       <Animated.View style={[styles.safeArea, contentStyle]}>
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-        <SwipeDismissHandle translateY={dragY} />
+        <GrabHandle />
         <View
           style={{
             alignItems: "center",
@@ -261,6 +307,7 @@ export default function ReceiveScreen() {
         <ActionBar address={activeAddress} />
       </SafeAreaView>
       </Animated.View>
+      </GestureDetector>
     </View>
   );
 }
