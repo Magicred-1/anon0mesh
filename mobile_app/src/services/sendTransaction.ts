@@ -100,15 +100,16 @@ export async function sendSolTransfer({
   }
 
   // MWA mode — Seeker / Saga Seed Vault flow. Reauthorize using cached
-  // token, verify the session account matches the feePayer (MWA may
-  // return a different selected account than the one cached), then
-  // submit via signAndSendTransactions.
+  // token, verify the session account matches the feePayer, then have
+  // the vault sign only. The app submits via its own RPC so the vault
+  // UI stays minimal (sign prompt only — no 'submitting' + 'success'
+  // screens from the wallet app).
   const cachedToken = await SecureStore.getItemAsync(MWA_TOKEN_KEY);
   if (!cachedToken) {
     throw new Error("MWA wallet not authorized. Reconnect your wallet.");
   }
 
-  let signature: string | null = null;
+  let signedTx: Transaction | null = null;
   await transact(async (mwaWallet) => {
     const auth = await mwaWallet.reauthorize({
       auth_token: cachedToken,
@@ -123,15 +124,14 @@ export async function sendSolTransfer({
     }
 
     tx.feePayer = sessionPubkey;
-    const signatures = await mwaWallet.signAndSendTransactions({
-      transactions: [tx],
-    });
-    signature = signatures[0] ?? null;
+    const signed = await mwaWallet.signTransactions({ transactions: [tx] });
+    signedTx = signed[0] ?? null;
   });
 
-  if (!signature) {
-    throw new Error("MWA wallet returned no signature — transaction may not have been submitted");
+  if (!signedTx) {
+    throw new Error("MWA wallet returned no signed transaction");
   }
 
+  const signature = await solanaConnection.sendRawTransaction(signedTx.serialize());
   return { signature, explorerUrl: explorerUrl(signature) };
 }
