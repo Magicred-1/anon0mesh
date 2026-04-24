@@ -16,6 +16,7 @@ interface WalletBalanceState {
   solBalance: number | null;
   activity: ActivityEntry[];
   activityLoading: boolean;
+  activityError: string | null;
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -38,6 +39,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<number | null>(null);
@@ -70,9 +72,13 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
 
       if (activityResult.status === "fulfilled") {
         setActivity(activityResult.value);
+        setActivityError(null);
       } else {
         console.warn("[useWalletBalance] activity fetch failed:", activityResult.reason);
-        // Keep previous activity — better stale than empty.
+        const reason = activityResult.reason;
+        const msg = reason instanceof Error ? reason.message : String(reason);
+        setActivityError(msg.includes("429") ? "Devnet rate-limited" : "Couldn't load activity");
+        // Keep previous activity list — better stale than empty.
       }
 
       const allFailed =
@@ -99,6 +105,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     solBalance,
     activity,
     activityLoading,
+    activityError,
     loading,
     error,
     refetch,

@@ -44,7 +44,7 @@ interface RecentActivityProps {
 export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const { hidden } = useHideBalance();
-  const { activity, activityLoading, lastFetched } = useWalletBalance();
+  const { activity, activityLoading, activityError, lastFetched } = useWalletBalance();
 
   const initialLoad = activityLoading && lastFetched === null;
   const visible = activity.slice(0, limit);
@@ -67,9 +67,14 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
   }
 
   if (visible.length === 0) {
+    const isRateLimit = activityError === "Devnet rate-limited";
     return (
       <View style={[styles.emptyState, { gap: spacing[3], paddingVertical: spacing[9] }]}>
-        <Icon color={colors.textTertiary} name="inbox" size={28} />
+        <Icon
+          color={activityError ? colors.warning : colors.textTertiary}
+          name={activityError ? "alert-circle" : "inbox"}
+          size={28}
+        />
         <Text
           style={{
             color: colors.textSecondary,
@@ -77,7 +82,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
             fontSize: fontSize.md,
           }}
         >
-          No activity yet
+          {activityError ? (isRateLimit ? "Devnet is rate-limiting us" : "Activity unavailable") : "No activity yet"}
         </Text>
         <Text
           style={{
@@ -88,7 +93,9 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
             textAlign: "center",
           }}
         >
-          Sent or received SOL will show up here.
+          {activityError
+            ? "Pull to refresh in a moment. Public devnet throttles heavy wallets."
+            : "Sent or received SOL will show up here."}
         </Text>
       </View>
     );

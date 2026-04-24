@@ -173,21 +173,48 @@ function toActivity(
   };
 }
 
+function isRateLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("429") || msg.toLowerCase().includes("too many requests");
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  attempts: number = 3,
+  baseDelayMs: number = 1500,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isRateLimitError(err) || i === attempts - 1) throw err;
+      await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, i)));
+    }
+  }
+  throw lastErr;
+}
+
 export async function fetchRecentActivity(
   connection: Connection,
   publicKey: PublicKey,
   limit: number = 8,
 ): Promise<ActivityEntry[]> {
   const walletAddress = publicKey.toBase58();
-  const signatures = await connection.getSignaturesForAddress(publicKey, { limit });
+  const signatures = await withRetry(() =>
+    connection.getSignaturesForAddress(publicKey, { limit }),
+  );
   if (signatures.length === 0) return [];
 
   // Single batched RPC instead of N parallel getParsedTransaction calls.
   // Devnet public endpoint rate-limits aggressively; batching + modest
-  // limit keeps us under the 429 threshold.
-  const parsed = await connection.getParsedTransactions(
-    signatures.map((s) => s.signature),
-    { maxSupportedTransactionVersion: 0 },
+  // limit + retry-with-backoff keeps us functional under the 429 threshold.
+  const parsed = await withRetry(() =>
+    connection.getParsedTransactions(
+      signatures.map((s) => s.signature),
+      { maxSupportedTransactionVersion: 0 },
+    ),
   );
 
   const activity = signatures
