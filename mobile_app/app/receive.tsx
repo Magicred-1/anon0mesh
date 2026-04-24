@@ -3,16 +3,15 @@ import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   Dimensions,
+  PanResponder,
   Pressable,
   Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   interpolate,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -36,7 +35,7 @@ import { useWallet } from "@/context/WalletContext";
 import { useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
-const DISMISS_VELOCITY = 800;
+const DISMISS_VELOCITY = 0.8;
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ADDRESS_MODES = [
@@ -68,27 +67,39 @@ export default function ReceiveScreen() {
     transform: [{ translateY: dragY.value }],
   }));
 
-  function handleDismiss() {
-    haptics.tap();
-    router.back();
-  }
-
-  const panGesture = Gesture.Pan()
-    .activeOffsetY(10)
-    .failOffsetY(-12)
-    .onUpdate((e) => {
-      dragY.value = Math.max(0, e.translationY);
-    })
-    .onEnd((e) => {
-      const past = dragY.value > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY;
-      if (past) {
-        dragY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (done) => {
-          if (done) runOnJS(handleDismiss)();
-        });
-      } else {
-        dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
-      }
-    });
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        // Don't claim touches on start — child Pressables get first dibs.
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        // Claim on move when drag is clearly vertical-down past threshold.
+        onMoveShouldSetPanResponder: (_, g) =>
+          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+        onMoveShouldSetPanResponderCapture: (_, g) =>
+          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderMove: (_, g) => {
+          dragY.value = Math.max(0, g.dy);
+        },
+        onPanResponderRelease: (_, g) => {
+          const past = g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY;
+          if (past) {
+            dragY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (done) => {
+              if (done) {
+                haptics.tap();
+                router.back();
+              }
+            });
+          } else {
+            dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
+          }
+        },
+        onPanResponderTerminate: () => {
+          dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
+        },
+      }),
+    [dragY, router],
+  );
 
   const GrabHandle = () => (
     <View style={{ alignItems: "center", paddingVertical: spacing[3] }}>
@@ -118,8 +129,7 @@ export default function ReceiveScreen() {
 
   if (!hasActiveAddress) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
-        <GestureDetector gesture={panGesture}>
+      <View style={[styles.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
         <Animated.View style={[styles.safeArea, contentStyle]}>
           <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
             <GrabHandle />
@@ -183,15 +193,13 @@ export default function ReceiveScreen() {
             </View>
           </SafeAreaView>
         </Animated.View>
-        </GestureDetector>
       </View>
     );
   }
 
   const qrValue = activeAddress;
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <GestureDetector gesture={panGesture}>
+    <View style={[styles.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
       <Animated.View style={[styles.safeArea, contentStyle]}>
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
         <GrabHandle />
@@ -307,7 +315,6 @@ export default function ReceiveScreen() {
         <ActionBar address={activeAddress} />
       </SafeAreaView>
       </Animated.View>
-      </GestureDetector>
     </View>
   );
 }
