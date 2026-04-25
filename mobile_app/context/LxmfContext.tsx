@@ -92,7 +92,10 @@ function mergeBeacon(
 
 export const G00N_HUB:  TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 };
 export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net',   port: 4242 };
-export const MY_PC:     TcpInterface = { host: '192.168.x.x',     port: 4243 };
+export const MY_PC:     TcpInterface = {
+  host: process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST ?? 'localhost',
+  port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243),
+};
 
 export interface LxmfPeer {
   destHash:    string;
