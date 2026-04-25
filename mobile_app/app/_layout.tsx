@@ -18,6 +18,7 @@ import { ThemeProvider } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider }  from '@/context/LxmfContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
+import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
 import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
@@ -80,9 +81,11 @@ export default function RootLayout() {
       <ThemeProvider>
         <LxmfProvider>
           <WalletProvider autoInitialize>
+            <WalletBalanceProvider>
             <HideBalanceProvider>
               <AppShell />
             </HideBalanceProvider>
+            </WalletBalanceProvider>
           </WalletProvider>
         </LxmfProvider>
       </ThemeProvider>

@@ -1,3 +1,4 @@
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,6 +12,7 @@ import {
   RecentActivity,
 } from "@/components/home";
 import * as haptics from "@/src/design-system/haptics";
+import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import { useTheme } from "@/theme";
 
 // Staggered entrance — each section enters ~90ms after the previous.
@@ -20,19 +22,38 @@ const ENTRANCE = {
   step: 90,
 };
 
+const REFOCUS_REFETCH_MS = 20_000;
+const DELAYED_REFETCH_MS = 6_000;
+
 export default function WalletScreen() {
   const { colors, spacing, fontFamily, fontSize } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+  const { refetch, lastFetched } = useWalletBalance();
 
-  // Pull-to-refresh stub. Real balance refresh lands in Phase 7 when
-  // the wallet layer exposes refetch. Fires a confirm haptic so the
-  // gesture feels intentional.
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     haptics.confirm();
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    setRefreshing(false);
-  }, []);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
+
+  // Auto-refetch on tab focus. Throttled — public devnet RPC rate-limits
+  // aggressively, and pull-to-refresh covers the manual case. The delayed
+  // refetch catches just-sent txs that confirmed but haven't been indexed
+  // into getSignaturesForAddress yet.
+  useFocusEffect(
+    useCallback(() => {
+      const stale = !lastFetched || Date.now() - lastFetched > REFOCUS_REFETCH_MS;
+      if (stale) refetch();
+      const delayed = stale ? setTimeout(() => refetch(), DELAYED_REFETCH_MS) : null;
+      return () => {
+        if (delayed) clearTimeout(delayed);
+      };
+    }, [lastFetched, refetch]),
+  );
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>

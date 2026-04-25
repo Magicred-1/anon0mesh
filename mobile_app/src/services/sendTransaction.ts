@@ -19,11 +19,17 @@ const APP_IDENTITY = {
   icon: "/favicon.ico",
 };
 
-// Hardcoded devnet for safety. Mainnet wiring is a deliberate future
+// Devnet-only for safety. Mainnet wiring is a deliberate future
 // decision — we don't want mainnet funds going out via a dev build.
-const DEVNET_RPC = "https://api.devnet.solana.com";
+//
+// EXPO_PUBLIC_SOLANA_RPC lets teams point at a dedicated devnet
+// endpoint (Helius / QuickNode / Triton free tier) to avoid the
+// public endpoint's 429 rate-limits. Falls back to the public
+// endpoint when unset so cloning the repo "just works".
+const DEFAULT_DEVNET_RPC = "https://api.devnet.solana.com";
+const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || DEFAULT_DEVNET_RPC;
 
-export const solanaConnection = new Connection(DEVNET_RPC, "confirmed");
+export const solanaConnection = new Connection(RPC_URL, "confirmed");
 
 export interface SendSolParams {
   adapter: IWalletAdapter;
@@ -100,15 +106,16 @@ export async function sendSolTransfer({
   }
 
   // MWA mode — Seeker / Saga Seed Vault flow. Reauthorize using cached
-  // token, verify the session account matches the feePayer (MWA may
-  // return a different selected account than the one cached), then
-  // submit via signAndSendTransactions.
+  // token, verify the session account matches the feePayer, then have
+  // the vault sign only. The app submits via its own RPC so the vault
+  // UI stays minimal (sign prompt only — no 'submitting' + 'success'
+  // screens from the wallet app).
   const cachedToken = await SecureStore.getItemAsync(MWA_TOKEN_KEY);
   if (!cachedToken) {
     throw new Error("MWA wallet not authorized. Reconnect your wallet.");
   }
 
-  let signature: string | null = null;
+  let signedTx: Transaction | null = null;
   await transact(async (mwaWallet) => {
     const auth = await mwaWallet.reauthorize({
       auth_token: cachedToken,
@@ -123,15 +130,14 @@ export async function sendSolTransfer({
     }
 
     tx.feePayer = sessionPubkey;
-    const signatures = await mwaWallet.signAndSendTransactions({
-      transactions: [tx],
-    });
-    signature = signatures[0] ?? null;
+    const signed = await mwaWallet.signTransactions({ transactions: [tx] });
+    signedTx = signed[0] ?? null;
   });
 
-  if (!signature) {
-    throw new Error("MWA wallet returned no signature — transaction may not have been submitted");
+  if (!signedTx) {
+    throw new Error("MWA wallet returned no signed transaction");
   }
 
+  const signature = await solanaConnection.sendRawTransaction(signedTx.serialize());
   return { signature, explorerUrl: explorerUrl(signature) };
 }
