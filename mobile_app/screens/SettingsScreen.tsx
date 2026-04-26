@@ -99,6 +99,8 @@ export default function SettingsScreen() {
                 pagingEnabled
                 scrollEventThrottle={16}
                 showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                directionalLockEnabled
                 onScroll={e => setCardPage(Math.round(e.nativeEvent.contentOffset.x / cardWidth))}
               >
                 {/* ── Page 0: Anonmesh identity ── */}

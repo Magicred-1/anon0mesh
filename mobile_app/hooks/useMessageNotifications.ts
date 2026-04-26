@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 import { useLxmfContext } from '@/context/LxmfContext';
 import type { NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { activeConversationRef } from './activeConversation';
+import { messagesFocusedRef }    from './messagesFocused';
+import { decodeLxmfSender } from '@/utils/lxmfDecode';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -28,6 +31,18 @@ if (Platform.OS === 'android') {
   }).catch(() => {});
 }
 
+// Events are prepended newest-first and capped at 200 — use reference comparison when capped.
+function sliceNewEvents(
+  events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
+): LxmfEvent[] {
+  if (events.length > prevCount) return events.slice(0, events.length - prevCount);
+  const first = events[0] ?? null;
+  if (prevFirst !== null && first !== prevFirst) {
+    const oldIdx = events.indexOf(prevFirst);
+    return oldIdx > 0 ? events.slice(0, oldIdx) : [];
+  }
+  return [];
+}
 
 export function useMessageNotifications(
   onInApp: (n: NotificationPayload) => void,
@@ -35,6 +50,7 @@ export function useMessageNotifications(
 ) {
   const { events, peers, nameMap } = useLxmfContext();
   const lastCountRef = useRef(0);
+  const lastFirstRef = useRef<LxmfEvent | null>(null);
   const appStateRef  = useRef(AppState.currentState);
 
   // Request local notification permission once — no remote/push token requested
@@ -56,32 +72,36 @@ export function useMessageNotifications(
   }, [peers, nameMap]);
 
   useEffect(() => {
-    if (events.length <= lastCountRef.current) return;
-    const newEvents = events.slice(lastCountRef.current);
+    const prevCount = lastCountRef.current;
+    const prevFirst = lastFirstRef.current;
     lastCountRef.current = events.length;
+    lastFirstRef.current = events[0] ?? null;
 
-    if (!enabled) return;
+    const newEvents = sliceNewEvents(events, prevCount, prevFirst);
+    if (newEvents.length === 0 || !enabled) return;
 
     for (const e of newEvents) {
       if (e.type !== 'messageReceived') continue;
 
-      const srcHash: string = e.source ?? '';
-      const sender  = resolveDisplay(srcHash);
-      const payload: NotificationPayload = { id: Date.now(), sender, body: 'new message' };
+      const rawContent = (e.content as string) ?? '';
+      const srcHash: string = decodeLxmfSender(rawContent) ?? (e.source as string) ?? '';
+      const sender = resolveDisplay(srcHash);
+      const payload: NotificationPayload = { id: Date.now(), sender, body: 'new message', destHash: srcHash };
 
-      // Suppress banner if user is already in this conversation
-      const inActiveThread = appStateRef.current === 'active' && srcHash === activeConversationRef.current;
+      // Suppress only if messages screen is focused AND this is the open conversation
+      const inActiveThread = appStateRef.current === 'active'
+        && messagesFocusedRef.current
+        && srcHash === activeConversationRef.current;
       if (inActiveThread) continue;
 
       if (appStateRef.current === 'active') {
         onInApp(payload);
       } else {
-        // Local notification — fires immediately, no server involved
         Notifications.scheduleNotificationAsync({
           content: { title: sender, body: 'new message', sound: true },
           trigger: null,
         }).catch(() => {});
       }
     }
-  }, [events, resolveDisplay, onInApp]);
+  }, [events, enabled, resolveDisplay, onInApp]);
 }

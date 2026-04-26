@@ -90,8 +90,7 @@ export default function OnboardingScreen() {
             onConnect={handleConnect}
             onCreate={handleCreate}
           />
-
-          <Text style={S.footer}>🔒 OPEN SOURCE · PRIVATE · DECENTRALIZED</Text>
+          
         </View>
 
       </SafeAreaView>
@@ -126,10 +125,10 @@ const S = StyleSheet.create({
   },
   heroLogo: {
     position: 'absolute',
-    width: 340, height: 68,
+    width: 500, height: 100,
     alignSelf: 'center',
     top: '50%',
-    marginTop: -34,
+    marginTop: -50,
   },
   title: {
     fontSize: 28,
@@ -149,12 +148,12 @@ const S = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 2,
   },
-  footer: {
-    fontFamily: fontFamily.sansSb,
-    fontSize: 10,
-    color: '#1e3d4a',
-    letterSpacing: 1.5,
-    textAlign: 'center',
-    marginTop: 4,
-  },
+  // footer: {
+  //   fontFamily: fontFamily.sansSb,
+  //   fontSize: 10,
+  //   color: '#ffffffbe',
+  //   letterSpacing: 1.5,
+  //   textAlign: 'center',
+  //   marginTop: 4,
+  // },
 });

@@ -23,6 +23,7 @@ import { InAppNotificationBanner, type NotificationPayload } from '@/components/
 import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
 import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
+import { pendingConversationRef }    from '@/hooks/pendingConversation';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -59,6 +60,11 @@ function AppShell() {
       <InAppNotificationBanner
         notification={activeNotif}
         onDismiss={() => setActiveNotif(null)}
+        onPress={(n) => {
+          if (n.destHash) pendingConversationRef.current = n.destHash;
+          setActiveNotif(null);
+          router.push('/(tabs)');
+        }}
         onPress={() => { router.push('/(tabs)'); }}
       />
     </>

@@ -13,7 +13,11 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app requires camera access to scan QR codes for connecting with peers and sharing content.",
-        "NSFaceIDUsageDescription": "This app uses Face ID to securely authenticate you when accessing sensitive features or information within the app."
+        "NSFaceIDUsageDescription": "This app uses Face ID to securely authenticate you when accessing sensitive features or information within the app.",
+        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
+      },
+      "entitlements": {
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -59,7 +63,8 @@
           "icon": "./assets/icons/anonmesh_white_icon.png",
           "color": "#00E5FF"
         }
-      ]
+      ],
+      "@magicred-1/react-native-lxmf"
     ],
     "experiments": {
       "typedRoutes": true,
