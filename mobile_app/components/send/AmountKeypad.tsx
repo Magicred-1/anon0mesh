@@ -6,13 +6,16 @@ import { DepthButton, Icon, NumericKeypad } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import { tokenByName } from "@/components/send/TokenPicker";
 import { useGlass } from "@/hooks/useGlass";
+import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import { useTheme } from "@/theme";
 
-const SOL_USD_RATE = 160;
-const USDC_USD_RATE = 1;
-
-function rateFor(sym: "SOL" | "USDC"): number {
-  return sym === "SOL" ? SOL_USD_RATE : USDC_USD_RATE;
+function formatBalance(amount: number, maxDecimals: number): string {
+  if (amount === 0) return "0";
+  const decimals = Math.min(maxDecimals, amount < 1 ? 6 : 4);
+  return amount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  });
 }
 
 function shortAddress(addr: string) {
@@ -25,9 +28,10 @@ export function AmountKeypad() {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const glass = useGlass("accent");
   const { to, symbol: symbolParam } = useLocalSearchParams<{ to: string; symbol?: string }>();
+  const { tokens } = useWalletBalance();
 
-  const symbol = (symbolParam === "USDC" ? "USDC" : "SOL") as "SOL" | "USDC";
-  const token = tokenByName(symbol);
+  const symbol = typeof symbolParam === "string" && symbolParam.length > 0 ? symbolParam : "SOL";
+  const token = tokenByName(symbol, tokens);
   const [amount, setAmount] = useState("0");
 
   const recipient = typeof to === "string" ? to : "";
@@ -38,9 +42,8 @@ export function AmountKeypad() {
     }
   }, [recipient, router]);
 
-  const balanceNum = parseFloat(token.balance.replace(/,/g, "")) || 0;
+  const balanceNum = token.uiAmount;
   const amountNum = parseFloat(amount) || 0;
-  const usdEquiv = (amountNum * rateFor(token.sym)).toFixed(2);
   const isValid = amountNum > 0 && amountNum <= balanceNum && Boolean(recipient);
 
   function handleNext() {
@@ -49,7 +52,7 @@ export function AmountKeypad() {
       pathname: "/send/review",
       params: {
         amount,
-        symbol: token.sym,
+        symbol: token.symbol,
         to: recipient,
       },
     });
@@ -151,15 +154,15 @@ export function AmountKeypad() {
                 marginTop: 2,
               }}
             >
-              {token.balance} {token.sym}
+              {formatBalance(token.uiAmount, token.maxDecimals)} {token.symbol}
             </Text>
           </View>
         </View>
 
         <View style={{ flex: 1, justifyContent: "center", paddingTop: spacing[5] }}>
           <NumericKeypad
-            currency={token.sym}
-            fiatLabel={`≈ $${usdEquiv}`}
+            currency={token.symbol}
+            fiatLabel={`${formatBalance(token.uiAmount, token.maxDecimals)} ${token.symbol} available`}
             maxAmount={balanceNum.toString()}
             maxDecimals={token.maxDecimals}
             onChangeValue={setAmount}
@@ -180,7 +183,7 @@ export function AmountKeypad() {
           >
             <Icon color={colors.error} name="alert-circle" size={14} />
             <Text style={{ color: colors.error, fontFamily: fontFamily.sans, fontSize: fontSize.sm }}>
-              Amount exceeds current {token.sym} balance.
+              Amount exceeds current {token.symbol} balance.
             </Text>
           </View>
         ) : null}

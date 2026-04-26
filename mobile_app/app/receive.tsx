@@ -2,6 +2,7 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
+  PanResponder,
   Pressable,
   Share,
   StyleSheet,
@@ -13,6 +14,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSequence,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,7 +25,6 @@ import {
   Icon,
   IconButton,
   SegmentedControl,
-  SwipeDismissHandle,
   TokenLogo,
 } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
@@ -31,6 +32,9 @@ import { useGlass } from "@/hooks/useGlass";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
 import { useTheme } from "@/theme";
+
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 0.8;
 
 const ADDRESS_MODES = [
   { id: "standard", label: "Standard" },
@@ -61,6 +65,56 @@ export default function ReceiveScreen() {
     transform: [{ translateY: dragY.value }],
   }));
 
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        // Don't claim touches on start — child Pressables get first dibs.
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: () => false,
+        // Claim on move when drag is clearly vertical-down past threshold.
+        onMoveShouldSetPanResponder: (_, g) =>
+          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+        onMoveShouldSetPanResponderCapture: (_, g) =>
+          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderMove: (_, g) => {
+          dragY.value = Math.max(0, g.dy);
+        },
+        onPanResponderRelease: (_, g) => {
+          const past = g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY;
+          if (past) {
+            // Hand off to native modal exit animation instead of
+            // running our own. Double-animating (content translateY
+            // then modal frame slide) looked like two separate
+            // sheets falling. router.back() triggers the native
+            // slide_from_bottom exit; content's current translateY
+            // blends into that animation naturally.
+            haptics.tap();
+            router.back();
+          } else {
+            dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
+          }
+        },
+        onPanResponderTerminate: () => {
+          dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
+        },
+      }),
+    [dragY, router],
+  );
+
+  const GrabHandle = () => (
+    <View style={{ alignItems: "center", paddingVertical: spacing[3] }}>
+      <View
+        style={{
+          backgroundColor: colors.textTertiary,
+          borderRadius: 3,
+          height: 4,
+          opacity: 0.5,
+          width: 44,
+        }}
+      />
+    </View>
+  );
+
   const walletAddress = publicKey?.toBase58() ?? "";
   const alias = displayName || (walletAddress ? shortAddress(walletAddress) : "—");
 
@@ -75,10 +129,10 @@ export default function ReceiveScreen() {
 
   if (!hasActiveAddress) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
         <Animated.View style={[styles.safeArea, contentStyle]}>
           <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-            <SwipeDismissHandle translateY={dragY} />
+            <GrabHandle />
             <View
               style={{
                 alignItems: "center",
@@ -145,10 +199,10 @@ export default function ReceiveScreen() {
 
   const qrValue = activeAddress;
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
       <Animated.View style={[styles.safeArea, contentStyle]}>
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-        <SwipeDismissHandle translateY={dragY} />
+        <GrabHandle />
         <View
           style={{
             alignItems: "center",
