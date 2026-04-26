@@ -18,11 +18,17 @@ import type { NodeData, Filter } from '@/components/nodes/types';
 
 // Converts a peer to NodeData WITHOUT latency — stable identity for MeshMap.
 // Latency is added separately for the list so MeshMap topology doesn't re-layout on every timer tick.
+function viaToIface(via: LxmfPeer['via']): 'BLE' | 'TCP' | 'RNode' {
+  if (via === 'ble')       return 'BLE';
+  if (via === 'rnode')     return 'RNode';
+  return 'TCP';
+}
+
 function peerToMapNode(p: LxmfPeer): NodeData {
   return {
     handle:   `${p.displayName.slice(0, 16)}`,
     hops:     p.hops,
-    iface:    p.via === 'ble' ? 'BLE' : 'TCP',
+    iface:    viaToIface(p.via),
     signal:   p.online ? 4 : 2,
     latency:  '—',
     online:   p.online,
@@ -34,7 +40,7 @@ function peerToMapNode(p: LxmfPeer): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const glass = useGlass();
-  const { isRunning, isNativeAvailable, isAnnouncing, peers, startBLE } = useLxmfContext();
+  const { isRunning, isNativeAvailable, isAnnouncing, bleActive, blePeerCount, peers, startBLE } = useLxmfContext();
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
@@ -46,6 +52,7 @@ export default function NodesScreen() {
   }, []);
 
   const enableBle = useCallback(async () => {
+    if (bleActive) return; // already started — don't re-trigger GATT registration
     if (Platform.OS === 'android') {
       const perms = Platform.Version >= 31
         ? [
@@ -58,7 +65,7 @@ export default function NodesScreen() {
       if (Object.values(results).some(r => r !== PermissionsAndroid.RESULTS.GRANTED)) return;
     }
     startBLE();
-  }, [startBLE]);
+  }, [bleActive, startBLE]);
 
   useEffect(() => {
     if (isNativeAvailable) enableBle();
@@ -92,6 +99,12 @@ export default function NodesScreen() {
     () => filter === 'all' ? listNodes : listNodes.filter(n => n.iface === filter),
     [listNodes, filter],
   );
+
+  const ifaceCounts = useMemo<Record<string, number>>(() => {
+    const c: Record<string, number> = { all: listNodes.length, BLE: 0, TCP: 0, RNode: 0 };
+    for (const n of listNodes) c[n.iface] = (c[n.iface] ?? 0) + 1;
+    return c;
+  }, [listNodes]);
   // Cap rendered rows — beyond 80 the ScrollView frame budget breaks on low-end devices
   const MAX_ROWS = 80;
   const shown    = useMemo(() => filtered.slice(0, MAX_ROWS), [filtered]);
@@ -120,19 +133,30 @@ export default function NodesScreen() {
             keyExtractor={f => f}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={S.filterBar}
-            renderItem={({ item: f }) => (
-              <Pressable
-                onPress={() => setFilter(f)}
-                style={[S.chip, {
-                  borderColor:     f === filter ? colors.primary + '80' : colors.border,
-                  backgroundColor: f === filter ? colors.primarySubtle  : 'transparent',
-                }]}
-              >
-                <Text style={[S.chipText, { color: f === filter ? colors.primary : colors.textTertiary }]}>
-                  {f.toUpperCase()}
-                </Text>
-              </Pressable>
-            )}
+            renderItem={({ item: f }) => {
+              const count   = f === 'BLE' ? blePeerCount : (ifaceCounts[f] ?? 0);
+              const active  = f === filter;
+              const isBle   = f === 'BLE';
+              return (
+                <Pressable
+                  onPress={() => setFilter(f)}
+                  style={[S.chip, {
+                    borderColor:     active ? colors.primary + '80' : colors.border,
+                    backgroundColor: active ? colors.primarySubtle  : 'transparent',
+                  }]}
+                >
+                  {isBle && bleActive && <PulseDot size={4} />}
+                  <Text style={[S.chipText, { color: active ? colors.primary : colors.textTertiary }]}>
+                    {f.toUpperCase()}
+                  </Text>
+                  {count > 0 && (
+                    <Text style={[S.chipCount, { color: active ? colors.primary : colors.textTertiary }]}>
+                      {count}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            }}
           />
 
           <BeaconRegistry />
@@ -180,7 +204,7 @@ const S = StyleSheet.create({
   title:        { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
   sub:          { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginTop: 2 },
   filterBar:    { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2, gap: 6 },
-  chip:         { paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: 4 },
+  chip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: 4 },
   chipText:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
   sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
   sectionText:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
@@ -189,4 +213,5 @@ const S = StyleSheet.create({
   peerBox:      { marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', maxHeight: 340 },
   peerScroll:   { flexGrow: 0 },
   listContent:  { flexGrow: 1 },
+  chipCount:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, opacity: 0.8 },
 });

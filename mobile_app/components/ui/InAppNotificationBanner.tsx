@@ -5,9 +5,10 @@ import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 
 export interface NotificationPayload {
-  id:     number;
-  sender: string;
-  body:   string;
+  id:       number;
+  sender:   string;
+  body:     string;
+  destHash: string;
 }
 
 interface Props {

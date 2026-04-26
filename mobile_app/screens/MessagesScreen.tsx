@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View, ScrollView, Text, Pressable,
   StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder,
@@ -22,10 +23,25 @@ import { Feather } from '@expo/vector-icons';
 import { useWallet } from '@/context/WalletContext';
 import type { AnyMsg, ChatMsg }  from '@/components/messages/types';
 import type { LxmfPeer } from '@/context/LxmfContext';
-import { activeConversationRef } from '@/hooks/activeConversation';
+import { activeConversationRef }  from '@/hooks/activeConversation';
+import { pendingConversationRef } from '@/hooks/pendingConversation';
+import { messagesFocusedRef }     from '@/hooks/messagesFocused';
 import { setDrawerOpen } from '@/hooks/drawerState';
 import { decodeLxmfContent, decodeLxmfSender } from '@/utils/lxmfDecode';
 import { formatAgo } from '@/utils/time';
+import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
+
+function sliceNewEvents(
+  events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
+): LxmfEvent[] {
+  if (events.length > prevCount) return events.slice(0, events.length - prevCount);
+  const first = events[0] ?? null;
+  if (prevFirst !== null && first !== prevFirst) {
+    const oldIdx = events.indexOf(prevFirst);
+    return oldIdx > 0 ? events.slice(0, oldIdx) : [];
+  }
+  return [];
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,13 +61,19 @@ function utf8ToBase64(s: string): string {
   return bytesToBase64(new TextEncoder().encode(s));
 }
 
+function viaToIface(via: LxmfPeer['via']): 'BLE' | 'TCP' | 'RNode' {
+  if (via === 'ble')   return 'BLE';
+  if (via === 'rnode') return 'RNode';
+  return 'TCP';
+}
+
 function lxmfPeerToPeer(p: LxmfPeer): Peer {
   const now = Math.floor(Date.now() / 1000);
   const ago = p.lastSeen > 0 ? formatAgo(now - p.lastSeen) : '—';
   return {
     handle:   p.displayName || p.destHash.slice(0, 8),
     hops:     p.hops,
-    iface:    p.via === 'ble' ? 'BLE' : 'TCP',
+    iface:    viaToIface(p.via),
     online:   p.online,
     unread:   0,
     last:     `${p.via} · ${p.online ? 'active' : 'offline'}`,
@@ -153,12 +175,13 @@ export default function MessagesScreen() {
   const [drawerVisible,    setDrawerVisible]     = useState(false);
   const [actionGridVisible, setActionGridVisible] = useState(false);
 
-  const scrollRef       = useRef<ScrollView>(null);
-  const drawerAnim      = useRef(new Animated.Value(-DRAWER_W)).current;
-  const drawerOpenRef   = useRef(false);
-  const pendingRef       = useRef<Map<string, string[]>>(new Map());
-  const activePeerHexRef = useRef<string | null>(null);
-  const lastEventIdxRef  = useRef(0);
+  const scrollRef         = useRef<ScrollView>(null);
+  const drawerAnim        = useRef(new Animated.Value(-DRAWER_W)).current;
+  const drawerOpenRef     = useRef(false);
+  const pendingRef        = useRef<Map<string, string[]>>(new Map());
+  const activePeerHexRef  = useRef<string | null>(null);
+  const lastEvtCountRef   = useRef(0);
+  const lastFirstEvtRef   = useRef<(typeof events)[0] | null>(null);
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
@@ -169,16 +192,19 @@ export default function MessagesScreen() {
 
   // Incoming message handler
   useEffect(() => {
-    if (events.length <= lastEventIdxRef.current) return;
-    const newEvents = events.slice(lastEventIdxRef.current);
-    lastEventIdxRef.current = events.length;
+    const prevCount = lastEvtCountRef.current;
+    const prevFirst = lastFirstEvtRef.current;
+    lastEvtCountRef.current  = events.length;
+    lastFirstEvtRef.current  = events[0] ?? null;
+
+    const newEvents = sliceNewEvents(events, prevCount, prevFirst);
+    if (newEvents.length === 0) return;
 
     for (const e of newEvents) {
       if (e.type !== 'messageReceived') continue;
       const rawContent = e.content ?? '';
       const srcHash: string = decodeLxmfSender(rawContent) ?? e.source ?? '';
       const text = decodeLxmfContent(rawContent);
-      console.log('[MSG] rx hexLen:', rawContent.length, 'srcHash:', srcHash.slice(0, 8), 'text:', JSON.stringify(text.slice(0, 40)));
       if (!text) continue;
 
       const peer = lxmfPeers.find(p => p.destHash === srcHash);
@@ -201,7 +227,7 @@ export default function MessagesScreen() {
 
   // Retry queued messages when the peer's identity arrives via announce
   useEffect(() => {
-    const last = events[events.length - 1];
+    const last = events[0]; // context prepends new events — index 0 is latest
     if (last?.type !== 'announceReceived') return;
     const hash: string | null = last.destHash ?? null;
     if (!hash) return;
@@ -301,7 +327,10 @@ export default function MessagesScreen() {
       return;
     }
     try {
-      await send(activePeerHex, utf8ToBase64(text));
+      const receipt = await send(activePeerHex, utf8ToBase64(text));
+      if (receipt < 0) {
+        setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'send failed: no route to peer' }]);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'send error';
       if (msg.includes('missing destination identity')) {
@@ -351,9 +380,31 @@ export default function MessagesScreen() {
     ]);
   }, [closeDrawer]);
 
+  // Track focus so notifications aren't suppressed when user is on another tab
+  useFocusEffect(useCallback(() => {
+    messagesFocusedRef.current = true;
+    const hash = pendingConversationRef.current;
+    if (hash) {
+      pendingConversationRef.current = null;
+      const peer = lxmfPeers.find(p => p.destHash === hash);
+      pickPeer(peer ? lxmfPeerToPeer(peer) : {
+        handle:   `@${hash.slice(0, 8)}`,
+        hops:     0,
+        iface:    'TCP',
+        online:   true,
+        unread:   0,
+        last:     '—',
+        time:     '—',
+        beacon:   false,
+        destHash: hash,
+      });
+    }
+    return () => { messagesFocusedRef.current = false; };
+  }, [lxmfPeers, pickPeer]));
+
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ThreadHeader

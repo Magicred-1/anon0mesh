@@ -1,5 +1,6 @@
 import React, { memo, useState, useRef, useCallback } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
@@ -82,6 +83,7 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
   const { colors }            = useTheme();
   const baseGlass             = useGlass();
   const { updateDisplayName } = useLxmfContext();
+  const { top }               = useSafeAreaInsets();
   const hasPeer               = peer !== null && peer !== '';
 
   const [editing, setEditing] = useState(false);
@@ -110,7 +112,7 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
   else                rightSlot = <EditIcon onPress={startEdit} />;
 
   return (
-    <View style={[S.header, { backgroundColor: colors.surface0, borderBottomColor: colors.borderSubtle }]}>
+    <View style={[S.header, { backgroundColor: colors.surface0, borderBottomColor: colors.borderSubtle, paddingTop: top + 10 }]}>
       <Pressable onPress={onOpen} style={[S.hamburger, baseGlass]}>
         <Feather name="menu" size={16} color={colors.textSecondary} />
       </Pressable>
