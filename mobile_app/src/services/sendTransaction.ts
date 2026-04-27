@@ -7,12 +7,10 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
-import * as SecureStore from "expo-secure-store";
 import { Buffer } from "buffer";
 
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
-
-const MWA_TOKEN_KEY = "anon_mwa_auth_token_v1";
+import { SecureKeys, secureGet } from "@/src/storage";
 const APP_IDENTITY = {
   name: "anonmesh",
   uri: "https://anonme.sh",
@@ -110,7 +108,7 @@ export async function sendSolTransfer({
   // the vault sign only. The app submits via its own RPC so the vault
   // UI stays minimal (sign prompt only — no 'submitting' + 'success'
   // screens from the wallet app).
-  const cachedToken = await SecureStore.getItemAsync(MWA_TOKEN_KEY);
+  const cachedToken = await secureGet(SecureKeys.MWA_TOKEN);
   if (!cachedToken) {
     throw new Error("MWA wallet not authorized. Reconnect your wallet.");
   }

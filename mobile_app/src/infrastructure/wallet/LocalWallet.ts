@@ -1,9 +1,12 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
 import { TurboModuleRegistry, type TurboModule } from 'react-native';
+import {
+  SecureKeys, PrefKeys,
+  secureGet, secureSet, secureDeleteAll,
+  prefGet,
+} from '@/src/storage';
 import type { IWalletAdapter, WalletMode } from './types';
 
 interface RNGetRandomValuesModule extends TurboModule {
@@ -12,13 +15,6 @@ interface RNGetRandomValuesModule extends TurboModule {
 
 // react-native-get-random-values registers this TurboModule — already linked, no rebuild needed
 const RNGetRandomValues = TurboModuleRegistry.get<RNGetRandomValuesModule>('RNGetRandomValues');
-
-// All keys sit in OS Keystore (Android) / Keychain (iOS) — no biometric OS gate.
-// Export is gated by LocalAuthentication which falls back to device PIN/passcode.
-const SECRET_KEY       = 'anon_wallet_secret_v2';   // OS-encrypted — AES-GCM ciphertext
-const AES_KEY_STORE    = 'anon_wallet_aes_v1';      // OS-encrypted — AES-256 key
-const PUBLIC_KEY_STORE = 'anon_wallet_pubkey_v1';   // OS-encrypted — base58 public key
-const MARKER_KEY       = 'anon_wallet_marker_v1';   // no auth — existence check only
 
 interface StoredPayload {
   iv: string;  // base64, 12 bytes
@@ -58,7 +54,7 @@ async function readAndDecrypt(): Promise<Keypair> {
   });
   if (!auth.success) throw new Error('Authentication cancelled');
 
-  const rawPayload = await SecureStore.getItemAsync(SECRET_KEY);
+  const rawPayload = await secureGet(SecureKeys.WALLET_SECRET);
   if (!rawPayload) throw new Error('Secret key was never stored — sign out and recreate your wallet to fix this');
 
   const parsed: unknown = JSON.parse(rawPayload);
@@ -70,7 +66,7 @@ async function readAndDecrypt(): Promise<Keypair> {
 
   if (!isStoredPayload(parsed)) throw new Error('Corrupted wallet data');
 
-  const rawAesKey = await SecureStore.getItemAsync(AES_KEY_STORE);
+  const rawAesKey = await secureGet(SecureKeys.WALLET_AES_KEY);
   if (!rawAesKey) throw new Error('AES key missing — wallet may be corrupted, please recreate');
   const secretKey = aesDecrypt(new Uint8Array(Buffer.from(rawAesKey, 'base64')), parsed);
   return Keypair.fromSecretKey(secretKey);
@@ -84,7 +80,7 @@ export class LocalWallet implements IWalletAdapter {
   isConnected(): boolean { return this._publicKey !== null; }
 
   async connect(): Promise<void> {
-    const biometricPref = await AsyncStorage.getItem('anonmesh:biometric-enabled');
+    const biometricPref = await prefGet(PrefKeys.BIOMETRIC_ENABLED);
     const needsBiometric = biometricPref !== 'false';
 
     if (needsBiometric) {
@@ -96,7 +92,7 @@ export class LocalWallet implements IWalletAdapter {
       if (!auth.success) throw new Error('Authentication cancelled');
     }
 
-    const stored = await SecureStore.getItemAsync(PUBLIC_KEY_STORE);
+    const stored = await secureGet(SecureKeys.WALLET_PUBKEY);
     if (!stored) throw new Error('No local wallet found — please recreate your wallet');
     this._publicKey = new PublicKey(stored);
   }
@@ -110,7 +106,7 @@ export class LocalWallet implements IWalletAdapter {
   }
 
   static async exists(): Promise<boolean> {
-    return (await SecureStore.getItemAsync(MARKER_KEY)) === 'true';
+    return (await secureGet(SecureKeys.WALLET_MARKER)) === 'true';
   }
 
   static async create(): Promise<LocalWallet> {
@@ -129,10 +125,10 @@ export class LocalWallet implements IWalletAdapter {
     const keypair = Keypair.fromSeed(seed);
     const payload = aesEncrypt(aesKey, keypair.secretKey);
 
-    await SecureStore.setItemAsync(AES_KEY_STORE, Buffer.from(aesKey).toString('base64'));
-    await SecureStore.setItemAsync(PUBLIC_KEY_STORE, keypair.publicKey.toBase58());
-    await SecureStore.setItemAsync(MARKER_KEY, 'true');
-    await SecureStore.setItemAsync(SECRET_KEY, JSON.stringify(payload));
+    await secureSet(SecureKeys.WALLET_AES_KEY, Buffer.from(aesKey).toString('base64'));
+    await secureSet(SecureKeys.WALLET_PUBKEY, keypair.publicKey.toBase58());
+    await secureSet(SecureKeys.WALLET_MARKER, 'true');
+    await secureSet(SecureKeys.WALLET_SECRET, JSON.stringify(payload));
 
     const w = new LocalWallet();
     w._publicKey = keypair.publicKey;
@@ -140,11 +136,15 @@ export class LocalWallet implements IWalletAdapter {
   }
 
   static async delete(): Promise<void> {
-    await Promise.allSettled([
-      SecureStore.deleteItemAsync(SECRET_KEY),
-      SecureStore.deleteItemAsync(AES_KEY_STORE),
-      SecureStore.deleteItemAsync(PUBLIC_KEY_STORE),
-      SecureStore.deleteItemAsync(MARKER_KEY),
-    ]);
+    const keys = [
+      SecureKeys.WALLET_SECRET,
+      SecureKeys.WALLET_AES_KEY,
+      SecureKeys.WALLET_PUBKEY,
+      SecureKeys.WALLET_MARKER,
+    ];
+    // Zero out before deleting — prevents recovery from storage journal/cache
+    // if the OS delays or partially applies the delete.
+    await Promise.allSettled(keys.map(k => secureSet(k, '')));
+    await secureDeleteAll(keys);
   }
 }
