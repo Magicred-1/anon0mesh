@@ -1,9 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
-import * as SecureStore from 'expo-secure-store';
+import { SecureKeys, secureGet, secureSet, secureDelete } from '@/src/storage';
 import type { IWalletAdapter, WalletMode } from './types';
-
-const TOKEN_KEY = 'anon_mwa_auth_token_v1';
 
 const APP_IDENTITY = {
   name: 'anonmesh',
@@ -20,7 +18,7 @@ export class MWAWallet implements IWalletAdapter {
   isConnected(): boolean { return this.publicKey !== null; }
 
   async connect(): Promise<void> {
-    const cachedToken = await SecureStore.getItemAsync(TOKEN_KEY);
+    const cachedToken = await secureGet(SecureKeys.MWA_TOKEN);
 
     const result = await transact(async (wallet) => {
       if (cachedToken) {
@@ -44,14 +42,14 @@ export class MWAWallet implements IWalletAdapter {
     const pubkeyBytes = Buffer.from(account.address, 'base64');
     this.publicKey = new PublicKey(pubkeyBytes);
     this.authToken = result.auth_token;
-    await SecureStore.setItemAsync(TOKEN_KEY, result.auth_token);
+    await secureSet(SecureKeys.MWA_TOKEN, result.auth_token);
   }
 
   async disconnect(): Promise<void> {
     const token = this.authToken;
     this.publicKey = null;
     this.authToken = null;
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await secureDelete(SecureKeys.MWA_TOKEN);
 
     if (token) {
       try {
@@ -65,6 +63,6 @@ export class MWAWallet implements IWalletAdapter {
   }
 
   static async hasCachedToken(): Promise<boolean> {
-    return (await SecureStore.getItemAsync(TOKEN_KEY)) !== null;
+    return (await secureGet(SecureKeys.MWA_TOKEN)) !== null;
   }
 }

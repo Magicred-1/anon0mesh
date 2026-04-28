@@ -1,20 +1,18 @@
 import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const KEY = 'anonmesh:notif-enabled';
+import { PrefKeys, prefGet, prefSet } from '@/src/storage';
 
 export function useNotificationEnabled(): [boolean, (v: boolean) => void] {
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY).then(v => {
+    prefGet(PrefKeys.NOTIF_ENABLED).then(v => {
       if (v !== null) setEnabled(v === 'true');
     });
   }, []);
 
   const set = (v: boolean) => {
     setEnabled(v);
-    AsyncStorage.setItem(KEY, String(v)).catch(() => {});
+    prefSet(PrefKeys.NOTIF_ENABLED, String(v));
   };
 
   return [enabled, set];

@@ -1,18 +1,16 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
-
-const KEY = 'anonmesh:biometric-enabled';
+import { PrefKeys, prefGet, prefSet } from '@/src/storage';
 
 export function useBiometricEnabled(): [boolean, (v: boolean) => void] {
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY).then(v => { if (v !== null) setEnabled(v === 'true'); });
+    prefGet(PrefKeys.BIOMETRIC_ENABLED).then(v => { if (v !== null) setEnabled(v === 'true'); });
   }, []);
 
   const set = (v: boolean) => {
     setEnabled(v);
-    AsyncStorage.setItem(KEY, String(v)).catch(() => {});
+    prefSet(PrefKeys.BIOMETRIC_ENABLED, String(v));
   };
 
   return [enabled, set];

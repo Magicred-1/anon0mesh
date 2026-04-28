@@ -1,9 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import * as haptics from "@/src/design-system/haptics";
-
-const STORAGE_KEY = "anonmesh:hide-balance";
+import { PrefKeys, prefGet, prefSet } from "@/src/storage";
 
 interface HideBalanceValue {
   hidden: boolean;
@@ -18,10 +16,10 @@ const HideBalanceContext = createContext<HideBalanceValue | null>(null);
 export function HideBalanceProvider({ children }: { children: React.ReactNode }) {
   const [hidden, setHidden] = useState(false);
 
-  // Hydrate from AsyncStorage on mount.
+  // Hydrate from storage on mount.
   useEffect(() => {
     let alive = true;
-    void AsyncStorage.getItem(STORAGE_KEY).then((value) => {
+    prefGet(PrefKeys.HIDE_BALANCE).then((value) => {
       if (!alive) return;
       setHidden(value === "true");
     });
@@ -34,7 +32,7 @@ export function HideBalanceProvider({ children }: { children: React.ReactNode })
     haptics.select();
     setHidden((prev) => {
       const next = !prev;
-      void AsyncStorage.setItem(STORAGE_KEY, next ? "true" : "false");
+      prefSet(PrefKeys.HIDE_BALANCE, next ? "true" : "false");
       return next;
     });
   }, []);

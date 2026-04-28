@@ -1,5 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  SecureKeys, LegacySecureKeys, PrefKeys,
+  secureGet, secureSet, secureDelete, secureDeleteAll,
+  prefGet, prefSet, prefRemove, prefGetJson, prefSetJson,
+} from '@/src/storage';
 import {
   useLxmf,
   LxmfModule,
@@ -9,17 +13,10 @@ import {
   type LxmfEvent,
   type TcpInterface,
 } from '@magicred-1/react-native-lxmf';
-import * as SecureStore from 'expo-secure-store';
 import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
-const PEERS_CACHE_KEY        = 'lxmf_peers_cache';
-const DISPLAY_NAME_KEY       = 'lxmf_display_name';
-const IDENTITY_KEY           = 'lxmf.identity.v1';
 const IDENTITY_SCHEMA_VERSION = 1;
-// Legacy keys — read-once for migration then deleted
-const LEGACY_IDENTITY_HEX_KEY = 'lxmf_identity_hex';
-const LEGACY_ADDRESS_HEX_KEY  = 'lxmf_address_hex';
 
 type StoredIdentity = {
   version:      number;
@@ -40,15 +37,15 @@ function isValidIdentity(blob: unknown): blob is StoredIdentity {
 }
 
 async function loadOrMigrateIdentity(): Promise<StoredIdentity | null> {
-  const raw = await SecureStore.getItemAsync(IDENTITY_KEY);
+  const raw = await secureGet(SecureKeys.LXMF_IDENTITY);
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
       return isValidIdentity(parsed) ? parsed : null;
     } catch { return null; }
   }
-  const legacyIdHex   = await SecureStore.getItemAsync(LEGACY_IDENTITY_HEX_KEY);
-  const legacyAddrHex = await SecureStore.getItemAsync(LEGACY_ADDRESS_HEX_KEY);
+  const legacyIdHex   = await secureGet(LegacySecureKeys.IDENTITY_HEX);
+  const legacyAddrHex = await secureGet(LegacySecureKeys.ADDRESS_HEX);
   if (!legacyIdHex || !legacyAddrHex) return null;
   const blob: StoredIdentity = {
     version:      IDENTITY_SCHEMA_VERSION,
@@ -57,12 +54,22 @@ async function loadOrMigrateIdentity(): Promise<StoredIdentity | null> {
     created_at:   new Date().toISOString(),
   };
   if (!isValidIdentity(blob)) return null;
-  await SecureStore.setItemAsync(IDENTITY_KEY, JSON.stringify(blob));
-  await Promise.allSettled([
-    SecureStore.deleteItemAsync(LEGACY_IDENTITY_HEX_KEY),
-    SecureStore.deleteItemAsync(LEGACY_ADDRESS_HEX_KEY),
-  ]);
+  await secureSet(SecureKeys.LXMF_IDENTITY, JSON.stringify(blob));
+  await secureDeleteAll([LegacySecureKeys.IDENTITY_HEX, LegacySecureKeys.ADDRESS_HEX]);
   return blob;
+}
+
+// Migrate display name from legacy SecureStore key to AsyncStorage once
+async function loadOrMigrateDisplayName(): Promise<string | null> {
+  const fromPref = await prefGet(PrefKeys.DISPLAY_NAME);
+  if (fromPref) return fromPref;
+  const legacy = await secureGet(LegacySecureKeys.DISPLAY_NAME);
+  if (legacy) {
+    await prefSet(PrefKeys.DISPLAY_NAME, legacy);
+    await secureDelete(LegacySecureKeys.DISPLAY_NAME);
+    return legacy;
+  }
+  return null;
 }
 
 function sanitizeName(raw: string, fallback: string): string {
@@ -259,10 +266,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      let name = await SecureStore.getItemAsync(DISPLAY_NAME_KEY);
+      let name = await loadOrMigrateDisplayName();
       if (!name) {
         name = generateNickname();
-        await SecureStore.setItemAsync(DISPLAY_NAME_KEY, name);
+        await prefSet(PrefKeys.DISPLAY_NAME, name);
       }
       if (!cancelled) setDisplayName(name);
 
@@ -316,15 +323,15 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       address_hex:  addrHex,
       created_at:   new Date().toISOString(),
     };
-    SecureStore.setItemAsync(IDENTITY_KEY, JSON.stringify(blob))
+    secureSet(SecureKeys.LXMF_IDENTITY, JSON.stringify(blob))
       .then(() => setStoredIdentity(blob))
       .catch(() => {});
   }, [isRunning, lxmf.status?.addressHex, storedIdentity, getIdentityHex]);
 
   const resetIdentity = useCallback(async () => {
     await Promise.allSettled([
-      SecureStore.deleteItemAsync(IDENTITY_KEY),
-      AsyncStorage.removeItem(PEERS_CACHE_KEY),
+      secureDelete(SecureKeys.LXMF_IDENTITY),
+      prefRemove(PrefKeys.PEERS_CACHE),
     ]);
     setStoredIdentity(null);
     if (isRunning) await stop();
@@ -352,16 +359,13 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [bleActive]);
 
   useEffect(() => {
-    AsyncStorage.getItem(PEERS_CACHE_KEY).then(raw => {
-      if (!raw) return;
-      try {
-        const cached: LxmfPeer[] = JSON.parse(raw);
-        const map = knownPeersRef.current;
-        for (const p of cached) {
-          if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false });
-        }
-        setPeers(Array.from(map.values()));
-      } catch { /* ignore corrupt cache */ }
+    prefGetJson<LxmfPeer[]>(PrefKeys.PEERS_CACHE).then(cached => {
+      if (!cached) return;
+      const map = knownPeersRef.current;
+      for (const p of cached) {
+        if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false });
+      }
+      setPeers(Array.from(map.values()));
     });
   }, []);
 
@@ -403,7 +407,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
 
     if (storageTimerRef.current) clearTimeout(storageTimerRef.current);
     storageTimerRef.current = setTimeout(() => {
-      AsyncStorage.setItem(PEERS_CACHE_KEY, JSON.stringify(updated)).catch(() => {});
+      prefSetJson(PrefKeys.PEERS_CACHE, updated);
     }, 3000);
   }, [lxmf.events, lxmf.beacons, lxmf.status, bleActive]);
 
@@ -458,7 +462,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       const trimmed = name.trim();
       if (!trimmed) return;
       setDisplayName(trimmed);
-      await SecureStore.setItemAsync(DISPLAY_NAME_KEY, trimmed);
+      await prefSet(PrefKeys.DISPLAY_NAME, trimmed);
     },
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
        handleStartBLE, handleStopBLE,
