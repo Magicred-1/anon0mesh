@@ -40,7 +40,7 @@ function peerToMapNode(p: LxmfPeer): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const glass = useGlass();
-  const { isRunning, isNativeAvailable, isAnnouncing, bleActive, blePeerCount, peers, startBLE } = useLxmfContext();
+  const { isRunning, isNativeAvailable, isAnnouncing, bleActive, peers, startBLE } = useLxmfContext();
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
@@ -134,7 +134,7 @@ export default function NodesScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={S.filterBar}
             renderItem={({ item: f }) => {
-              const count   = f === 'BLE' ? blePeerCount : (ifaceCounts[f] ?? 0);
+              const count   = ifaceCounts[f] ?? 0;
               const active  = f === filter;
               const isBle   = f === 'BLE';
               return (
@@ -149,7 +149,7 @@ export default function NodesScreen() {
                   <Text style={[S.chipText, { color: active ? colors.primary : colors.textTertiary }]}>
                     {f.toUpperCase()}
                   </Text>
-                  {count > 0 && (
+                  {(isBle ? bleActive : count > 0) && (
                     <Text style={[S.chipCount, { color: active ? colors.primary : colors.textTertiary }]}>
                       {count}
                     </Text>
@@ -214,4 +214,5 @@ const S = StyleSheet.create({
   peerScroll:   { flexGrow: 0 },
   listContent:  { flexGrow: 1 },
   chipCount:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, opacity: 0.8 },
+
 });

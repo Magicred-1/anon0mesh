@@ -4,10 +4,10 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 
-import { HapticTab }       from '@/components/haptic-tab';
-import { Feather }         from '@expo/vector-icons';
-import { useTheme }        from '@/theme';
-import { subscribeDrawer } from '@/hooks/drawerState';
+import { HapticTab }          from '@/components/haptic-tab';
+import { Feather }            from '@expo/vector-icons';
+import { useTheme }           from '@/theme';
+import { subscribeDrawer }    from '@/hooks/drawerState';
 
 // ── Tab order ─────────────────────────────────────────────────────────────────
 const TABS = ['/', '/wallet', '/nodes', '/settings'] as const;

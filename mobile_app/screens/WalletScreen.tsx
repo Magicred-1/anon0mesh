@@ -10,6 +10,7 @@ import {
   NearbyPeersCard,
   RecentActivity,
 } from "@/components/home";
+import { NetworkStatusBadge } from "@/components/wallet/NetworkStatusBadge";
 import * as haptics from "@/src/design-system/haptics";
 import { useTheme } from "@/theme";
 
@@ -55,6 +56,7 @@ export default function WalletScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInDown.duration(ENTRANCE.duration).delay(ENTRANCE.step * 1)}>
+            <NetworkStatusBadge />
             <BalanceCard />
           </Animated.View>
 
