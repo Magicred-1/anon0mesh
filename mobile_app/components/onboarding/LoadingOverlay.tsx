@@ -28,18 +28,18 @@ const LoadingDots = memo(function LoadingDots() {
 
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.stagger(180, [
+      Animated.stagger(100, [
         Animated.sequence([
-          Animated.timing(d1, { toValue: 1,    duration: 280, useNativeDriver: true }),
-          Animated.timing(d1, { toValue: 0.15, duration: 280, useNativeDriver: true }),
+          Animated.timing(d1, { toValue: 1,    duration: 160, useNativeDriver: true }),
+          Animated.timing(d1, { toValue: 0.15, duration: 160, useNativeDriver: true }),
         ]),
         Animated.sequence([
-          Animated.timing(d2, { toValue: 1,    duration: 280, useNativeDriver: true }),
-          Animated.timing(d2, { toValue: 0.15, duration: 280, useNativeDriver: true }),
+          Animated.timing(d2, { toValue: 1,    duration: 160, useNativeDriver: true }),
+          Animated.timing(d2, { toValue: 0.15, duration: 160, useNativeDriver: true }),
         ]),
         Animated.sequence([
-          Animated.timing(d3, { toValue: 1,    duration: 280, useNativeDriver: true }),
-          Animated.timing(d3, { toValue: 0.15, duration: 280, useNativeDriver: true }),
+          Animated.timing(d3, { toValue: 1,    duration: 160, useNativeDriver: true }),
+          Animated.timing(d3, { toValue: 0.15, duration: 160, useNativeDriver: true }),
         ]),
       ])
     );
@@ -67,8 +67,8 @@ export const LoadingOverlay = memo(function LoadingOverlay({
   useEffect(() => {
     const blink = Animated.loop(
       Animated.sequence([
-        Animated.timing(cursorAnim, { toValue: 0, duration: 420, useNativeDriver: true }),
-        Animated.timing(cursorAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
+        Animated.timing(cursorAnim, { toValue: 0, duration: 260, useNativeDriver: true }),
+        Animated.timing(cursorAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
       ])
     );
     if (isLoading) blink.start();
@@ -82,8 +82,8 @@ export const LoadingOverlay = memo(function LoadingOverlay({
       stampScale.setValue(1.14);
       stampOpacity.setValue(0);
       Animated.parallel([
-        Animated.spring(stampScale,   { toValue: 1, friction: 7, tension: 90, useNativeDriver: true }),
-        Animated.timing(stampOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.spring(stampScale,   { toValue: 1, friction: 6, tension: 130, useNativeDriver: true }),
+        Animated.timing(stampOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
       ]).start();
     } else {
       stampOpacity.setValue(0);
@@ -111,7 +111,11 @@ export const LoadingOverlay = memo(function LoadingOverlay({
             </Animated.Text>
 
             <View style={S.handleRow}>
-              <Animated.Text style={[S.nickname, { opacity: nicknameOpacity }]}>
+              <Animated.Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                style={[S.nickname, { opacity: nicknameOpacity }]}
+              >
                 @{nickname}
               </Animated.Text>
               <Animated.Text style={[S.cursor, { opacity: cursorAnim }]}>_</Animated.Text>
@@ -142,7 +146,7 @@ export const LoadingOverlay = memo(function LoadingOverlay({
             <View style={S.stampLine} />
 
             <Text style={S.stampStatus}>MESH JOINED</Text>
-            <Text style={S.stampHandle}>@{nickname}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={S.stampHandle}>@{nickname}</Text>
 
             <View style={S.stampLine} />
             <Text style={S.stampMeta}>{today} · IDENTITY VERIFIED</Text>
@@ -197,10 +201,12 @@ const S = StyleSheet.create({
   },
   handleRow: {
     flexDirection: 'row', alignItems: 'flex-end', marginTop: 4,
+    maxWidth: '100%', flexShrink: 1,
   },
   nickname: {
     fontFamily: fontFamily.sansMd,
     fontSize: 28, color: CYAN, letterSpacing: 2, fontWeight: '700',
+    flexShrink: 1, minWidth: 0,
   },
   cursor: {
     fontFamily: fontFamily.sansMd,
@@ -248,6 +254,7 @@ const S = StyleSheet.create({
     textShadowColor: CYAN,
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 14,
+    alignSelf: 'stretch', textAlign: 'center',
   },
   stampMeta: {
     fontFamily: fontFamily.sansMd,

@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { useWallet } from "@/context/WalletContext";
 import { solanaConnection } from "@/src/services/sendTransaction";
@@ -44,6 +44,32 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<number | null>(null);
 
+  const lastFetchedRef = useRef<number | null>(null);
+  const refetchRef    = useRef<() => Promise<void>>(() => Promise.resolve());
+  const COOLDOWN_MS   = 30_000;
+
+  function applyBalanceResults(
+    solResult: PromiseSettledResult<number>,
+    splResult: PromiseSettledResult<TokenBalance[]>,
+  ) {
+    if (solResult.status !== "fulfilled") return;
+    const sol = solResult.value;
+    const splTokens = splResult.status === "fulfilled" ? splResult.value : [];
+    setSolBalance(sol);
+    setTokens([{ ...NATIVE_SOL, uiAmount: sol }, ...splTokens]);
+  }
+
+  function applyActivityResult(result: PromiseSettledResult<ActivityEntry[]>) {
+    if (result.status === "fulfilled") {
+      setActivity(result.value);
+      setActivityError(null);
+      return;
+    }
+    const reason = result.reason;
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    setActivityError(msg.includes("429") ? "Devnet rate-limited" : "Couldn't load activity");
+  }
+
   const refetch = useCallback(async () => {
     if (!publicKey) {
       setTokens([NATIVE_SOL]);
@@ -53,52 +79,42 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const now = Date.now();
+    if (lastFetchedRef.current !== null && now - lastFetchedRef.current < COOLDOWN_MS) return;
+    lastFetchedRef.current = now;
+
     setLoading(true);
     setActivityLoading(true);
     try {
       const [solResult, splResult, activityResult] = await Promise.allSettled([
         fetchSolBalance(solanaConnection, publicKey),
         fetchSplTokens(solanaConnection, publicKey),
-        fetchRecentActivity(solanaConnection, publicKey, 15),
+        fetchRecentActivity(solanaConnection, publicKey, 10),
       ]);
 
-      if (solResult.status === "fulfilled") {
-        const sol = solResult.value;
-        const solToken: TokenBalance = { ...NATIVE_SOL, uiAmount: sol };
-        const splTokens = splResult.status === "fulfilled" ? splResult.value : [];
-        setSolBalance(sol);
-        setTokens([solToken, ...splTokens]);
-      }
-
-      if (activityResult.status === "fulfilled") {
-        setActivity(activityResult.value);
-        setActivityError(null);
-      } else {
-        console.warn("[useWalletBalance] activity fetch failed:", activityResult.reason);
-        const reason = activityResult.reason;
-        const msg = reason instanceof Error ? reason.message : String(reason);
-        setActivityError(msg.includes("429") ? "Devnet rate-limited" : "Couldn't load activity");
-        // Keep previous activity list — better stale than empty.
-      }
+      applyBalanceResults(solResult, splResult);
+      applyActivityResult(activityResult);
 
       const allFailed =
         solResult.status === "rejected" &&
-        activityResult.status === "rejected" &&
-        splResult.status === "rejected";
+        splResult.status === "rejected" &&
+        activityResult.status === "rejected";
       setError(allFailed ? "Couldn't reach devnet" : null);
       setLastFetched(Date.now());
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to fetch balance";
-      setError(msg);
+      setError(err instanceof Error ? err.message : "Failed to fetch balance");
     } finally {
       setLoading(false);
       setActivityLoading(false);
     }
-  }, [publicKey]);
+  }, [publicKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep ref current so the effect below never stales without re-running.
+  refetchRef.current = refetch;
 
   useEffect(() => {
-    if (isConnected && publicKey) refetch();
-  }, [isConnected, publicKey, refetch]);
+    if (isConnected && publicKey) refetchRef.current();
+  }, [isConnected, publicKey]);
 
   const value: WalletBalanceState = {
     tokens,
