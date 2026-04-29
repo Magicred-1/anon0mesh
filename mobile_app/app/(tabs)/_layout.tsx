@@ -8,6 +8,7 @@ import { HapticTab }          from '@/components/haptic-tab';
 import { Feather }            from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { subscribeDrawer }    from '@/hooks/drawerState';
+import { useSafeAreaInsets }  from 'react-native-safe-area-context';
 
 // ── Tab order ─────────────────────────────────────────────────────────────────
 const TABS = ['/', '/wallet', '/nodes', '/settings'] as const;
@@ -66,6 +67,7 @@ function ExitToast({ visible }: { readonly visible: boolean }) {
 // ── Layout ────────────────────────────────────────────────────────────────────
 export default function TabLayout() {
   const { colors } = useTheme();
+  const insets     = useSafeAreaInsets();
   const router     = useRouter();
   const pathname   = usePathname();
 
@@ -133,7 +135,8 @@ export default function TabLayout() {
             tabBarStyle: {
               backgroundColor: colors.surface0,
               borderTopColor:  colors.borderSubtle,
-              ...(Platform.OS === 'ios' && { paddingBottom: 0 }),
+              height:          56 + insets.bottom,
+              paddingBottom:   insets.bottom,
             },
             headerStyle:     { backgroundColor: colors.background },
             headerTintColor: colors.textPrimary,
