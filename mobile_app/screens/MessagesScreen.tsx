@@ -31,6 +31,9 @@ import { decodeLxmfContent, decodeLxmfSender } from '@/utils/lxmfDecode';
 import { formatAgo } from '@/utils/time';
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
+let _msgId = Date.now();
+const nextId = () => ++_msgId;
+
 function sliceNewEvents(
   events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
 ): LxmfEvent[] {
@@ -150,7 +153,7 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
   try {
     const p = JSON.parse(text);
     if (!p || typeof p !== 'object') return null;
-    const id = Date.now();
+    const id = nextId();
     if (p.t === 'share-addr' && typeof p.addr === 'string')
       return { id, kind: 'share-address', from, me: false, time, asset: p.asset ?? 'SOL', address: p.addr };
     if (p.t === 'req-addr')
@@ -211,12 +214,12 @@ export default function MessagesScreen() {
       const from = peer?.displayName || (srcHash ? srcHash.slice(0, 8) : 'unknown');
       const time = new Date().toTimeString().slice(0, 8);
 
-      const msg: AnyMsg = parseStructuredMsg(text, from, time) ?? { id: Date.now(), from, me: false, time, text, enc: true };
+      const msg: AnyMsg = parseStructuredMsg(text, from, time) ?? { id: nextId(), from, me: false, time, text, enc: true };
 
       // Show in active thread; if from a different peer add a label
       if (activePeerHexRef.current && srcHash !== activePeerHexRef.current) {
         setMsgs(m => [...m,
-          { id: Date.now() - 1, kind: 'sys' as const, text: `message from ${from}` },
+          { id: nextId(), kind: 'sys' as const, text: `message from ${from}` },
           msg,
         ]);
       } else {
@@ -238,7 +241,7 @@ export default function MessagesScreen() {
       send(hash, utf8ToBase64(text)).catch(() => {});
     }
     if (hash === activePeerHexRef.current) {
-      setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'identity resolved — queued messages sent' }]);
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'identity resolved — queued messages sent' }]);
     }
   }, [events, send]);
 
@@ -317,28 +320,28 @@ export default function MessagesScreen() {
 
   const sendMsg = useCallback(async (text: string) => {
     const now = new Date().toTimeString().slice(0, 8);
-    setMsgs(m => [...m, { id: Date.now(), from: 'me', me: true, time: now, text, enc: true }]);
+    setMsgs(m => [...m, { id: nextId(), from: 'me', me: true, time: now, text, enc: true }]);
     if (!activePeerHex) {
-      setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
       return;
     }
     if (!isRunning) {
-      setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
       return;
     }
     try {
       const receipt = await send(activePeerHex, utf8ToBase64(text));
       if (receipt < 0) {
-        setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'send failed: no route to peer' }]);
+        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'send failed: no route to peer' }]);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'send error';
       if (msg.includes('missing destination identity')) {
         const q = pendingRef.current;
         q.set(activePeerHex, [...(q.get(activePeerHex) ?? []), text]);
-        setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: 'peer identity unknown — queued, retrying on announce' }]);
+        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'peer identity unknown — queued, retrying on announce' }]);
       } else {
-        setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
+        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
       }
     }
   }, [activePeerHex, isRunning, send]);
@@ -351,13 +354,13 @@ export default function MessagesScreen() {
     let payload: string;
 
     if (a.type === 'share-address') {
-      bubble  = { id: Date.now(), kind: 'share-address', from: 'me', me: true, time: now, asset: 'SOL', address: addr };
+      bubble  = { id: nextId(), kind: 'share-address', from: 'me', me: true, time: now, asset: 'SOL', address: addr };
       payload = JSON.stringify({ t: 'share-addr', asset: 'SOL', addr });
     } else if (a.type === 'request-address') {
-      bubble  = { id: Date.now(), kind: 'request-address', from: 'me', me: true, time: now, asset: 'SOL' };
+      bubble  = { id: nextId(), kind: 'request-address', from: 'me', me: true, time: now, asset: 'SOL' };
       payload = JSON.stringify({ t: 'req-addr', asset: 'SOL' });
     } else {
-      bubble  = { id: Date.now(), kind: 'request-money', from: 'me', me: true, time: now, asset: a.asset, amount: a.amount };
+      bubble  = { id: nextId(), kind: 'request-money', from: 'me', me: true, time: now, asset: a.asset, amount: a.amount };
       payload = JSON.stringify({ t: 'req-pay', asset: a.asset, amount: a.amount });
     }
 
@@ -366,7 +369,7 @@ export default function MessagesScreen() {
     if (!activePeerHex) return;
     send(activePeerHex, utf8ToBase64(payload)).catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : 'send error';
-      setMsgs(m => [...m, { id: Date.now(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
     });
   }, [publicKey, activePeerHex, send]);
 
