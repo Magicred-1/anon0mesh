@@ -19,6 +19,9 @@ export default function OnboardingScreen() {
   const { displayName: nickname } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
+  // If already connected when screen mounts (back-nav from tabs), skip animation delay.
+  const alreadyConnectedRef = useRef(isConnected && !!publicKey);
+
   const overlayOpacity   = useRef(new Animated.Value(0)).current;
   const enteringOpacity  = useRef(new Animated.Value(0)).current;
   const statusOpacity    = useRef(new Animated.Value(0)).current;
@@ -45,7 +48,8 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     if (!isConnected || !publicKey) return;
-    const t = setTimeout(() => router.replace('/(tabs)'), 2200);
+    const delay = alreadyConnectedRef.current ? 0 : 2200;
+    const t = setTimeout(() => router.replace('/(tabs)'), delay);
     return () => clearTimeout(t);
   }, [isConnected, publicKey, router]);
 
