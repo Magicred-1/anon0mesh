@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -18,27 +19,21 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import QRCodeSvg from "react-native-qrcode-svg";
 
-import {
-  Icon,
-  IconButton,
-  SegmentedControl,
-  TokenLogo,
-} from "@/components/primitives";
+import { SegmentedControl, TokenLogo } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
-import { useGlass } from "@/hooks/useGlass";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
-import { useTheme } from "@/theme";
+import { fontFamily as FF, useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 0.8;
+const GAP = 10;
 
 const ADDRESS_MODES = [
   { id: "standard", label: "Standard" },
-  { id: "stealth", label: "Stealth" },
+  { id: "stealth",  label: "Stealth"  },
 ];
 
 function shortAddress(addr: string | null | undefined): string {
@@ -47,7 +42,6 @@ function shortAddress(addr: string | null | undefined): string {
   return `${addr.slice(0, 8)}…${addr.slice(-4)}`;
 }
 
-// Placeholder stealth meta-address until real derivation wires (Phase 7).
 function previewStealthAddress(walletAddress: string | null | undefined): string {
   if (!walletAddress) return "";
   return `stealth_${walletAddress.slice(0, 4)}${walletAddress.slice(-6)}`;
@@ -55,10 +49,12 @@ function previewStealthAddress(walletAddress: string | null | undefined): string
 
 export default function ReceiveScreen() {
   const router = useRouter();
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const { colors } = useTheme();
   const { publicKey } = useWallet();
   const { displayName } = useLxmfContext();
   const [mode, setMode] = useState<string>("standard");
+  const [copied, setCopied] = useState(false);
+  const copyPulse = useSharedValue(0);
   const dragY = useSharedValue(0);
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -68,10 +64,8 @@ export default function ReceiveScreen() {
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        // Don't claim touches on start — child Pressables get first dibs.
         onStartShouldSetPanResponder: () => false,
         onStartShouldSetPanResponderCapture: () => false,
-        // Claim on move when drag is clearly vertical-down past threshold.
         onMoveShouldSetPanResponder: (_, g) =>
           g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
         onMoveShouldSetPanResponderCapture: (_, g) =>
@@ -80,14 +74,7 @@ export default function ReceiveScreen() {
           dragY.value = Math.max(0, g.dy);
         },
         onPanResponderRelease: (_, g) => {
-          const past = g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY;
-          if (past) {
-            // Hand off to native modal exit animation instead of
-            // running our own. Double-animating (content translateY
-            // then modal frame slide) looked like two separate
-            // sheets falling. router.back() triggers the native
-            // slide_from_bottom exit; content's current translateY
-            // blends into that animation naturally.
+          if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
             haptics.tap();
             router.back();
           } else {
@@ -101,93 +88,46 @@ export default function ReceiveScreen() {
     [dragY, router],
   );
 
-  const GrabHandle = () => (
-    <View style={{ alignItems: "center", paddingVertical: spacing[3] }}>
-      <View
-        style={{
-          backgroundColor: colors.textTertiary,
-          borderRadius: 3,
-          height: 4,
-          opacity: 0.5,
-          width: 44,
-        }}
-      />
-    </View>
-  );
-
   const walletAddress = publicKey?.toBase58() ?? "";
   const alias = displayName || (walletAddress ? shortAddress(walletAddress) : "—");
+  const stealthAddress = useMemo(() => previewStealthAddress(walletAddress), [walletAddress]);
 
-  const stealthAddress = useMemo(
-    () => previewStealthAddress(walletAddress),
-    [walletAddress],
-  );
-
-  const isStealth = mode === "stealth";
+  const isStealth   = mode === "stealth";
   const activeAddress = isStealth ? stealthAddress : walletAddress;
-  const hasActiveAddress = activeAddress.length > 0;
 
-  if (!hasActiveAddress) {
+  async function handleCopy() {
+    if (!activeAddress) return;
+    haptics.confirm();
+    await Clipboard.setStringAsync(activeAddress);
+    setCopied(true);
+    copyPulse.value = withSequence(
+      withTiming(1, { duration: 180 }),
+      withTiming(1, { duration: 900 }),
+      withTiming(0, { duration: 280 }),
+    );
+    setTimeout(() => setCopied(false), 1400);
+  }
+
+  async function handleShare() {
+    if (!activeAddress) return;
+    haptics.select();
+    try { await Share.share({ message: `anonmesh address\n${activeAddress}` }); } catch {}
+  }
+
+  const copyPulseStyle = useAnimatedStyle(() => ({
+    opacity:   interpolate(copyPulse.value, [0, 1], [0, 0.55]),
+    transform: [{ scale: interpolate(copyPulse.value, [0, 1], [1, 1.08]) }],
+  }));
+
+  if (!activeAddress) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-        <Animated.View style={[styles.safeArea, contentStyle]}>
-          <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-            <GrabHandle />
-            <View
-              style={{
-                alignItems: "center",
-                flexDirection: "row",
-                justifyContent: "space-between",
-                paddingHorizontal: spacing[5],
-                paddingVertical: spacing[4],
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamily.sansBold,
-                  fontSize: 32,
-                  letterSpacing: -0.5,
-                }}
-              >
-                Receive
-              </Text>
-              <IconButton
-                accessibilityLabel="Close receive"
-                name="x"
-                onPress={() => router.back()}
-                size="md"
-                tone="neutral"
-                variant="contained"
-              />
-            </View>
-            <View
-              style={{
-                alignItems: "center",
-                flex: 1,
-                justifyContent: "center",
-                paddingHorizontal: spacing[6],
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontFamily: fontFamily.sansBold,
-                  fontSize: fontSize.lg,
-                  marginBottom: spacing[2],
-                  textAlign: "center",
-                }}
-              >
-                Connect wallet to receive
-              </Text>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamily.sans,
-                  fontSize: fontSize.md,
-                  textAlign: "center",
-                }}
-              >
+      <View style={[S.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
+        <Animated.View style={[S.fill, contentStyle]}>
+          <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
+            <GrabHandle color={colors.textTertiary} />
+            <View style={[S.grid, { flex: 1, justifyContent: "center", alignItems: "center" }]}>
+              <Text style={[S.noWalletTitle, { color: colors.textPrimary }]}>Connect wallet to receive</Text>
+              <Text style={[S.noWalletSub, { color: colors.textSecondary }]}>
                 Connect a wallet before sharing or scanning a receive address.
               </Text>
             </View>
@@ -197,291 +137,178 @@ export default function ReceiveScreen() {
     );
   }
 
-  const qrValue = activeAddress;
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      <Animated.View style={[styles.safeArea, contentStyle]}>
-      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-        <GrabHandle />
-        <View
-          style={{
-            alignItems: "center",
-            flexDirection: "row",
-            justifyContent: "space-between",
-            paddingHorizontal: spacing[5],
-            paddingVertical: spacing[4],
-          }}
-        >
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamily.sansBold,
-              fontSize: 32,
-              letterSpacing: -0.5,
-            }}
-          >
-            Receive
-          </Text>
-          <IconButton
-            accessibilityLabel="Close receive"
-            name="x"
-            onPress={() => router.back()}
-            size="md"
-            tone="neutral"
-            variant="contained"
-          />
-        </View>
+    <View style={[S.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
+      <Animated.View style={[S.fill, contentStyle]}>
+        <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
 
-        <View style={{ paddingHorizontal: spacing[5], paddingTop: spacing[2] }}>
-          <SegmentedControl
-            onSelect={setMode}
-            segments={ADDRESS_MODES}
-            selected={mode}
-            tone={isStealth ? "purple" : "cyan"}
-          />
-        </View>
+          <GrabHandle color={colors.textTertiary} />
 
-        <View
-          style={{
-            alignItems: "center",
-            flex: 1,
-            gap: spacing[3],
-            justifyContent: "center",
-            paddingHorizontal: spacing[5],
-            paddingVertical: spacing[4],
-          }}
-        >
-          <Text
-            numberOfLines={1}
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamily.sansSb,
-              fontSize: fontSize.lg,
-            }}
-          >
-            {alias}
-          </Text>
-
-          <View
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderRadius: radii.lg,
-              padding: 10,
-            }}
-          >
-            <QRCodeSvg
-              backgroundColor="#FFFFFF"
-              color={isStealth ? colors.primaryDim : colors.glass}
-              ecl="H"
-              logo={require("@/assets/icons/anonmesh_white_icon.png")}
-              logoBackgroundColor="#0B0C10"
-              logoBorderRadius={20}
-              logoMargin={3}
-              logoSize={40}
-              size={200}
-              value={qrValue}
-            />
-          </View>
-
-          <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}>
-            <TokenLogo size={16} symbol="SOL" />
-            <TokenLogo size={16} symbol="USDC" />
-            <Text
-              style={{
-                color: colors.textTertiary,
-                fontFamily: fontFamily.sansMd,
-                fontSize: fontSize.xs,
-                letterSpacing: 0.6,
-                marginLeft: spacing[1],
-                textTransform: "uppercase",
-              }}
+          {/* ── header ── */}
+          <View style={S.header}>
+            <View>
+              <Text style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
+              <Text style={[S.screenTitle, { color: colors.textPrimary }]}>receive</Text>
+            </View>
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={10}
+              style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
             >
-              On Solana {isStealth ? "(stealth)" : ""}
-            </Text>
+              <Feather name="x" size={16} color={colors.textSecondary} />
+            </Pressable>
           </View>
 
-          <Text
-            numberOfLines={1}
-            style={{
-              color: colors.textSecondary,
-              fontFamily: fontFamily.mono,
-              fontSize: fontSize.sm,
-            }}
-          >
-            {shortAddress(activeAddress)}
-          </Text>
-        </View>
+          <View style={S.grid}>
 
-        <ActionBar address={activeAddress} />
-      </SafeAreaView>
+            {/* ── mode toggle ── */}
+            <SegmentedControl
+              onSelect={setMode}
+              segments={ADDRESS_MODES}
+              selected={mode}
+              tone={isStealth ? "cyan" : "neutral"}
+            />
+
+            {/* ── QR tile ── */}
+            <View style={[S.tile, S.qrTile, { backgroundColor: colors.surface1, borderColor: isStealth ? colors.primaryDim : colors.borderStrong }]}>
+              <Text style={[S.tileLabel, { color: colors.textTertiary }]}>
+                {isStealth ? "STEALTH ADDRESS" : "RECEIVE ADDRESS"}
+              </Text>
+
+              <View style={S.qrWrap}>
+                <View style={[S.qrCard, { borderColor: colors.borderSubtle }]}>
+                  <QRCodeSvg
+                    backgroundColor="#FFFFFF"
+                    color={isStealth ? "#004d66" : "#00080c"}
+                    ecl="H"
+                    logo={require("@/assets/icons/anonmesh_white_icon.png")}
+                    logoBackgroundColor="#0B0C10"
+                    logoBorderRadius={20}
+                    logoMargin={3}
+                    logoSize={36}
+                    size={186}
+                    value={activeAddress}
+                  />
+                </View>
+              </View>
+
+              <Text style={[S.alias, { color: colors.textPrimary }]} numberOfLines={1}>
+                {alias}
+              </Text>
+
+              <Text style={[S.mono, { color: colors.textSecondary }]} numberOfLines={1}>
+                {shortAddress(activeAddress)}
+              </Text>
+
+              <View style={S.networkRow}>
+                <TokenLogo size={14} symbol="SOL" />
+                <TokenLogo size={14} symbol="USDC" />
+                <Text style={[S.networkLabel, { color: colors.textTertiary }]}>
+                  SOLANA{isStealth ? " · STEALTH" : ""}
+                </Text>
+              </View>
+
+              {isStealth && (
+                <Text style={[S.stealthNote, { color: colors.textTertiary }]}>
+                  only works with{" "}
+                  <Text style={{ color: colors.primary, fontFamily: FF.sansSb }}>anonmesh</Text>
+                  {" "}senders
+                </Text>
+              )}
+            </View>
+
+            {/* ── action row ── */}
+            <View style={S.actionRow}>
+              {/* Share */}
+              <Pressable
+                onPress={handleShare}
+                style={({ pressed }) => [
+                  S.tile, S.actionTile,
+                  { backgroundColor: colors.surface1, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Feather name="share" size={20} color={colors.primary} />
+                <Text style={[S.actionLabel, { color: colors.textSecondary }]}>Share</Text>
+              </Pressable>
+
+              {/* Copy */}
+              <View style={[S.actionTileOuter, { flex: 1 }]}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[S.tile, S.copyGlow, { backgroundColor: colors.primarySubtle, borderColor: 'transparent' }, copyPulseStyle]}
+                />
+                <Pressable
+                  onPress={handleCopy}
+                  style={({ pressed }) => [
+                    S.tile, S.actionTile,
+                    {
+                      backgroundColor: copied ? colors.primarySubtle : colors.surface1,
+                      borderColor:     copied ? colors.primary : colors.border,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name={copied ? "check" : "copy"}
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={[S.actionLabel, { color: copied ? colors.primary : colors.textSecondary }]}>
+                    {copied ? "Copied" : "Copy"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+          </View>
+        </SafeAreaView>
       </Animated.View>
     </View>
   );
 }
 
-interface ActionBarProps {
-  address: string;
-}
-
-function ActionBar({ address }: ActionBarProps) {
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
-  const glass = useGlass("soft");
-  const [copied, setCopied] = useState(false);
-  const pulse = useSharedValue(0);
-
-  async function handleCopy() {
-    if (!address) return;
-    haptics.confirm();
-    await Clipboard.setStringAsync(address);
-    setCopied(true);
-    pulse.value = withSequence(
-      withTiming(1, { duration: 180 }),
-      withTiming(1, { duration: 900 }),
-      withTiming(0, { duration: 280 }),
-    );
-    setTimeout(() => setCopied(false), 1400);
-  }
-
-  async function handleShare() {
-    if (!address) return;
-    haptics.select();
-    try {
-      await Share.share({ message: `anonmesh address\n${address}` });
-    } catch {
-      // non-fatal
-    }
-  }
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0, 0.6]),
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.12]) }],
-  }));
-
+function GrabHandle({ color }: { readonly color: string }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        gap: spacing[3],
-        paddingBottom: spacing[7],
-        paddingHorizontal: spacing[5],
-        paddingTop: spacing[3],
-      }}
-    >
-      <CircleButton
-        glass={glass}
-        iconName="share"
-        iconColor={colors.textPrimary}
-        label="Share"
-        labelColor={colors.textSecondary}
-        onPress={handleShare}
-        radii={radii}
-        spacing={spacing}
-        fontFamily={fontFamily}
-        fontSize={fontSize}
-      />
-      <View style={{ flex: 1, position: "relative" }}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              backgroundColor: colors.primarySubtle,
-              borderRadius: radii.lg,
-              ...StyleSheet.absoluteFillObject,
-            },
-            pulseStyle,
-          ]}
-        />
-        <CircleButton
-          glass={glass}
-          iconName={copied ? "check" : "copy"}
-          iconColor={copied ? colors.success : colors.primary}
-          label={copied ? "Copied" : "Copy"}
-          labelColor={copied ? colors.success : colors.textPrimary}
-          onPress={handleCopy}
-          radii={radii}
-          spacing={spacing}
-          fontFamily={fontFamily}
-          fontSize={fontSize}
-        />
-      </View>
+    <View style={S.grabHandle}>
+      <View style={[S.grabPill, { backgroundColor: color }]} />
     </View>
   );
 }
 
-function CircleButton({
-  glass,
-  iconName,
-  iconColor,
-  label,
-  labelColor,
-  onPress,
-  radii,
-  spacing,
-  fontFamily,
-  fontSize,
-}: {
-  glass: ReturnType<typeof useGlass>;
-  iconName: React.ComponentProps<typeof Icon>["name"];
-  iconColor: string;
-  label: string;
-  labelColor: string;
-  onPress: () => void;
-  radii: ReturnType<typeof useTheme>["radii"];
-  spacing: ReturnType<typeof useTheme>["spacing"];
-  fontFamily: ReturnType<typeof useTheme>["fontFamily"];
-  fontSize: ReturnType<typeof useTheme>["fontSize"];
-}) {
-  const pressed = useSharedValue(0);
-  const scaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(pressed.value, [0, 1], [1, 0.96]) }],
-  }));
+const S = StyleSheet.create({
+  root:         { flex: 1 },
+  fill:         { flex: 1 },
+  grid:         { paddingHorizontal: 16, gap: GAP, paddingBottom: 16 },
 
-  return (
-    <Pressable
-      onPressIn={() => {
-        pressed.value = withTiming(1, { duration: 80 });
-        haptics.select();
-      }}
-      onPressOut={() => {
-        pressed.value = withTiming(0, { duration: 160 });
-      }}
-      onPress={onPress}
-      style={{ flex: 1 }}
-    >
-      <Animated.View
-        style={[
-          glass,
-          {
-            alignItems: "center",
-            borderRadius: radii.lg,
-            flexDirection: "row",
-            gap: spacing[2],
-            justifyContent: "center",
-            minHeight: 56,
-          },
-          scaleStyle,
-        ]}
-      >
-        <Icon color={iconColor} name={iconName} size={18} />
-        <Text
-          style={{
-            color: labelColor,
-            fontFamily: fontFamily.sansMd,
-            fontSize: fontSize.md,
-          }}
-        >
-          {label}
-        </Text>
-      </Animated.View>
-    </Pressable>
-  );
-}
+  grabHandle:   { alignItems: "center", paddingVertical: 10 },
+  grabPill:     { width: 44, height: 4, borderRadius: 2, opacity: 0.4 },
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
+  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  kicker:       { fontFamily: FF.sansMd, fontSize: 10, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },
+  screenTitle:  { fontFamily: FF.sansBold, fontSize: 28, letterSpacing: -0.5 },
+  closeBtn:     { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: "center", justifyContent: "center" },
+
+  tile:         { borderRadius: 20, borderWidth: 0.5, padding: 16, overflow: "hidden" },
+
+  // QR tile
+  qrTile:       { alignItems: "center", gap: 10 },
+  tileLabel:    { fontFamily: FF.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: "uppercase", alignSelf: "flex-start" },
+  qrWrap:       { paddingVertical: 6 },
+  qrCard:       { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 10, borderWidth: 0.5 },
+  alias:        { fontFamily: FF.sansSb, fontSize: 15 },
+  mono:         { fontFamily: FF.mono, fontSize: 12 },
+  networkRow:   { flexDirection: "row", alignItems: "center", gap: 6 },
+  networkLabel: { fontFamily: FF.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: "uppercase" },
+  stealthNote:  { fontFamily: FF.sansMd, fontSize: 11, letterSpacing: 0.2, textAlign: "center" },
+
+  // action row
+  actionRow:      { flexDirection: "row", gap: GAP },
+  actionTileOuter:{ position: "relative" },
+  actionTile:     { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 18 },
+  copyGlow:       { position: "absolute", inset: 0 },
+  actionLabel:    { fontFamily: FF.sansMd, fontSize: 11, letterSpacing: 0.5 },
+
+  // no-wallet
+  noWalletTitle: { fontFamily: FF.sansBold, fontSize: 18, marginBottom: 8, textAlign: "center" },
+  noWalletSub:   { fontFamily: FF.sans, fontSize: 14, textAlign: "center", paddingHorizontal: 32 },
 });

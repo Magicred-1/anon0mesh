@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -14,12 +15,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { DepthButton, Icon, IconButton, PressSurface, TokenLogo } from "@/components/primitives";
+import { DepthButton, TokenLogo } from "@/components/primitives";
 import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
-import { useTheme } from "@/theme";
+import { fontFamily as FF, useTheme } from "@/theme";
+
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function formatBalance(amount: number, maxDecimals: number): string {
   if (amount === 0) return "0";
@@ -45,9 +48,49 @@ function shortAddress(addr: string): string {
   return `${addr.slice(0, 8)}…${addr.slice(-4)}`;
 }
 
+function handleScan() {
+  haptics.tap();
+  Alert.alert("QR scan coming soon", "Paste an address or use the dev mock fill for now.");
+}
+
+// ── sub-components ────────────────────────────────────────────────────────────
+
+function AddressFeedback({
+  address,
+  isValid,
+  trimmedAddress,
+  colors,
+}: {
+  readonly address: string;
+  readonly isValid: boolean;
+  readonly trimmedAddress: string;
+  readonly colors: ReturnType<typeof useTheme>["colors"];
+}) {
+  if (address.length > 0 && !isValid) {
+    return (
+      <Text style={[S.addressFeedback, { color: colors.error }]}>
+        Enter a valid Solana address.
+      </Text>
+    );
+  }
+  if (isValid) {
+    return (
+      <Text style={[S.addressFeedback, { color: colors.textSecondary }]}>
+        Sending to{" "}
+        <Text style={{ color: colors.primary, fontFamily: FF.mono }}>
+          {shortAddress(trimmedAddress)}
+        </Text>
+      </Text>
+    );
+  }
+  return null;
+}
+
+// ── component ─────────────────────────────────────────────────────────────────
+
 export function RecipientPicker() {
   const router = useRouter();
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const { colors } = useTheme();
   const [address, setAddress] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -86,258 +129,116 @@ export function RecipientPicker() {
     setAddress(MOCK_DEVNET_ADDRESS);
   }
 
-  function handleScan() {
-    haptics.tap();
-    Alert.alert("QR scan coming soon", "Paste an address or use the dev mock fill for now.");
-  }
-
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <SafeAreaView edges={["top", "bottom"]} style={styles.flex}>
-        <View style={[styles.header, { paddingHorizontal: spacing[5], paddingVertical: spacing[4] }]}>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamily.sansBold,
-              fontSize: 32,
-              letterSpacing: -0.5,
-            }}
-          >
-            Send
-          </Text>
-          <IconButton
+    <View style={[S.root, { backgroundColor: colors.background }]}>
+      <SafeAreaView edges={["top", "bottom"]} style={S.flex}>
+        {/* ── Header ── */}
+        <View style={[S.header, { paddingHorizontal: 16, paddingVertical: 16 }]}>
+          <View>
+            <Text style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
+            <Text style={[S.screenTitle, { color: colors.textPrimary }]}>send</Text>
+          </View>
+          <Pressable
             accessibilityLabel="Close send"
-            name="x"
+            accessibilityRole="button"
+            hitSlop={8}
             onPress={() => router.back()}
-            size="md"
-            tone="neutral"
-            variant="contained"
-          />
+            style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+          >
+            <Feather name="x" size={18} color={colors.textPrimary} />
+          </Pressable>
         </View>
 
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={S.flex}>
           <ScrollView
-            contentContainerStyle={{
-              gap: spacing[5],
-              paddingBottom: spacing[10],
-              paddingHorizontal: spacing[5],
-              paddingTop: spacing[4],
-            }}
+            contentContainerStyle={[S.scrollContent, { gap: 10, paddingHorizontal: 16, paddingBottom: 32 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Token selector — tap to change BEFORE entering address. */}
-            <PressSurface
+            {/* ── Token tile ── */}
+            <Pressable
               accessibilityLabel={`Sending ${token.symbol}. Tap to choose a different token.`}
               onPress={() => {
                 haptics.tap();
                 setPickerOpen(true);
               }}
-              style={{
-                backgroundColor: colors.primarySubtle,
-                borderColor: "rgba(0,229,255,0.32)",
-                borderRadius: radii.lg,
-                borderWidth: 1,
-              }}
-              variant="row"
+              style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.borderStrong }]}
             >
-              <View
-                style={{
-                  alignItems: "center",
-                  flexDirection: "row",
-                  gap: spacing[4],
-                  paddingHorizontal: spacing[4],
-                  paddingVertical: spacing[4],
-                }}
-              >
+              <Text style={[S.tileLabel, { color: colors.textTertiary }]}>TOKEN</Text>
+              <View style={S.tokenRow}>
                 <TokenLogo size={36} symbol={token.symbol as "SOL" | "USDC"} />
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: colors.textTertiary,
-                      fontFamily: fontFamily.sansMd,
-                      fontSize: fontSize.xs,
-                      letterSpacing: 0.8,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Sending
+                <View style={S.tokenMeta}>
+                  <Text style={[S.tokenSymbol, { color: colors.textPrimary }]}>
+                    {token.symbol}
                   </Text>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamily.sansSb,
-                      fontSize: fontSize.lg,
-                    }}
-                  >
-                    {token.symbol} · {token.name}
+                  <Text style={[S.tokenName, { color: colors.textSecondary }]}>
+                    {token.name}
                   </Text>
                 </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontFamily: fontFamily.mono,
-                      fontSize: fontSize.sm,
-                    }}
-                  >
+                <View style={[S.balanceChip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                  <Text style={[S.balanceChipText, { color: colors.primary }]}>
                     {formatBalance(token.uiAmount, token.maxDecimals)}
                   </Text>
-                  <Icon color={colors.primary} name="chevron-down" size={14} />
                 </View>
+                <Feather name="chevron-down" size={16} color={colors.primary} />
               </View>
-            </PressSurface>
+            </Pressable>
 
-            <View
-              style={{
-                alignItems: "center",
-                backgroundColor: colors.surface0,
-                borderColor: colors.border,
-                borderRadius: radii.lg,
-                borderWidth: 1,
-                flexDirection: "row",
-                gap: spacing[3],
-                paddingHorizontal: spacing[4],
-              }}
-            >
-              <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.md }}>
-                To
-              </Text>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                multiline={false}
-                numberOfLines={1}
-                onChangeText={setAddress}
-                placeholder="Solana address"
-                placeholderTextColor={colors.textTertiary}
-                selectionColor={colors.primary}
-                style={{
-                  color: colors.textPrimary,
-                  flex: 1,
-                  fontFamily: fontFamily.mono,
-                  fontSize: fontSize.md,
-                  minHeight: 56,
-                  paddingVertical: 0,
-                }}
-                value={address}
+            {/* ── Address tile ── */}
+            <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+              <Text style={[S.tileLabel, { color: colors.textTertiary }]}>TO</Text>
+              <View style={S.addressRow}>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  multiline={false}
+                  numberOfLines={1}
+                  onChangeText={setAddress}
+                  placeholder="Solana address"
+                  placeholderTextColor={colors.textTertiary}
+                  selectionColor={colors.primary}
+                  style={[S.addressInput, { color: colors.textPrimary }]}
+                  value={address}
+                />
+                <Pressable
+                  accessibilityLabel="Paste address"
+                  accessibilityRole="button"
+                  onPress={handlePaste}
+                  style={[S.pastePill, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+                >
+                  <Text style={[S.pastePillText, { color: colors.textPrimary }]}>Paste</Text>
+                </Pressable>
+              </View>
+              <AddressFeedback
+                address={address}
+                isValid={isValid}
+                trimmedAddress={trimmedAddress}
+                colors={colors}
               />
-              <Pressable
-                accessibilityLabel="Paste address"
-                accessibilityRole="button"
-                onPress={handlePaste}
-                style={{
-                  backgroundColor: colors.surface1,
-                  borderRadius: radii.full,
-                  paddingHorizontal: spacing[4],
-                  paddingVertical: spacing[2],
-                }}
-              >
-                <Text style={{ color: colors.textPrimary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
-                  Paste
-                </Text>
-              </Pressable>
             </View>
 
-            {address.length > 0 && !isValid ? (
-              <Text
-                style={{
-                  color: colors.error,
-                  fontFamily: fontFamily.sans,
-                  fontSize: fontSize.sm,
-                  paddingHorizontal: spacing[3],
-                }}
-              >
-                Enter a valid Solana address.
-              </Text>
-            ) : isValid ? (
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontFamily: fontFamily.sans,
-                  fontSize: fontSize.sm,
-                  paddingHorizontal: spacing[3],
-                }}
-              >
-                Sending to{" "}
-                <Text style={{ color: colors.primary, fontFamily: fontFamily.mono }}>
-                  {shortAddress(trimmedAddress)}
-                </Text>
-              </Text>
-            ) : null}
-
-            <PressSurface
+            {/* ── QR tile ── */}
+            <Pressable
               accessibilityLabel="Scan QR code"
               onPress={handleScan}
-              style={{
-                backgroundColor: colors.surface0,
-                borderColor: colors.border,
-                borderRadius: radii.lg,
-                borderWidth: 1,
-              }}
-              variant="row"
+              style={[S.tile, S.qrTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}
             >
-              <View
-                style={{
-                  alignItems: "center",
-                  flexDirection: "row",
-                  gap: spacing[4],
-                  paddingHorizontal: spacing[4],
-                  paddingVertical: spacing[4],
-                }}
-              >
-                <View
-                  style={{
-                    alignItems: "center",
-                    backgroundColor: colors.surface1,
-                    borderRadius: radii.full,
-                    height: 52,
-                    justifyContent: "center",
-                    width: 52,
-                  }}
-                >
-                  <Icon color={colors.textPrimary} name="maximize" size={22} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontFamily: fontFamily.sansSb,
-                      fontSize: fontSize.lg,
-                    }}
-                  >
-                    Scan QR Code
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      fontFamily: fontFamily.sans,
-                      fontSize: fontSize.sm,
-                    }}
-                  >
-                    Tap to scan a peer&apos;s address
-                  </Text>
-                </View>
-              </View>
-            </PressSurface>
+              <Feather name="maximize" size={28} color={colors.textPrimary} />
+              <Text style={[S.qrTitle, { color: colors.textPrimary }]}>Scan QR</Text>
+              <Text style={[S.qrSub, { color: colors.textSecondary }]}>
+                tap to scan a peer&apos;s address
+              </Text>
+            </Pressable>
 
+            {/* ── Dev mock fill ── */}
             {__DEV__ ? (
               <Pressable
                 accessibilityLabel="Fill mock Solana devnet address"
                 onPress={handleMockFill}
-                style={{
-                  alignItems: "center",
-                  alignSelf: "flex-start",
-                  backgroundColor: colors.accentSubtle,
-                  borderRadius: radii.full,
-                  flexDirection: "row",
-                  gap: spacing[2],
-                  paddingHorizontal: spacing[4],
-                  paddingVertical: spacing[2],
-                }}
+                style={[S.devPill, { backgroundColor: colors.accentSubtle, borderColor: colors.border }]}
               >
-                <Icon color={colors.accent} name="code" size={14} />
-                <Text style={{ color: colors.accent, fontFamily: fontFamily.mono, fontSize: 11 }}>
+                <Feather name="code" size={13} color={colors.accent} />
+                <Text style={[S.devPillText, { color: colors.accent }]}>
                   dev: fill mock devnet address
                 </Text>
               </Pressable>
@@ -345,7 +246,8 @@ export function RecipientPicker() {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        <View style={{ paddingBottom: spacing[5], paddingHorizontal: spacing[5], paddingTop: spacing[3] }}>
+        {/* ── Footer ── */}
+        <View style={S.footer}>
           <DepthButton
             disabled={!isValid}
             label="Continue"
@@ -367,16 +269,153 @@ export function RecipientPicker() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
+// ── styles ────────────────────────────────────────────────────────────────────
+
+const S = StyleSheet.create({
+  root: { flex: 1 },
+  flex: { flex: 1 },
+
+  // header
   header: {
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  kicker: {
+    fontFamily: FF.sansMd,
+    fontSize: 10,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  screenTitle: {
+    fontFamily: FF.sansBold,
+    fontSize: 28,
+    letterSpacing: -0.5,
+  },
+  closeButton: {
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 0.5,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+
+  // scroll
+  scrollContent: {
+    paddingTop: 4,
+  },
+
+  // shared tile
+  tile: {
+    borderRadius: 20,
+    borderWidth: 0.5,
+    overflow: "hidden",
+    padding: 16,
+  },
+  tileLabel: {
+    fontFamily: FF.sansMd,
+    fontSize: 9.5,
+    letterSpacing: 2,
+    marginBottom: 10,
+    textTransform: "uppercase",
+  },
+
+  // token tile
+  tokenRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  tokenMeta: {
+    flex: 1,
+    gap: 1,
+  },
+  tokenSymbol: {
+    fontFamily: FF.sansSb,
+    fontSize: 15,
+  },
+  tokenName: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+  },
+  balanceChip: {
+    borderRadius: 10,
+    borderWidth: 0.5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  balanceChipText: {
+    fontFamily: FF.mono,
+    fontSize: 12,
+  },
+
+  // address tile
+  addressRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  addressInput: {
+    flex: 1,
+    fontFamily: FF.mono,
+    fontSize: 13,
+    minHeight: 40,
+    paddingVertical: 0,
+  },
+  pastePill: {
+    borderRadius: 12,
+    borderWidth: 0.5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  pastePillText: {
+    fontFamily: FF.sansMd,
+    fontSize: 12,
+  },
+  addressFeedback: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+    marginTop: 8,
+  },
+
+  // qr tile
+  qrTile: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 24,
+  },
+  qrTitle: {
+    fontFamily: FF.sansSb,
+    fontSize: 15,
+  },
+  qrSub: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+    textAlign: "center",
+  },
+
+  // dev pill
+  devPill: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  devPillText: {
+    fontFamily: FF.mono,
+    fontSize: 11,
+  },
+
+  // footer
+  footer: {
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
 });

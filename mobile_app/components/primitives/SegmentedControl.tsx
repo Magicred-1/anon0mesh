@@ -16,7 +16,7 @@ interface Segment {
   label: string;
 }
 
-export type SegmentedControlTone = "cyan" | "purple";
+export type SegmentedControlTone = "cyan" | "purple" | "neutral";
 
 interface SegmentedControlProps {
   segments: Segment[];
@@ -38,12 +38,14 @@ export function SegmentedControl({
   const translateX = useSharedValue(0);
 
   const toneActive: Record<SegmentedControlTone, string> = {
-    cyan:   colors.primary,
-    purple: colors.accent,
+    cyan:    colors.primary,
+    purple:  colors.accent,
+    neutral: colors.textPrimary,
   };
   const toneBorder: Record<SegmentedControlTone, string> = {
-    cyan:   "rgba(0,229,255,0.32)",
-    purple: "rgba(92,255,59,0.32)",
+    cyan:    "rgba(0,229,255,0.32)",
+    purple:  "rgba(92,255,59,0.32)",
+    neutral: "rgba(255,255,255,0.12)",
   };
 
   function handleLayout(e: LayoutChangeEvent) {
