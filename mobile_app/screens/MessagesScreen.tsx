@@ -9,6 +9,7 @@ import { useTheme } from '@/theme';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { SystemLine }            from '@/components/messages/SystemLine';
 import { MessageBubble }         from '@/components/messages/MessageBubble';
+import { MediaBubble }           from '@/components/messages/MediaBubble';
 import { RequestMoneyBubble }    from '@/components/messages/RequestMoneyBubble';
 import { RequestAddressBubble }  from '@/components/messages/RequestAddressBubble';
 import { ShareAddressBubble }    from '@/components/messages/ShareAddressBubble';
@@ -21,7 +22,8 @@ import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { PulseDot } from '@/components/ui/PulseDot';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '@/context/WalletContext';
-import type { AnyMsg, ChatMsg }  from '@/components/messages/types';
+import type { AnyMsg, ChatMsg, MediaMsg } from '@/components/messages/types';
+import type { MediaPayload } from '@/components/messages/Composer';
 import type { LxmfPeer } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
@@ -33,6 +35,19 @@ import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
 let _msgId = Date.now();
 const nextId = () => ++_msgId;
+
+type GetSendState = (id: number) => 'sent' | 'queued' | 'delivered' | 'failed' | undefined;
+
+function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
+  if (m.kind === 'sys')             return <SystemLine           key={m.id} text={m.text} />;
+  if (m.kind === 'tx')              return <InlineTxCard         key={m.id} m={m} />;
+  if (m.kind === 'request-money')   return <RequestMoneyBubble   key={m.id} m={m} />;
+  if (m.kind === 'request-address') return <RequestAddressBubble key={m.id} m={m} />;
+  if (m.kind === 'share-address')   return <ShareAddressBubble   key={m.id} m={m} />;
+  if (m.kind === 'media')           return <MediaBubble          key={m.id} m={m} />;
+  const chat: ChatMsg = m;
+  return <MessageBubble key={m.id} m={chat} sendState={getSendState(m.id)} />;
+}
 
 function sliceNewEvents(
   events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
@@ -160,6 +175,12 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
       return { id, kind: 'request-address', from, me: false, time, asset: p.asset ?? 'SOL', note: p.note };
     if (p.t === 'req-pay' && typeof p.amount === 'string')
       return { id, kind: 'request-money', from, me: false, time, asset: p.asset ?? 'SOL', amount: p.amount, note: p.note };
+    if (p.t === 'media' && typeof p.data === 'string' && typeof p.mime === 'string') {
+      const uri = `data:${p.mime};base64,${p.data}`;
+      return { id, kind: 'media', from, me: false, time, uri, mimeType: p.mime,
+        width: typeof p.w === 'number' ? p.w : undefined,
+        height: typeof p.h === 'number' ? p.h : undefined };
+    }
   } catch { /* plain text */ }
   return null;
 }
@@ -177,14 +198,17 @@ export default function MessagesScreen() {
   const [activePeerHex,    setActivePeerHex]     = useState<string | null>(null);
   const [drawerVisible,    setDrawerVisible]     = useState(false);
   const [actionGridVisible, setActionGridVisible] = useState(false);
+  const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
 
-  const scrollRef         = useRef<ScrollView>(null);
-  const drawerAnim        = useRef(new Animated.Value(-DRAWER_W)).current;
-  const drawerOpenRef     = useRef(false);
-  const pendingRef        = useRef<Map<string, string[]>>(new Map());
-  const activePeerHexRef  = useRef<string | null>(null);
-  const lastEvtCountRef   = useRef(0);
-  const lastFirstEvtRef   = useRef<(typeof events)[0] | null>(null);
+  const scrollRef          = useRef<ScrollView>(null);
+  const drawerAnim         = useRef(new Animated.Value(-DRAWER_W)).current;
+  const drawerOpenRef      = useRef(false);
+  const pendingRef         = useRef<Map<string, string[]>>(new Map());
+  const activePeerHexRef   = useRef<string | null>(null);
+  const lastEvtCountRef    = useRef(0);
+  const lastFirstEvtRef    = useRef<(typeof events)[0] | null>(null);
+  const idToSeqRef         = useRef<Map<number, number>>(new Map());
+  const immediateTimers    = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
@@ -193,7 +217,16 @@ export default function MessagesScreen() {
     activeConversationRef.current  = activePeerHex;
   }, [activePeerHex]);
 
-  // Incoming message handler
+  // Cleanup timers on unmount
+  useEffect(() => () => { immediateTimers.current.forEach(clearTimeout); }, []);
+
+  const resolveSeq = useCallback((seq: number, state: 'sent' | 'queued' | 'delivered' | 'failed') => {
+    clearTimeout(immediateTimers.current.get(seq));
+    immediateTimers.current.delete(seq);
+    setSeqStates(m => new Map(m).set(seq, state));
+  }, []);
+
+  // Incoming messages + queue state events
   useEffect(() => {
     const prevCount = lastEvtCountRef.current;
     const prevFirst = lastFirstEvtRef.current;
@@ -204,7 +237,11 @@ export default function MessagesScreen() {
     if (newEvents.length === 0) return;
 
     for (const e of newEvents) {
+      if (e.type === 'messageQueued'   && typeof e.seq === 'number') { resolveSeq(e.seq, 'queued');    continue; }
+      if (e.type === 'messageDelivered'&& typeof e.seq === 'number') { resolveSeq(e.seq, 'delivered'); continue; }
+      if (e.type === 'messageFailed'   && typeof e.seq === 'number') { resolveSeq(e.seq, 'failed');    continue; }
       if (e.type !== 'messageReceived') continue;
+
       const rawContent = e.content ?? '';
       const srcHash: string = decodeLxmfSender(rawContent) ?? e.source ?? '';
       const text = decodeLxmfContent(rawContent);
@@ -213,20 +250,15 @@ export default function MessagesScreen() {
       const peer = lxmfPeers.find(p => p.destHash === srcHash);
       const from = peer?.displayName || (srcHash ? srcHash.slice(0, 8) : 'unknown');
       const time = new Date().toTimeString().slice(0, 8);
-
       const msg: AnyMsg = parseStructuredMsg(text, from, time) ?? { id: nextId(), from, me: false, time, text, enc: true };
 
-      // Show in active thread; if from a different peer add a label
       if (activePeerHexRef.current && srcHash !== activePeerHexRef.current) {
-        setMsgs(m => [...m,
-          { id: nextId(), kind: 'sys' as const, text: `message from ${from}` },
-          msg,
-        ]);
+        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `message from ${from}` }, msg]);
       } else {
         setMsgs(m => [...m, msg]);
       }
     }
-  }, [events, lxmfPeers]);
+  }, [events, lxmfPeers, resolveSeq]);
 
   // Retry queued messages when the peer's identity arrives via announce
   useEffect(() => {
@@ -244,6 +276,17 @@ export default function MessagesScreen() {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'identity resolved — queued messages sent' }]);
     }
   }, [events, send]);
+
+  const queuedCount = useMemo(
+    () => [...seqStates.values()].filter(s => s === 'queued').length,
+    [seqStates],
+  );
+
+  const getSendState = useCallback((msgId: number) => {
+    const seq = idToSeqRef.current.get(msgId);
+    if (seq === undefined) return undefined;
+    return seqStates.get(seq);
+  }, [seqStates]);
 
   const livePeers: Peer[] = useMemo(
     () => lxmfPeers.map(lxmfPeerToPeer),
@@ -319,8 +362,9 @@ export default function MessagesScreen() {
   });
 
   const sendMsg = useCallback(async (text: string) => {
-    const now = new Date().toTimeString().slice(0, 8);
-    setMsgs(m => [...m, { id: nextId(), from: 'me', me: true, time: now, text, enc: true }]);
+    const now   = new Date().toTimeString().slice(0, 8);
+    const msgId = nextId();
+    setMsgs(m => [...m, { id: msgId, from: 'me', me: true, time: now, text, enc: true }]);
     if (!activePeerHex) {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
       return;
@@ -330,8 +374,13 @@ export default function MessagesScreen() {
       return;
     }
     try {
-      const receipt = await send(activePeerHex, utf8ToBase64(text));
-      if (receipt < 0) {
+      const seq = await send(activePeerHex, utf8ToBase64(text));
+      if (seq > 0) {
+        idToSeqRef.current.set(msgId, seq);
+        // If no messageQueued event arrives within 2s, assume immediate delivery
+        const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+        immediateTimers.current.set(seq, timer);
+      } else {
         setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'send failed: no route to peer' }]);
       }
     } catch (err: unknown) {
@@ -344,7 +393,28 @@ export default function MessagesScreen() {
         setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
       }
     }
-  }, [activePeerHex, isRunning, send]);
+  }, [activePeerHex, isRunning, send, resolveSeq]);
+
+  const handleMedia = useCallback(async (media: MediaPayload) => {
+    const now   = new Date().toTimeString().slice(0, 8);
+    const msgId = nextId();
+    setMsgs(m => [...m, { id: msgId, kind: 'media' as const, from: 'me', me: true, time: now,
+      uri: media.uri, mimeType: media.mimeType, width: media.width, height: media.height }]);
+    if (!activePeerHex || !isRunning) return;
+    try {
+      const payload = JSON.stringify({ t: 'media', mime: media.mimeType, data: media.base64,
+        w: media.width, h: media.height });
+      const seq = await send(activePeerHex, utf8ToBase64(payload));
+      if (seq > 0) {
+        idToSeqRef.current.set(msgId, seq);
+        const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+        immediateTimers.current.set(seq, timer);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'send error';
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `media send failed: ${msg}` }]);
+    }
+  }, [activePeerHex, isRunning, send, resolveSeq]);
 
   const handleGridAction = useCallback((a: GridAction) => {
     const now  = new Date().toTimeString().slice(0, 8);
@@ -379,7 +449,6 @@ export default function MessagesScreen() {
     closeDrawer();
     setMsgs([
       { id: 1, kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` },
-      { id: 2, from: p.handle, me: false, time: new Date().toTimeString().slice(0, 8), text: 'channel open. e2ee locked in.', enc: true },
     ]);
   }, [closeDrawer]);
 
@@ -420,6 +489,14 @@ export default function MessagesScreen() {
             />
             {activePeerHex ? (
               <>
+                {queuedCount > 0 && (
+                  <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
+                    <Feather name="clock" size={11} color={colors.primary} />
+                    <Text style={[S.queueBannerText, { color: colors.primary }]}>
+                      {queuedCount} message{queuedCount > 1 ? 's' : ''} queued — will deliver when peer is reachable
+                    </Text>
+                  </View>
+                )}
                 <ScrollView
                   ref={scrollRef}
                   style={{ flex: 1 }}
@@ -427,17 +504,10 @@ export default function MessagesScreen() {
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
-                  {msgs.map(m => {
-                    if (m.kind === 'sys')             return <SystemLine           key={m.id} text={m.text} />;
-                    if (m.kind === 'tx')              return <InlineTxCard         key={m.id} m={m} />;
-                    if (m.kind === 'request-money')   return <RequestMoneyBubble   key={m.id} m={m} />;
-                    if (m.kind === 'request-address') return <RequestAddressBubble key={m.id} m={m} />;
-                    if (m.kind === 'share-address')   return <ShareAddressBubble   key={m.id} m={m} />;
-                    return <MessageBubble key={m.id} m={m as ChatMsg} />;
-                  })}
+                  {msgs.map(m => renderMsg(m, getSendState))}
                   <View style={{ height: 4 }} />
                 </ScrollView>
-                <Composer onSend={sendMsg} onGrid={() => setActionGridVisible(true)} />
+                <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
               </>
             ) : (
               <NoPeerState onOpen={openDrawer} peerCount={livePeers.length} />
@@ -492,7 +562,9 @@ export default function MessagesScreen() {
 }
 
 const S = StyleSheet.create({
-  root:   { flex: 1 },
+  root:            { flex: 1 },
+  queueBanner:     { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 0.5 },
+  queueBannerText: { fontSize: 11, letterSpacing: 0.3, flex: 1 },
   drawer: {
     position: 'absolute', top: 0, bottom: 0, left: 0, width: DRAWER_W,
     zIndex: 41, borderTopRightRadius: 18, borderBottomRightRadius: 18,

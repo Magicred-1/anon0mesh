@@ -1,12 +1,25 @@
-import React, { memo, useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet } from 'react-native';
+import React, { memo, useState, useCallback } from 'react';
+import { View, TextInput, Pressable, StyleSheet, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 
-interface Props { onSend: (text: string) => void; onGrid?: () => void }
+export interface MediaPayload {
+  uri:      string;
+  base64:   string;
+  mimeType: string;
+  width?:   number;
+  height?:  number;
+}
 
-export const Composer = memo(function Composer({ onSend, onGrid }: Props) {
+interface Props {
+  readonly onSend:   (text: string) => void;
+  readonly onMedia?: (media: MediaPayload) => void;
+  readonly onGrid?:  () => void;
+}
+
+export const Composer = memo(function Composer({ onSend, onMedia, onGrid }: Props) {
   const { colors } = useTheme();
   const baseGlass  = useGlass();
   const [value, setValue] = useState('');
@@ -18,10 +31,38 @@ export const Composer = memo(function Composer({ onSend, onGrid }: Props) {
     setValue('');
   };
 
+  const pickMedia = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Allow photo library access to send images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      quality: 0.6,
+      base64: true,
+      exif: false,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    if (!asset.base64) return;
+    onMedia?.({
+      uri:      asset.uri,
+      base64:   asset.base64,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      width:    asset.width,
+      height:   asset.height,
+    });
+  }, [onMedia]);
+
   return (
     <View style={[S.bar, { backgroundColor: colors.surface0, borderTopColor: colors.borderSubtle }]}>
       <Pressable style={[S.iconBtn, baseGlass]} onPress={onGrid}>
         <Feather name="grid" size={15} color={colors.textSecondary} />
+      </Pressable>
+      <Pressable style={[S.iconBtn, baseGlass]} onPress={pickMedia}>
+        <Feather name="image" size={15} color={colors.textSecondary} />
       </Pressable>
       <View style={[S.field, baseGlass]}>
         <Feather name="lock" size={13} color={colors.primary} />
