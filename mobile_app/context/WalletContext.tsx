@@ -181,14 +181,8 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
       return bs58.encode(secretKey);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const isNotFound = msg.includes('not found') || msg.includes('Not Found');
       if (msg === 'Authentication cancelled') return null;
-      Alert.alert(
-        'Export failed',
-        isNotFound
-          ? 'Secret key was never stored. Sign out and recreate your wallet to fix this.'
-          : `Could not read key: ${msg}`,
-      );
+      Alert.alert('Export failed', msg);
       return null;
     }
   }, [wallet]);

@@ -1,6 +1,7 @@
 import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as SecureStore from 'expo-secure-store';
 import { TurboModuleRegistry, type TurboModule } from 'react-native';
 import {
   SecureKeys, PrefKeys,
@@ -54,7 +55,16 @@ async function readAndDecrypt(): Promise<Keypair> {
   });
   if (!auth.success) throw new Error('Authentication cancelled');
 
-  const rawPayload = await secureGet(SecureKeys.WALLET_SECRET);
+  // Call SecureStore directly — secureGet() swallows all errors (returns null),
+  // which makes real keychain failures (e.g. access-group mismatch after
+  // signing-cert change) indistinguishable from "key never stored".
+  let rawPayload: string | null;
+  try {
+    rawPayload = await SecureStore.getItemAsync(SecureKeys.WALLET_SECRET);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Keychain read failed: ${msg} — try signing out and recreating your wallet`);
+  }
   if (!rawPayload) throw new Error('Secret key was never stored — sign out and recreate your wallet to fix this');
 
   const parsed: unknown = JSON.parse(rawPayload);
@@ -66,7 +76,13 @@ async function readAndDecrypt(): Promise<Keypair> {
 
   if (!isStoredPayload(parsed)) throw new Error('Corrupted wallet data');
 
-  const rawAesKey = await secureGet(SecureKeys.WALLET_AES_KEY);
+  let rawAesKey: string | null;
+  try {
+    rawAesKey = await SecureStore.getItemAsync(SecureKeys.WALLET_AES_KEY);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Keychain read failed (AES key): ${msg}`);
+  }
   if (!rawAesKey) throw new Error('AES key missing — wallet may be corrupted, please recreate');
   const secretKey = aesDecrypt(new Uint8Array(Buffer.from(rawAesKey, 'base64')), parsed);
   return Keypair.fromSecretKey(secretKey);
