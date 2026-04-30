@@ -124,22 +124,22 @@ export const PeersDrawer = memo(function PeersDrawer({
       <View style={S.listSection}>
         <View style={S.listHeader}>
           <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>CONNECTED PEERS</Text>
-          <View style={[S.searchBox, softGlass, { flex: 1 }]}>
-            <Feather name="search" size={12} color={colors.textTertiary} />
-            <TextInput
-              placeholder="search"
-              placeholderTextColor={colors.textTertiary}
-              style={[S.searchInput, { color: colors.textPrimary }]}
-              value={query}
-              onChangeText={setQuery}
-              autoCorrect={false}
-            />
-            {query.length > 0 && (
-              <Pressable onPress={() => setQuery('')}>
-                <Feather name="x" size={11} color={colors.textTertiary} />
-              </Pressable>
-            )}
-          </View>
+        </View>
+        <View style={[S.searchBox, softGlass]}>
+          <Feather name="search" size={14} color={colors.textTertiary} />
+          <TextInput
+            placeholder="search peers…"
+            placeholderTextColor={colors.textTertiary}
+            style={[S.searchInput, { color: colors.textPrimary }]}
+            value={query}
+            onChangeText={setQuery}
+            autoCorrect={false}
+          />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery('')} hitSlop={12}>
+              <Feather name="x" size={13} color={colors.textTertiary} />
+            </Pressable>
+          )}
         </View>
 
         <ScrollView
@@ -230,9 +230,9 @@ const S = StyleSheet.create({
 
   // ── Peer list section ────────────────────────────────────────────────────────
   listSection:  { flex: 1, paddingHorizontal: 14, gap: 8, minHeight: 0 },
-  listHeader:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  searchBox:    { flexDirection: 'row', alignItems: 'center', gap: 7, padding: 7, paddingHorizontal: 10, borderRadius: 10 },
-  searchInput:  { flex: 1, fontSize: 11.5, fontFamily: fontFamily.sansMd, padding: 0 },
+  listHeader:   { flexDirection: 'row', alignItems: 'center' },
+  searchBox:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12 },
+  searchInput:  { flex: 1, fontSize: 13, fontFamily: fontFamily.sansMd, padding: 0 },
   peerScroll:   { flex: 1 },
   listContent:  { paddingBottom: 20, gap: 2 },
 
