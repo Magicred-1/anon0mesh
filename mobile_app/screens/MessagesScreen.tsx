@@ -200,7 +200,6 @@ export default function MessagesScreen() {
   const scrollRef          = useRef<ScrollView>(null);
   const drawerAnim         = useRef(new Animated.Value(-DRAWER_W)).current;
   const drawerOpenRef      = useRef(false);
-  const pendingRef         = useRef<Map<string, string[]>>(new Map());
   const activePeerHexRef   = useRef<string | null>(null);
   const lastEvtCountRef    = useRef(0);
   const lastFirstEvtRef    = useRef<(typeof events)[0] | null>(null);
@@ -276,22 +275,6 @@ export default function MessagesScreen() {
     }
   }, [events, lxmfPeers, resolveSeq]);
 
-  // Retry queued messages when the peer's identity arrives via announce
-  useEffect(() => {
-    const last = events[0]; // context prepends new events — index 0 is latest
-    if (last?.type !== 'announceReceived') return;
-    const hash: string | null = last.destHash ?? null;
-    if (!hash) return;
-    const queued = pendingRef.current.get(hash);
-    if (!queued?.length) return;
-    pendingRef.current.delete(hash);
-    for (const text of queued) {
-      send(hash, utf8ToBase64(text)).catch(() => {});
-    }
-    if (hash === activePeerHexRef.current) {
-      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'identity resolved — queued messages sent' }]);
-    }
-  }, [events, send]);
 
   const queuedCount = useMemo(
     () => [...seqStates.values()].filter(s => s === 'queued').length,
@@ -389,25 +372,16 @@ export default function MessagesScreen() {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
       return;
     }
-    try {
-      const seq = await send(activePeerHex, utf8ToBase64(text));
-      if (seq > 0) {
-        idToSeqRef.current.set(msgId, seq);
-        // If no messageQueued event arrives within 2s, assume immediate delivery
-        const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
-        immediateTimers.current.set(seq, timer);
-      } else {
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'send failed: no route to peer' }]);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'send error';
-      if (msg.includes('missing destination identity')) {
-        const q = pendingRef.current;
-        q.set(activePeerHex, [...(q.get(activePeerHex) ?? []), text]);
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'peer identity unknown — queued, retrying on announce' }]);
-      } else {
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
-      }
+    const seq = await send(activePeerHex, utf8ToBase64(text));
+    if (seq > 0) {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
+    } else {
+      // send() swallowed the error → lxmf.error banner shows reason; mark bubble failed
+      const pseudoSeq = -msgId;
+      idToSeqRef.current.set(msgId, pseudoSeq);
+      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
     }
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
@@ -417,16 +391,15 @@ export default function MessagesScreen() {
     setMsgs(m => [...m, { id: msgId, kind: 'media' as const, from: 'me', me: true, time: now,
       uri: media.uri, mimeType: media.mimeType, width: media.width, height: media.height }]);
     if (!activePeerHex || !isRunning) return;
-    try {
-      const seq = await send(activePeerHex, utf8ToBase64(''), { image: { mimeType: media.mimeType, data: media.base64 } });
-      if (seq > 0) {
-        idToSeqRef.current.set(msgId, seq);
-        const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
-        immediateTimers.current.set(seq, timer);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'send error';
-      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `media send failed: ${msg}` }]);
+    const seq = await send(activePeerHex, utf8ToBase64(''), { image: { mimeType: media.mimeType, data: media.base64 } });
+    if (seq > 0) {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
+    } else {
+      const pseudoSeq = -msgId;
+      idToSeqRef.current.set(msgId, pseudoSeq);
+      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
     }
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
@@ -451,10 +424,7 @@ export default function MessagesScreen() {
     setMsgs(m => [...m, bubble]);
 
     if (!activePeerHex) return;
-    send(activePeerHex, utf8ToBase64(payload)).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : 'send error';
-      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
-    });
+    send(activePeerHex, utf8ToBase64(payload));
   }, [publicKey, activePeerHex, send]);
 
   const pickPeer = useCallback((p: Peer) => {
