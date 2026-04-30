@@ -446,6 +446,7 @@ export default function MessagesScreen() {
     const hash = pendingConversationRef.current;
     if (hash) {
       pendingConversationRef.current = null;
+      if (hash === activePeerHexRef.current) return; // already in this thread
       const peer = lxmfPeers.find(p => p.destHash === hash);
       pickPeer(peer ? lxmfPeerToPeer(peer) : {
         handle:   `@${hash.slice(0, 8)}`,

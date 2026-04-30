@@ -6,7 +6,6 @@ import { useLxmfContext } from '@/context/LxmfContext';
 import type { NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { activeConversationRef } from './activeConversation';
 import { messagesFocusedRef }    from './messagesFocused';
-import { decodeLxmfSender } from '@/utils/lxmfDecode';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -83,8 +82,7 @@ export function useMessageNotifications(
     for (const e of newEvents) {
       if (e.type !== 'messageReceived') continue;
 
-      const rawContent = (e.content as string) ?? '';
-      const srcHash: string = decodeLxmfSender(rawContent) ?? (e.source as string) ?? '';
+      const srcHash: string = typeof e.source === 'string' ? e.source : '';
       const sender = resolveDisplay(srcHash);
       const payload: NotificationPayload = { id: Date.now(), sender, body: 'new message', destHash: srcHash };
 
