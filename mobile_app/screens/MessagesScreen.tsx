@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useFocusEffect } from 'expo-router';
 import {
   View, ScrollView, Text, Pressable,
-  StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder,
+  StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder, Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { SystemLine }            from '@/components/messages/SystemLine';
@@ -186,7 +186,8 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
-  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send } = useLxmfContext();
+  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send, getDisplayName } = useLxmfContext();
+  const insets = useSafeAreaInsets();
 
   const { publicKey } = useWallet();
 
@@ -214,6 +215,15 @@ export default function MessagesScreen() {
     activePeerHexRef.current       = activePeerHex;
     activeConversationRef.current  = activePeerHex;
   }, [activePeerHex]);
+
+  // Keyboard-aware safe-area spacer — collapses bottom spacer while keyboard is visible
+  const [kbShown, setKbShown] = useState(false);
+  useEffect(() => {
+    const isIOS = Platform.OS === 'ios';
+    const show = Keyboard.addListener(isIOS ? 'keyboardWillShow' : 'keyboardDidShow',  () => setKbShown(true));
+    const hide = Keyboard.addListener(isIOS ? 'keyboardWillHide' : 'keyboardDidHide', () => setKbShown(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   // Cleanup timers on unmount
   useEffect(() => () => { immediateTimers.current.forEach(clearTimeout); }, []);
@@ -244,8 +254,7 @@ export default function MessagesScreen() {
       const srcHash: string = typeof e.source === 'string' ? e.source : '';
       const bodyText = typeof e.body === 'string' ? decodeBody(e.body) : '';
 
-      const peer = lxmfPeers.find(p => p.destHash === srcHash);
-      const from = peer?.displayName || (srcHash ? srcHash.slice(0, 8) : 'unknown');
+      const from = getDisplayName(srcHash) || 'unknown';
       const time = new Date().toTimeString().slice(0, 8);
 
       const newMsgs: AnyMsg[] = [];
@@ -265,15 +274,18 @@ export default function MessagesScreen() {
 
       if (newMsgs.length === 0) continue;
 
-      if (activePeerHexRef.current && srcHash !== activePeerHexRef.current) {
+      if (srcHash === activePeerHexRef.current) {
+        setMsgs(m => [...m, ...newMsgs]);
+      } else {
+        // Route to that peer's thread regardless of whether any peer is active
         const thread = threadsRef.current.get(srcHash) ?? [];
         threadsRef.current.set(srcHash, [...thread, ...newMsgs]);
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `message from ${from}` }]);
-      } else {
-        setMsgs(m => [...m, ...newMsgs]);
+        if (activePeerHexRef.current !== null) {
+          setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `↙ message from ${from}` }]);
+        }
       }
     }
-  }, [events, lxmfPeers, resolveSeq]);
+  }, [events, getDisplayName, resolveSeq]);
 
 
   const queuedCount = useMemo(
@@ -432,6 +444,9 @@ export default function MessagesScreen() {
     const prevHash = activePeerHexRef.current;
     if (prevHash) threadsRef.current.set(prevHash, msgsRef.current);
     const newHash = p.destHash ?? null;
+    // Sync ref immediately — avoids race where a message arrives before the next render+effect
+    activePeerHexRef.current      = newHash;
+    activeConversationRef.current = newHash;
     setActivePeer(p.handle);
     setActivePeerHex(newHash);
     closeDrawer();
@@ -450,7 +465,7 @@ export default function MessagesScreen() {
       if (hash === activePeerHexRef.current) return; // already in this thread
       const peer = lxmfPeers.find(p => p.destHash === hash);
       pickPeer(peer ? lxmfPeerToPeer(peer) : {
-        handle:   `@${hash.slice(0, 8)}`,
+        handle:   getDisplayName(hash),
         hops:     0,
         iface:    'TCP',
         online:   true,
@@ -462,13 +477,13 @@ export default function MessagesScreen() {
       });
     }
     return () => { messagesFocusedRef.current = false; };
-  }, [lxmfPeers, pickPeer]));
+  }, [lxmfPeers, pickPeer, getDisplayName]));
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
             <ThreadHeader
               peer={activePeerHex ? activePeer : null}
               selfName={displayName || undefined}
@@ -498,6 +513,8 @@ export default function MessagesScreen() {
                   <View style={{ height: 4 }} />
                 </ScrollView>
                 <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
+                {/* Safe-area spacer: collapses when keyboard is up (KAV padding already covers it) */}
+                <View style={{ height: kbShown ? 0 : insets.bottom }} />
               </>
             ) : (
               <NoPeerState onOpen={openDrawer} peerCount={livePeers.length} />
@@ -535,7 +552,7 @@ export default function MessagesScreen() {
           peers={livePeers.length > 0 ? livePeers : undefined}
           isAnnouncing={isAnnouncing}
           onNewHash={hash => pickPeer({
-            handle:   `@${hash.slice(0, 8)}`,
+            handle:   getDisplayName(hash) || hash.slice(0, 8),
             hops:     0,
             iface:    'TCP',
             online:   true,

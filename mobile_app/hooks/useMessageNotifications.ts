@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
@@ -47,7 +47,7 @@ export function useMessageNotifications(
   onInApp: (n: NotificationPayload) => void,
   enabled = true,
 ) {
-  const { events, peers, nameMap } = useLxmfContext();
+  const { events, getDisplayName } = useLxmfContext();
   const lastCountRef = useRef(0);
   const lastFirstRef = useRef<LxmfEvent | null>(null);
   const appStateRef  = useRef(AppState.currentState);
@@ -65,11 +65,6 @@ export function useMessageNotifications(
     return () => sub.remove();
   }, []);
 
-  const resolveDisplay = useCallback((srcHash: string): string => {
-    const fromPeers = peers.find(p => p.destHash === srcHash)?.displayName;
-    return fromPeers || nameMap[srcHash] || srcHash.slice(0, 8);
-  }, [peers, nameMap]);
-
   useEffect(() => {
     const prevCount = lastCountRef.current;
     const prevFirst = lastFirstRef.current;
@@ -79,27 +74,33 @@ export function useMessageNotifications(
     const newEvents = sliceNewEvents(events, prevCount, prevFirst);
     if (newEvents.length === 0 || !enabled) return;
 
-    for (const e of newEvents) {
-      if (e.type !== 'messageReceived') continue;
+    const toNotify = newEvents.filter(e => e.type === 'messageReceived');
+    if (toNotify.length === 0) return;
 
-      const srcHash: string = typeof e.source === 'string' ? e.source : '';
-      const sender = resolveDisplay(srcHash);
-      const payload: NotificationPayload = { id: Date.now(), sender, body: 'new message', destHash: srcHash };
+    // Defer past React's current effect flush so parent LxmfProvider's peer-tracking
+    // effect (which updates knownPeersRef) has run before we resolve display names.
+    const timer = setTimeout(() => {
+      for (const e of toNotify) {
+        const srcHash: string = typeof e.source === 'string' ? e.source : '';
+        const sender = getDisplayName(srcHash);
+        const payload: NotificationPayload = { id: Date.now(), sender, body: 'new message', destHash: srcHash };
 
-      // Suppress only if messages screen is focused AND this is the open conversation
-      const inActiveThread = appStateRef.current === 'active'
-        && messagesFocusedRef.current
-        && srcHash === activeConversationRef.current;
-      if (inActiveThread) continue;
+        const inActiveThread = appStateRef.current === 'active'
+          && messagesFocusedRef.current
+          && srcHash === activeConversationRef.current;
+        if (inActiveThread) continue;
 
-      if (appStateRef.current === 'active') {
-        onInApp(payload);
-      } else {
-        Notifications.scheduleNotificationAsync({
-          content: { title: sender, body: 'new message', sound: true },
-          trigger: null,
-        }).catch(() => {});
+        if (appStateRef.current === 'active') {
+          onInApp(payload);
+        } else {
+          Notifications.scheduleNotificationAsync({
+            content: { title: sender, body: 'new message', sound: true },
+            trigger: null,
+          }).catch(() => {});
+        }
       }
-    }
-  }, [events, enabled, resolveDisplay, onInApp]);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [events, enabled, getDisplayName, onInApp]);
 }
