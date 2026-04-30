@@ -1,33 +1,58 @@
+import { Feather } from "@expo/vector-icons";
 import React from "react";
 import {
+  Pressable,
   StyleProp,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Icon, Pill } from "@/components/primitives";
-import { useTheme } from "@/theme";
+import { fontFamily as FF, useTheme } from "@/theme";
 
 interface SendScaffoldProps {
-  children: React.ReactNode;
-  contentStyle?: StyleProp<ViewStyle>;
-  eyebrow?: string;
-  footer?: React.ReactNode;
-  onBack?: () => void;
-  showBack?: boolean;
-  step?: number;
-  subtitle?: string;
-  title: string;
-  totalSteps?: number;
-  trailing?: React.ReactNode;
+  readonly children: React.ReactNode;
+  readonly contentStyle?: StyleProp<ViewStyle>;
+  readonly eyebrow?: string;
+  readonly footer?: React.ReactNode;
+  readonly onBack?: () => void;
+  readonly showBack?: boolean;
+  readonly step?: number;
+  readonly subtitle?: string;
+  readonly title: string;
+  readonly totalSteps?: number;
+  readonly trailing?: React.ReactNode;
+}
+
+function NavSlot({
+  showBack,
+  onBack,
+  colors,
+}: {
+  readonly showBack: boolean;
+  readonly onBack?: () => void;
+  readonly colors: ReturnType<typeof useTheme>["colors"];
+}) {
+  if (showBack) {
+    return (
+      <Pressable
+        accessibilityLabel="Back"
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={onBack}
+        style={[S.navButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+      >
+        <Feather name="arrow-left" size={18} color={colors.textPrimary} />
+      </Pressable>
+    );
+  }
+  return <View style={S.navSpacer} />;
 }
 
 function formatStep(step: number, totalSteps: number) {
-  return `${String(step).padStart(2, "0")} / ${String(totalSteps).padStart(2, "0")}`;
+  return `SEND · ${String(step).padStart(2, "0")} / ${String(totalSteps).padStart(2, "0")}`;
 }
 
 export function SendScaffold({
@@ -43,98 +68,46 @@ export function SendScaffold({
   totalSteps = 3,
   trailing,
 }: SendScaffoldProps) {
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const { colors } = useTheme();
 
   const resolvedEyebrow =
-    eyebrow ?? (step ? `Transfer ${formatStep(step, totalSteps)}` : "Transfer receipt");
+    eyebrow ?? (step ? formatStep(step, totalSteps) : "SEND");
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-        <View style={[styles.header, { paddingHorizontal: spacing[5], paddingTop: spacing[2] }]}>
-          {showBack ? (
-            <TouchableOpacity
-              accessibilityLabel="Back"
-              accessibilityRole="button"
-              activeOpacity={0.8}
-              hitSlop={8}
-              onPress={onBack}
-              style={[
-                styles.navButton,
-                {
-                  backgroundColor: colors.surface0,
-                  borderColor: colors.border,
-                  borderRadius: radii.full,
-                },
-              ]}
-            >
-              <Icon color={colors.textPrimary} name="arrow-left" size={18} />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.navSpacer} />
-          )}
-
-          {trailing ??
-            (step ? <Pill label={formatStep(step, totalSteps)} tone="neutral" /> : <View style={styles.navSpacer} />)}
-        </View>
-
-        <View style={{ gap: spacing[2], paddingHorizontal: spacing[5], paddingTop: spacing[5] }}>
-          <Text
-            style={{
-              color: colors.textTertiary,
-              fontFamily: fontFamily.sansMd,
-              fontSize: fontSize.xs,
-              letterSpacing: 0.8,
-              textTransform: "uppercase",
-            }}
-          >
-            {resolvedEyebrow}
-          </Text>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamily.sansBold,
-              fontSize: fontSize["3xl"],
-              letterSpacing: -0.8,
-            }}
-          >
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: fontFamily.sans,
-                fontSize: fontSize.md,
-                lineHeight: fontSize.md * 1.55,
-                maxWidth: 360,
-                paddingTop: spacing[2],
-              }}
-            >
-              {subtitle}
+    <View style={[S.root, { backgroundColor: colors.background }]}>
+      <SafeAreaView edges={["top", "bottom"]} style={S.safeArea}>
+        {/* Header */}
+        <View style={S.header}>
+          <View style={S.headerLeft}>
+            <Text style={[S.kicker, { color: colors.textTertiary }]}>
+              {resolvedEyebrow}
             </Text>
-          ) : null}
+            <Text style={[S.screenTitle, { color: colors.textPrimary }]}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={[S.subtitle, { color: colors.textSecondary }]}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={S.headerRight}>
+            {trailing ?? <NavSlot showBack={showBack} onBack={onBack} colors={colors} />}
+          </View>
         </View>
 
-        <View style={[styles.content, { paddingTop: spacing[5] }, contentStyle]}>{children}</View>
+        {/* Content */}
+        <View style={[S.content, contentStyle]}>{children}</View>
 
-        {footer ? (
-          <View
-            style={{
-              paddingBottom: spacing[4],
-              paddingHorizontal: spacing[5],
-              paddingTop: spacing[4],
-            }}
-          >
-            {footer}
-          </View>
-        ) : null}
+        {/* Footer */}
+        {footer ? <View style={S.footer}>{footer}</View> : null}
       </SafeAreaView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const S = StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -142,22 +115,58 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
     justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  headerLeft: {
+    flex: 1,
+    gap: 4,
+    paddingRight: 12,
+  },
+  headerRight: {
+    paddingTop: 2,
+  },
+  kicker: {
+    fontFamily: FF.sansMd,
+    fontSize: 10,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  screenTitle: {
+    fontFamily: FF.sansBold,
+    fontSize: 28,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontFamily: FF.sans,
+    fontSize: 14,
+    lineHeight: 21,
+    maxWidth: 320,
+    paddingTop: 4,
   },
   navButton: {
     alignItems: "center",
-    borderWidth: 1,
-    height: 40,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    height: 36,
     justifyContent: "center",
-    width: 40,
+    width: 36,
   },
   navSpacer: {
-    height: 40,
-    width: 40,
+    height: 36,
+    width: 36,
   },
   content: {
     flex: 1,
+  },
+  footer: {
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
 });

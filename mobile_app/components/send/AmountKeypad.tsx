@@ -1,13 +1,13 @@
+import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { DepthButton, Icon, NumericKeypad } from "@/components/primitives";
+import { DepthButton, NumericKeypad } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import { tokenByName } from "@/components/send/TokenPicker";
-import { useGlass } from "@/hooks/useGlass";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
-import { useTheme } from "@/theme";
+import { fontFamily as FF, useTheme } from "@/theme";
 
 function formatBalance(amount: number, maxDecimals: number): string {
   if (amount === 0) return "0";
@@ -25,8 +25,7 @@ function shortAddress(addr: string) {
 
 export function AmountKeypad() {
   const router = useRouter();
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
-  const glass = useGlass("accent");
+  const { colors } = useTheme();
   const { to, symbol: symbolParam } = useLocalSearchParams<{ to: string; symbol?: string }>();
   const { tokens } = useWalletBalance();
 
@@ -43,7 +42,7 @@ export function AmountKeypad() {
   }, [recipient, router]);
 
   const balanceNum = token.uiAmount;
-  const amountNum = parseFloat(amount) || 0;
+  const amountNum = Number.parseFloat(amount) || 0;
   const isValid = amountNum > 0 && amountNum <= balanceNum && Boolean(recipient);
 
   function handleNext() {
@@ -74,92 +73,30 @@ export function AmountKeypad() {
         />
       }
     >
-      <View style={{ flex: 1, paddingHorizontal: spacing[5] }}>
-        <View
-          style={[
-            glass,
-            {
-              alignItems: "center",
-              borderRadius: radii.xl,
-              flexDirection: "row",
-              gap: spacing[5],
-              justifyContent: "space-between",
-              paddingHorizontal: spacing[5],
-              paddingVertical: spacing[5],
-            },
-          ]}
-        >
-          <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-            <Text
-              style={{
-                color: colors.textTertiary,
-                fontFamily: fontFamily.sansMd,
-                fontSize: fontSize.xs,
-                letterSpacing: 0.7,
-                textTransform: "uppercase",
-              }}
-            >
-              Sending to
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={{
-                color: colors.textPrimary,
-                fontFamily: fontFamily.sansSb,
-                fontSize: fontSize.lg,
-              }}
-            >
-              Wallet address
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={{
-                color: colors.textSecondary,
-                fontFamily: fontFamily.mono,
-                fontSize: fontSize.sm,
-              }}
-            >
-              {shortAddress(recipient)}
-            </Text>
-          </View>
-
-          <View
-            style={{
-              alignItems: "flex-end",
-              backgroundColor: colors.primarySubtle,
-              borderColor: "rgba(0,229,255,0.32)",
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              minWidth: 120,
-              paddingHorizontal: spacing[4],
-              paddingVertical: spacing[3],
-            }}
-          >
-            <Text
-              style={{
-                color: colors.textTertiary,
-                fontFamily: fontFamily.sansMd,
-                fontSize: fontSize.xs,
-                letterSpacing: 0.5,
-                textTransform: "uppercase",
-              }}
-            >
-              Available
-            </Text>
-            <Text
-              style={{
-                color: colors.primary,
-                fontFamily: fontFamily.mono,
-                fontSize: fontSize.sm,
-                marginTop: 2,
-              }}
-            >
-              {formatBalance(token.uiAmount, token.maxDecimals)} {token.symbol}
-            </Text>
+      <View style={S.inner}>
+        {/* Recipient info tile */}
+        <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+          <Text style={[S.tileLabel, { color: colors.textTertiary }]}>SENDING TO</Text>
+          <View style={S.recipientRow}>
+            <View style={S.recipientLeft}>
+              <Text numberOfLines={1} style={[S.recipientName, { color: colors.textPrimary }]}>
+                Wallet address
+              </Text>
+              <Text numberOfLines={1} style={[S.recipientAddr, { color: colors.textSecondary }]}>
+                {shortAddress(recipient)}
+              </Text>
+            </View>
+            <View style={[S.availableChip, { backgroundColor: colors.primarySubtle, borderColor: "rgba(0,229,255,0.32)" }]}>
+              <Text style={[S.availableLabel, { color: colors.textTertiary }]}>Available</Text>
+              <Text style={[S.availableAmount, { color: colors.primary }]}>
+                {formatBalance(token.uiAmount, token.maxDecimals)} {token.symbol}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={{ flex: 1, justifyContent: "center", paddingTop: spacing[5] }}>
+        {/* Keypad */}
+        <View style={S.keypadWrapper}>
           <NumericKeypad
             currency={token.symbol}
             fiatLabel={`${formatBalance(token.uiAmount, token.maxDecimals)} ${token.symbol} available`}
@@ -171,18 +108,11 @@ export function AmountKeypad() {
           />
         </View>
 
+        {/* Overage warning */}
         {amountNum > balanceNum ? (
-          <View
-            style={{
-              alignItems: "center",
-              flexDirection: "row",
-              gap: spacing[2],
-              justifyContent: "center",
-              paddingBottom: spacing[3],
-            }}
-          >
-            <Icon color={colors.error} name="alert-circle" size={14} />
-            <Text style={{ color: colors.error, fontFamily: fontFamily.sans, fontSize: fontSize.sm }}>
+          <View style={S.errorRow}>
+            <Feather name="alert-circle" size={14} color={colors.error} />
+            <Text style={[S.errorText, { color: colors.error }]}>
               Amount exceeds current {token.symbol} balance.
             </Text>
           </View>
@@ -192,4 +122,84 @@ export function AmountKeypad() {
   );
 }
 
-const styles = StyleSheet.create({});
+// ── styles ────────────────────────────────────────────────────────────────────
+
+const S = StyleSheet.create({
+  inner: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+
+  // recipient info tile
+  tile: {
+    borderRadius: 20,
+    borderWidth: 0.5,
+    overflow: "hidden",
+    padding: 16,
+  },
+  tileLabel: {
+    fontFamily: FF.sansMd,
+    fontSize: 9.5,
+    letterSpacing: 2,
+    marginBottom: 10,
+    textTransform: "uppercase",
+  },
+  recipientRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  recipientLeft: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  recipientName: {
+    fontFamily: FF.sansSb,
+    fontSize: 15,
+  },
+  recipientAddr: {
+    fontFamily: FF.mono,
+    fontSize: 12,
+  },
+  availableChip: {
+    alignItems: "flex-end",
+    borderRadius: 12,
+    borderWidth: 0.5,
+    minWidth: 110,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  availableLabel: {
+    fontFamily: FF.sansMd,
+    fontSize: 9.5,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  availableAmount: {
+    fontFamily: FF.mono,
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  // keypad
+  keypadWrapper: {
+    flex: 1,
+    justifyContent: "center",
+    paddingTop: 16,
+  },
+
+  // error
+  errorRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    paddingBottom: 10,
+  },
+  errorText: {
+    fontFamily: FF.sans,
+    fontSize: 13,
+  },
+});

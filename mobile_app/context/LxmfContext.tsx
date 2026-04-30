@@ -254,6 +254,8 @@ interface LxmfCtxValue {
   bleUnpairedRNodeCount: () => number;
   blePeerCount:         number;
   updateDisplayName:    (name: string) => Promise<void>;
+  isBeacon:             boolean;
+  setBeaconMode:        (enabled: boolean) => Promise<void>;
 }
 
 const LxmfCtx = createContext<LxmfCtxValue | null>(null);
@@ -262,6 +264,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const [displayName,      setDisplayName]      = useState<string | null>(null);
   const [storedIdentity,   setStoredIdentity]   = useState<StoredIdentity | null>(null);
   const [identityHydrated, setIdentityHydrated] = useState(false);
+  const [isBeacon,         setIsBeacon]         = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +278,9 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
 
       const identity = await loadOrMigrateIdentity().catch(() => null);
       if (!cancelled && identity) setStoredIdentity(identity);
+
+      const beaconPref = await prefGet(PrefKeys.BEACON_MODE);
+      if (!cancelled) setIsBeacon(beaconPref === 'true');
 
       if (!cancelled) setIdentityHydrated(true);
     })();
@@ -299,6 +305,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       displayName,
       identityHex:    storedIdentity?.identity_hex ?? 'new',
       lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
+      isBeacon,
     }).then(async ok => {
       if (!ok) return;
       const perm = await requestBLEPermissions();
@@ -307,7 +314,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         setBleActive(true);
       }
     }).finally(() => { startingRef.current = false; });
-  }, [isNativeAvailable, isRunning, start, lxmfStartBLE, displayName, identityHydrated, storedIdentity]);
+  }, [isNativeAvailable, isRunning, start, lxmfStartBLE, displayName, identityHydrated, storedIdentity, isBeacon]);
 
   // Persist identity after node starts (using getIdentityHex() per new API)
   useEffect(() => {
@@ -432,6 +439,13 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     setBleActive(false);
   }, [lxmfStopBLE]);
 
+  const setBeaconMode = useCallback(async (enabled: boolean) => {
+    setIsBeacon(enabled);
+    await prefSet(PrefKeys.BEACON_MODE, enabled ? 'true' : 'false');
+    if (isRunning) await stop();
+    // auto-start effect fires on isRunning → false, picks up new isBeacon state
+  }, [isRunning, stop]);
+
   const value = useMemo(() => ({
     isRunning:             lxmf.isRunning,
     isNativeAvailable:     lxmf.isNativeAvailable,
@@ -464,8 +478,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       setDisplayName(trimmed);
       await prefSet(PrefKeys.DISPLAY_NAME, trimmed);
     },
+    isBeacon,
+    setBeaconMode,
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
-       handleStartBLE, handleStopBLE,
+       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop, lxmf.send,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons, lxmf.fetchMessages,

@@ -1,15 +1,15 @@
 import * as Clipboard from "expo-clipboard";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { Icon, Pill, SlideToConfirm } from "@/components/primitives";
+import { Pill, SlideToConfirm } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { sendSolTransfer } from "@/src/services/sendTransaction";
-import { useGlass } from "@/hooks/useGlass";
-import { useTheme } from "@/theme";
+import { fontFamily as FF, useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
   if (!addr || addr.length <= 14) return addr;
@@ -17,15 +17,50 @@ function shortAddress(addr: string): string {
 }
 
 interface ReviewCardProps {
-  to: string;
-  amount: string;
-  symbol: string;
+  readonly to: string;
+  readonly amount: string;
+  readonly symbol: string;
 }
+
+// ── DetailRow ─────────────────────────────────────────────────────────────────
+
+interface DetailRowProps {
+  readonly icon: React.ComponentProps<typeof Feather>["name"];
+  readonly label: string;
+  readonly secondary?: string;
+  readonly value?: string;
+  readonly valueComponent?: React.ReactNode;
+  readonly colors: ReturnType<typeof useTheme>["colors"];
+}
+
+function DetailRow({ icon, label, secondary, value, valueComponent, colors }: DetailRowProps) {
+  return (
+    <View style={S.detailRow}>
+      <View style={S.detailLeft}>
+        <Feather name={icon} size={16} color={colors.textTertiary} />
+        <Text style={[S.detailLabel, { color: colors.textSecondary }]}>{label}</Text>
+      </View>
+      <View style={S.detailRight}>
+        {valueComponent ?? (
+          <Text numberOfLines={1} style={[S.detailValue, { color: colors.textPrimary }]}>
+            {value}
+          </Text>
+        )}
+        {secondary ? (
+          <Text numberOfLines={1} style={[S.detailSecondary, { color: colors.textTertiary }]}>
+            {secondary}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+// ── ReviewCard ────────────────────────────────────────────────────────────────
 
 export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
   const router = useRouter();
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
-  const glass = useGlass("strong");
+  const { colors } = useTheme();
   const { wallet } = useWallet();
 
   const [stealthEnabled, setStealthEnabled] = useState(false);
@@ -68,7 +103,7 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
       const result = await sendSolTransfer({
         adapter: wallet,
         recipientAddress: to,
-        amountSOL: parseFloat(amount),
+        amountSOL: Number.parseFloat(amount),
       });
 
       router.push({
@@ -97,141 +132,80 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
       }
     >
       <ScrollView
-        contentContainerStyle={{
-          gap: spacing[5],
-          paddingBottom: spacing[5],
-          paddingHorizontal: spacing[5],
-        }}
+        contentContainerStyle={[S.scrollContent, { gap: 10 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ alignItems: "center", paddingVertical: spacing[7] }}>
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamily.sansBold,
-              fontSize: fontSize["4xl"],
-              letterSpacing: -1.4,
-              textAlign: "center",
-            }}
-          >
+        {/* Amount tile */}
+        <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+          <Text style={[S.tileLabel, { color: colors.textTertiary }]}>AMOUNT</Text>
+          <Text style={[S.amountBig, { color: colors.textPrimary }]}>
             {amount}{" "}
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontFamily: fontFamily.sansSb,
-                fontSize: fontSize.lg,
-              }}
-            >
-              {symbol}
-            </Text>
+            <Text style={[S.amountUnit, { color: colors.textSecondary }]}>{symbol}</Text>
           </Text>
         </View>
 
-        <View
-          style={[
-            glass,
-            {
-              borderRadius: radii.xl,
-              paddingHorizontal: spacing[5],
-              paddingVertical: spacing[3],
-            },
-          ]}
-        >
+        {/* Details tile */}
+        <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
           <DetailRow
             colors={colors}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            spacing={spacing}
             icon="user"
             label="To"
             valueComponent={
-              <TouchableOpacity
+              <Pressable
                 accessibilityLabel="Copy recipient address"
                 hitSlop={6}
                 onPress={async () => {
                   haptics.tap();
                   await Clipboard.setStringAsync(to);
                 }}
-                style={{ alignItems: "center", flexDirection: "row", gap: spacing[2] }}
+                style={S.copyRow}
               >
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: colors.textPrimary,
-                    fontFamily: fontFamily.mono,
-                    fontSize: fontSize.md,
-                    maxWidth: 160,
-                    textAlign: "right",
-                  }}
-                >
+                <Text numberOfLines={1} style={[S.detailMono, { color: colors.textPrimary }]}>
                   {shortAddress(to)}
                 </Text>
-                <Icon color={colors.textTertiary} name="copy" size={14} />
-              </TouchableOpacity>
+                <Feather name="copy" size={14} color={colors.textTertiary} />
+              </Pressable>
             }
           />
           <DetailRow
             colors={colors}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            spacing={spacing}
             icon="activity"
             label="Route"
             valueComponent={<Pill label="On-chain" tone="cyan" />}
           />
           <DetailRow
             colors={colors}
-            fontFamily={fontFamily}
-            fontSize={fontSize}
-            spacing={spacing}
             icon="zap"
             label="Fee"
             value="~0.000005 SOL"
           />
         </View>
 
-        <TouchableOpacity
+        {/* Stealth toggle tile */}
+        <Pressable
           accessibilityLabel={stealthEnabled ? "Disable stealth default" : "Enable stealth default"}
           accessibilityRole="button"
-          activeOpacity={0.8}
           onPress={() => setStealthEnabled((s) => !s)}
-          style={{
-            alignItems: "center",
-            backgroundColor: colors.surface0,
-            borderColor: colors.border,
-            borderRadius: radii.lg,
-            borderWidth: 1,
-            flexDirection: "row",
-            justifyContent: "space-between",
-            paddingHorizontal: spacing[5],
-            paddingVertical: spacing[4],
-          }}
+          style={[S.tile, S.stealthTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}
         >
-          <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[3] }}>
-            <Icon
-              color={stealthEnabled ? colors.accent : colors.textTertiary}
+          <View style={S.stealthLeft}>
+            <Feather
               name="eye-off"
               size={16}
+              color={stealthEnabled ? colors.accent : colors.textTertiary}
             />
-            <Text
-              style={{
-                color: stealthEnabled ? colors.accent : colors.textPrimary,
-                fontFamily: fontFamily.sansMd,
-                fontSize: fontSize.md,
-              }}
-            >
+            <Text style={[S.stealthLabel, { color: stealthEnabled ? colors.accent : colors.textPrimary }]}>
               Stealth
             </Text>
           </View>
           <Pill label={stealthEnabled ? "On" : "Off"} tone={stealthEnabled ? "purple" : "neutral"} />
-        </TouchableOpacity>
+        </Pressable>
 
+        {/* Error */}
         {error ? (
-          <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[2], justifyContent: "center" }}>
-            <Icon color={colors.error} name="alert-circle" size={14} />
-            <Text style={{ color: colors.error, fontFamily: fontFamily.sans, fontSize: fontSize.sm }}>
-              {error}
-            </Text>
+          <View style={S.errorRow}>
+            <Feather name="alert-circle" size={14} color={colors.error} />
+            <Text style={[S.errorText, { color: colors.error }]}>{error}</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -239,75 +213,111 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
   );
 }
 
-function DetailRow({
-  icon,
-  label,
-  secondary,
-  value,
-  valueComponent,
-  colors,
-  fontFamily,
-  fontSize,
-  spacing,
-}: {
-  icon: React.ComponentProps<typeof Icon>["name"];
-  label: string;
-  secondary?: string;
-  value?: string;
-  valueComponent?: React.ReactNode;
-  colors: ReturnType<typeof useTheme>["colors"];
-  fontFamily: ReturnType<typeof useTheme>["fontFamily"];
-  fontSize: ReturnType<typeof useTheme>["fontSize"];
-  spacing: ReturnType<typeof useTheme>["spacing"];
-}) {
-  return (
-    <View
-      style={{
-        alignItems: "center",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        minHeight: 56,
-      }}
-    >
-      <View style={{ alignItems: "center", flexDirection: "row", gap: spacing[3] }}>
-        <Icon color={colors.textTertiary} name={icon} size={16} />
-        <Text style={{ color: colors.textSecondary, fontFamily: fontFamily.sans, fontSize: fontSize.md }}>
-          {label}
-        </Text>
-      </View>
+// ── styles ────────────────────────────────────────────────────────────────────
 
-      <View style={{ alignItems: "flex-end", flexShrink: 1, gap: 2, marginLeft: spacing[4] }}>
-        {valueComponent ?? (
-          <Text
-            numberOfLines={1}
-            style={{
-              color: colors.textPrimary,
-              fontFamily: fontFamily.sansMd,
-              fontSize: fontSize.md,
-              maxWidth: 180,
-              textAlign: "right",
-            }}
-          >
-            {value}
-          </Text>
-        )}
-        {secondary ? (
-          <Text
-            numberOfLines={1}
-            style={{
-              color: colors.textTertiary,
-              fontFamily: fontFamily.sans,
-              fontSize: fontSize.xs,
-              maxWidth: 220,
-              textAlign: "right",
-            }}
-          >
-            {secondary}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-}
+const S = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+  },
 
-const styles = StyleSheet.create({});
+  // shared tile
+  tile: {
+    borderRadius: 20,
+    borderWidth: 0.5,
+    overflow: "hidden",
+    padding: 16,
+  },
+  tileLabel: {
+    fontFamily: FF.sansMd,
+    fontSize: 9.5,
+    letterSpacing: 2,
+    marginBottom: 10,
+    textTransform: "uppercase",
+  },
+
+  // amount tile
+  amountBig: {
+    fontFamily: FF.sansBold,
+    fontSize: 38,
+    letterSpacing: -1.4,
+  },
+  amountUnit: {
+    fontFamily: FF.sansSb,
+    fontSize: 17,
+  },
+
+  // detail rows
+  detailRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 52,
+  },
+  detailLeft: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  detailLabel: {
+    fontFamily: FF.sans,
+    fontSize: 15,
+  },
+  detailRight: {
+    alignItems: "flex-end",
+    flexShrink: 1,
+    gap: 2,
+    marginLeft: 16,
+  },
+  detailValue: {
+    fontFamily: FF.sansMd,
+    fontSize: 15,
+    maxWidth: 180,
+    textAlign: "right",
+  },
+  detailSecondary: {
+    fontFamily: FF.sans,
+    fontSize: 11,
+    maxWidth: 220,
+    textAlign: "right",
+  },
+  detailMono: {
+    fontFamily: FF.mono,
+    fontSize: 15,
+    maxWidth: 160,
+    textAlign: "right",
+  },
+  copyRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+
+  // stealth tile
+  stealthTile: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  stealthLeft: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+  },
+  stealthLabel: {
+    fontFamily: FF.sansMd,
+    fontSize: 15,
+  },
+
+  // error
+  errorRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+  },
+  errorText: {
+    fontFamily: FF.sans,
+    fontSize: 13,
+  },
+});
