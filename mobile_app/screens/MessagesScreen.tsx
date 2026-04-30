@@ -373,16 +373,17 @@ export default function MessagesScreen() {
       return;
     }
     const seq = await send(activePeerHex, utf8ToBase64(text));
-    if (seq > 0) {
-      idToSeqRef.current.set(msgId, seq);
-      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
-      immediateTimers.current.set(seq, timer);
-    } else {
-      // send() swallowed the error → lxmf.error banner shows reason; mark bubble failed
+    if (seq < 0) {
+      // -1: useLxmf caught a native error; lxmf.error banner shows reason
       const pseudoSeq = -msgId;
       idToSeqRef.current.set(msgId, pseudoSeq);
       setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
+    } else if (seq > 0) {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
     }
+    // seq === 0: accepted by module but no seq to track; bubble stays optimistic
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
   const handleMedia = useCallback(async (media: MediaPayload) => {
@@ -392,14 +393,14 @@ export default function MessagesScreen() {
       uri: media.uri, mimeType: media.mimeType, width: media.width, height: media.height }]);
     if (!activePeerHex || !isRunning) return;
     const seq = await send(activePeerHex, utf8ToBase64(''), { image: { mimeType: media.mimeType, data: media.base64 } });
-    if (seq > 0) {
-      idToSeqRef.current.set(msgId, seq);
-      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
-      immediateTimers.current.set(seq, timer);
-    } else {
+    if (seq < 0) {
       const pseudoSeq = -msgId;
       idToSeqRef.current.set(msgId, pseudoSeq);
       setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
+    } else if (seq > 0) {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
     }
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
