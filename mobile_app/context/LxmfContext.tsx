@@ -95,8 +95,10 @@ function applyAnnounceEvent(
   if (typeof hash !== 'string' || hash === ownHash)
     return { peerChanged: false, nameChanged: false };
 
-  const appData  = typeof e.appData === 'string' ? e.appData.trim() : '';
-  const name     = appData ? sanitizeName(appData, hash) : undefined;
+  const appData  = typeof e.appData === 'string' ? e.appData : '';
+  const isBeaconNode = appData.startsWith('anonmesh::beacon::v1');
+  const nameRaw  = isBeaconNode ? (appData.split('\0')[1] ?? '') : appData.trim();
+  const name     = nameRaw ? sanitizeName(nameRaw, hash) : undefined;
   const nameChanged = !!name && names[hash] !== name;
   if (nameChanged) names[hash] = name!;
 
@@ -105,12 +107,13 @@ function applyAnnounceEvent(
   if (typeof e.hops === 'number') hops = e.hops;
   else if (typeof (e as any).hopCount === 'number') hops = (e as any).hopCount;
   map.set(hash, {
-    destHash:    hash,
-    displayName: name ?? existing?.displayName ?? hash.slice(0, 8),
+    destHash:     hash,
+    displayName:  name ?? existing?.displayName ?? hash.slice(0, 8),
     hops,
-    lastSeen:    now,
-    online:      true,
-    via:         resolveVia(hops, bleActive, existing),
+    lastSeen:     now,
+    online:       true,
+    via:          resolveVia(hops, bleActive, existing),
+    isBeaconNode: isBeaconNode || (existing?.isBeaconNode ?? false),
   });
   return { peerChanged: true, nameChanged };
 }
@@ -153,12 +156,13 @@ function processNewEvents(
           const hops = Number.parseInt(m[2], 10);
           const existing = map.get(hash);
           map.set(hash, {
-            destHash:    hash,
-            displayName: existing?.displayName ?? names[hash] ?? hash.slice(0, 8),
+            destHash:     hash,
+            displayName:  existing?.displayName ?? names[hash] ?? hash.slice(0, 8),
             hops,
-            lastSeen:    now,
-            online:      true,
-            via:         resolveVia(hops, bleActive, existing),
+            lastSeen:     now,
+            online:       true,
+            via:          resolveVia(hops, bleActive, existing),
+            isBeaconNode: existing?.isBeaconNode ?? false,
           });
           peerChanged = true;
         }
@@ -194,12 +198,13 @@ function mergeBeacon(
     return false;
   // Beacons can be any interface — preserve existing via tag if known
   map.set(b.destHash, {
-    destHash:    b.destHash,
-    displayName: dispName,
-    hops:        existing?.hops ?? 0,
+    destHash:     b.destHash,
+    displayName:  dispName,
+    hops:         existing?.hops ?? 0,
     lastSeen,
-    online:      isOnline,
-    via:         existing?.via ?? 'reticulum',
+    online:       isOnline,
+    via:          existing?.via ?? 'reticulum',
+    isBeaconNode: true,
   });
   return true;
 }
@@ -212,12 +217,13 @@ export const MY_PC:      TcpInterface = {
 };
 
 export interface LxmfPeer {
-  destHash:    string;
-  displayName: string;
-  hops:        number;
-  lastSeen:    number;
-  online:      boolean;
-  via:         'ble' | 'reticulum' | 'rnode';
+  destHash:     string;
+  displayName:  string;
+  hops:         number;
+  lastSeen:     number;
+  online:       boolean;
+  via:          'ble' | 'reticulum' | 'rnode';
+  isBeaconNode: boolean;
 }
 
 interface LxmfCtxValue {
@@ -370,7 +376,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       if (!cached) return;
       const map = knownPeersRef.current;
       for (const p of cached) {
-        if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false });
+        if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false, isBeaconNode: p.isBeaconNode ?? false });
       }
       setPeers(Array.from(map.values()));
     });

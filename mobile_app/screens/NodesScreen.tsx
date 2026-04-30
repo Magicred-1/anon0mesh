@@ -26,7 +26,7 @@ function viaToIface(via: LxmfPeer['via']): 'BLE' | 'TCP' | 'RNode' {
 
 function peerToMapNode(p: LxmfPeer): NodeData {
   return {
-    handle:   `${p.displayName.slice(0, 16)}`,
+    handle:   p.displayName.slice(0, 16),
     hops:     p.hops,
     iface:    viaToIface(p.via),
     signal:   p.online ? 4 : 2,
@@ -34,6 +34,7 @@ function peerToMapNode(p: LxmfPeer): NodeData {
     online:   p.online,
     weak:     false,
     destHash: p.destHash,
+    beacon:   p.isBeaconNode,
   };
 }
 

@@ -34,6 +34,7 @@ export const NodeRow = memo(function NodeRow({ n, selected }: Props) {
           <Text style={[S.handle, { color: selected ? colors.primary : colors.textPrimary }]} numberOfLines={1}>
             {n.handle}
           </Text>
+          {n.beacon && <Pill label="BEACON" variant="primary" />}
         </View>
         <View style={S.meta}>
           <Text style={[S.metaText, { color: colors.textTertiary }]}>HOPS · {String(n.hops).padStart(2,'0')}</Text>
