@@ -123,6 +123,7 @@ export default function NodesScreen() {
             </View>
           </View>
 
+
           <View style={{ paddingTop: 14, paddingHorizontal: 20 }}>
             <MeshMap nodes={listNodes} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} />
           </View>

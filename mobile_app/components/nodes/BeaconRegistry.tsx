@@ -7,23 +7,30 @@ import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
 import { PulseDot } from '@/components/ui/PulseDot';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
+import { useLxmfContext } from '@/context/LxmfContext';
+import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 
-const ACTIVE_BEACONS = 3;
-const STAKE_SOL      = '0.5';
-const NETWORK_FEE    = '~0.000005';
+const BEACON_STALE_MS = 120_000;
+const STAKE_SOL       = '0.5';
+const NETWORK_FEE     = '~0.000005';
 
 interface Props {
   readonly initialActive?: boolean;
 }
 
-export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = false }: Props) {
+export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _initialActive = false }: Props) {
   const { colors } = useTheme();
   const glass       = useGlass();
   const softGlass   = useGlass('soft');
   const accentGlass = useGlass('accent');
+  const { isBeacon, setBeaconMode, beacons, peers } = useLxmfContext();
+  const reachableCount = beacons.filter(b => Date.now() - b.lastAnnounce < BEACON_STALE_MS).length
+    + peers.filter(p => p.online).length;
+  const { mode: networkMode } = useNetworkMode();
+  const hasInternet = networkMode === 'online';
 
-  const [active,  setActive]  = useState(initialActive);
-  const [modal,   setModal]   = useState(false);
+  const active = isBeacon;
+  const [modal, setModal] = useState(false);
   const [cosigns]             = useState(24);
   const [earned]              = useState(0.000312);
 
@@ -89,7 +96,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
                 </View>
                 <View style={[S.chip, softGlass]}>
                   <PulseDot size={5} />
-                  <Text style={[S.chipText, { color: colors.primary }]}>{ACTIVE_BEACONS} reachable</Text>
+                  <Text style={[S.chipText, { color: colors.primary }]}>{reachableCount} reachable</Text>
                 </View>
               </View>
 
@@ -107,7 +114,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
               {/* ── Inactive stats ── */}
               <View style={[S.statsRow, { borderBottomColor: colors.borderSubtle }]}>
                 <View style={S.stat}>
-                  <Text style={[S.statVal, { color: colors.textPrimary }]}>{ACTIVE_BEACONS}</Text>
+                  <Text style={[S.statVal, { color: colors.textPrimary }]}>{reachableCount}</Text>
                   <Text style={[S.statKey, { color: colors.textTertiary }]}>ACTIVE BEACONS</Text>
                 </View>
                 <View style={[S.statDivider, { backgroundColor: colors.borderSubtle }]} />
@@ -122,11 +129,17 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
               </Text>
 
               <Pressable
-                onPress={openModal}
-                style={({ pressed }) => [S.regBtn, accentGlass, { opacity: pressed ? 0.85 : 1 }]}
+                onPress={hasInternet ? openModal : undefined}
+                style={({ pressed }) => {
+                  let opacity = 0.4;
+                  if (hasInternet) opacity = pressed ? 0.85 : 1;
+                  return [S.regBtn, accentGlass, { opacity }];
+                }}
               >
                 <Feather name="radio" size={13} color={colors.primary} />
-                <Text style={[S.regText, { color: colors.primary }]}>REGISTER AS BEACON</Text>
+                <Text style={[S.regText, { color: colors.primary }]}>
+                  {hasInternet ? 'REGISTER AS BEACON' : 'REQUIRES INTERNET'}
+                </Text>
               </Pressable>
             </>
           )}
@@ -207,7 +220,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
             {/* Primary action */}
             {active ? (
               <Pressable
-                onPress={() => { setActive(false); dismiss(); }}
+                onPress={() => { setBeaconMode(false); dismiss(); }}
                 style={({ pressed }) => [S.deregModalBtn, { borderColor: colors.error + '40', opacity: pressed ? 0.7 : 1 }]}
               >
                 <Feather name="trash-2" size={13} color={colors.error} />
@@ -215,7 +228,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive = fal
               </Pressable>
             ) : (
               <Pressable
-                onPress={() => { setActive(true); dismiss(); }}
+                onPress={() => { setBeaconMode(true); dismiss(); }}
                 style={({ pressed }) => [S.signBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
               >
                 <Feather name="lock" size={14} color={colors.textInverse} />

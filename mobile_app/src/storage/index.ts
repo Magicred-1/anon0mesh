@@ -37,6 +37,7 @@ export const PrefKeys = {
   BIOMETRIC_ENABLED: 'anonmesh:biometric-enabled',
   HIDE_BALANCE:      'anonmesh:hide-balance',
   NOTIF_ENABLED:     'anonmesh:notif-enabled',
+  BEACON_MODE:       'anonmesh:beacon-mode',
 } as const;
 
 // Legacy keys — kept only for one-time migration reads, then deleted
