@@ -47,7 +47,6 @@ export const PeersDrawer = memo(function PeersDrawer({
   const [query,         setQuery]         = useState('');
   const [hash,          setHash]          = useState('');
   const [scannerOpen,   setScannerOpen]   = useState(false);
-  const [scannedContact, setScannedContact] = useState<{ hash: string } | null>(null);
 
   const filtered = (query
     ? peers.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
@@ -82,7 +81,7 @@ export const PeersDrawer = memo(function PeersDrawer({
             placeholder="paste hash or scan QR…"
             placeholderTextColor={colors.textTertiary}
             value={hash}
-            onChangeText={t => { setHash(t); setScannedContact(null); }}
+            onChangeText={setHash}
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -91,31 +90,12 @@ export const PeersDrawer = memo(function PeersDrawer({
           </Pressable>
         </View>
 
-        {scannedContact && (
-          <View style={[S.contactCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-            <View style={[S.contactIcon, { backgroundColor: colors.primarySubtle }]}>
-              <Feather name="user-plus" size={15} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[S.contactLabel, { color: colors.textTertiary }]}>NEW CONTACT</Text>
-              <Text style={[S.contactHash, { color: colors.textPrimary }]} numberOfLines={1}>
-                {scannedContact.hash}
-              </Text>
-            </View>
-            <Pressable onPress={() => setScannedContact(null)} hitSlop={10}>
-              <Feather name="x" size={13} color={colors.textTertiary} />
-            </Pressable>
-          </View>
-        )}
-
         {canStart && (
           <Pressable
-            onPress={() => { onNewHash?.(hash.trim()); setHash(''); setScannedContact(null); }}
+            onPress={() => { onNewHash?.(hash.trim()); setHash(''); }}
             style={[S.startBtn, { backgroundColor: colors.primary }]}
           >
-            <Text style={[S.startBtnText, { color: '#08080A' }]}>
-              {scannedContact ? 'ADD CONTACT & MESSAGE' : 'START CONVERSATION'}
-            </Text>
+            <Text style={[S.startBtnText, { color: '#08080A' }]}>START CONVERSATION</Text>
           </Pressable>
         )}
       </View>
@@ -199,10 +179,7 @@ export const PeersDrawer = memo(function PeersDrawer({
         onClose={() => setScannerOpen(false)}
         onResult={result => {
           setScannerOpen(false);
-          if (result.type === 'lxmf') {
-            setHash(result.hash);
-            setScannedContact({ hash: result.hash });
-          }
+          if (result.type === 'lxmf') onNewHash?.(result.hash);
         }}
       />
     </View>
@@ -223,10 +200,6 @@ const S = StyleSheet.create({
   hashInput:    { fontFamily: fontFamily.sansMd, fontSize: 12, padding: 0, flex: 1 },
   startBtn:     { padding: 12, borderRadius: 12, alignItems: 'center' },
   startBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
-  contactCard:  { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: 0.5 },
-  contactIcon:  { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  contactLabel: { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
-  contactHash:  { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.3 },
 
   // ── Peer list section ────────────────────────────────────────────────────────
   listSection:  { flex: 1, paddingHorizontal: 14, gap: 8, minHeight: 0 },

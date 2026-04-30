@@ -13,10 +13,12 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import React, { useCallback, useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 
-import { ThemeProvider } from '@/theme';
+import { ThemeProvider, useTheme } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
-import { LxmfProvider }  from '@/context/LxmfContext';
+import { LxmfProvider, useLxmfContext } from '@/context/LxmfContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
@@ -28,6 +30,30 @@ import { pendingConversationRef }    from '@/hooks/pendingConversation';
 export const unstable_settings = {
   anchor: 'onboarding',
 };
+
+function LxmfErrorBanner() {
+  const { error } = useLxmfContext();
+  const { colors } = useTheme();
+  const [dismissed, setDismissed] = useState<string | null>(null);
+
+  if (!error || error === dismissed) return null;
+
+  return (
+    <View style={[E.bar, { backgroundColor: colors.error + '18', borderColor: colors.error + '40' }]}>
+      <Feather name="alert-circle" size={13} color={colors.error} />
+      <Text style={[E.text, { color: colors.error }]} numberOfLines={2}>{error}</Text>
+      <Pressable onPress={() => setDismissed(error)} hitSlop={10}>
+        <Feather name="x" size={13} color={colors.error} />
+      </Pressable>
+    </View>
+  );
+}
+
+const E = StyleSheet.create({
+  bar:  { position: 'absolute', bottom: 90, left: 16, right: 16, flexDirection: 'row', alignItems: 'center',
+          gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 0.5, zIndex: 99 },
+  text: { flex: 1, fontSize: 12, lineHeight: 17 },
+});
 
 function AppShell() {
   const router = useRouter();
@@ -56,6 +82,8 @@ function AppShell() {
         </Stack>
         <StatusBar style="light" />
       </NavThemeProvider>
+
+      <LxmfErrorBanner />
 
       <InAppNotificationBanner
         notification={activeNotif}

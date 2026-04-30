@@ -90,9 +90,9 @@ export const Composer = memo(function Composer({ onSend, onMedia, onGrid }: Prop
 });
 
 const S = StyleSheet.create({
-  bar:     { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, paddingHorizontal: 14, paddingBottom: 12, borderTopWidth: 0.5 },
-  iconBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  field:   { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 9, paddingHorizontal: 13, borderRadius: 99 },
+  bar:     { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, paddingHorizontal: 14, paddingBottom: 10, borderTopWidth: 0.5 },
+  iconBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  field:   { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12 },
   input:   { flex: 1, fontSize: 14 },
-  sendBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
+  sendBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
 });

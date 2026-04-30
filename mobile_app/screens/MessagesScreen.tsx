@@ -29,8 +29,11 @@ import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
 import { setDrawerOpen } from '@/hooks/drawerState';
-import { decodeLxmfContent, decodeLxmfSender } from '@/utils/lxmfDecode';
 import { formatAgo } from '@/utils/time';
+
+function decodeBody(b64: string): string {
+  try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { return ''; }
+}
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
 let _msgId = Date.now();
@@ -175,12 +178,6 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
       return { id, kind: 'request-address', from, me: false, time, asset: p.asset ?? 'SOL', note: p.note };
     if (p.t === 'req-pay' && typeof p.amount === 'string')
       return { id, kind: 'request-money', from, me: false, time, asset: p.asset ?? 'SOL', amount: p.amount, note: p.note };
-    if (p.t === 'media' && typeof p.data === 'string' && typeof p.mime === 'string') {
-      const uri = `data:${p.mime};base64,${p.data}`;
-      return { id, kind: 'media', from, me: false, time, uri, mimeType: p.mime,
-        width: typeof p.w === 'number' ? p.w : undefined,
-        height: typeof p.h === 'number' ? p.h : undefined };
-    }
   } catch { /* plain text */ }
   return null;
 }
@@ -209,6 +206,8 @@ export default function MessagesScreen() {
   const lastFirstEvtRef    = useRef<(typeof events)[0] | null>(null);
   const idToSeqRef         = useRef<Map<number, number>>(new Map());
   const immediateTimers    = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const threadsRef         = useRef<Map<string, AnyMsg[]>>(new Map());
+  const msgsRef            = useRef<AnyMsg[]>([]);
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
@@ -219,6 +218,7 @@ export default function MessagesScreen() {
 
   // Cleanup timers on unmount
   useEffect(() => () => { immediateTimers.current.forEach(clearTimeout); }, []);
+  useEffect(() => { msgsRef.current = msgs; }, [msgs]);
 
   const resolveSeq = useCallback((seq: number, state: 'sent' | 'queued' | 'delivered' | 'failed') => {
     clearTimeout(immediateTimers.current.get(seq));
@@ -242,20 +242,36 @@ export default function MessagesScreen() {
       if (e.type === 'messageFailed'   && typeof e.seq === 'number') { resolveSeq(e.seq, 'failed');    continue; }
       if (e.type !== 'messageReceived') continue;
 
-      const rawContent = e.content ?? '';
-      const srcHash: string = decodeLxmfSender(rawContent) ?? e.source ?? '';
-      const text = decodeLxmfContent(rawContent);
-      if (!text) continue;
+      const srcHash: string = typeof e.source === 'string' ? e.source : '';
+      const bodyText = typeof e.body === 'string' ? decodeBody(e.body) : '';
 
       const peer = lxmfPeers.find(p => p.destHash === srcHash);
       const from = peer?.displayName || (srcHash ? srcHash.slice(0, 8) : 'unknown');
       const time = new Date().toTimeString().slice(0, 8);
-      const msg: AnyMsg = parseStructuredMsg(text, from, time) ?? { id: nextId(), from, me: false, time, text, enc: true };
+
+      const newMsgs: AnyMsg[] = [];
+
+      if (e.image && typeof e.image.data === 'string' && typeof e.image.mimeType === 'string') {
+        const uri = `data:${e.image.mimeType};base64,${e.image.data}`;
+        newMsgs.push({ id: nextId(), kind: 'media', from, me: false, time, uri, mimeType: e.image.mimeType });
+      }
+
+      const files = Array.isArray(e.files) && e.files.length > 0
+        ? (e.files as { name: string; data: string }[])
+        : undefined;
+      if (bodyText || files) {
+        const structured = bodyText ? parseStructuredMsg(bodyText, from, time) : null;
+        newMsgs.push(structured ?? { id: nextId(), from, me: false, time, text: bodyText, enc: true, files });
+      }
+
+      if (newMsgs.length === 0) continue;
 
       if (activePeerHexRef.current && srcHash !== activePeerHexRef.current) {
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `message from ${from}` }, msg]);
+        const thread = threadsRef.current.get(srcHash) ?? [];
+        threadsRef.current.set(srcHash, [...thread, ...newMsgs]);
+        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `message from ${from}` }]);
       } else {
-        setMsgs(m => [...m, msg]);
+        setMsgs(m => [...m, ...newMsgs]);
       }
     }
   }, [events, lxmfPeers, resolveSeq]);
@@ -402,9 +418,7 @@ export default function MessagesScreen() {
       uri: media.uri, mimeType: media.mimeType, width: media.width, height: media.height }]);
     if (!activePeerHex || !isRunning) return;
     try {
-      const payload = JSON.stringify({ t: 'media', mime: media.mimeType, data: media.base64,
-        w: media.width, h: media.height });
-      const seq = await send(activePeerHex, utf8ToBase64(payload));
+      const seq = await send(activePeerHex, utf8ToBase64(''), { image: { mimeType: media.mimeType, data: media.base64 } });
       if (seq > 0) {
         idToSeqRef.current.set(msgId, seq);
         const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
@@ -444,10 +458,14 @@ export default function MessagesScreen() {
   }, [publicKey, activePeerHex, send]);
 
   const pickPeer = useCallback((p: Peer) => {
+    const prevHash = activePeerHexRef.current;
+    if (prevHash) threadsRef.current.set(prevHash, msgsRef.current);
+    const newHash = p.destHash ?? null;
     setActivePeer(p.handle);
-    setActivePeerHex(p.destHash ?? null);
+    setActivePeerHex(newHash);
     closeDrawer();
-    setMsgs([
+    const saved = newHash ? threadsRef.current.get(newHash) : undefined;
+    setMsgs(saved ?? [
       { id: 1, kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` },
     ]);
   }, [closeDrawer]);
@@ -478,7 +496,7 @@ export default function MessagesScreen() {
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ThreadHeader
               peer={activePeerHex ? activePeer : null}
               selfName={displayName || undefined}

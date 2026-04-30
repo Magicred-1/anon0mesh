@@ -1,13 +1,56 @@
 import React, { memo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Alert, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
+import { useTheme, fontFamily } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 import type { ChatMsg } from './types';
 
-interface Props { m: ChatMsg }
+type SendState = 'sent' | 'queued' | 'delivered' | 'failed';
 
-export const MessageBubble = memo(function MessageBubble({ m }: Props) {
+interface Props {
+  readonly m: ChatMsg;
+  readonly sendState?: SendState;
+}
+
+const STATE_META: Record<SendState, { icon: React.ComponentProps<typeof Feather>['name']; label: string }> = {
+  sent:      { icon: 'check',        label: 'sent'      },
+  queued:    { icon: 'clock',        label: 'queued'    },
+  delivered: { icon: 'check-circle', label: 'delivered' },
+  failed:    { icon: 'x-circle',     label: 'failed'    },
+};
+
+function SendStatus({ state, colors }: { readonly state: SendState; readonly colors: ReturnType<typeof useTheme>['colors'] }) {
+  const { icon, label } = STATE_META[state];
+  let color: string = colors.textTertiary;
+  if (state === 'failed')    color = colors.error;
+  if (state === 'delivered') color = colors.primary;
+  return (
+    <View style={S.statusRow}>
+      <Feather name={icon} size={10} color={color} />
+      <Text style={[S.statusText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+function FileRow({ file, colors }: {
+  readonly file: { name: string; data: string };
+  readonly colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const sizeKb = Math.round((file.data.length * 3) / 4 / 1024);
+  return (
+    <Pressable
+      onPress={() => Alert.alert(file.name, `${sizeKb} KB — file saving coming soon`)}
+      style={({ pressed }) => [S.fileRow, { backgroundColor: pressed ? colors.surface2 : colors.surface1, borderColor: colors.border }]}
+    >
+      <Feather name="file" size={13} color={colors.textSecondary} />
+      <Text style={[S.fileName, { color: colors.textPrimary }]} numberOfLines={1}>{file.name}</Text>
+      <Text style={[S.fileSize, { color: colors.textTertiary }]}>{sizeKb} KB</Text>
+      <Feather name="download" size={12} color={colors.textTertiary} />
+    </Pressable>
+  );
+}
+
+export const MessageBubble = memo(function MessageBubble({ m, sendState }: Props) {
   const { colors } = useTheme();
   const glass      = useGlass(m.me ? 'accent' : 'base');
   return (
@@ -21,17 +64,34 @@ export const MessageBubble = memo(function MessageBubble({ m }: Props) {
         S.bubble, glass,
         { borderBottomRightRadius: m.me ? 4 : 16, borderBottomLeftRadius: m.me ? 16 : 4 },
       ]}>
-        <Text style={[S.text, { color: colors.textPrimary }]}>{m.text}</Text>
+        {m.text.length > 0 && (
+          <Text style={[S.text, { color: colors.textPrimary }]}>{m.text}</Text>
+        )}
+        {m.files && m.files.length > 0 && (
+          <View style={[S.files, m.text.length > 0 && S.filesWithText]}>
+            {m.files.map(f => <FileRow key={f.name} file={f} colors={colors} />)}
+          </View>
+        )}
+        {m.me && sendState && (
+          <SendStatus state={sendState} colors={colors} />
+        )}
       </View>
     </View>
   );
 });
 
 const S = StyleSheet.create({
-  wrap:   { paddingHorizontal: 16, marginBottom: 14 },
-  meta:   { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  from:   { fontSize: 10, letterSpacing: 0.5 },
-  time:   { fontSize: 10, letterSpacing: 0.5 },
-  bubble: { maxWidth: '78%', padding: 10, paddingHorizontal: 13, borderRadius: 16 },
-  text:   { fontSize: 14.5, lineHeight: 21 },
+  wrap:         { paddingHorizontal: 16, marginBottom: 14 },
+  meta:         { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  from:         { fontSize: 10, letterSpacing: 0.5 },
+  time:         { fontSize: 10, letterSpacing: 0.5 },
+  bubble:       { maxWidth: '78%', padding: 10, paddingHorizontal: 13, borderRadius: 16 },
+  text:         { fontSize: 14.5, lineHeight: 21 },
+  files:        { gap: 4 },
+  filesWithText:{ marginTop: 8 },
+  fileRow:      { flexDirection: 'row', alignItems: 'center', gap: 7, padding: 8, borderRadius: 8, borderWidth: 0.5 },
+  fileName:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 12 },
+  fileSize:     { fontFamily: fontFamily.sansMd, fontSize: 10 },
+  statusRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, justifyContent: 'flex-end' },
+  statusText:   { fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' },
 });

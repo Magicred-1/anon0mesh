@@ -28,7 +28,8 @@
         "foregroundImage": "./assets/images/favicon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "allowBackup": false
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "output": "static",

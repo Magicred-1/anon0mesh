@@ -11,6 +11,7 @@ import {
   type LxmfNodeStatus,
   type Beacon,
   type LxmfEvent,
+  type LxmfMedia,
   type TcpInterface,
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
@@ -248,8 +249,8 @@ interface LxmfCtxValue {
     displayName?:    string;
   }) => Promise<boolean>;
   stop:                 () => Promise<void>;
-  send:                 (destHex: string, bodyBase64: string) => Promise<number>;
-  broadcast:            (destsHex: string[], bodyBase64: string) => Promise<number>;
+  send:                 (destHex: string, bodyBase64: string, media?: LxmfMedia) => Promise<number>;
+  broadcast:            (destsHex: string[], bodyBase64: string, media?: LxmfMedia) => Promise<number>;
   /** Start BLE radio. For LoRa: pair RNode in OS BT settings first, then call this. */
   startBLE:             () => Promise<void>;
   stopBLE:              () => Promise<void>;
