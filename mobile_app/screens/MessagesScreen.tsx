@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useFocusEffect } from 'expo-router';
 import {
   View, ScrollView, Text, Pressable,
-  StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder,
+  StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder, Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { SystemLine }            from '@/components/messages/SystemLine';
 import { MessageBubble }         from '@/components/messages/MessageBubble';
+import { MediaBubble }           from '@/components/messages/MediaBubble';
 import { RequestMoneyBubble }    from '@/components/messages/RequestMoneyBubble';
 import { RequestAddressBubble }  from '@/components/messages/RequestAddressBubble';
 import { ShareAddressBubble }    from '@/components/messages/ShareAddressBubble';
@@ -21,18 +22,35 @@ import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { PulseDot } from '@/components/ui/PulseDot';
 import { Feather } from '@expo/vector-icons';
 import { useWallet } from '@/context/WalletContext';
-import type { AnyMsg, ChatMsg }  from '@/components/messages/types';
+import type { AnyMsg, ChatMsg, MediaMsg } from '@/components/messages/types';
+import type { MediaPayload } from '@/components/messages/Composer';
 import type { LxmfPeer } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
 import { setDrawerOpen } from '@/hooks/drawerState';
-import { decodeLxmfContent, decodeLxmfSender } from '@/utils/lxmfDecode';
 import { formatAgo } from '@/utils/time';
+
+function decodeBody(b64: string): string {
+  try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { return ''; }
+}
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
 let _msgId = Date.now();
 const nextId = () => ++_msgId;
+
+type GetSendState = (id: number) => 'sent' | 'queued' | 'delivered' | 'failed' | undefined;
+
+function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
+  if (m.kind === 'sys')             return <SystemLine           key={m.id} text={m.text} />;
+  if (m.kind === 'tx')              return <InlineTxCard         key={m.id} m={m} />;
+  if (m.kind === 'request-money')   return <RequestMoneyBubble   key={m.id} m={m} />;
+  if (m.kind === 'request-address') return <RequestAddressBubble key={m.id} m={m} />;
+  if (m.kind === 'share-address')   return <ShareAddressBubble   key={m.id} m={m} />;
+  if (m.kind === 'media')           return <MediaBubble          key={m.id} m={m} />;
+  const chat: ChatMsg = m;
+  return <MessageBubble key={m.id} m={chat} sendState={getSendState(m.id)} />;
+}
 
 function sliceNewEvents(
   events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
@@ -168,7 +186,8 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
-  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send } = useLxmfContext();
+  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send, getDisplayName } = useLxmfContext();
+  const insets = useSafeAreaInsets();
 
   const { publicKey } = useWallet();
 
@@ -177,14 +196,18 @@ export default function MessagesScreen() {
   const [activePeerHex,    setActivePeerHex]     = useState<string | null>(null);
   const [drawerVisible,    setDrawerVisible]     = useState(false);
   const [actionGridVisible, setActionGridVisible] = useState(false);
+  const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
 
-  const scrollRef         = useRef<ScrollView>(null);
-  const drawerAnim        = useRef(new Animated.Value(-DRAWER_W)).current;
-  const drawerOpenRef     = useRef(false);
-  const pendingRef        = useRef<Map<string, string[]>>(new Map());
-  const activePeerHexRef  = useRef<string | null>(null);
-  const lastEvtCountRef   = useRef(0);
-  const lastFirstEvtRef   = useRef<(typeof events)[0] | null>(null);
+  const scrollRef          = useRef<ScrollView>(null);
+  const drawerAnim         = useRef(new Animated.Value(-DRAWER_W)).current;
+  const drawerOpenRef      = useRef(false);
+  const activePeerHexRef   = useRef<string | null>(null);
+  const lastEvtCountRef    = useRef(0);
+  const lastFirstEvtRef    = useRef<(typeof events)[0] | null>(null);
+  const idToSeqRef         = useRef<Map<number, number>>(new Map());
+  const immediateTimers    = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const threadsRef         = useRef<Map<string, AnyMsg[]>>(new Map());
+  const msgsRef            = useRef<AnyMsg[]>([]);
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
@@ -193,7 +216,26 @@ export default function MessagesScreen() {
     activeConversationRef.current  = activePeerHex;
   }, [activePeerHex]);
 
-  // Incoming message handler
+  // Keyboard-aware safe-area spacer — collapses bottom spacer while keyboard is visible
+  const [kbShown, setKbShown] = useState(false);
+  useEffect(() => {
+    const isIOS = Platform.OS === 'ios';
+    const show = Keyboard.addListener(isIOS ? 'keyboardWillShow' : 'keyboardDidShow',  () => setKbShown(true));
+    const hide = Keyboard.addListener(isIOS ? 'keyboardWillHide' : 'keyboardDidHide', () => setKbShown(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  // Cleanup timers on unmount
+  useEffect(() => () => { immediateTimers.current.forEach(clearTimeout); }, []);
+  useEffect(() => { msgsRef.current = msgs; }, [msgs]);
+
+  const resolveSeq = useCallback((seq: number, state: 'sent' | 'queued' | 'delivered' | 'failed') => {
+    clearTimeout(immediateTimers.current.get(seq));
+    immediateTimers.current.delete(seq);
+    setSeqStates(m => new Map(m).set(seq, state));
+  }, []);
+
+  // Incoming messages + queue state events
   useEffect(() => {
     const prevCount = lastEvtCountRef.current;
     const prevFirst = lastFirstEvtRef.current;
@@ -204,46 +246,58 @@ export default function MessagesScreen() {
     if (newEvents.length === 0) return;
 
     for (const e of newEvents) {
+      if (e.type === 'messageQueued'   && typeof e.seq === 'number') { resolveSeq(e.seq, 'queued');    continue; }
+      if (e.type === 'messageDelivered'&& typeof e.seq === 'number') { resolveSeq(e.seq, 'delivered'); continue; }
+      if (e.type === 'messageFailed'   && typeof e.seq === 'number') { resolveSeq(e.seq, 'failed');    continue; }
       if (e.type !== 'messageReceived') continue;
-      const rawContent = e.content ?? '';
-      const srcHash: string = decodeLxmfSender(rawContent) ?? e.source ?? '';
-      const text = decodeLxmfContent(rawContent);
-      if (!text) continue;
 
-      const peer = lxmfPeers.find(p => p.destHash === srcHash);
-      const from = peer?.displayName || (srcHash ? srcHash.slice(0, 8) : 'unknown');
+      const srcHash: string = typeof e.source === 'string' ? e.source : '';
+      const bodyText = typeof e.body === 'string' ? decodeBody(e.body) : '';
+
+      const from = getDisplayName(srcHash) || 'unknown';
       const time = new Date().toTimeString().slice(0, 8);
 
-      const msg: AnyMsg = parseStructuredMsg(text, from, time) ?? { id: nextId(), from, me: false, time, text, enc: true };
+      const newMsgs: AnyMsg[] = [];
 
-      // Show in active thread; if from a different peer add a label
-      if (activePeerHexRef.current && srcHash !== activePeerHexRef.current) {
-        setMsgs(m => [...m,
-          { id: nextId(), kind: 'sys' as const, text: `message from ${from}` },
-          msg,
-        ]);
+      if (e.image && typeof e.image.data === 'string' && typeof e.image.mimeType === 'string') {
+        const uri = `data:${e.image.mimeType};base64,${e.image.data}`;
+        newMsgs.push({ id: nextId(), kind: 'media', from, me: false, time, uri, mimeType: e.image.mimeType });
+      }
+
+      const files = Array.isArray(e.files) && e.files.length > 0
+        ? (e.files as { name: string; data: string }[])
+        : undefined;
+      if (bodyText || files) {
+        const structured = bodyText ? parseStructuredMsg(bodyText, from, time) : null;
+        newMsgs.push(structured ?? { id: nextId(), from, me: false, time, text: bodyText, enc: true, files });
+      }
+
+      if (newMsgs.length === 0) continue;
+
+      if (srcHash === activePeerHexRef.current) {
+        setMsgs(m => [...m, ...newMsgs]);
       } else {
-        setMsgs(m => [...m, msg]);
+        // Route to that peer's thread regardless of whether any peer is active
+        const thread = threadsRef.current.get(srcHash) ?? [];
+        threadsRef.current.set(srcHash, [...thread, ...newMsgs]);
+        if (activePeerHexRef.current !== null) {
+          setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `↙ message from ${from}` }]);
+        }
       }
     }
-  }, [events, lxmfPeers]);
+  }, [events, getDisplayName, resolveSeq]);
 
-  // Retry queued messages when the peer's identity arrives via announce
-  useEffect(() => {
-    const last = events[0]; // context prepends new events — index 0 is latest
-    if (last?.type !== 'announceReceived') return;
-    const hash: string | null = last.destHash ?? null;
-    if (!hash) return;
-    const queued = pendingRef.current.get(hash);
-    if (!queued?.length) return;
-    pendingRef.current.delete(hash);
-    for (const text of queued) {
-      send(hash, utf8ToBase64(text)).catch(() => {});
-    }
-    if (hash === activePeerHexRef.current) {
-      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'identity resolved — queued messages sent' }]);
-    }
-  }, [events, send]);
+
+  const queuedCount = useMemo(
+    () => [...seqStates.values()].filter(s => s === 'queued').length,
+    [seqStates],
+  );
+
+  const getSendState = useCallback((msgId: number) => {
+    const seq = idToSeqRef.current.get(msgId);
+    if (seq === undefined) return undefined;
+    return seqStates.get(seq);
+  }, [seqStates]);
 
   const livePeers: Peer[] = useMemo(
     () => lxmfPeers.map(lxmfPeerToPeer),
@@ -319,8 +373,9 @@ export default function MessagesScreen() {
   });
 
   const sendMsg = useCallback(async (text: string) => {
-    const now = new Date().toTimeString().slice(0, 8);
-    setMsgs(m => [...m, { id: nextId(), from: 'me', me: true, time: now, text, enc: true }]);
+    const now   = new Date().toTimeString().slice(0, 8);
+    const msgId = nextId();
+    setMsgs(m => [...m, { id: msgId, from: 'me', me: true, time: now, text, enc: true }]);
     if (!activePeerHex) {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
       return;
@@ -329,22 +384,37 @@ export default function MessagesScreen() {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
       return;
     }
-    try {
-      const receipt = await send(activePeerHex, utf8ToBase64(text));
-      if (receipt < 0) {
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'send failed: no route to peer' }]);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'send error';
-      if (msg.includes('missing destination identity')) {
-        const q = pendingRef.current;
-        q.set(activePeerHex, [...(q.get(activePeerHex) ?? []), text]);
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'peer identity unknown — queued, retrying on announce' }]);
-      } else {
-        setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
-      }
+    const seq = await send(activePeerHex, utf8ToBase64(text));
+    if (seq < 0) {
+      // -1: useLxmf caught a native error; lxmf.error banner shows reason
+      const pseudoSeq = -msgId;
+      idToSeqRef.current.set(msgId, pseudoSeq);
+      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
+    } else if (seq > 0) {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
     }
-  }, [activePeerHex, isRunning, send]);
+    // seq === 0: accepted by module but no seq to track; bubble stays optimistic
+  }, [activePeerHex, isRunning, send, resolveSeq]);
+
+  const handleMedia = useCallback(async (media: MediaPayload) => {
+    const now   = new Date().toTimeString().slice(0, 8);
+    const msgId = nextId();
+    setMsgs(m => [...m, { id: msgId, kind: 'media' as const, from: 'me', me: true, time: now,
+      uri: media.uri, mimeType: media.mimeType, width: media.width, height: media.height }]);
+    if (!activePeerHex || !isRunning) return;
+    const seq = await send(activePeerHex, utf8ToBase64(''), { image: { mimeType: media.mimeType, data: media.base64 } });
+    if (seq < 0) {
+      const pseudoSeq = -msgId;
+      idToSeqRef.current.set(msgId, pseudoSeq);
+      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
+    } else if (seq > 0) {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
+    }
+  }, [activePeerHex, isRunning, send, resolveSeq]);
 
   const handleGridAction = useCallback((a: GridAction) => {
     const now  = new Date().toTimeString().slice(0, 8);
@@ -367,19 +437,22 @@ export default function MessagesScreen() {
     setMsgs(m => [...m, bubble]);
 
     if (!activePeerHex) return;
-    send(activePeerHex, utf8ToBase64(payload)).catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : 'send error';
-      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `send failed: ${msg}` }]);
-    });
+    send(activePeerHex, utf8ToBase64(payload));
   }, [publicKey, activePeerHex, send]);
 
   const pickPeer = useCallback((p: Peer) => {
+    const prevHash = activePeerHexRef.current;
+    if (prevHash) threadsRef.current.set(prevHash, msgsRef.current);
+    const newHash = p.destHash ?? null;
+    // Sync ref immediately — avoids race where a message arrives before the next render+effect
+    activePeerHexRef.current      = newHash;
+    activeConversationRef.current = newHash;
     setActivePeer(p.handle);
-    setActivePeerHex(p.destHash ?? null);
+    setActivePeerHex(newHash);
     closeDrawer();
-    setMsgs([
+    const saved = newHash ? threadsRef.current.get(newHash) : undefined;
+    setMsgs(saved ?? [
       { id: 1, kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` },
-      { id: 2, from: p.handle, me: false, time: new Date().toTimeString().slice(0, 8), text: 'channel open. e2ee locked in.', enc: true },
     ]);
   }, [closeDrawer]);
 
@@ -389,9 +462,10 @@ export default function MessagesScreen() {
     const hash = pendingConversationRef.current;
     if (hash) {
       pendingConversationRef.current = null;
+      if (hash === activePeerHexRef.current) return; // already in this thread
       const peer = lxmfPeers.find(p => p.destHash === hash);
       pickPeer(peer ? lxmfPeerToPeer(peer) : {
-        handle:   `@${hash.slice(0, 8)}`,
+        handle:   getDisplayName(hash),
         hops:     0,
         iface:    'TCP',
         online:   true,
@@ -403,13 +477,13 @@ export default function MessagesScreen() {
       });
     }
     return () => { messagesFocusedRef.current = false; };
-  }, [lxmfPeers, pickPeer]));
+  }, [lxmfPeers, pickPeer, getDisplayName]));
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={[]}>
         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
             <ThreadHeader
               peer={activePeerHex ? activePeer : null}
               selfName={displayName || undefined}
@@ -420,6 +494,14 @@ export default function MessagesScreen() {
             />
             {activePeerHex ? (
               <>
+                {queuedCount > 0 && (
+                  <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
+                    <Feather name="clock" size={11} color={colors.primary} />
+                    <Text style={[S.queueBannerText, { color: colors.primary }]}>
+                      {queuedCount} message{queuedCount > 1 ? 's' : ''} queued — will deliver when peer is reachable
+                    </Text>
+                  </View>
+                )}
                 <ScrollView
                   ref={scrollRef}
                   style={{ flex: 1 }}
@@ -427,17 +509,12 @@ export default function MessagesScreen() {
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
-                  {msgs.map(m => {
-                    if (m.kind === 'sys')             return <SystemLine           key={m.id} text={m.text} />;
-                    if (m.kind === 'tx')              return <InlineTxCard         key={m.id} m={m} />;
-                    if (m.kind === 'request-money')   return <RequestMoneyBubble   key={m.id} m={m} />;
-                    if (m.kind === 'request-address') return <RequestAddressBubble key={m.id} m={m} />;
-                    if (m.kind === 'share-address')   return <ShareAddressBubble   key={m.id} m={m} />;
-                    return <MessageBubble key={m.id} m={m as ChatMsg} />;
-                  })}
+                  {msgs.map(m => renderMsg(m, getSendState))}
                   <View style={{ height: 4 }} />
                 </ScrollView>
-                <Composer onSend={sendMsg} onGrid={() => setActionGridVisible(true)} />
+                <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
+                {/* Safe-area spacer: collapses when keyboard is up (KAV padding already covers it) */}
+                <View style={{ height: kbShown ? 0 : insets.bottom }} />
               </>
             ) : (
               <NoPeerState onOpen={openDrawer} peerCount={livePeers.length} />
@@ -475,7 +552,7 @@ export default function MessagesScreen() {
           peers={livePeers.length > 0 ? livePeers : undefined}
           isAnnouncing={isAnnouncing}
           onNewHash={hash => pickPeer({
-            handle:   `@${hash.slice(0, 8)}`,
+            handle:   getDisplayName(hash) || hash.slice(0, 8),
             hops:     0,
             iface:    'TCP',
             online:   true,
@@ -492,7 +569,9 @@ export default function MessagesScreen() {
 }
 
 const S = StyleSheet.create({
-  root:   { flex: 1 },
+  root:            { flex: 1 },
+  queueBanner:     { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 0.5 },
+  queueBannerText: { fontSize: 11, letterSpacing: 0.3, flex: 1 },
   drawer: {
     position: 'absolute', top: 0, bottom: 0, left: 0, width: DRAWER_W,
     zIndex: 41, borderTopRightRadius: 18, borderBottomRightRadius: 18,

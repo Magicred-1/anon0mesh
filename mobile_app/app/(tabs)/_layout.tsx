@@ -140,8 +140,9 @@ export default function TabLayout() {
             },
             headerStyle:     { backgroundColor: colors.background },
             headerTintColor: colors.textPrimary,
-            headerShown:     false,
-            tabBarButton:    HapticTab,
+            headerShown:          false,
+            tabBarButton:         HapticTab,
+            tabBarHideOnKeyboard: true,
           }}
         >
           <Tabs.Screen name="index"    options={{ title: 'Messages', tabBarIcon: MessagesIcon }} />

@@ -13,6 +13,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app requires camera access to scan QR codes for connecting with peers and sharing content.",
+        "NSPhotoLibraryUsageDescription": "Allow anonmesh to access your photo library to send images in encrypted chats.",
         "NSFaceIDUsageDescription": "This app uses Face ID to securely authenticate you when accessing sensitive features or information within the app.",
         "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral"]
       },
@@ -27,7 +28,8 @@
         "foregroundImage": "./assets/images/favicon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "allowBackup": false
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "output": "static",
@@ -35,6 +37,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow anonmesh to access your photo library to send images in encrypted chats."
+        }
+      ],
       [
         "expo-camera",
         {

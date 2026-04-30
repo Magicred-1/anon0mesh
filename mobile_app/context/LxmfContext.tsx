@@ -11,6 +11,7 @@ import {
   type LxmfNodeStatus,
   type Beacon,
   type LxmfEvent,
+  type LxmfMedia,
   type TcpInterface,
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
@@ -90,13 +91,15 @@ function applyAnnounceEvent(
   bleActive: boolean,
 ): { peerChanged: boolean; nameChanged: boolean } {
   if (e.type !== 'announceReceived') return { peerChanged: false, nameChanged: false };
-  // Rust may use destHash, address, or source depending on version
-  const hash = (e.destHash ?? e.address ?? e.source) as string | undefined;
+  const hash = (e.destHash ?? (e as any).dest_hash ?? e.address ?? e.source) as string | undefined;
   if (typeof hash !== 'string' || hash === ownHash)
     return { peerChanged: false, nameChanged: false };
 
-  const appData  = typeof e.appData === 'string' ? e.appData.trim() : '';
-  const name     = appData ? sanitizeName(appData, hash) : undefined;
+  const rawAppData = typeof e.appData === 'string' ? e.appData : (e as any).app_data;
+  const appData    = typeof rawAppData === 'string' ? rawAppData : '';
+  const isBeaconNode = appData.startsWith('anonmesh::beacon::v1');
+  const nameRaw  = isBeaconNode ? (appData.split('\0')[1] ?? '') : appData.trim();
+  const name     = nameRaw ? sanitizeName(nameRaw, hash) : undefined;
   const nameChanged = !!name && names[hash] !== name;
   if (nameChanged) names[hash] = name!;
 
@@ -105,12 +108,13 @@ function applyAnnounceEvent(
   if (typeof e.hops === 'number') hops = e.hops;
   else if (typeof (e as any).hopCount === 'number') hops = (e as any).hopCount;
   map.set(hash, {
-    destHash:    hash,
-    displayName: name ?? existing?.displayName ?? hash.slice(0, 8),
+    destHash:     hash,
+    displayName:  name ?? existing?.displayName ?? hash.slice(0, 8),
     hops,
-    lastSeen:    now,
-    online:      true,
-    via:         resolveVia(hops, bleActive, existing),
+    lastSeen:     now,
+    online:       true,
+    via:          resolveVia(hops, bleActive, existing),
+    isBeaconNode: isBeaconNode || (existing?.isBeaconNode ?? false),
   });
   return { peerChanged: true, nameChanged };
 }
@@ -153,12 +157,13 @@ function processNewEvents(
           const hops = Number.parseInt(m[2], 10);
           const existing = map.get(hash);
           map.set(hash, {
-            destHash:    hash,
-            displayName: existing?.displayName ?? names[hash] ?? hash.slice(0, 8),
+            destHash:     hash,
+            displayName:  existing?.displayName ?? names[hash] ?? hash.slice(0, 8),
             hops,
-            lastSeen:    now,
-            online:      true,
-            via:         resolveVia(hops, bleActive, existing),
+            lastSeen:     now,
+            online:       true,
+            via:          resolveVia(hops, bleActive, existing),
+            isBeaconNode: existing?.isBeaconNode ?? false,
           });
           peerChanged = true;
         }
@@ -171,9 +176,10 @@ function processNewEvents(
 
 function applyBeaconDiscovered(e: LxmfEvent, names: NameDict): boolean {
   if (e.type !== 'beaconDiscovered') return false;
-  const hash = (e.destHash ?? e.address ?? e.source) as string | undefined;
+  const hash = (e.destHash ?? (e as any).dest_hash ?? e.address ?? e.source) as string | undefined;
   if (typeof hash !== 'string') return false;
-  const appData = typeof e.appData === 'string' ? e.appData.trim() : '';
+  const rawAppData = typeof e.appData === 'string' ? e.appData : (e as any).app_data;
+  const appData    = typeof rawAppData === 'string' ? rawAppData.trim() : '';
   if (!appData) return false;
   const name = sanitizeName(appData, hash);
   if (names[hash] === name) return false;
@@ -194,12 +200,13 @@ function mergeBeacon(
     return false;
   // Beacons can be any interface — preserve existing via tag if known
   map.set(b.destHash, {
-    destHash:    b.destHash,
-    displayName: dispName,
-    hops:        existing?.hops ?? 0,
+    destHash:     b.destHash,
+    displayName:  dispName,
+    hops:         existing?.hops ?? 0,
     lastSeen,
-    online:      isOnline,
-    via:         existing?.via ?? 'reticulum',
+    online:       isOnline,
+    via:          existing?.via ?? 'reticulum',
+    isBeaconNode: true,
   });
   return true;
 }
@@ -212,12 +219,13 @@ export const MY_PC:      TcpInterface = {
 };
 
 export interface LxmfPeer {
-  destHash:    string;
-  displayName: string;
-  hops:        number;
-  lastSeen:    number;
-  online:      boolean;
-  via:         'ble' | 'reticulum' | 'rnode';
+  destHash:     string;
+  displayName:  string;
+  hops:         number;
+  lastSeen:     number;
+  online:       boolean;
+  via:          'ble' | 'reticulum' | 'rnode';
+  isBeaconNode: boolean;
 }
 
 interface LxmfCtxValue {
@@ -242,8 +250,8 @@ interface LxmfCtxValue {
     displayName?:    string;
   }) => Promise<boolean>;
   stop:                 () => Promise<void>;
-  send:                 (destHex: string, bodyBase64: string) => Promise<number>;
-  broadcast:            (destsHex: string[], bodyBase64: string) => Promise<number>;
+  send:                 (destHex: string, bodyBase64: string, media?: LxmfMedia) => Promise<number>;
+  broadcast:            (destsHex: string[], bodyBase64: string, media?: LxmfMedia) => Promise<number>;
   /** Start BLE radio. For LoRa: pair RNode in OS BT settings first, then call this. */
   startBLE:             () => Promise<void>;
   stopBLE:              () => Promise<void>;
@@ -256,6 +264,8 @@ interface LxmfCtxValue {
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
   setBeaconMode:        (enabled: boolean) => Promise<void>;
+  /** Reads from refs — always current, safe to call inside any effect. */
+  getDisplayName:       (hash: string) => string;
 }
 
 const LxmfCtx = createContext<LxmfCtxValue | null>(null);
@@ -370,7 +380,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       if (!cached) return;
       const map = knownPeersRef.current;
       for (const p of cached) {
-        if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false });
+        if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false, isBeaconNode: p.isBeaconNode ?? false });
       }
       setPeers(Array.from(map.values()));
     });
@@ -446,6 +456,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     // auto-start effect fires on isRunning → false, picks up new isBeacon state
   }, [isRunning, stop]);
 
+  const getDisplayName = useCallback((hash: string) => {
+    const peer = knownPeersRef.current.get(hash);
+    return peer?.displayName || nameMapRef.current[hash] || hash.slice(0, 8);
+  }, []);
+
   const value = useMemo(() => ({
     isRunning:             lxmf.isRunning,
     isNativeAvailable:     lxmf.isNativeAvailable,
@@ -480,8 +495,9 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     },
     isBeacon,
     setBeaconMode,
+    getDisplayName,
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
-       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode,
+       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode, getDisplayName,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop, lxmf.send,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons, lxmf.fetchMessages,
