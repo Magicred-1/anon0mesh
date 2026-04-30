@@ -29,7 +29,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",
