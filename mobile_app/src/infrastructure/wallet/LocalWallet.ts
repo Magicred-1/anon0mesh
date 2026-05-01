@@ -125,6 +125,17 @@ export class LocalWallet implements IWalletAdapter {
     return (await secureGet(SecureKeys.WALLET_MARKER)) === 'true';
   }
 
+  /** Returns true only when ALL keys needed for export are present. */
+  static async isFullyIntact(): Promise<boolean> {
+    const [marker, pubkey, aesKey, secret] = await Promise.all([
+      secureGet(SecureKeys.WALLET_MARKER),
+      secureGet(SecureKeys.WALLET_PUBKEY),
+      secureGet(SecureKeys.WALLET_AES_KEY),
+      secureGet(SecureKeys.WALLET_SECRET),
+    ]);
+    return marker === 'true' && !!pubkey && !!aesKey && !!secret;
+  }
+
   static async create(): Promise<LocalWallet> {
     const auth = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Authenticate to create your anonmesh wallet',
