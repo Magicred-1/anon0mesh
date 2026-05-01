@@ -213,10 +213,11 @@ function mergeBeacon(
 
 export const G00N_HUB:   TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 };
 export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net',    port: 4242 };
-export const MY_PC:      TcpInterface = {
-  host: process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST ?? 'localhost',
-  port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243),
-};
+
+const _myPcHost = process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST;
+export const MY_PC: TcpInterface | null = _myPcHost && _myPcHost !== 'localhost'
+  ? { host: _myPcHost, port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243) }
+  : null;
 
 /** Message as stored in the native DB — returned by fetchMessages(). */
 export interface StoredMessage {
@@ -312,7 +313,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const lxmf = useLxmf({
     identityHex:    storedIdentity?.identity_hex ?? 'new',
     lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
-    logLevel:       2,
+    logLevel:       __DEV__ ? 2 : 1,
     dbPath: 'messages.db',
   });
 
@@ -324,7 +325,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     startingRef.current = true;
     start({
       mode:           LxmfNodeMode.ReticulumAndBle,
-      tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB],
+      tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB].filter(Boolean) as TcpInterface[],
       displayName,
       identityHex:    storedIdentity?.identity_hex ?? 'new',
       lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
@@ -446,7 +447,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     if (!isRunning) {
       const ok = await start({
         mode:           LxmfNodeMode.ReticulumAndBle,
-        tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB],
+        tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB].filter(Boolean) as TcpInterface[],
         displayName:    displayName ?? '',
         identityHex:    storedIdentity?.identity_hex ?? 'new',
         lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
