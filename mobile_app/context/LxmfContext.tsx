@@ -218,6 +218,16 @@ export const MY_PC:      TcpInterface = {
   port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243),
 };
 
+/** Message as stored in the native DB — returned by fetchMessages(). */
+export interface StoredMessage {
+  source:    string;
+  body:      string;   // base64
+  title?:    string;
+  timestamp: number;
+  image?:    { mimeType: string; data: string };
+  files?:    { name: string; data: string }[];
+}
+
 export interface LxmfPeer {
   destHash:     string;
   displayName:  string;
@@ -257,7 +267,9 @@ interface LxmfCtxValue {
   stopBLE:              () => Promise<void>;
   getStatus:            () => LxmfNodeStatus | null;
   getBeacons:           () => Beacon[];
-  fetchMessages:        (limit?: number) => any[];
+  fetchMessages:        (limit?: number) => StoredMessage[];
+  /** Fetch stored messages for a specific peer from the native DB. */
+  getPeerMessages:      (destHash: string, limit?: number) => StoredMessage[];
   setLogLevel:          (level: number) => void;
   bleUnpairedRNodeCount: () => number;
   blePeerCount:         number;
@@ -301,6 +313,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     identityHex:    storedIdentity?.identity_hex ?? 'new',
     lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
     logLevel:       2,
+    dbPath: 'messages.db',
   });
 
   const { isNativeAvailable, isRunning, start, stop, getIdentityHex, startBLE: lxmfStartBLE, stopBLE: lxmfStopBLE } = lxmf;
@@ -461,6 +474,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     return peer?.displayName || nameMapRef.current[hash] || hash.slice(0, 8);
   }, []);
 
+  const { fetchMessages: lxmfFetchMessages } = lxmf;
+  const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
+    const all = lxmfFetchMessages(limit * 2) as StoredMessage[];
+    return all.filter(m => m.source === destHash).slice(0, limit);
+  }, [lxmfFetchMessages]);
+
   const value = useMemo(() => ({
     isRunning:             lxmf.isRunning,
     isNativeAvailable:     lxmf.isNativeAvailable,
@@ -483,7 +502,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     stopBLE:               handleStopBLE,
     getStatus:             lxmf.getStatus,
     getBeacons:            lxmf.getBeacons,
-    fetchMessages:         lxmf.fetchMessages,
+    fetchMessages:         lxmfFetchMessages,
+    getPeerMessages,
     setLogLevel:           lxmf.setLogLevel,
     bleUnpairedRNodeCount: lxmf.bleUnpairedRNodeCount,
     blePeerCount,
@@ -497,10 +517,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     setBeaconMode,
     getDisplayName,
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
-       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode, getDisplayName,
+       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode, getDisplayName, getPeerMessages, lxmfFetchMessages,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop, lxmf.send,
-       lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons, lxmf.fetchMessages,
+       lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount]);
 
   return (
