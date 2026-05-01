@@ -35,25 +35,6 @@ function decodeBody(b64: string): string {
   try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { return ''; }
 }
 
-function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: string): AnyMsg[] {
-  const me   = !!ownHash && m.source === ownHash;
-  const time = new Date(m.timestamp * 1000).toTimeString().slice(0, 8);
-  const out: AnyMsg[] = [];
-
-  if (m.image?.data && m.image?.mimeType) {
-    const uri = `data:${m.image.mimeType};base64,${m.image.data}`;
-    out.push({ id: nextId(), kind: 'media', from: me ? 'me' : from, me, time, uri, mimeType: m.image.mimeType });
-  }
-
-  const bodyText = m.body ? decodeBody(m.body) : '';
-  if (bodyText || (m.files && m.files.length > 0)) {
-    const sender     = me ? 'me' : from;
-    const structured = bodyText ? parseStructuredMsg(bodyText, sender, time) : null;
-    out.push(structured ?? { id: nextId(), from: sender, me, time, text: bodyText, enc: true, files: m.files });
-  }
-
-  return out;
-}
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
 let _msgId = Date.now();
@@ -200,6 +181,26 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
       return { id, kind: 'request-money', from, me: false, time, asset: p.asset ?? 'SOL', amount: p.amount, note: p.note };
   } catch { /* plain text */ }
   return null;
+}
+
+function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: string): AnyMsg[] {
+  const me   = !!ownHash && m.source === ownHash;
+  const time = new Date(m.timestamp * 1000).toTimeString().slice(0, 8);
+  const out: AnyMsg[] = [];
+
+  if (m.image?.data && m.image?.mimeType) {
+    const uri = `data:${m.image.mimeType};base64,${m.image.data}`;
+    out.push({ id: nextId(), kind: 'media', from: me ? 'me' : from, me, time, uri, mimeType: m.image.mimeType });
+  }
+
+  const bodyText = m.body ? decodeBody(m.body) : '';
+  if (bodyText || (m.files && m.files.length > 0)) {
+    const sender     = me ? 'me' : from;
+    const structured = bodyText ? parseStructuredMsg(bodyText, sender, time) : null;
+    out.push(structured ?? { id: nextId(), from: sender, me, time, text: bodyText, enc: true, files: m.files });
+  }
+
+  return out;
 }
 
 // ── Screen ───────────────────────────────────────────────────────────────────
