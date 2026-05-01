@@ -313,8 +313,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const lxmf = useLxmf({
     identityHex:    storedIdentity?.identity_hex ?? 'new',
     lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
-    logLevel:       __DEV__ ? 2 : 1,
-    dbPath: 'messages.db',
+    logLevel: __DEV__ ? 2 : 1,
+    dbPath:   undefined,
   });
 
   const { isNativeAvailable, isRunning, start, stop, getIdentityHex, startBLE: lxmfStartBLE, stopBLE: lxmfStopBLE } = lxmf;
