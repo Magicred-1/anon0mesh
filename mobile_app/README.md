@@ -16,6 +16,12 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+## Mobile UI notes
+
+- Bottom tabs use the custom `PolishedTabBar` in `app/(tabs)/_layout.tsx`.
+- Android system navigation color is configured in `app.json` and refreshed at runtime from `app/_layout.tsx`; rebuild the native/dev-client app after changing those config values.
+- Validate bottom navigation changes in an Android or iOS dev build. Web preview currently depends on native wallet modules and is not the source of truth for this UI.
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)

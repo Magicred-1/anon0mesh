@@ -31,12 +31,25 @@
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan"
     },
+    "androidNavigationBar": {
+      "backgroundColor": "#00080C",
+      "barStyle": "light-content"
+    },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-navigation-bar",
+        {
+          "backgroundColor": "#00080C",
+          "barStyle": "light",
+          "enforceContrast": false,
+          "visibility": "visible"
+        }
+      ],
       [
         "expo-image-picker",
         {
