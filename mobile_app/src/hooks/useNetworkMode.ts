@@ -64,13 +64,17 @@ export function useNetworkMode(): NetworkState {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, relay?.destHash]);
 
-  // Route incoming LXMF messages to the active MeshRpcAdapter.
+  // Route incoming LXMF messages and rpcResponse events to the active MeshRpcAdapter.
   useEffect(() => {
     const mesh = meshAdapterRef.current;
     if (!mesh || events.length === 0) return;
     const last = events[0];
-    if (last?.type === 'messageReceived' && last.source && last.content) {
-      mesh.handleIncoming(last.source as string, last.content as string);
+    if (last?.type === 'messageReceived' && last.source && last.body) {
+      const decoded = Buffer.from(last.body as string, 'base64').toString('utf8');
+      mesh.handleIncoming(last.source as string, decoded);
+    }
+    if (last?.type === 'rpcResponse') {
+      mesh.handleIncoming(last.source as string ?? '', last.body as string ?? '');
     }
   }, [events]);
 

@@ -184,7 +184,7 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
 }
 
 function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: string): AnyMsg[] {
-  const me   = !!ownHash && m.source === ownHash;
+  const me   = m.outbound === true || (!!ownHash && m.source === ownHash);
   const time = new Date(m.timestamp * 1000).toTimeString().slice(0, 8);
   const out: AnyMsg[] = [];
 
@@ -407,16 +407,15 @@ export default function MessagesScreen() {
     }
     const seq = await send(activePeerHex, utf8ToBase64(text));
     if (seq < 0) {
-      // -1: useLxmf caught a native error; lxmf.error banner shows reason
       const pseudoSeq = -msgId;
       idToSeqRef.current.set(msgId, pseudoSeq);
       setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
-    } else if (seq > 0) {
+    } else {
+      // seq >= 0: queued (not yet delivered) — track it
       idToSeqRef.current.set(msgId, seq);
       const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
       immediateTimers.current.set(seq, timer);
     }
-    // seq === 0: accepted by module but no seq to track; bubble stays optimistic
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
   const handleMedia = useCallback(async (media: MediaPayload) => {
@@ -430,7 +429,7 @@ export default function MessagesScreen() {
       const pseudoSeq = -msgId;
       idToSeqRef.current.set(msgId, pseudoSeq);
       setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
-    } else if (seq > 0) {
+    } else {
       idToSeqRef.current.set(msgId, seq);
       const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
       immediateTimers.current.set(seq, timer);
