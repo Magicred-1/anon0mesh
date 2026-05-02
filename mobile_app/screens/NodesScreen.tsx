@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, FlatList, ScrollView, Pressable, StyleSheet,
-  Platform, PermissionsAndroid,
+  Platform, PermissionsAndroid, InteractionManager,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
@@ -45,12 +46,13 @@ export default function NodesScreen() {
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
-  // 15s tick — enough precision for "Xs ago" labels, 15× fewer re-renders than 1s
+  // 15s tick — enough precision for "Xs ago" labels, but only while this tab is focused.
   const [nowSec, setNowSec] = useState(() => Date.now() / 1000);
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    setNowSec(Date.now() / 1000);
     const id = setInterval(() => setNowSec(Date.now() / 1000), 15_000);
     return () => clearInterval(id);
-  }, []);
+  }, []));
 
   const enableBle = useCallback(async () => {
     if (bleActive) return; // already started — don't re-trigger GATT registration
@@ -68,9 +70,13 @@ export default function NodesScreen() {
     startBLE();
   }, [bleActive, startBLE]);
 
-  useEffect(() => {
-    if (isNativeAvailable) enableBle();
-  }, [isNativeAvailable, enableBle]);
+  useFocusEffect(useCallback(() => {
+    if (!isNativeAvailable) return undefined;
+    const task = InteractionManager.runAfterInteractions(() => {
+      enableBle();
+    });
+    return () => task.cancel();
+  }, [isNativeAvailable, enableBle]));
 
   // Stable node identity: only re-creates when peers change, not on timer ticks.
   // MeshMap receives this — topology layout only runs when peer set actually changes.
