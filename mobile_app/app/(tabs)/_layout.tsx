@@ -220,6 +220,7 @@ function PolishedTabBar({ state, navigation }: BottomTabBarProps) {
           <View onLayout={onLayout} style={S.tabRow}>
             {state.routes.map((route, index) => {
               const isFocused = activeIndex === index;
+              const routeIsFocused = state.index === index;
               const meta = TAB_META[route.name] ?? {
                 label: route.name,
                 icon: 'circle' as React.ComponentProps<typeof Feather>['name'],
@@ -249,7 +250,7 @@ function PolishedTabBar({ state, navigation }: BottomTabBarProps) {
                   return;
                 }
 
-                if (!isFocused && !event.defaultPrevented) {
+                if (!routeIsFocused && !event.defaultPrevented) {
                   navigation.dispatch(TabActions.jumpTo(route.name, route.params));
                 }
               };
@@ -386,17 +387,17 @@ export default function TabLayout() {
     <GestureDetector gesture={swipe}>
       <View style={S.fill}>
         <Tabs
-          detachInactiveScreens={false}
+          detachInactiveScreens
           tabBar={(props) => <PolishedTabBar {...props} />}
           screenOptions={{
             tabBarActiveTintColor:   colors.primary,
             tabBarInactiveTintColor: colors.textTertiary,
             animation:            'none',
-            freezeOnBlur:         false,
+            freezeOnBlur:         true,
             headerStyle:     { backgroundColor: colors.background },
             headerTintColor: colors.textPrimary,
             headerShown:          false,
-            lazy:                 false,
+            lazy:                 true,
             tabBarHideOnKeyboard: true,
           }}
         >

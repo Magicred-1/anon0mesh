@@ -7,7 +7,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
-  useSharedValue, useAnimatedStyle, withSpring, runOnJS,
+  useSharedValue, useAnimatedStyle, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
@@ -172,6 +172,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
   const [expanded,   setExpanded]   = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const heightAnim = useRef(new Animated.Value(0)).current;
+  const shouldRenderCanvas = expanded || fullscreen;
 
   const toggle = useCallback(() => {
     setExpanded(prev => {
@@ -196,16 +197,18 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
   );
 
   useEffect(() => {
+    if (!shouldRenderCanvas) return undefined;
     const anim = Animated.loop(
       Animated.timing(pulse, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: true }),
     );
     anim.start();
     return () => anim.stop();
-  }, [pulse]);
+  }, [pulse, shouldRenderCanvas]);
 
   // Ghost breathe animation for skeleton placeholders
   const ghost = useRef(new Animated.Value(0.25)).current;
   useEffect(() => {
+    if (!shouldRenderCanvas) return undefined;
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(ghost, { toValue: 0.65, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -214,7 +217,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
     );
     anim.start();
     return () => anim.stop();
-  }, [ghost]);
+  }, [ghost, shouldRenderCanvas]);
 
   // ── Pan + Pinch shared values ─────────────────────────────────────────────
   const tx  = useSharedValue(0); const ty  = useSharedValue(0);
@@ -238,22 +241,6 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
     stx.value = initTx; sty.value = initTy;
   }, [tx, ty, stx, sty]);
 
-  const resetView = useCallback(() => {
-    let targetTx: number, targetTy: number;
-    if (fullscreen) {
-      const { width, height } = Dimensions.get('window');
-      targetTx = width / 2 - ME_X;
-      targetTy = height / 2 - ME_Y;
-    } else {
-      targetTx = normalCenterTx.current;
-      targetTy = normalCenterTy.current;
-    }
-    tx.value  = withSpring(targetTx, { damping: 18, stiffness: 130 });
-    ty.value  = withSpring(targetTy, { damping: 18, stiffness: 130 });
-    sc.value  = withSpring(1,        { damping: 18, stiffness: 130 });
-    stx.value = targetTx; sty.value = targetTy; ssc.value = 1;
-  }, [fullscreen, tx, ty, sc, stx, sty, ssc]);
-
   const enterFullscreen = useCallback(() => {
     const { width, height } = Dimensions.get('window');
     const ftx = width / 2 - ME_X;
@@ -272,6 +259,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
 
   // ── Layout computation ────────────────────────────────────────────────────
   const placed = useMemo(() => {
+    if (!shouldRenderCanvas) return [];
     const seen = new Set<string>();
     const sorted = [...nodes].sort((a, b) => {
       if ((a.online === false) !== (b.online === false)) return a.online === false ? 1 : -1;
@@ -284,7 +272,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
       return true;
     }).slice(0, MAX_NODES);
     return layout(unique);
-  }, [nodes]);
+  }, [nodes, shouldRenderCanvas]);
 
   const edgeList = useMemo(() => edges(placed), [placed]);
 
@@ -472,11 +460,13 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
       {/* Collapsible small viewport */}
       {!fullscreen && (
         <Animated.View style={[S.canvasWrap, { height: heightAnim }]}>
-          <GestureDetector gesture={composed}>
-            <View style={S.viewport} onLayout={onViewportLayout}>
-              {canvasContent}
-            </View>
-          </GestureDetector>
+          {shouldRenderCanvas && (
+            <GestureDetector gesture={composed}>
+              <View style={S.viewport} onLayout={onViewportLayout}>
+                {canvasContent}
+              </View>
+            </GestureDetector>
+          )}
           {selStrip(0)}
           {expanded && (
             <Pressable
