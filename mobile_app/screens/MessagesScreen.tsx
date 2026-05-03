@@ -19,7 +19,6 @@ import { ThreadHeader }          from '@/components/messages/ThreadHeader';
 import { PeersDrawer }           from '@/components/messages/PeersDrawer';
 import { CreateGroupModal }      from '@/components/messages/CreateGroupModal';
 import { JoinGroupModal }        from '@/components/messages/JoinGroupModal';
-import { GroupMembersSheet }     from '@/components/messages/GroupMembersSheet';
 import { ChannelShareSheet }    from '@/components/messages/ChannelShareSheet';
 import { DRAWER_W, type Peer } from '@/components/messages/constants';
 import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
@@ -214,7 +213,7 @@ export default function MessagesScreen() {
   const {
     isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send,
     getDisplayName, getPeerMessages, myAddress,
-    groups, createGroup, joinGroup, leaveGroup, getGroupMembers,
+    groups, createGroup, joinGroup, leaveGroup,
   } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
@@ -227,8 +226,7 @@ export default function MessagesScreen() {
   const [actionGridVisible,  setActionGridVisible]  = useState(false);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
-  const [membersAddrHex,     setMembersAddrHex]     = useState<string | null>(null);
-  const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
+const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
 
   const scrollRef          = useRef<ScrollView>(null);
@@ -611,13 +609,6 @@ export default function MessagesScreen() {
         onClose={() => setShareSheetOpen(false)}
         group={groups.find(g => g.addrHex === activePeerHex) ?? null}
       />
-      <GroupMembersSheet
-        visible={membersAddrHex !== null}
-        onClose={() => setMembersAddrHex(null)}
-        group={groups.find(g => g.addrHex === membersAddrHex) ?? null}
-        members={membersAddrHex ? getGroupMembers(membersAddrHex) : []}
-        getDisplayName={getDisplayName}
-      />
 
       <Animated.View style={[
         S.drawer,
@@ -644,7 +635,6 @@ export default function MessagesScreen() {
           onCreateGroup={() => setCreateGroupVisible(true)}
           onJoinGroup={() => setJoinGroupVisible(true)}
           onLeaveGroup={addrHex => leaveGroup(addrHex)}
-          onShowMembers={addrHex => setMembersAddrHex(addrHex)}
         />
       </Animated.View>
     </View>

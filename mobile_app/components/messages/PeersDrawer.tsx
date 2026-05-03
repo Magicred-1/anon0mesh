@@ -2,6 +2,8 @@ import React, { memo, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { PulseDot } from '@/components/ui/PulseDot';
@@ -20,7 +22,6 @@ interface Props {
   readonly onCreateGroup?:  () => void;
   readonly onJoinGroup?:    () => void;
   readonly onLeaveGroup?:   (addrHex: string) => void;
-  readonly onShowMembers?:  (addrHex: string) => void;
 }
 
 function PeerRowSkeleton() {
@@ -39,9 +40,46 @@ function PeerRowSkeleton() {
   );
 }
 
+// ── SwipeableGroupRow ─────────────────────────────────────────────────────────
+
+const REVEAL = 72;
+
+function SwipeableGroupRow({ onLeave, children }: { readonly onLeave: () => void; readonly children: React.ReactNode }) {
+  const tx = useSharedValue(0);
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-8, 8])
+    .failOffsetY([-6, 6])
+    .onUpdate(e => { tx.value = Math.max(-REVEAL, Math.min(0, e.translationX)); })
+    .onEnd(() => {
+      tx.value = tx.value < -REVEAL / 2
+        ? withSpring(-REVEAL, { damping: 20, stiffness: 220 })
+        : withSpring(0,       { damping: 20, stiffness: 220 });
+    });
+
+  const rowAnim = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }] }));
+
+  return (
+    <View style={S.swipeWrap}>
+      <Pressable
+        onPress={() => { tx.value = withSpring(0); onLeave(); }}
+        style={S.leaveAction}
+      >
+        <Feather name="log-out" size={14} color="#fff" />
+        <Text style={S.leaveText}>LEAVE</Text>
+      </Pressable>
+      <GestureDetector gesture={pan}>
+        <Reanimated.View style={rowAnim}>
+          {children}
+        </Reanimated.View>
+      </GestureDetector>
+    </View>
+  );
+}
+
 export const PeersDrawer = memo(function PeersDrawer({
   active, onPick, syncing, isAnnouncing, onNewHash, peers: peersProp,
-  onCreateGroup, onJoinGroup, onLeaveGroup, onShowMembers,
+  onCreateGroup, onJoinGroup, onLeaveGroup,
 }: Props) {
   const { colors }  = useTheme();
   const softGlass   = useGlass('soft');
@@ -125,39 +163,33 @@ export const PeersDrawer = memo(function PeersDrawer({
         {groups.length === 0 ? (
           <Text style={[S.channelEmpty, { color: colors.textTertiary }]}>no channels yet</Text>
         ) : groups.map(g => {
-          const isActive = active === (g.destHash ?? g.handle);
+          const id       = g.destHash ?? g.handle;
+          const isActive = active === id;
           return (
-            <Pressable
-              key={g.destHash ?? g.handle}
-              onPress={() => onPick(g)}
-              onLongPress={() => onLeaveGroup?.(g.destHash ?? g.handle)}
-              style={({ pressed }) => {
-                const pressedBg = pressed ? colors.surface1 : 'transparent';
-                const bg = isActive ? colors.primarySubtle : pressedBg;
-                return [S.row, { backgroundColor: bg, borderColor: isActive ? colors.primary + '44' : 'transparent' }];
-              }}
-            >
-              <View style={[S.avatar, { backgroundColor: '#0d2f2a', borderColor: '#1a5c4f' }]}>
-                <Text style={[S.channelHash, { color: '#4ecdc4' }]}>#</Text>
-              </View>
-              <View style={S.info}>
-                <View style={S.infoRow}>
-                  <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{g.handle}</Text>
-                  <Text style={[S.time,   { color: colors.textTertiary }]}>{g.time}</Text>
-                </View>
-                <View style={[S.infoRow, { marginTop: 3 }]}>
-                  <Text style={[S.last, { color: colors.textSecondary }]} numberOfLines={1}>{g.last}</Text>
-                  {g.unread > 0 && <Pill label={String(g.unread)} variant="primary" />}
-                </View>
-              </View>
+            <SwipeableGroupRow key={id} onLeave={() => onLeaveGroup?.(id)}>
               <Pressable
-                onPress={e => { e.stopPropagation(); onShowMembers?.(g.destHash ?? g.handle); }}
-                hitSlop={10}
-                style={S.membersBtn}
+                onPress={() => onPick(g)}
+                style={({ pressed }) => {
+                  const pressedBg = pressed ? colors.surface1 : 'transparent';
+                  const bg = isActive ? colors.primarySubtle : pressedBg;
+                  return [S.row, { backgroundColor: bg, borderColor: isActive ? colors.primary + '44' : 'transparent' }];
+                }}
               >
-                <Feather name="users" size={13} color={colors.textTertiary} />
-              </Pressable>
-            </Pressable>
+                <View style={[S.avatar, { backgroundColor: '#0d2f2a', borderColor: '#1a5c4f' }]}>
+                  <Text style={[S.channelHash, { color: '#4ecdc4' }]}>#</Text>
+                </View>
+                <View style={S.info}>
+                  <View style={S.infoRow}>
+                    <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{g.handle}</Text>
+                    <Text style={[S.time,   { color: colors.textTertiary }]}>{g.time}</Text>
+                  </View>
+                  <View style={[S.infoRow, { marginTop: 3 }]}>
+                    <Text style={[S.last, { color: colors.textSecondary }]} numberOfLines={1}>{g.last}</Text>
+                    {g.unread > 0 && <Pill label={String(g.unread)} variant="primary" />}
+                  </View>
+                </View>
+                </Pressable>
+            </SwipeableGroupRow>
           );
         })}
       </View>
@@ -269,6 +301,9 @@ const S = StyleSheet.create({
   channelEmpty:       { fontFamily: fontFamily.sansMd, fontSize: 10.5, paddingVertical: 4, paddingHorizontal: 2, opacity: 0.5 },
   channelHash:        { fontFamily: fontFamily.sansMd, fontSize: 16, fontWeight: '700' },
   membersBtn:         { padding: 4 },
+  swipeWrap:          { borderRadius: 12, overflow: 'hidden' },
+  leaveAction:        { position: 'absolute', right: 0, top: 0, bottom: 0, width: REVEAL, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  leaveText:          { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 1.5, color: '#fff', marginTop: 3 },
 
   // ── Peer list section ────────────────────────────────────────────────────────
   listSection:  { flex: 1, paddingHorizontal: 14, gap: 8, minHeight: 0 },
