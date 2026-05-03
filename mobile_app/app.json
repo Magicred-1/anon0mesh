@@ -78,6 +78,7 @@
       ],
       "expo-secure-store",
       "expo-local-authentication",
+      "./plugins/withDisableAndroidContentCapture",
       [
         "expo-notifications",
         {

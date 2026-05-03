@@ -57,6 +57,13 @@ const E = StyleSheet.create({
   text: { flex: 1, fontSize: 12, lineHeight: 17 },
 });
 
+function NotificationBridge({ onInApp }: { readonly onInApp: (n: NotificationPayload) => void }) {
+  const [notifsEnabled] = useNotificationEnabled();
+  useMessageNotifications(onInApp, notifsEnabled);
+  usePeerCountNotification(notifsEnabled);
+  return null;
+}
+
 function AppShell() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -75,10 +82,6 @@ function AppShell() {
     setActiveNotif(n);
   }, []);
 
-  const [notifsEnabled] = useNotificationEnabled();
-  useMessageNotifications(handleInApp, notifsEnabled);
-  usePeerCountNotification(notifsEnabled);
-
   return (
     <View style={[R.appRoot, { backgroundColor: colors.background }]}>
       <NavThemeProvider value={DarkTheme}>
@@ -96,6 +99,7 @@ function AppShell() {
       </NavThemeProvider>
 
       <LxmfErrorBanner />
+      <NotificationBridge onInApp={handleInApp} />
 
       <InAppNotificationBanner
         notification={activeNotif}

@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef, useCallback } from 'react';
+import React, { memo, useState, useRef, useCallback, useMemo } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
@@ -11,8 +11,11 @@ import { useLxmfContext } from '@/context/LxmfContext';
 import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 
 const BEACON_STALE_MS = 120_000;
-const STAKE_SOL       = '0.5';
-const NETWORK_FEE     = '~0.000005';
+const EPOCH_MS_THRESHOLD = 10_000_000_000;
+
+function announceMillis(lastAnnounce: number): number {
+  return lastAnnounce > EPOCH_MS_THRESHOLD ? lastAnnounce : lastAnnounce * 1000;
+}
 
 interface Props {
   readonly initialActive?: boolean;
@@ -24,15 +27,24 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const softGlass   = useGlass('soft');
   const accentGlass = useGlass('accent');
   const { isBeacon, setBeaconMode, beacons, peers } = useLxmfContext();
-  const reachableCount = beacons.filter(b => Date.now() - b.lastAnnounce < BEACON_STALE_MS).length
-    + peers.filter(p => p.online).length;
+  const reachableCount = useMemo(() => {
+    const now = Date.now();
+    const reachable = new Set<string>();
+    for (const b of beacons) {
+      if (b.state === 'active' && now - announceMillis(b.lastAnnounce) < BEACON_STALE_MS) {
+        reachable.add(b.destHash);
+      }
+    }
+    for (const p of peers) {
+      if (p.online) reachable.add(p.destHash);
+    }
+    return reachable.size;
+  }, [beacons, peers]);
   const { mode: networkMode } = useNetworkMode();
   const hasInternet = networkMode === 'online';
 
   const active = isBeacon;
   const [modal, setModal] = useState(false);
-  const [cosigns]             = useState(24);
-  const [earned]              = useState(0.000312);
 
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
@@ -67,7 +79,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 <View style={S.earnedBlock}>
                   <View style={S.earnedRow}>
                     <SolanaIcon size={22} color={colors.primary} />
-                    <Text style={[S.earnedVal, { color: colors.textPrimary }]}>{earned.toFixed(6)}</Text>
+                    <Text style={[S.earnedVal, { color: colors.textPrimary }]}>0.000000</Text>
                   </View>
                   <Text style={[S.earnedLabel, { color: colors.textTertiary }]}>SOL EARNED</Text>
                 </View>
@@ -78,7 +90,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 {/* Co-signs */}
                 <View style={S.cosignBlock}>
                   <View style={S.earnedRow}>
-                    <Text style={[S.cosignVal, { color: colors.textPrimary }]}>{cosigns}</Text>
+                    <Text style={[S.cosignVal, { color: colors.textPrimary }]}>0</Text>
                   </View>
                   <Text style={[S.earnedLabel, { color: colors.textTertiary }]}>CO-SIGNS</Text>
                 </View>
@@ -92,7 +104,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 </View>
                 <View style={[S.chip, softGlass]}>
                   <Feather name="lock" size={9} color={colors.textTertiary} />
-                  <Text style={[S.chipText, { color: colors.textSecondary }]}>{STAKE_SOL} SOL locked</Text>
+                  <Text style={[S.chipText, { color: colors.textSecondary }]}>local mode</Text>
                 </View>
                 <View style={[S.chip, softGlass]}>
                   <PulseDot size={5} />
@@ -115,17 +127,17 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               <View style={[S.statsRow, { borderBottomColor: colors.borderSubtle }]}>
                 <View style={S.stat}>
                   <Text style={[S.statVal, { color: colors.textPrimary }]}>{reachableCount}</Text>
-                  <Text style={[S.statKey, { color: colors.textTertiary }]}>ACTIVE BEACONS</Text>
+                  <Text style={[S.statKey, { color: colors.textTertiary }]}>REACHABLE</Text>
                 </View>
                 <View style={[S.statDivider, { backgroundColor: colors.borderSubtle }]} />
                 <View style={S.stat}>
-                  <Text style={[S.statVal, { color: colors.textPrimary }]}>{STAKE_SOL} SOL</Text>
-                  <Text style={[S.statKey, { color: colors.textTertiary }]}>STAKE REQUIRED</Text>
+                  <Text style={[S.statVal, { color: colors.textPrimary }]}>0 SOL</Text>
+                  <Text style={[S.statKey, { color: colors.textTertiary }]}>STAKE HELD</Text>
                 </View>
               </View>
 
               <Text style={[S.desc, { color: colors.textSecondary }]}>
-                Stake SOL to become a beacon node. Co-sign confidential transactions and earn fees from the network.
+                Enable local beacon announces so other nodes can discover this device. Staking and fee payouts are not wired in this build.
               </Text>
 
               <Pressable
@@ -173,9 +185,9 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
             {!active && (
               <View style={{ gap: 8 }}>
                 {([
-                  { icon: 'lock'   as const, bg: colors.primarySubtle,  iconColor: colors.primary,       label: 'Stake (locked)',  val: `${STAKE_SOL} SOL`,   valColor: colors.textPrimary  },
-                  { icon: 'zap'    as const, bg: colors.surface1,        iconColor: colors.textTertiary,  label: 'Network fee',     val: `${NETWORK_FEE} SOL`, valColor: colors.textTertiary },
-                  { icon: 'shield' as const, bg: colors.accentSubtle,    iconColor: colors.accent,        label: 'Role assigned',   val: 'Co-signer',          valColor: colors.accent       },
+                  { icon: 'radio'  as const, bg: colors.primarySubtle, iconColor: colors.primary,      label: 'Beacon mode', val: 'Local',          valColor: colors.textPrimary },
+                  { icon: 'zap'    as const, bg: colors.surface1,       iconColor: colors.textTertiary, label: 'Network fee', val: 'None',           valColor: colors.textTertiary },
+                  { icon: 'shield' as const, bg: colors.accentSubtle,   iconColor: colors.accent,       label: 'Registry',    val: 'Not submitted',  valColor: colors.accent },
                 ] as const).map((row, i) => (
                   <Reanimated.View key={row.label} entering={FadeIn.delay(i * 260).duration(280)}>
                     <Pressable style={[S.feeRow, glass]}>
@@ -194,9 +206,9 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
             {active && (
               <View style={{ gap: 8 }}>
                 {([
-                  { icon: 'trending-up' as const, bg: colors.accentSubtle, iconColor: colors.accent,       label: 'Earnings to date',  val: `◎ ${earned.toFixed(6)}`, valColor: colors.accent       },
-                  { icon: 'unlock'      as const, bg: colors.surface1,     iconColor: colors.textTertiary,  label: 'Stake returned',    val: `${STAKE_SOL} SOL`,        valColor: colors.textPrimary  },
-                  { icon: 'x-circle'   as const, bg: colors.error + '18', iconColor: colors.error,         label: 'Co-sign role lost', val: 'Immediately',             valColor: colors.error        },
+                  { icon: 'trending-up' as const, bg: colors.accentSubtle, iconColor: colors.accent,      label: 'Earnings',    val: 'Not tracked', valColor: colors.accent },
+                  { icon: 'unlock'      as const, bg: colors.surface1,     iconColor: colors.textTertiary, label: 'Stake held',  val: '0 SOL',       valColor: colors.textPrimary },
+                  { icon: 'x-circle'    as const, bg: colors.error + '18', iconColor: colors.error,        label: 'Announces',   val: 'Stop',        valColor: colors.error },
                 ] as const).map((row, i) => (
                   <Reanimated.View key={row.label} entering={FadeIn.delay(i * 260).duration(280)}>
                     <View style={[S.feeRow, glass]}>
@@ -213,8 +225,8 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 
             <Text style={[S.sheetDesc, { color: colors.textSecondary }]}>
               {active
-                ? `${STAKE_SOL} SOL stake returns to your wallet. Co-sign fees stop immediately.`
-                : `Your wallet will be charged ${STAKE_SOL} SOL as stake. Authenticate to confirm.`}
+                ? 'Beacon mode is local announce-only in this build. Turning it off stops this device announcing.'
+                : 'Beacon mode starts local announces only. No stake transaction or wallet charge is submitted.'}
             </Text>
 
             {/* Primary action */}
@@ -231,8 +243,8 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 onPress={() => { setBeaconMode(true); dismiss(); }}
                 style={({ pressed }) => [S.signBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
               >
-                <Feather name="lock" size={14} color={colors.textInverse} />
-                <Text style={[S.signText, { color: colors.textInverse }]}>SIGN WITH BIOMETRICS</Text>
+                <Feather name="radio" size={14} color={colors.textInverse} />
+                <Text style={[S.signText, { color: colors.textInverse }]}>ENABLE BEACON</Text>
               </Pressable>
             )}
           </Animated.View>

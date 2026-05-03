@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
+import { InteractionManager } from 'react-native';
 import {
   SecureKeys, LegacySecureKeys, PrefKeys,
   secureGet, secureSet, secureDelete, secureDeleteAll,
@@ -19,6 +20,9 @@ import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
 const IDENTITY_SCHEMA_VERSION = 1;
+const PEER_FRESH_WINDOW_SEC = 10 * 60;
+const MAX_TRACKED_PEERS = 300;
+const EPOCH_MS_THRESHOLD = 10_000_000_000;
 
 type StoredIdentity = {
   version:      number;
@@ -133,6 +137,7 @@ function sliceNewEvents(
   const first = events[0] ?? null;
   if (prevFirst !== null && first !== prevFirst) {
     const oldIdx = events.indexOf(prevFirst);
+    if (oldIdx === -1) return events;
     return oldIdx > 0 ? events.slice(0, oldIdx) : [];
   }
   return [];
@@ -227,7 +232,9 @@ function mergeBeacon(
   if (b.destHash === ownHash) return false;
   const existing = map.get(b.destHash);
   const isOnline = b.state === 'active';
-  const lastSeen = b.lastAnnounce > 0 ? b.lastAnnounce : (existing?.lastSeen ?? now);
+  const lastSeen = b.lastAnnounce > 0
+    ? (b.lastAnnounce > EPOCH_MS_THRESHOLD ? b.lastAnnounce / 1000 : b.lastAnnounce)
+    : (existing?.lastSeen ?? now);
   const dispName = names[b.destHash] ?? existing?.displayName ?? b.destHash.slice(0, 8);
   if (existing?.online === isOnline && existing.lastSeen === lastSeen && existing.displayName === dispName)
     return false;
@@ -242,6 +249,43 @@ function mergeBeacon(
     isBeaconNode: true,
   });
   return true;
+}
+
+function prunePeerMap(map: PeerMap, now: number, ownHash: string | undefined): boolean {
+  let changed = false;
+
+  if (ownHash && map.delete(ownHash)) changed = true;
+
+  for (const [hash, peer] of map) {
+    let lastSeen = peer.lastSeen;
+    if (lastSeen > EPOCH_MS_THRESHOLD) {
+      lastSeen = lastSeen / 1000;
+      map.set(hash, { ...peer, lastSeen });
+      changed = true;
+    }
+    if (now - lastSeen > PEER_FRESH_WINDOW_SEC) {
+      map.delete(hash);
+      changed = true;
+    }
+  }
+
+  if (map.size <= MAX_TRACKED_PEERS) return changed;
+
+  const keep = new Set(
+    Array.from(map.values())
+      .sort((a, b) => b.lastSeen - a.lastSeen)
+      .slice(0, MAX_TRACKED_PEERS)
+      .map((peer) => peer.destHash),
+  );
+
+  for (const hash of map.keys()) {
+    if (!keep.has(hash)) {
+      map.delete(hash);
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 export const G00N_HUB:   TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 };
@@ -264,6 +308,28 @@ export interface StoredMessage {
   timestamp: number;
   image?:    { mimeType: string; data: string };
   files?:    { name: string; data: string }[];
+}
+
+const LXMF_LOG_LEVEL = Number(process.env.EXPO_PUBLIC_LXMF_LOG_LEVEL ?? 1);
+const LXMF_AUTOSTART_DELAY_MS = 1_500;
+
+function isUsableTcpHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'localhost') return false;
+  if (normalized === '0.0.0.0') return false;
+  if (normalized === '::1') return false;
+  if (normalized.startsWith('127.')) return false;
+  if (normalized.includes('x.x')) return false;
+  return true;
+}
+
+function configuredTcpInterfaces(): TcpInterface[] {
+  const interfaces = [G00N_HUB, BELETH_HUB];
+  if (MY_PC && isUsableTcpHost(MY_PC.host) && Number.isFinite(MY_PC.port) && MY_PC.port > 0) {
+    interfaces.unshift(MY_PC);
+  }
+  return interfaces;
 }
 
 export interface LxmfPeer {
@@ -353,31 +419,45 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const lxmf = useLxmf({
     identityHex:    storedIdentity?.identity_hex ?? 'new',
     lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
-    logLevel: __DEV__ ? 2 : 1,
+    logLevel: Number.isFinite(LXMF_LOG_LEVEL) ? LXMF_LOG_LEVEL : 1,
     dbPath:   (FileSystem.documentDirectory ?? '') + 'lxmf.db',
   });
 
   const { isNativeAvailable, isRunning, start, stop, getIdentityHex } = lxmf;
   const startingRef = useRef(false);
+  const autostartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isNativeAvailable || isRunning || startingRef.current || displayName === null || !identityHydrated) return;
-    startingRef.current = true;
-    // Request BLE permissions first — start() auto-activates BLE hardware
-    requestBLEPermissions().then(perm => {
-      if (perm !== 'granted' && perm !== 'not_required') {
-        startingRef.current = false;
-        return;
+    let cancelled = false;
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      autostartTimerRef.current = setTimeout(() => {
+        if (cancelled || isRunning || startingRef.current) return;
+        startingRef.current = true;
+        requestBLEPermissions().then(perm => {
+          if (cancelled || (perm !== 'granted' && perm !== 'not_required')) return false;
+          return start({
+            mode:           LxmfNodeMode.ReticulumAndBle,
+            tcpInterfaces:  configuredTcpInterfaces(),
+            displayName,
+            identityHex:    storedIdentity?.identity_hex ?? 'new',
+            lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
+            isBeacon,
+          });
+        }).then(ok => {
+          if (ok && !cancelled) setBleActive(true);
+        }).finally(() => { startingRef.current = false; });
+      }, LXMF_AUTOSTART_DELAY_MS);
+    });
+
+    return () => {
+      cancelled = true;
+      if (autostartTimerRef.current) {
+        clearTimeout(autostartTimerRef.current);
+        autostartTimerRef.current = null;
       }
-      return start({
-        mode:           LxmfNodeMode.ReticulumAndBle,
-        tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB].filter(Boolean) as TcpInterface[],
-        displayName,
-        identityHex:    storedIdentity?.identity_hex ?? 'new',
-        lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
-        isBeacon,
-      }).then(ok => { if (ok) setBleActive(true); });
-    }).finally(() => { startingRef.current = false; });
+      interaction.cancel();
+    };
   }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon]);
 
   // Persist identity after node starts (using getIdentityHex() per new API)
@@ -433,12 +513,14 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     prefGetJson<LxmfPeer[]>(PrefKeys.PEERS_CACHE).then(cached => {
       if (!cached) return;
       const map = knownPeersRef.current;
+      const now = Date.now() / 1000;
       for (const p of cached) {
         if (!map.has(p.destHash)) map.set(p.destHash, { ...p, online: false, isBeaconNode: p.isBeaconNode ?? false });
       }
+      prunePeerMap(map, now, lxmf.status?.addressHex);
       setPeers(Array.from(map.values()));
     });
-  }, []);
+  }, [lxmf.status?.addressHex]);
 
   useEffect(() => {
     const map     = knownPeersRef.current;
@@ -463,11 +545,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
 
     let { peerChanged, nameChanged } = processNewEvents(newEvts, map, names, now, ownHash, bleActive);
 
-    if (ownHash) map.delete(ownHash);
-
     for (const b of lxmf.beacons) {
       if (mergeBeacon(b, map, names, now, ownHash)) peerChanged = true;
     }
+
+    if (prunePeerMap(map, now, ownHash)) peerChanged = true;
 
     if (nameChanged) setNameMap({ ...names });
 
@@ -487,7 +569,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     if (bleActive) return;
     const ok = await start({
       mode:           LxmfNodeMode.ReticulumAndBle,
-      tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB].filter(Boolean) as TcpInterface[],
+      tcpInterfaces:  configuredTcpInterfaces(),
       displayName:    displayName ?? '',
       identityHex:    storedIdentity?.identity_hex ?? 'new',
       lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',

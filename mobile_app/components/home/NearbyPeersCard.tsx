@@ -17,10 +17,9 @@ function initialOf(alias: string | undefined): string {
 
 // Peer presence strip above Recent.
 //
-// LxmfContext.peers is a persistent accumulator (keyed by destHash) that
-// monotonically grows as announces arrive — so on mount it's briefly
-// empty before events flush through. To avoid "0 → 6" flicker we use
-// `useMemo` + filter for stability.
+// LxmfContext.peers is keyed by destHash and pruned to recent announces.
+// On mount it can still be briefly empty before events flush through, so
+// `useMemo` + filtering keeps the visible state stable.
 //
 // Tap opens teammate's MeshMap on the Nodes tab — he owns peer
 // visualization; we don't duplicate.
