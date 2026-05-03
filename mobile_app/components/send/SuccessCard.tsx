@@ -5,7 +5,6 @@ import {
   Alert,
   Linking,
   Share,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -26,10 +25,9 @@ interface SuccessCardProps {
   txId: string;
   amount: string;
   symbol: string;
-  simulated?: boolean;
 }
 
-export function SuccessCard({ txId, amount, symbol, simulated = false }: SuccessCardProps) {
+export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const glass = useGlass("strong");
@@ -53,9 +51,7 @@ export function SuccessCard({ txId, amount, symbol, simulated = false }: Success
     haptics.tap();
     try {
       await Share.share({
-        message: simulated
-          ? `Sent ${amount} ${symbol} (demo transfer).`
-          : `Sent ${amount} ${symbol}. Signature: ${txId}`,
+        message: `Sent ${amount} ${symbol}. Signature: ${txId}`,
       });
     } catch {
       // non-fatal
@@ -131,41 +127,24 @@ export function SuccessCard({ txId, amount, symbol, simulated = false }: Success
             <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
               Status
             </Text>
-            <Pill
-              label={simulated ? "Demo transfer" : "Submitted to devnet"}
-              tone={simulated ? "amber" : "cyan"}
-            />
+            <Pill label="Submitted to devnet" tone="cyan" />
           </View>
-          {!simulated ? (
-            <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
-                Signature
-              </Text>
-              <TouchableOpacity onPress={handleCopySignature} hitSlop={6}>
-                <Text
-                  style={{
-                    color: colors.primary,
-                    fontFamily: fontFamily.mono,
-                    fontSize: fontSize.sm,
-                  }}
-                >
-                  {shortReference(txId)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <Text
-              style={{
-                color: colors.textTertiary,
-                fontFamily: fontFamily.sans,
-                fontSize: fontSize.xs,
-                textAlign: "center",
-                paddingTop: spacing[1],
-              }}
-            >
-              USDC and other SPL token transfers are simulated until Jupiter integration lands.
+          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+            <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
+              Signature
             </Text>
-          )}
+            <TouchableOpacity onPress={handleCopySignature} hitSlop={6}>
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontFamily: fontFamily.mono,
+                  fontSize: fontSize.sm,
+                }}
+              >
+                {shortReference(txId)}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={{ flexDirection: "row", gap: spacing[3] }}>
@@ -177,20 +156,16 @@ export function SuccessCard({ txId, amount, symbol, simulated = false }: Success
             variant="secondary"
             style={{ flex: 1 }}
           />
-          {!simulated ? (
-            <DepthButton
-              label="Explorer"
-              onPress={handleExplorer}
-              size="md"
-              tone="cyan"
-              variant="secondary"
-              style={{ flex: 1 }}
-            />
-          ) : null}
+          <DepthButton
+            label="Explorer"
+            onPress={handleExplorer}
+            size="md"
+            tone="cyan"
+            variant="secondary"
+            style={{ flex: 1 }}
+          />
         </View>
       </View>
     </SendScaffold>
   );
 }
-
-const styles = StyleSheet.create({});

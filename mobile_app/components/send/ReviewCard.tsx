@@ -1,19 +1,65 @@
 import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Pill, SlideToConfirm } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
-import { sendSolTransfer } from "@/src/services/sendTransaction";
+import { useNetworkMode } from "@/src/hooks/useNetworkMode";
+import {
+  estimateSolTransferFeeLamports,
+  sendSolTransfer,
+  TransactionNotApprovedError,
+} from "@/src/services/sendTransaction";
+import { DEMO_MODE } from "@/src/utils/demoMode";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
   if (!addr || addr.length <= 14) return addr;
   return `${addr.slice(0, 8)}…${addr.slice(-4)}`;
+}
+
+function formatSolFee(lamports: number): string {
+  return `${(lamports / 1_000_000_000).toFixed(9).replace(/0+$/, "").replace(/\.$/, "")} SOL`;
+}
+
+function routeLabel(mode: "online" | "mesh" | "isolated"): string {
+  if (mode === "online") return "Online RPC";
+  if (mode === "mesh") return "Mesh relay";
+  return "Isolated";
+}
+
+function routeTone(mode: "online" | "mesh" | "isolated"): React.ComponentProps<typeof Pill>["tone"] {
+  if (mode === "online") return "cyan";
+  if (mode === "mesh") return "purple";
+  return "neutral";
+}
+
+const FEE_ESTIMATE_TIMEOUT_MS = 10_000;
+
+type ReviewError =
+  | { kind: "approval"; message: string }
+  | { kind: "unsupported"; message: string }
+  | { kind: "route"; message: string }
+  | { kind: "send"; message: string };
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Fee estimate timed out")), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 interface ReviewCardProps {
@@ -62,36 +108,65 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
   const router = useRouter();
   const { colors } = useTheme();
   const { wallet } = useWallet();
+  const { adapter: rpcAdapter, mode: networkMode } = useNetworkMode();
 
   const [stealthEnabled, setStealthEnabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReviewError | null>(null);
+  const [feeLabel, setFeeLabel] = useState("Calculating...");
   const [isConfirming, setIsConfirming] = useState(false);
   const [sliderResetKey, setSliderResetKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function estimateFee() {
+      if (symbol !== "SOL" || !wallet) {
+        setFeeLabel("Fee unavailable");
+        return;
+      }
+
+      setFeeLabel("Calculating...");
+      try {
+        const lamports = await withTimeout(
+          estimateSolTransferFeeLamports({
+            walletAdapter: wallet,
+            recipientAddress: to,
+            amountSOL: Number.parseFloat(amount),
+          }),
+          FEE_ESTIMATE_TIMEOUT_MS,
+        );
+        if (!cancelled) setFeeLabel(formatSolFee(lamports));
+      } catch {
+        if (!cancelled) setFeeLabel("Fee unavailable");
+      }
+    }
+
+    estimateFee();
+    return () => {
+      cancelled = true;
+    };
+  }, [amount, symbol, to, wallet]);
 
   async function handleConfirm() {
     if (isConfirming) return;
 
-    // SOL-only for devnet path. USDC + SPL token support comes with
-    // Jupiter integration; for now any non-SOL token falls back to
-    // a simulated receipt so the UX flow is still exercised.
     if (symbol !== "SOL") {
-      setError(null);
-      setIsConfirming(true);
-      try {
-        await new Promise((r) => setTimeout(r, 900));
-        const simulated = `sim_${Math.random().toString(36).slice(2, 12)}`;
-        router.push({
-          pathname: "/send/success",
-          params: { amount, symbol, txId: simulated, simulated: "1" },
-        });
-      } finally {
-        setIsConfirming(false);
-      }
+      setError({ kind: "unsupported", message: `${symbol} transfers are not implemented yet` });
+      setSliderResetKey((k) => k + 1);
       return;
     }
 
     if (!wallet) {
-      setError("Wallet not connected");
+      setError({ kind: "send", message: "Wallet not connected" });
+      setSliderResetKey((k) => k + 1);
+      return;
+    }
+
+    if (rpcAdapter.mode === "isolated") {
+      setError({
+        kind: "route",
+        message: "No Solana RPC route is available. Connect to internet or an active relay before retrying.",
+      });
       setSliderResetKey((k) => k + 1);
       return;
     }
@@ -101,7 +176,8 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
 
     try {
       const result = await sendSolTransfer({
-        adapter: wallet,
+        walletAdapter: wallet,
+        rpcAdapter,
         recipientAddress: to,
         amountSOL: Number.parseFloat(amount),
       });
@@ -111,11 +187,23 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
         params: { amount, symbol, txId: result.signature },
       });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Send failed");
+      setError(
+        err instanceof TransactionNotApprovedError
+          ? {
+              kind: "approval",
+              message: "Approve the transaction in your wallet to submit it.",
+            }
+          : { kind: "send", message: err instanceof Error ? err.message : "Send failed" },
+      );
       setSliderResetKey((k) => k + 1);
     } finally {
       setIsConfirming(false);
     }
+  }
+
+  function handleRetry() {
+    haptics.tap();
+    handleConfirm();
   }
 
   return (
@@ -124,11 +212,20 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
       step={3}
       title="Review"
       footer={
-        <SlideToConfirm
-          key={sliderResetKey}
-          label={`Slide to send ${amount} ${symbol}`}
-          onComplete={handleConfirm}
-        />
+        isConfirming ? (
+          <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+            <Feather name="smartphone" size={16} color={colors.primary} />
+            <Text style={[S.waitingFooterText, { color: colors.textPrimary }]}>
+              Approve in wallet
+            </Text>
+          </View>
+        ) : (
+          <SlideToConfirm
+            key={sliderResetKey}
+            label={`Slide to send ${amount} ${symbol}`}
+            onComplete={handleConfirm}
+          />
+        )
       }
     >
       <ScrollView
@@ -171,15 +268,25 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
             colors={colors}
             icon="activity"
             label="Route"
-            valueComponent={<Pill label="On-chain" tone="cyan" />}
+            valueComponent={<Pill label={routeLabel(networkMode)} tone={routeTone(networkMode)} />}
           />
           <DetailRow
             colors={colors}
             icon="zap"
             label="Fee"
-            value="~0.000005 SOL"
+            secondary="Estimated from devnet RPC"
+            value={feeLabel}
           />
         </View>
+
+        {DEMO_MODE ? (
+          <View style={[S.demoNote, { backgroundColor: colors.accentSubtle, borderColor: colors.border }]}>
+            <Feather name="info" size={13} color={colors.accent} />
+            <Text style={[S.demoNoteText, { color: colors.accent }]}>
+              Demo mode: devnet SOL only.
+            </Text>
+          </View>
+        ) : null}
 
         {/* Stealth toggle tile */}
         <Pressable
@@ -203,9 +310,29 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
 
         {/* Error */}
         {error ? (
-          <View style={S.errorRow}>
-            <Feather name="alert-circle" size={14} color={colors.error} />
-            <Text style={[S.errorText, { color: colors.error }]}>{error}</Text>
+          <View style={[S.errorPanel, { backgroundColor: colors.errorSubtle, borderColor: colors.error + "40" }]}>
+            <View style={S.errorHeader}>
+              <Feather name="alert-circle" size={16} color={colors.error} />
+              <Text style={[S.errorTitle, { color: colors.error }]}>
+                {error.kind === "approval" ? "Transaction not approved" : "Transfer not sent"}
+              </Text>
+            </View>
+            <Text style={[S.errorText, { color: colors.textSecondary }]}>{error.message}</Text>
+            {error.kind === "approval" || error.kind === "send" || error.kind === "route" ? (
+              <Pressable
+                accessibilityLabel="Try transaction again"
+                accessibilityRole="button"
+                disabled={isConfirming}
+                onPress={handleRetry}
+                style={[
+                  S.retryButton,
+                  { backgroundColor: colors.surface1, borderColor: colors.borderStrong },
+                ]}
+              >
+                <Feather name="rotate-ccw" size={16} color={colors.textPrimary} />
+                <Text style={[S.retryText, { color: colors.textPrimary }]}>Try again</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
@@ -309,15 +436,70 @@ const S = StyleSheet.create({
     fontSize: 15,
   },
 
+  waitingFooter: {
+    alignItems: "center",
+    borderRadius: 32,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 10,
+    height: 62,
+    justifyContent: "center",
+  },
+  waitingFooterText: {
+    fontFamily: FF.sansMd,
+    fontSize: 16,
+  },
+
   // error
-  errorRow: {
+  errorPanel: {
+    borderRadius: 14,
+    borderWidth: 0.5,
+    gap: 8,
+    padding: 14,
+  },
+  errorHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 6,
-    justifyContent: "center",
+    gap: 8,
+  },
+  errorTitle: {
+    fontFamily: FF.sansSb,
+    fontSize: 14,
   },
   errorText: {
     fontFamily: FF.sans,
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  retryButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    borderRadius: 16,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    marginTop: 6,
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  retryText: {
+    fontFamily: FF.sansSb,
+    fontSize: 15,
+  },
+  demoNote: {
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  demoNoteText: {
+    flex: 1,
+    fontFamily: FF.sansMd,
+    fontSize: 12,
   },
 });
