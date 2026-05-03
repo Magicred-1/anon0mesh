@@ -3,44 +3,71 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { solanaConnection } from '@/src/services/sendTransaction';
 import { DirectRpcAdapter } from '../infrastructure/network/DirectRpcAdapter';
+import { IsolatedRpcAdapter } from '../infrastructure/network/IsolatedRpcAdapter';
 import { MeshRpcAdapter } from '../infrastructure/network/MeshRpcAdapter';
 import type { IRpcAdapter, NetworkMode } from '../infrastructure/network/types';
 
-// Beacon must have announced within this window to be considered reachable.
+// Beacon must be active and recently announced to be considered a usable
+// Solana relay route. Plain peers/BLE are mesh presence, not RPC transport.
 const BEACON_STALE_MS = 120_000;
+const EPOCH_MS_THRESHOLD = 10_000_000_000;
 
-function freshBeacon(beacons: { destHash: string; state: string; lastAnnounce: number }[]) {
-  return beacons.find((b) => Date.now() - b.lastAnnounce < BEACON_STALE_MS) ?? null;
+function announceMillis(lastAnnounce: number): number {
+  return lastAnnounce > EPOCH_MS_THRESHOLD ? lastAnnounce : lastAnnounce * 1000;
+}
+
+function freshRelayBeacon(
+  beacons: { destHash: string; state: string; lastAnnounce: number }[],
+  ownHash: string | null | undefined,
+) {
+  const now = Date.now();
+  return [...beacons]
+    .filter((b) =>
+      b.state === "active" &&
+      b.destHash !== ownHash &&
+      now - announceMillis(b.lastAnnounce) < BEACON_STALE_MS,
+    )
+    .sort((a, b) => announceMillis(b.lastAnnounce) - announceMillis(a.lastAnnounce))[0] ?? null;
+}
+
+function hasInternetRoute(state: {
+  isConnected: boolean | null;
+  isInternetReachable: boolean | null;
+}) {
+  // On Android/iOS, NetInfo can report isInternetReachable=null while the
+  // device is connected. Treat only explicit false as offline so Solana sends
+  // do not get misrouted to mesh when normal internet is available.
+  return state.isConnected === true && state.isInternetReachable !== false;
 }
 
 export interface NetworkState {
   mode: NetworkMode;
   adapter: IRpcAdapter;
+  relayHash: string | null;
 }
 
 export function useNetworkMode(): NetworkState {
-  const { beacons, peers, blePeerCount, send, events } = useLxmfContext();
+  const { beacons, send, events, status } = useLxmfContext();
   const [internet, setInternet] = useState(true);
 
   // Subscribe to OS-level connectivity — no polling, no HTTP spam.
   useEffect(() => {
     const unsub = NetInfo.addEventListener((state) => {
-      setInternet(Boolean(state.isConnected && state.isInternetReachable));
+      setInternet(hasInternetRoute(state));
     });
     // Fetch once on mount so initial state is correct before first event.
     NetInfo.fetch().then((state) => {
-      setInternet(Boolean(state.isConnected && state.isInternetReachable));
+      setInternet(hasInternetRoute(state));
     });
     return unsub;
   }, []);
 
-  const relay = useMemo(() => freshBeacon(beacons), [beacons]);
-  const hasMesh = blePeerCount > 0 || peers.some(p => p.online) || relay !== null;
+  const relay = useMemo(() => freshRelayBeacon(beacons, status?.addressHex), [beacons, status?.addressHex]);
 
   let mode: NetworkMode;
   if (internet) {
     mode = 'online';
-  } else if (hasMesh) {
+  } else if (relay) {
     mode = 'mesh';
   } else {
     mode = 'isolated';
@@ -58,9 +85,8 @@ export function useNetworkMode(): NetworkState {
       meshAdapterRef.current = a;
       return a;
     }
-    // Isolated fallback — adapter kept so callers get a clear network error.
     meshAdapterRef.current = null;
-    return new DirectRpcAdapter(solanaConnection);
+    return new IsolatedRpcAdapter();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, relay?.destHash]);
 
@@ -78,5 +104,5 @@ export function useNetworkMode(): NetworkState {
     }
   }, [events]);
 
-  return { mode, adapter };
+  return { mode, adapter, relayHash: adapter.relayHash };
 }

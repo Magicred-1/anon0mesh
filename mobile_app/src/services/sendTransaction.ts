@@ -9,8 +9,9 @@ import {
 import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
 import { Buffer } from "buffer";
 
+import type { IRpcAdapter } from "@/src/infrastructure/network";
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
-import { SecureKeys, secureGet } from "@/src/storage";
+import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 const APP_IDENTITY = {
   name: "anonmesh",
   uri: "https://anonme.sh",
@@ -30,7 +31,14 @@ const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || DEFAULT_DEVNET_RPC;
 export const solanaConnection = new Connection(RPC_URL, "confirmed");
 
 export interface SendSolParams {
-  adapter: IWalletAdapter;
+  walletAdapter: IWalletAdapter;
+  rpcAdapter: IRpcAdapter;
+  recipientAddress: string;
+  amountSOL: number;
+}
+
+export interface EstimateSolTransferFeeParams {
+  walletAdapter: IWalletAdapter;
   recipientAddress: string;
   amountSOL: number;
 }
@@ -40,33 +48,55 @@ export interface SendResult {
   explorerUrl: string;
 }
 
+export class TransactionNotApprovedError extends Error {
+  constructor() {
+    super("Transaction not approved");
+    this.name = "TransactionNotApprovedError";
+  }
+}
+
+interface MwaAuthResult {
+  auth_token: string;
+  accounts: { address: string }[];
+}
+
 function explorerUrl(signature: string): string {
   return `https://explorer.solana.com/tx/${encodeURIComponent(signature)}?cluster=devnet`;
 }
 
-/**
- * Sign + submit a SOL transfer on devnet.
- *
- * Local wallet mode → exports secret key via biometric-gated path,
- * signs in-app, submits via the devnet RPC. Secret is zeroed out of
- * memory immediately after signing.
- *
- * MWA mode → not yet wired. Throws a clear error until the MWA
- * signing flow is ported (Seeker Seed Vault path).
- *
- * SOL-only for now. USDC / SPL token transfers need associated
- * token account handling which lands with the Jupiter integration.
- */
-export async function sendSolTransfer({
-  adapter,
+function isWalletDenial(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const normalized = msg.toLowerCase();
+  return (
+    normalized.includes("authentication cancelled") ||
+    normalized.includes("authorization request failed") ||
+    normalized.includes("authorization cancelled") ||
+    normalized.includes("auth request failed") ||
+    normalized.includes("cancelled") ||
+    normalized.includes("canceled") ||
+    normalized.includes("declined") ||
+    normalized.includes("denied") ||
+    normalized.includes("rejected") ||
+    normalized.includes("user refused")
+  );
+}
+
+function normalizeWalletError(err: unknown): never {
+  if (isWalletDenial(err)) {
+    throw new TransactionNotApprovedError();
+  }
+  throw err;
+}
+
+function buildSolTransferTransaction({
+  fromPubkey,
   recipientAddress,
   amountSOL,
-}: SendSolParams): Promise<SendResult> {
-  const fromPubkey = adapter.getPublicKey();
-  if (!fromPubkey) {
-    throw new Error("Wallet not connected");
-  }
-
+}: {
+  fromPubkey: PublicKey;
+  recipientAddress: string;
+  amountSOL: number;
+}): Transaction {
   let toPubkey: PublicKey;
   try {
     toPubkey = new PublicKey(recipientAddress);
@@ -79,64 +109,137 @@ export async function sendSolTransfer({
     throw new Error("Invalid amount");
   }
 
-  const tx = new Transaction().add(
+  return new Transaction().add(
     SystemProgram.transfer({ fromPubkey, toPubkey, lamports }),
   );
+}
+
+export async function estimateSolTransferFeeLamports({
+  walletAdapter,
+  recipientAddress,
+  amountSOL,
+}: EstimateSolTransferFeeParams): Promise<number> {
+  const fromPubkey = walletAdapter.getPublicKey();
+  if (!fromPubkey) {
+    throw new Error("Wallet not connected");
+  }
+
+  const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL });
   const { blockhash } = await solanaConnection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
 
-  const mode = adapter.getMode();
+  // Fee estimate stays direct-RPC until IRpcAdapter exposes getFeeForMessage.
+  const fee = await solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed");
+  if (fee.value === null) {
+    throw new Error("Fee unavailable");
+  }
+  return fee.value;
+}
+
+/**
+ * Sign + submit a SOL transfer on devnet.
+ *
+ * Local wallet mode → exports secret key via biometric-gated path,
+ * signs in-app, submits via the selected RPC adapter. Secret is
+ * zeroed out of memory immediately after signing.
+ *
+ * MWA mode → reauthorizes or refreshes authorization, asks Seed Vault
+ * to sign, then submits via the selected RPC adapter.
+ *
+ * SOL-only for now. USDC / SPL token transfers need associated
+ * token account handling which lands with the Jupiter integration.
+ */
+export async function sendSolTransfer({
+  walletAdapter,
+  rpcAdapter,
+  recipientAddress,
+  amountSOL,
+}: SendSolParams): Promise<SendResult> {
+  const fromPubkey = walletAdapter.getPublicKey();
+  if (!fromPubkey) {
+    throw new Error("Wallet not connected");
+  }
+
+  const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL });
+  const { blockhash } = await rpcAdapter.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = fromPubkey;
+
+  const mode = walletAdapter.getMode();
 
   if (mode === "local") {
     // Local wallet: secret key is only decrypted long enough to sign,
     // then zeroed. Biometric prompt fires inside exportSecretKey.
-    const secretKey = await adapter.exportSecretKey();
+    let secretKey: Uint8Array;
+    try {
+      secretKey = await walletAdapter.exportSecretKey();
+    } catch (err: unknown) {
+      normalizeWalletError(err);
+    }
     let signature: string;
     try {
       const keypair = Keypair.fromSecretKey(secretKey);
       tx.sign(keypair);
-      signature = await solanaConnection.sendRawTransaction(tx.serialize());
+      signature = await rpcAdapter.sendRawTransaction(tx.serialize());
     } finally {
       secretKey.fill(0);
     }
     return { signature, explorerUrl: explorerUrl(signature) };
   }
 
-  // MWA mode — Seeker / Saga Seed Vault flow. Reauthorize using cached
-  // token, verify the session account matches the feePayer, then have
-  // the vault sign only. The app submits via its own RPC so the vault
-  // UI stays minimal (sign prompt only — no 'submitting' + 'success'
-  // screens from the wallet app).
+  // MWA mode — Seeker / Saga Seed Vault flow. Try cached-token
+  // reauthorization first, then fall back to full authorize when the
+  // cached token/session is stale. The vault signs only; the app submits
+  // via its selected RPC adapter.
   const cachedToken = await secureGet(SecureKeys.MWA_TOKEN);
-  if (!cachedToken) {
-    throw new Error("MWA wallet not authorized. Reconnect your wallet.");
-  }
 
   const signedTransactions: Transaction[] = [];
-  await transact(async (mwaWallet) => {
-    const auth = await mwaWallet.reauthorize({
-      auth_token: cachedToken,
-      identity: APP_IDENTITY,
+  try {
+    await transact(async (mwaWallet) => {
+      let auth: MwaAuthResult;
+      if (cachedToken) {
+        try {
+          auth = await mwaWallet.reauthorize({
+            auth_token: cachedToken,
+            identity: APP_IDENTITY,
+          }) as MwaAuthResult;
+        } catch {
+          auth = await mwaWallet.authorize({
+            chain: "solana:devnet",
+            identity: APP_IDENTITY,
+          }) as MwaAuthResult;
+          await secureSet(SecureKeys.MWA_TOKEN, auth.auth_token);
+        }
+      } else {
+        auth = await mwaWallet.authorize({
+          chain: "solana:devnet",
+          identity: APP_IDENTITY,
+        }) as MwaAuthResult;
+        await secureSet(SecureKeys.MWA_TOKEN, auth.auth_token);
+      }
+
+      const sessionPubkey = new PublicKey(Buffer.from(auth.accounts[0].address, "base64"));
+
+      if (sessionPubkey.toBase58() !== fromPubkey.toBase58()) {
+        throw new Error(
+          `MWA account mismatch — expected ${fromPubkey.toBase58().slice(0, 8)}…, wallet returned ${sessionPubkey.toBase58().slice(0, 8)}…. Reconnect the correct account.`,
+        );
+      }
+
+      tx.feePayer = sessionPubkey;
+      const signed = await mwaWallet.signTransactions({ transactions: [tx] });
+      if (signed[0]) signedTransactions[0] = signed[0];
     });
-    const sessionPubkey = new PublicKey(Buffer.from(auth.accounts[0].address, "base64"));
-
-    if (sessionPubkey.toBase58() !== fromPubkey.toBase58()) {
-      throw new Error(
-        `MWA account mismatch — expected ${fromPubkey.toBase58().slice(0, 8)}…, wallet returned ${sessionPubkey.toBase58().slice(0, 8)}…. Reconnect the correct account.`,
-      );
-    }
-
-    tx.feePayer = sessionPubkey;
-    const signed = await mwaWallet.signTransactions({ transactions: [tx] });
-    if (signed[0]) signedTransactions[0] = signed[0];
-  });
+  } catch (err: unknown) {
+    normalizeWalletError(err);
+  }
 
   const signedTx = signedTransactions[0];
   if (!signedTx) {
-    throw new Error("MWA wallet returned no signed transaction");
+    throw new TransactionNotApprovedError();
   }
 
-  const signature = await solanaConnection.sendRawTransaction(signedTx.serialize());
+  const signature = await rpcAdapter.sendRawTransaction(signedTx.serialize());
   return { signature, explorerUrl: explorerUrl(signature) };
 }

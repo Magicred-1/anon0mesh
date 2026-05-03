@@ -1,13 +1,13 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { useWallet } from "@/context/WalletContext";
+import { useNetworkMode } from "@/src/hooks/useNetworkMode";
 import { solanaConnection } from "@/src/services/sendTransaction";
 import {
   ActivityEntry,
   SOL_DECIMALS,
   TokenBalance,
   fetchRecentActivity,
-  fetchSolBalance,
   fetchSplTokens,
 } from "@/src/services/walletData";
 
@@ -34,6 +34,7 @@ const WalletBalanceContext = createContext<WalletBalanceState | undefined>(undef
 
 export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const { publicKey, isConnected } = useWallet();
+  const { adapter: rpcAdapter, mode, relayHash } = useNetworkMode();
 
   const [tokens, setTokens] = useState<TokenBalance[]>([NATIVE_SOL]);
   const [solBalance, setSolBalance] = useState<number | null>(null);
@@ -45,6 +46,8 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const [lastFetched, setLastFetched] = useState<number | null>(null);
 
   const lastFetchedRef = useRef<number | null>(null);
+  const lastPublicKeyRef = useRef<string | null>(null);
+  const lastRouteRef = useRef<string | null>(null);
   const refetchRef    = useRef<() => Promise<void>>(() => Promise.resolve());
   const COOLDOWN_MS   = 30_000;
 
@@ -86,8 +89,10 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setActivityLoading(true);
     try {
+      // Parsed-token and activity RPCs stay direct until IRpcAdapter exposes
+      // those broader Solana APIs; native SOL balance uses the selected route.
       const [solResult, splResult, activityResult] = await Promise.allSettled([
-        fetchSolBalance(solanaConnection, publicKey),
+        rpcAdapter.getBalance(publicKey),
         fetchSplTokens(solanaConnection, publicKey),
         fetchRecentActivity(solanaConnection, publicKey, 10),
       ]);
@@ -107,14 +112,26 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       setActivityLoading(false);
     }
-  }, [publicKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [publicKey, rpcAdapter]);
 
   // Keep ref current so the effect below never stales without re-running.
   refetchRef.current = refetch;
 
   useEffect(() => {
-    if (isConnected && publicKey) refetchRef.current();
-  }, [isConnected, publicKey]);
+    const publicKeyString = publicKey?.toBase58() ?? null;
+    const routeKey = `${mode}:${relayHash ?? ""}`;
+    const routeChanged = lastRouteRef.current !== routeKey;
+    const walletChanged = lastPublicKeyRef.current !== publicKeyString;
+
+    lastRouteRef.current = routeKey;
+    lastPublicKeyRef.current = publicKeyString;
+
+    if (routeChanged || walletChanged) {
+      lastFetchedRef.current = null;
+    }
+
+    if (isConnected || !publicKey) refetchRef.current();
+  }, [isConnected, mode, publicKey, relayHash]);
 
   const value: WalletBalanceState = {
     tokens,
