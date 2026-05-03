@@ -36,6 +36,7 @@ export function RNodePairModal({ onClose, onPaired }: Props) {
   const [phase,       setPhase]       = useState(0);
   const [devices,     setDevices]     = useState<{ mac: string; name: string }[]>([]);
   const [pairedMac,   setPairedMac]   = useState<string | null>(null);
+  const [pairError,   setPairError]   = useState<string | null>(null);
   const sheetAnim = useRef(new Animated.Value(0)).current;
   const pollRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -61,12 +62,27 @@ export function RNodePairModal({ onClose, onPaired }: Props) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [phase, getNusUnpairedRNodes]);
 
-  // Start handshake → success sequence
+  // Phase 2: poll until pairedMac disappears from unpaired list (= bonded+connected)
   useEffect(() => {
-    if (phase !== 2) return;
-    const t = setTimeout(() => setPhase(3), 1800);
-    return () => clearTimeout(t);
-  }, [phase]);
+    if (phase !== 2 || !pairedMac) return;
+    const deadline = Date.now() + 15_000;
+    const id = setInterval(() => {
+      if (Date.now() > deadline) {
+        clearInterval(id);
+        setPairError('Pairing timed out — try again');
+        setPhase(1);
+        return;
+      }
+      try {
+        const still = getNusUnpairedRNodes();
+        if (!still.some(d => d.mac === pairedMac)) {
+          clearInterval(id);
+          setPhase(3);
+        }
+      } catch { /* native not ready */ }
+    }, 500);
+    return () => clearInterval(id);
+  }, [phase, pairedMac, getNusUnpairedRNodes]);
 
   const openBTSettings = useCallback(() => {
     if (Platform.OS === 'android') {
@@ -77,10 +93,14 @@ export function RNodePairModal({ onClose, onPaired }: Props) {
   }, []);
 
   const connect = useCallback(async (mac: string) => {
-    setPhase(2);
+    setPairError(null);
     setPairedMac(mac);
     if (!bleActive) await startBLE();
-    try { pairNusRNode(mac); } catch { /* ignore — BLE may not be ready yet */ }
+    try {
+      const ok = pairNusRNode(mac);
+      if (!ok) { setPairError('Device not found — re-scan and try again'); return; }
+    } catch { setPairError('Pairing failed — BLE not ready'); return; }
+    setPhase(2);
   }, [bleActive, startBLE, pairNusRNode]);
 
   const dismiss = useCallback(() => {
@@ -147,9 +167,10 @@ export function RNodePairModal({ onClose, onPaired }: Props) {
                   <SignalBars value={3} size={10} />
                 </Pressable>
               ))}
-              <Text style={[S.hint, { color: colors.textTertiary, textAlign: 'center', marginTop: 4 }]}>
-                Tap a device to activate it as a co-interface
-              </Text>
+              {pairError
+                ? <Text style={[S.hint, { color: colors.error ?? '#ff4444', textAlign: 'center', marginTop: 4 }]}>{pairError}</Text>
+                : <Text style={[S.hint, { color: colors.textTertiary, textAlign: 'center', marginTop: 4 }]}>Tap a device to activate it as a co-interface</Text>
+              }
             </View>
           )}
 

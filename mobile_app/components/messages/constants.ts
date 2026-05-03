@@ -31,6 +31,7 @@ export interface Peer {
   time: string;
   beacon: boolean;
   destHash?: string;
+  isGroup?: boolean;
 }
 
 export const PEERS: Peer[] = [

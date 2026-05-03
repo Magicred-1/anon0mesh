@@ -1,6 +1,6 @@
 import React, { memo, useState, useCallback } from 'react';
 import { View, TextInput, Pressable, StyleSheet, Alert } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
@@ -83,7 +83,7 @@ export const Composer = memo(function Composer({ onSend, onMedia, onGrid }: Prop
           borderColor:     hasText ? 'transparent'    : colors.border,
         }]}
       >
-        <Feather name="arrow-up" size={16} color={hasText ? colors.background : colors.textTertiary} />
+        <MaterialCommunityIcons name="bird" size={18} color={hasText ? colors.background : colors.textTertiary} />
       </Pressable>
     </View>
   );

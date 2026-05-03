@@ -5,17 +5,33 @@ import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 
 export type ScannedAddress =
-  | { type: 'lxmf';   hash:    string }
-  | { type: 'solana'; address: string }
-  | { type: 'unknown'; raw:    string };
+  | { type: 'lxmf';       hash:    string }
+  | { type: 'lxmf-group'; addrHex: string; keyHex: string; name?: string }
+  | { type: 'solana';     address: string }
+  | { type: 'unknown';    raw:     string };
 
 // 32-byte LXMF/Reticulum address = 64 hex chars (raw) or 32 (short hash shown in UI)
 const LXMF_RE   = /^[0-9a-f]{32}([0-9a-f]{32})?$/i;
+const HEX32_RE  = /^[0-9a-fA-F]{32}$/;
 // Solana pubkey: base58, 32–44 chars (excludes 0, O, I, l)
 const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 function parse(raw: string): ScannedAddress {
   const s = raw.trim();
+
+  // lxmf://group/<addrHex>/<keyHex>?name=<name>
+  if (s.startsWith('lxmf://group/')) {
+    const rest     = s.slice('lxmf://group/'.length);
+    const [body, query] = rest.split('?') as [string, string | undefined];
+    const parts    = body.split('/');
+    const addrHex  = parts[0] ?? '';
+    const keyHex   = parts[1] ?? '';
+    if (HEX32_RE.test(addrHex) && HEX32_RE.test(keyHex)) {
+      const nameParam = query?.split('&').find(p => p.startsWith('name='))?.slice(5);
+      const name = nameParam ? decodeURIComponent(nameParam) : undefined;
+      return { type: 'lxmf-group', addrHex: addrHex.toLowerCase(), keyHex: keyHex.toLowerCase(), name };
+    }
+  }
 
   if (s.startsWith('lxmf://') || s.startsWith('reticulum://')) {
     const hash = s.split('://')[1]?.split('?')[0] ?? '';
@@ -61,8 +77,9 @@ export function QRScannerModal({ visible, onResult, onClose }: Props) {
 
     const result = parse(data);
     const hint =
-      result.type === 'lxmf'    ? `LXMF · ${result.hash.slice(0, 8)}…` :
-      result.type === 'solana'  ? `Solana · ${result.address.slice(0, 8)}…` :
+      result.type === 'lxmf'       ? `LXMF · ${result.hash.slice(0, 8)}…` :
+      result.type === 'lxmf-group' ? `channel · ${result.name ?? result.addrHex.slice(0, 8)}…` :
+      result.type === 'solana'     ? `Solana · ${result.address.slice(0, 8)}…` :
       'unknown format';
     setLabel(hint);
 

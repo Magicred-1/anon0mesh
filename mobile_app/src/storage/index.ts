@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const SecureKeys = {
   // LXMF identity — 128-hex private key + 32-hex address
   LXMF_IDENTITY:    'lxmf.identity.v1',
+  // LXMF group channels — array of {addrHex, name, keyHex}; keyHex is AES-128 key material
+  LXMF_GROUPS:      'lxmf.groups.v1',
   // Wallet — AES-GCM encrypted keypair and related material
   WALLET_SECRET:    'anon_wallet_secret_v2',
   WALLET_AES_KEY:   'anon_wallet_aes_v1',

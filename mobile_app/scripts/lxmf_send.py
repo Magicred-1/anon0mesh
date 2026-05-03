@@ -38,7 +38,7 @@ def main():
 
     # Announce our identity so the phone can resolve us for replies
     router.announce(source_dest.hash)
-    time.sleep(1)  # give announce time to propagate
+    time.sleep(4)  # give announce time to propagate before message arrives
 
     print(f"[source  ] {RNS.prettyhexrep(source_dest.hash)}")
     print(f"[dest    ] {dest_hex}")

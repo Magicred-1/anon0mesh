@@ -195,45 +195,23 @@ export async function sendSolTransfer({
   const cachedToken = await secureGet(SecureKeys.MWA_TOKEN);
 
   const signedTransactions: Transaction[] = [];
-  try {
-    await transact(async (mwaWallet) => {
-      let auth: MwaAuthResult;
-      if (cachedToken) {
-        try {
-          auth = await mwaWallet.reauthorize({
-            auth_token: cachedToken,
-            identity: APP_IDENTITY,
-          }) as MwaAuthResult;
-        } catch {
-          auth = await mwaWallet.authorize({
-            chain: "solana:devnet",
-            identity: APP_IDENTITY,
-          }) as MwaAuthResult;
-          await secureSet(SecureKeys.MWA_TOKEN, auth.auth_token);
-        }
-      } else {
-        auth = await mwaWallet.authorize({
-          chain: "solana:devnet",
-          identity: APP_IDENTITY,
-        }) as MwaAuthResult;
-        await secureSet(SecureKeys.MWA_TOKEN, auth.auth_token);
-      }
-
-      const sessionPubkey = new PublicKey(Buffer.from(auth.accounts[0].address, "base64"));
-
-      if (sessionPubkey.toBase58() !== fromPubkey.toBase58()) {
-        throw new Error(
-          `MWA account mismatch — expected ${fromPubkey.toBase58().slice(0, 8)}…, wallet returned ${sessionPubkey.toBase58().slice(0, 8)}…. Reconnect the correct account.`,
-        );
-      }
-
-      tx.feePayer = sessionPubkey;
-      const signed = await mwaWallet.signTransactions({ transactions: [tx] });
-      if (signed[0]) signedTransactions[0] = signed[0];
+  await transact(async (mwaWallet) => {
+    const auth = await mwaWallet.reauthorize({
+      auth_token: cachedToken,
+      identity: APP_IDENTITY,
     });
-  } catch (err: unknown) {
-    normalizeWalletError(err);
-  }
+    const sessionPubkey = new PublicKey(Buffer.from(auth.accounts[0].address, "base64"));
+
+    if (sessionPubkey.toBase58() !== fromPubkey.toBase58()) {
+      throw new Error(
+        `MWA account mismatch — expected ${fromPubkey.toBase58().slice(0, 8)}…, wallet returned ${sessionPubkey.toBase58().slice(0, 8)}…. Reconnect the correct account.`,
+      );
+    }
+
+    tx.feePayer = sessionPubkey;
+    const signed = await mwaWallet.signTransactions({ transactions: [tx] });
+    if (signed[0]) signedTransactions[0] = signed[0];
+  });
 
   const signedTx = signedTransactions[0];
   if (!signedTx) {
