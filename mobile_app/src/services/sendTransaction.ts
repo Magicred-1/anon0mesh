@@ -113,7 +113,7 @@ export async function sendSolTransfer({
     throw new Error("MWA wallet not authorized. Reconnect your wallet.");
   }
 
-  let signedTx: Transaction | null = null;
+  const signedTransactions: Transaction[] = [];
   await transact(async (mwaWallet) => {
     const auth = await mwaWallet.reauthorize({
       auth_token: cachedToken,
@@ -129,9 +129,10 @@ export async function sendSolTransfer({
 
     tx.feePayer = sessionPubkey;
     const signed = await mwaWallet.signTransactions({ transactions: [tx] });
-    signedTx = signed[0] ?? null;
+    if (signed[0]) signedTransactions[0] = signed[0];
   });
 
+  const signedTx = signedTransactions[0];
   if (!signedTx) {
     throw new Error("MWA wallet returned no signed transaction");
   }

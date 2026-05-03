@@ -10,10 +10,12 @@ import {
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
+import * as SystemUI from 'expo-system-ui';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
-import React, { useCallback, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Platform, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { ThemeProvider, useTheme } from '@/theme';
@@ -57,7 +59,17 @@ const E = StyleSheet.create({
 
 function AppShell() {
   const router = useRouter();
+  const { colors } = useTheme();
   const [activeNotif, setActiveNotif] = useState<NotificationPayload | null>(null);
+
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(colors.background).catch(() => undefined);
+    if (Platform.OS === 'android') {
+      NavigationBar.setStyle('dark');
+      NavigationBar.setBackgroundColorAsync(colors.background).catch(() => undefined);
+      NavigationBar.setButtonStyleAsync('light').catch(() => undefined);
+    }
+  }, [colors.background]);
 
   const handleInApp = useCallback((n: NotificationPayload) => {
     setActiveNotif(n);
@@ -68,7 +80,7 @@ function AppShell() {
   usePeerCountNotification(notifsEnabled);
 
   return (
-    <>
+    <View style={[R.appRoot, { backgroundColor: colors.background }]}>
       <NavThemeProvider value={DarkTheme}>
         <Stack initialRouteName="index" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
           <Stack.Screen name="index" />
@@ -94,9 +106,19 @@ function AppShell() {
           router.push('/(tabs)');
         }}
       />
-    </>
+    </View>
   );
 }
+
+const R = StyleSheet.create({
+  gestureRoot: {
+    backgroundColor: '#00080c',
+    flex: 1,
+  },
+  appRoot: {
+    flex: 1,
+  },
+});
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -110,7 +132,7 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={R.gestureRoot}>
       <ThemeProvider>
         <LxmfProvider>
           <WalletProvider autoInitialize>

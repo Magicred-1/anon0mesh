@@ -125,4 +125,4 @@ export const lightColors = {
   glass:   'rgba(240,248,252,0.92)',
 } as const;
 
-export type AppColors = typeof darkColors;
+export type AppColors = typeof darkColors | typeof lightColors;
