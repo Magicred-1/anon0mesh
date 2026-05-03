@@ -28,6 +28,7 @@ import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
 import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 import { pendingConversationRef }    from '@/hooks/pendingConversation';
+import { useBackgroundService }      from '@/hooks/useBackgroundService';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -75,6 +76,7 @@ function AppShell() {
     setActiveNotif(n);
   }, []);
 
+  useBackgroundService();
   const [notifsEnabled] = useNotificationEnabled();
   useMessageNotifications(handleInApp, notifsEnabled);
   usePeerCountNotification(notifsEnabled);
