@@ -13,9 +13,16 @@ export const WalletFactory = {
   },
 
   async hasLocalWallet(): Promise<boolean> {
-    return DeviceDetector.isSolanaMobileDevice()
-      ? MWAWallet.hasCachedToken()
-      : LocalWallet.exists();
+    if (DeviceDetector.isSolanaMobileDevice()) return MWAWallet.hasCachedToken();
+    if (!await LocalWallet.exists()) return false;
+    // If marker exists but secret/AES key are missing (cross-build keychain
+    // access-group mismatch — e.g. Expo dev client → production signing),
+    // the wallet is unrecoverable. Auto-delete so the user is sent to creation.
+    if (!await LocalWallet.isFullyIntact()) {
+      await LocalWallet.delete();
+      return false;
+    }
+    return true;
   },
 
   async createAuto(): Promise<IWalletAdapter> {

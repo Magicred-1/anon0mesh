@@ -39,7 +39,7 @@ export default function SettingsScreen() {
   const [copiedWallet,  setCopiedWallet]  = useState(false);
   const [cardPage,      setCardPage]      = useState(0);
   const [cardWidth,     setCardWidth]     = useState(SCREEN_W - CARD_OUTER);
-  const [paired,        setPaired]        = useState<PairedDevice>({ id: 'rnode_001', name: 'RNode · 410MHz', rssi: -42, serial: 'RN-914-4f2a' });
+  const [paired,        setPaired]        = useState<PairedDevice>(null);
   const [notifications,  setNotifications]  = useNotificationEnabled();
   const [biometric,      setBiometric]      = useBiometricEnabled();
   const [disableBioOpen, setDisableBioOpen] = useState(false);

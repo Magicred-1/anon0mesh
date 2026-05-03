@@ -24,7 +24,7 @@ import { Feather } from '@expo/vector-icons';
 import { useWallet } from '@/context/WalletContext';
 import type { AnyMsg, ChatMsg, MediaMsg } from '@/components/messages/types';
 import type { MediaPayload } from '@/components/messages/Composer';
-import type { LxmfPeer } from '@/context/LxmfContext';
+import type { LxmfPeer, StoredMessage } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
@@ -34,6 +34,7 @@ import { formatAgo } from '@/utils/time';
 function decodeBody(b64: string): string {
   try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { return ''; }
 }
+
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
 let _msgId = Date.now();
@@ -182,11 +183,31 @@ function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | 
   return null;
 }
 
+function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: string): AnyMsg[] {
+  const me   = m.outbound === true || (!!ownHash && m.source === ownHash);
+  const time = new Date(m.timestamp * 1000).toTimeString().slice(0, 8);
+  const out: AnyMsg[] = [];
+
+  if (m.image?.data && m.image?.mimeType) {
+    const uri = `data:${m.image.mimeType};base64,${m.image.data}`;
+    out.push({ id: nextId(), kind: 'media', from: me ? 'me' : from, me, time, uri, mimeType: m.image.mimeType });
+  }
+
+  const bodyText = m.body ? decodeBody(m.body) : '';
+  if (bodyText || (m.files && m.files.length > 0)) {
+    const sender     = me ? 'me' : from;
+    const structured = bodyText ? parseStructuredMsg(bodyText, sender, time) : null;
+    out.push(structured ?? { id: nextId(), from: sender, me, time, text: bodyText, enc: true, files: m.files });
+  }
+
+  return out;
+}
+
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
-  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send, getDisplayName } = useLxmfContext();
+  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send, getDisplayName, getPeerMessages, myAddress } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
   const { publicKey } = useWallet();
@@ -386,16 +407,15 @@ export default function MessagesScreen() {
     }
     const seq = await send(activePeerHex, utf8ToBase64(text));
     if (seq < 0) {
-      // -1: useLxmf caught a native error; lxmf.error banner shows reason
       const pseudoSeq = -msgId;
       idToSeqRef.current.set(msgId, pseudoSeq);
       setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
-    } else if (seq > 0) {
+    } else {
+      // seq >= 0: queued (not yet delivered) — track it
       idToSeqRef.current.set(msgId, seq);
       const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
       immediateTimers.current.set(seq, timer);
     }
-    // seq === 0: accepted by module but no seq to track; bubble stays optimistic
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
   const handleMedia = useCallback(async (media: MediaPayload) => {
@@ -409,7 +429,7 @@ export default function MessagesScreen() {
       const pseudoSeq = -msgId;
       idToSeqRef.current.set(msgId, pseudoSeq);
       setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
-    } else if (seq > 0) {
+    } else {
       idToSeqRef.current.set(msgId, seq);
       const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
       immediateTimers.current.set(seq, timer);
@@ -444,17 +464,27 @@ export default function MessagesScreen() {
     const prevHash = activePeerHexRef.current;
     if (prevHash) threadsRef.current.set(prevHash, msgsRef.current);
     const newHash = p.destHash ?? null;
-    // Sync ref immediately — avoids race where a message arrives before the next render+effect
     activePeerHexRef.current      = newHash;
     activeConversationRef.current = newHash;
     setActivePeer(p.handle);
     setActivePeerHex(newHash);
     closeDrawer();
-    const saved = newHash ? threadsRef.current.get(newHash) : undefined;
-    setMsgs(saved ?? [
-      { id: 1, kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` },
-    ]);
-  }, [closeDrawer]);
+
+    const cached = newHash ? threadsRef.current.get(newHash) : undefined;
+    if (cached) { setMsgs(cached); return; }
+
+    if (newHash) {
+      const stored = getPeerMessages(newHash);
+      if (stored.length > 0) {
+        const fromName = getDisplayName(newHash);
+        const dbMsgs   = stored.flatMap(m => storedMsgToAnyMsg(m, myAddress, fromName));
+        setMsgs(dbMsgs.length > 0 ? dbMsgs : [{ id: nextId(), kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` }]);
+        return;
+      }
+    }
+
+    setMsgs([{ id: nextId(), kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` }]);
+  }, [closeDrawer, getPeerMessages, getDisplayName, myAddress]);
 
   // Track focus so notifications aren't suppressed when user is on another tab
   useFocusEffect(useCallback(() => {

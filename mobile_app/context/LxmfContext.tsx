@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   SecureKeys, LegacySecureKeys, PrefKeys,
   secureGet, secureSet, secureDelete, secureDeleteAll,
@@ -137,6 +138,56 @@ function sliceNewEvents(
   return [];
 }
 
+// Fallback: parse log events for announces (library compat across versions)
+function applyLogAnnounce(
+  e: LxmfEvent, map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
+  bleActive: boolean,
+): boolean {
+  if (e.type !== 'log') return false;
+  const msg = typeof e.message === 'string' ? e.message : '';
+  const m = ANNOUNCE_LOG_RE.exec(msg);
+  if (!m || m[1] === ownHash) return false;
+  const hash = m[1];
+  const hops = Number.parseInt(m[2], 10);
+  const existing = map.get(hash);
+  map.set(hash, {
+    destHash:     hash,
+    displayName:  existing?.displayName ?? names[hash] ?? hash.slice(0, 8),
+    hops,
+    lastSeen:     now,
+    online:       true,
+    via:          resolveVia(hops, bleActive, existing),
+    isBeaconNode: existing?.isBeaconNode ?? false,
+  });
+  return true;
+}
+
+// A received message proves the sender is reachable — mark online.
+function applyMessageReceived(
+  e: LxmfEvent, map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
+  bleActive: boolean,
+): boolean {
+  if (e.type !== 'messageReceived') return false;
+  const srcHash = (e.source ?? (e as any).src ?? (e as any).destHash) as string | undefined;
+  if (!srcHash || srcHash === ownHash) return false;
+  const existing = map.get(srcHash);
+  if (existing) {
+    if (existing.online) return false;
+    map.set(srcHash, { ...existing, online: true, lastSeen: now });
+  } else {
+    map.set(srcHash, {
+      destHash:     srcHash,
+      displayName:  names[srcHash] ?? srcHash.slice(0, 8),
+      hops:         0,
+      lastSeen:     now,
+      online:       true,
+      via:          bleActive ? 'ble' : 'reticulum',
+      isBeaconNode: false,
+    });
+  }
+  return true;
+}
+
 function processNewEvents(
   evts: LxmfEvent[], map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
   bleActive: boolean,
@@ -148,28 +199,10 @@ function processNewEvents(
     if (ann.peerChanged) peerChanged = true;
     if (ann.nameChanged) nameChanged = true;
     if (!ann.peerChanged) {
-      // Fallback: parse log events for announces (library compat across versions)
-      if (e.type === 'log') {
-        const msg = typeof e.message === 'string' ? e.message : '';
-        const m = ANNOUNCE_LOG_RE.exec(msg);
-        if (m && m[1] !== ownHash) {
-          const hash = m[1];
-          const hops = Number.parseInt(m[2], 10);
-          const existing = map.get(hash);
-          map.set(hash, {
-            destHash:     hash,
-            displayName:  existing?.displayName ?? names[hash] ?? hash.slice(0, 8),
-            hops,
-            lastSeen:     now,
-            online:       true,
-            via:          resolveVia(hops, bleActive, existing),
-            isBeaconNode: existing?.isBeaconNode ?? false,
-          });
-          peerChanged = true;
-        }
-      }
+      if (applyLogAnnounce(e, map, names, now, ownHash, bleActive)) peerChanged = true;
       if (applyBeaconDiscovered(e, names)) nameChanged = true;
     }
+    if (applyMessageReceived(e, map, names, now, ownHash, bleActive)) peerChanged = true;
   }
   return { peerChanged, nameChanged };
 }
@@ -213,10 +246,25 @@ function mergeBeacon(
 
 export const G00N_HUB:   TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 };
 export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net',    port: 4242 };
-export const MY_PC:      TcpInterface = {
-  host: process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST ?? 'localhost',
-  port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243),
-};
+
+const _myPcHost = process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST;
+export const MY_PC: TcpInterface | null = _myPcHost && _myPcHost !== 'localhost'
+  ? { host: _myPcHost, port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243) }
+  : null;
+
+/** Message as stored in the native DB — returned by fetchMessages(). */
+export interface StoredMessage {
+  id?:       number;
+  source:    string;   // 32-char hex sender
+  dest?:     string;   // 32-char hex recipient
+  body:      string;   // base64
+  title?:    string;   // base64
+  outbound?: boolean;  // true = sent by us
+  acked?:    boolean;  // delivery acknowledged
+  timestamp: number;
+  image?:    { mimeType: string; data: string };
+  files?:    { name: string; data: string }[];
+}
 
 export interface LxmfPeer {
   destHash:     string;
@@ -257,10 +305,15 @@ interface LxmfCtxValue {
   stopBLE:              () => Promise<void>;
   getStatus:            () => LxmfNodeStatus | null;
   getBeacons:           () => Beacon[];
-  fetchMessages:        (limit?: number) => any[];
+  fetchMessages:        (limit?: number) => StoredMessage[];
+  /** Fetch stored messages for a specific peer from the native DB. */
+  getPeerMessages:      (destHash: string, limit?: number) => StoredMessage[];
   setLogLevel:          (level: number) => void;
-  bleUnpairedRNodeCount: () => number;
-  blePeerCount:         number;
+  bleUnpairedRNodeCount:  () => number;
+  getNusUnpairedRNodes:   () => { mac: string; name: string }[];
+  pairNusRNode:           (mac: string) => boolean;
+  beaconRpc:              (destHashHex: string, method: string, params?: unknown) => Promise<number>;
+  blePeerCount:           number;
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
   setBeaconMode:        (enabled: boolean) => Promise<void>;
@@ -300,31 +353,32 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const lxmf = useLxmf({
     identityHex:    storedIdentity?.identity_hex ?? 'new',
     lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
-    logLevel:       2,
+    logLevel: __DEV__ ? 2 : 1,
+    dbPath:   (FileSystem.documentDirectory ?? '') + 'lxmf.db',
   });
 
-  const { isNativeAvailable, isRunning, start, stop, getIdentityHex, startBLE: lxmfStartBLE, stopBLE: lxmfStopBLE } = lxmf;
+  const { isNativeAvailable, isRunning, start, stop, getIdentityHex } = lxmf;
   const startingRef = useRef(false);
 
   useEffect(() => {
     if (!isNativeAvailable || isRunning || startingRef.current || displayName === null || !identityHydrated) return;
     startingRef.current = true;
-    start({
-      mode:           LxmfNodeMode.ReticulumAndBle,
-      tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB],
-      displayName,
-      identityHex:    storedIdentity?.identity_hex ?? 'new',
-      lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
-      isBeacon,
-    }).then(async ok => {
-      if (!ok) return;
-      const perm = await requestBLEPermissions();
-      if (perm === 'granted' || perm === 'not_required') {
-        lxmfStartBLE();
-        setBleActive(true);
+    // Request BLE permissions first — start() auto-activates BLE hardware
+    requestBLEPermissions().then(perm => {
+      if (perm !== 'granted' && perm !== 'not_required') {
+        startingRef.current = false;
+        return;
       }
+      return start({
+        mode:           LxmfNodeMode.ReticulumAndBle,
+        tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB].filter(Boolean) as TcpInterface[],
+        displayName,
+        identityHex:    storedIdentity?.identity_hex ?? 'new',
+        lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
+        isBeacon,
+      }).then(ok => { if (ok) setBleActive(true); });
     }).finally(() => { startingRef.current = false; });
-  }, [isNativeAvailable, isRunning, start, lxmfStartBLE, displayName, identityHydrated, storedIdentity, isBeacon]);
+  }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon]);
 
   // Persist identity after node starts (using getIdentityHex() per new API)
   useEffect(() => {
@@ -428,26 +482,23 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     }, 3000);
   }, [lxmf.events, lxmf.beacons, lxmf.status, bleActive]);
 
+  // start() auto-activates BLE hardware — no manual startBLE()/stopBLE() needed
   const handleStartBLE = useCallback(async () => {
-    if (bleActive) return; // guard: already started, prevents GATT server spam
-    if (!isRunning) {
-      const ok = await start({
-        mode:           LxmfNodeMode.ReticulumAndBle,
-        tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB],
-        displayName:    displayName ?? '',
-        identityHex:    storedIdentity?.identity_hex ?? 'new',
-        lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
-      });
-      if (!ok) return;
-    }
-    lxmfStartBLE();
-    setBleActive(true);
-  }, [bleActive, isRunning, start, lxmfStartBLE, displayName, storedIdentity]);
+    if (bleActive) return;
+    const ok = await start({
+      mode:           LxmfNodeMode.ReticulumAndBle,
+      tcpInterfaces:  [MY_PC, G00N_HUB, BELETH_HUB].filter(Boolean) as TcpInterface[],
+      displayName:    displayName ?? '',
+      identityHex:    storedIdentity?.identity_hex ?? 'new',
+      lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
+    });
+    if (ok) setBleActive(true);
+  }, [bleActive, start, displayName, storedIdentity]);
 
   const handleStopBLE = useCallback(async () => {
-    lxmfStopBLE();
+    await stop();
     setBleActive(false);
-  }, [lxmfStopBLE]);
+  }, [stop]);
 
   const setBeaconMode = useCallback(async (enabled: boolean) => {
     setIsBeacon(enabled);
@@ -460,6 +511,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     const peer = knownPeersRef.current.get(hash);
     return peer?.displayName || nameMapRef.current[hash] || hash.slice(0, 8);
   }, []);
+
+  const { fetchMessages: lxmfFetchMessages } = lxmf;
+  const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
+    const all = lxmfFetchMessages(limit * 2) as StoredMessage[];
+    return all.filter(m => m.source === destHash || m.dest === destHash).slice(0, limit);
+  }, [lxmfFetchMessages]);
 
   const value = useMemo(() => ({
     isRunning:             lxmf.isRunning,
@@ -483,9 +540,13 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     stopBLE:               handleStopBLE,
     getStatus:             lxmf.getStatus,
     getBeacons:            lxmf.getBeacons,
-    fetchMessages:         lxmf.fetchMessages,
+    fetchMessages:         lxmfFetchMessages,
+    getPeerMessages,
     setLogLevel:           lxmf.setLogLevel,
-    bleUnpairedRNodeCount: lxmf.bleUnpairedRNodeCount,
+    bleUnpairedRNodeCount:  lxmf.bleUnpairedRNodeCount,
+    getNusUnpairedRNodes:   lxmf.getNusUnpairedRNodes,
+    pairNusRNode:           lxmf.pairNusRNode,
+    beaconRpc:              lxmf.beaconRpc,
     blePeerCount,
     updateDisplayName: async (name: string) => {
       const trimmed = name.trim();
@@ -497,11 +558,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     setBeaconMode,
     getDisplayName,
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
-       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode, getDisplayName,
+       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode, getDisplayName, getPeerMessages, lxmfFetchMessages,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop, lxmf.send,
-       lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons, lxmf.fetchMessages,
-       lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount]);
+       lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
+       lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
+       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc]);
 
   return (
     <LxmfCtx.Provider value={value}>
