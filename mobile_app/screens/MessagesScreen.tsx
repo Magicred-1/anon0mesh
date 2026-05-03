@@ -17,6 +17,10 @@ import { InlineTxCard }          from '@/components/messages/InlineTxCard';
 import { Composer }              from '@/components/messages/Composer';
 import { ThreadHeader }          from '@/components/messages/ThreadHeader';
 import { PeersDrawer }           from '@/components/messages/PeersDrawer';
+import { CreateGroupModal }      from '@/components/messages/CreateGroupModal';
+import { JoinGroupModal }        from '@/components/messages/JoinGroupModal';
+import { GroupMembersSheet }     from '@/components/messages/GroupMembersSheet';
+import { ChannelShareSheet }    from '@/components/messages/ChannelShareSheet';
 import { DRAWER_W, type Peer } from '@/components/messages/constants';
 import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { PulseDot } from '@/components/ui/PulseDot';
@@ -207,7 +211,11 @@ function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: strin
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
-  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send, getDisplayName, getPeerMessages, myAddress } = useLxmfContext();
+  const {
+    isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send,
+    getDisplayName, getPeerMessages, myAddress,
+    groups, createGroup, joinGroup, leaveGroup, getGroupMembers,
+  } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
   const { publicKey } = useWallet();
@@ -215,8 +223,12 @@ export default function MessagesScreen() {
   const [msgs,             setMsgs]             = useState<AnyMsg[]>([]);
   const [activePeer,       setActivePeer]        = useState('');
   const [activePeerHex,    setActivePeerHex]     = useState<string | null>(null);
-  const [drawerVisible,    setDrawerVisible]     = useState(false);
-  const [actionGridVisible, setActionGridVisible] = useState(false);
+  const [drawerVisible,      setDrawerVisible]      = useState(false);
+  const [actionGridVisible,  setActionGridVisible]  = useState(false);
+  const [createGroupVisible, setCreateGroupVisible] = useState(false);
+  const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
+  const [membersAddrHex,     setMembersAddrHex]     = useState<string | null>(null);
+  const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
 
   const scrollRef          = useRef<ScrollView>(null);
@@ -320,10 +332,22 @@ export default function MessagesScreen() {
     return seqStates.get(seq);
   }, [seqStates]);
 
-  const livePeers: Peer[] = useMemo(
-    () => lxmfPeers.map(lxmfPeerToPeer),
-    [lxmfPeers],
-  );
+  const livePeers: Peer[] = useMemo(() => {
+    const dms = lxmfPeers.map(lxmfPeerToPeer);
+    const groupPeers: Peer[] = groups.map(g => ({
+      handle:   g.name,
+      destHash: g.addrHex,
+      hops:     0,
+      iface:    'TCP' as const,
+      online:   true,
+      unread:   0,
+      last:     '',
+      time:     '',
+      beacon:   false,
+      isGroup:  true,
+    }));
+    return [...groupPeers, ...dms];
+  }, [lxmfPeers, groups]);
 
   const activePeerObj = useMemo(
     () => livePeers.find(p => p.destHash === activePeerHex) ?? null,
@@ -521,6 +545,9 @@ export default function MessagesScreen() {
               iface={activePeerObj?.iface as 'TCP' | 'BLE' | 'RNode' | undefined}
               online={activePeerObj?.online}
               onOpen={openDrawer}
+              onShareQR={activePeerHex && groups.some(g => g.addrHex === activePeerHex)
+                ? () => setShareSheetOpen(true)
+                : undefined}
             />
             {activePeerHex ? (
               <>
@@ -543,8 +570,7 @@ export default function MessagesScreen() {
                   <View style={{ height: 4 }} />
                 </ScrollView>
                 <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
-                {/* Safe-area spacer: collapses when keyboard is up (KAV padding already covers it) */}
-                <View style={{ height: kbShown ? 0 : insets.bottom }} />
+                <View style={{ height: kbShown ? 0 : insets.bottom, backgroundColor: colors.surface0 }} />
               </>
             ) : (
               <NoPeerState onOpen={openDrawer} peerCount={livePeers.length} />
@@ -570,6 +596,29 @@ export default function MessagesScreen() {
         onClose={() => setActionGridVisible(false)}
       />
 
+      <CreateGroupModal
+        visible={createGroupVisible}
+        onClose={() => setCreateGroupVisible(false)}
+        onCreate={createGroup}
+      />
+      <JoinGroupModal
+        visible={joinGroupVisible}
+        onClose={() => setJoinGroupVisible(false)}
+        onJoin={joinGroup}
+      />
+      <ChannelShareSheet
+        visible={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        group={groups.find(g => g.addrHex === activePeerHex) ?? null}
+      />
+      <GroupMembersSheet
+        visible={membersAddrHex !== null}
+        onClose={() => setMembersAddrHex(null)}
+        group={groups.find(g => g.addrHex === membersAddrHex) ?? null}
+        members={membersAddrHex ? getGroupMembers(membersAddrHex) : []}
+        getDisplayName={getDisplayName}
+      />
+
       <Animated.View style={[
         S.drawer,
         { backgroundColor: colors.glass, borderRightColor: colors.border },
@@ -592,6 +641,10 @@ export default function MessagesScreen() {
             beacon:   false,
             destHash: hash,
           })}
+          onCreateGroup={() => setCreateGroupVisible(true)}
+          onJoinGroup={() => setJoinGroupVisible(true)}
+          onLeaveGroup={addrHex => leaveGroup(addrHex)}
+          onShowMembers={addrHex => setMembersAddrHex(addrHex)}
         />
       </Animated.View>
     </View>

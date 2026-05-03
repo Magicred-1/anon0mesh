@@ -11,12 +11,16 @@ import { QRScannerModal } from './QRScannerModal';
 import { type Peer } from './constants';
 
 interface Props {
-  readonly active:         string;
-  readonly onPick:         (p: Peer) => void;
-  readonly syncing?:       boolean;
-  readonly isAnnouncing?:  boolean;
-  readonly onNewHash?:     (hash: string) => void;
-  readonly peers?:         Peer[];
+  readonly active:          string;
+  readonly onPick:          (p: Peer) => void;
+  readonly syncing?:        boolean;
+  readonly isAnnouncing?:   boolean;
+  readonly onNewHash?:      (hash: string) => void;
+  readonly peers?:          Peer[];
+  readonly onCreateGroup?:  () => void;
+  readonly onJoinGroup?:    () => void;
+  readonly onLeaveGroup?:   (addrHex: string) => void;
+  readonly onShowMembers?:  (addrHex: string) => void;
 }
 
 function PeerRowSkeleton() {
@@ -37,20 +41,23 @@ function PeerRowSkeleton() {
 
 export const PeersDrawer = memo(function PeersDrawer({
   active, onPick, syncing, isAnnouncing, onNewHash, peers: peersProp,
+  onCreateGroup, onJoinGroup, onLeaveGroup, onShowMembers,
 }: Props) {
   const { colors }  = useTheme();
   const softGlass   = useGlass('soft');
 
   const peers       = peersProp ?? [];
-  const onlineCount = peers.filter(p => p.online).length;
+  const groups      = peers.filter(p => p.isGroup);
+  const dmPeers     = peers.filter(p => !p.isGroup);
+  const onlineCount = dmPeers.filter(p => p.online).length;
 
   const [query,         setQuery]         = useState('');
   const [hash,          setHash]          = useState('');
   const [scannerOpen,   setScannerOpen]   = useState(false);
 
   const filtered = (query
-    ? peers.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
-    : peers
+    ? dmPeers.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
+    : dmPeers
   ).slice().sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
 
   const canStart = hash.trim().length > 0;
@@ -100,6 +107,61 @@ export const PeersDrawer = memo(function PeersDrawer({
         )}
       </View>
 
+      {/* ── Channels (groups) ───────────────────────────────────────────── */}
+      <View style={S.channelSection}>
+        <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>CHANNELS</Text>
+
+        <View style={S.channelBtnRow}>
+          <Pressable onPress={onJoinGroup} style={[S.channelActionBtn, softGlass]}>
+            <Feather name="log-in" size={14} color={colors.textSecondary} />
+            <Text style={[S.channelActionText, { color: colors.textSecondary }]}>JOIN</Text>
+          </Pressable>
+          <Pressable onPress={onCreateGroup} style={[S.channelActionBtn, softGlass]}>
+            <Feather name="plus" size={14} color={colors.primary} />
+            <Text style={[S.channelActionText, { color: colors.primary }]}>CREATE</Text>
+          </Pressable>
+        </View>
+
+        {groups.length === 0 ? (
+          <Text style={[S.channelEmpty, { color: colors.textTertiary }]}>no channels yet</Text>
+        ) : groups.map(g => {
+          const isActive = active === (g.destHash ?? g.handle);
+          return (
+            <Pressable
+              key={g.destHash ?? g.handle}
+              onPress={() => onPick(g)}
+              onLongPress={() => onLeaveGroup?.(g.destHash ?? g.handle)}
+              style={({ pressed }) => {
+                const pressedBg = pressed ? colors.surface1 : 'transparent';
+                const bg = isActive ? colors.primarySubtle : pressedBg;
+                return [S.row, { backgroundColor: bg, borderColor: isActive ? colors.primary + '44' : 'transparent' }];
+              }}
+            >
+              <View style={[S.avatar, { backgroundColor: '#0d2f2a', borderColor: '#1a5c4f' }]}>
+                <Text style={[S.channelHash, { color: '#4ecdc4' }]}>#</Text>
+              </View>
+              <View style={S.info}>
+                <View style={S.infoRow}>
+                  <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{g.handle}</Text>
+                  <Text style={[S.time,   { color: colors.textTertiary }]}>{g.time}</Text>
+                </View>
+                <View style={[S.infoRow, { marginTop: 3 }]}>
+                  <Text style={[S.last, { color: colors.textSecondary }]} numberOfLines={1}>{g.last}</Text>
+                  {g.unread > 0 && <Pill label={String(g.unread)} variant="primary" />}
+                </View>
+              </View>
+              <Pressable
+                onPress={e => { e.stopPropagation(); onShowMembers?.(g.destHash ?? g.handle); }}
+                hitSlop={10}
+                style={S.membersBtn}
+              >
+                <Feather name="users" size={13} color={colors.textTertiary} />
+              </Pressable>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* ── Peer list — contained scrollable box ────────────────────────── */}
       <View style={S.listSection}>
         <View style={S.listHeader}>
@@ -137,13 +199,11 @@ export const PeersDrawer = memo(function PeersDrawer({
                   <Pressable
                     key={p.destHash ?? p.handle}
                     onPress={() => onPick(p)}
-                    style={({ pressed }) => [
-                      S.row,
-                      {
-                        backgroundColor: isActive ? colors.primarySubtle : pressed ? colors.surface1 : 'transparent',
-                        borderColor:     isActive ? colors.primary + '44' : 'transparent',
-                      },
-                    ]}
+                    style={({ pressed }) => {
+                      const pressedBg = pressed ? colors.surface1 : 'transparent';
+                      const bg = isActive ? colors.primarySubtle : pressedBg;
+                      return [S.row, { backgroundColor: bg, borderColor: isActive ? colors.primary + '44' : 'transparent' }];
+                    }}
                   >
                     <View style={S.avatarWrap}>
                       <View style={[S.avatar, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
@@ -200,6 +260,15 @@ const S = StyleSheet.create({
   hashInput:    { fontFamily: fontFamily.sansMd, fontSize: 12, padding: 0, flex: 1 },
   startBtn:     { padding: 12, borderRadius: 12, alignItems: 'center' },
   startBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+
+  // ── Channels section ─────────────────────────────────────────────────────────
+  channelSection:     { paddingHorizontal: 14, paddingBottom: 10, gap: 6 },
+  channelBtnRow:      { flexDirection: 'row', gap: 6 },
+  channelActionBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12 },
+  channelActionText:  { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase' },
+  channelEmpty:       { fontFamily: fontFamily.sansMd, fontSize: 10.5, paddingVertical: 4, paddingHorizontal: 2, opacity: 0.5 },
+  channelHash:        { fontFamily: fontFamily.sansMd, fontSize: 16, fontWeight: '700' },
+  membersBtn:         { padding: 4 },
 
   // ── Peer list section ────────────────────────────────────────────────────────
   listSection:  { flex: 1, paddingHorizontal: 14, gap: 8, minHeight: 0 },

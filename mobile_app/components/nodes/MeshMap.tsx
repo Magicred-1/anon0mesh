@@ -169,9 +169,9 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
   const insets     = useSafeAreaInsets();
 
   // ── Collapse / fullscreen ─────────────────────────────────────────────────
-  const [expanded,   setExpanded]   = useState(false);
+  const [expanded,   setExpanded]   = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-  const heightAnim = useRef(new Animated.Value(0)).current;
+  const heightAnim = useRef(new Animated.Value(VIEWPORT_H)).current;
   const shouldRenderCanvas = expanded || fullscreen;
 
   const toggle = useCallback(() => {

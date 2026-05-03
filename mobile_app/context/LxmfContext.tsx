@@ -252,6 +252,28 @@ export const MY_PC: TcpInterface | null = _myPcHost && _myPcHost !== 'localhost'
   ? { host: _myPcHost, port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243) }
   : null;
 
+// ── Group channels ───────────────────────────────────────────────────────────
+
+export interface LxmfGroup {
+  addrHex: string; // 32 hex — deterministic group address
+  name:    string;
+  keyHex:  string; // 32 hex — AES-128 shared secret (stored in SecureStore)
+}
+
+function generateKeyHex(): string {
+  const buf = new Uint8Array(16);
+  const cryptoApi = globalThis.crypto ?? (globalThis as Record<string, unknown>).msCrypto;
+  const api = cryptoApi as { getRandomValues?: (buf: Uint8Array) => Uint8Array } | undefined;
+  if (api?.getRandomValues) {
+    api.getRandomValues(buf);
+  } else {
+    for (let i = 0; i < buf.length; i++) buf[i] = Math.trunc(Math.random() * 256);
+  }
+  return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Message as stored in the native DB ───────────────────────────────────────
+
 /** Message as stored in the native DB — returned by fetchMessages(). */
 export interface StoredMessage {
   id?:       number;
@@ -319,6 +341,15 @@ interface LxmfCtxValue {
   setBeaconMode:        (enabled: boolean) => Promise<void>;
   /** Reads from refs — always current, safe to call inside any effect. */
   getDisplayName:       (hash: string) => string;
+  // ── Groups ────────────────────────────────────────────────────────────────
+  groups:      LxmfGroup[];
+  createGroup: (name: string) => Promise<LxmfGroup>;
+  joinGroup:   (addrHex: string, keyHex: string, name?: string) => Promise<boolean>;
+  leaveGroup:  (addrHex: string) => Promise<void>;
+  isGroup:         (addrHex: string) => boolean;
+  getGroupName:    (addrHex: string) => string;
+  /** Returns deduplicated source hashes of peers who sent messages to this group. */
+  getGroupMembers: (addrHex: string) => string[];
 }
 
 const LxmfCtx = createContext<LxmfCtxValue | null>(null);
@@ -482,6 +513,104 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     }, 3000);
   }, [lxmf.events, lxmf.beacons, lxmf.status, bleActive]);
 
+  // ── Group channels ──────────────────────────────────────────────────────────
+  const [groups,    setGroups]  = useState<LxmfGroup[]>([]);
+  const groupMapRef             = useRef<Record<string, LxmfGroup>>({});
+  const groupsRef               = useRef<LxmfGroup[]>([]);
+
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+
+  // Load persisted groups on mount
+  useEffect(() => {
+    secureGet(SecureKeys.LXMF_GROUPS).then(raw => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as LxmfGroup[];
+        groupMapRef.current = Object.fromEntries(parsed.map(g => [g.addrHex, g]));
+        setGroups(parsed);
+      } catch {}
+    });
+  }, []);
+
+  // Re-register groups every time the node (re)starts — Rust registry is in-memory
+  useEffect(() => {
+    if (!isRunning || groupsRef.current.length === 0) return;
+    for (const g of groupsRef.current) {
+      try { lxmf.joinGroup(g.addrHex, g.keyHex); } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning]);
+
+  const handleCreateGroup = useCallback(async (name: string): Promise<LxmfGroup> => {
+    const keyHex  = generateKeyHex();
+    const addrHex = lxmf.createGroup(name, keyHex);
+    const group   = { addrHex, name, keyHex };
+    const updated = [...groupsRef.current, group];
+    groupMapRef.current[addrHex] = group;
+    setGroups(updated);
+    await secureSet(SecureKeys.LXMF_GROUPS, JSON.stringify(updated));
+    return group;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lxmf.createGroup]);
+
+  const handleJoinGroup = useCallback(async (
+    addrHex: string, keyHex: string, name = addrHex.slice(0, 8),
+  ): Promise<boolean> => {
+    if (!/^[0-9a-f]{32}$/i.test(addrHex) || !/^[0-9a-f]{32}$/i.test(keyHex)) return false;
+    const ok = lxmf.joinGroup(addrHex, keyHex);
+    if (!ok) return false;
+    if (!groupMapRef.current[addrHex]) {
+      const group   = { addrHex, name, keyHex };
+      const updated = [...groupsRef.current, group];
+      groupMapRef.current[addrHex] = group;
+      setGroups(updated);
+      await secureSet(SecureKeys.LXMF_GROUPS, JSON.stringify(updated));
+    }
+    return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lxmf.joinGroup]);
+
+  const handleLeaveGroup = useCallback(async (addrHex: string): Promise<void> => {
+    try { lxmf.leaveGroup(addrHex); } catch {}
+    delete groupMapRef.current[addrHex];
+    const updated = groupsRef.current.filter(g => g.addrHex !== addrHex);
+    setGroups(updated);
+    await secureSet(SecureKeys.LXMF_GROUPS, JSON.stringify(updated));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lxmf.leaveGroup]);
+
+  const isGroup      = useCallback((addrHex: string) => !!groupMapRef.current[addrHex], []);
+  const getGroupName = useCallback((addrHex: string) =>
+    groupMapRef.current[addrHex]?.name ?? addrHex.slice(0, 8), []);
+
+  const getGroupMembers = useCallback((addrHex: string): string[] => {
+    try {
+      const msgs    = lxmf.fetchMessages(500) as StoredMessage[];
+      const ownHash = lxmf.getStatus()?.addressHex ?? storedIdentity?.address_hex;
+      const seen    = new Set<string>();
+      for (const m of msgs) {
+        const raw     = m as unknown as Record<string, unknown>;
+        const grpDest = m.dest ?? raw.groupDest;
+        if (grpDest === addrHex && m.source && m.source !== ownHash) {
+          seen.add(m.source);
+        }
+      }
+      return Array.from(seen);
+    } catch {
+      return [];
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lxmf.fetchMessages, lxmf.getStatus, storedIdentity]);
+
+  // Auto-route send: group addresses → sendGroup, peers → send
+  const handleSend = useCallback(async (
+    destHex: string, bodyBase64: string, media?: LxmfMedia,
+  ): Promise<number> => {
+    if (groupMapRef.current[destHex]) return lxmf.sendGroup(destHex, bodyBase64, media);
+    return lxmf.send(destHex, bodyBase64, media);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lxmf.send, lxmf.sendGroup]);
+
   // start() auto-activates BLE hardware — no manual startBLE()/stopBLE() needed
   const handleStartBLE = useCallback(async () => {
     if (bleActive) return;
@@ -534,7 +663,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     resetIdentity,
     start:                 lxmf.start,
     stop:                  lxmf.stop,
-    send:                  lxmf.send,
+    send:                  handleSend,
     broadcast:             lxmf.broadcast,
     startBLE:              handleStartBLE,
     stopBLE:               handleStopBLE,
@@ -557,10 +686,19 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     isBeacon,
     setBeaconMode,
     getDisplayName,
+    groups,
+    createGroup: handleCreateGroup,
+    joinGroup:   handleJoinGroup,
+    leaveGroup:  handleLeaveGroup,
+    isGroup,
+    getGroupName,
+    getGroupMembers,
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
-       handleStartBLE, handleStopBLE, isBeacon, setBeaconMode, getDisplayName, getPeerMessages, lxmfFetchMessages,
+       handleStartBLE, handleStopBLE, handleSend, handleCreateGroup, handleJoinGroup, handleLeaveGroup,
+       isGroup, getGroupName, getGroupMembers, groups,
+       isBeacon, setBeaconMode, getDisplayName, getPeerMessages, lxmfFetchMessages,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
-       lxmf.events, lxmf.error, lxmf.start, lxmf.stop, lxmf.send,
+       lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
        lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc]);
