@@ -130,6 +130,11 @@ function withAndroidForegroundService(config) {
     };
     addPerm('android.permission.FOREGROUND_SERVICE');
     addPerm('android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE');
+    addPerm('android.permission.BLUETOOTH_ADVERTISE');
+    addPerm('android.permission.BLUETOOTH_CONNECT');
+    addPerm('android.permission.BLUETOOTH_SCAN');
+    addPerm('android.permission.CHANGE_WIFI_STATE');
+    addPerm('android.permission.CHANGE_NETWORK_STATE');
 
     const app = manifest.application[0];
     if (!app.service) app.service = [];
