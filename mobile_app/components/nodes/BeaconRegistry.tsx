@@ -16,9 +16,10 @@ const NETWORK_FEE     = '~0.000005';
 
 interface Props {
   readonly initialActive?: boolean;
+  readonly style?: import('react-native').ViewStyle;
 }
 
-export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _initialActive = false }: Props) {
+export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _initialActive = false, style }: Props) {
   const { colors } = useTheme();
   const glass       = useGlass();
   const softGlass   = useGlass('soft');
@@ -52,7 +53,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   return (
     <>
       {/* ── Card ────────────────────────────────────────────────────────── */}
-      <View style={S.wrap}>
+      <View style={[S.wrap, style]}>
         <View style={S.labelRow}>
           <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>BEACON REGISTRY</Text>
           <Pill label={active ? 'ACTIVE BEACON' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
@@ -125,7 +126,9 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               </View>
 
               <Text style={[S.desc, { color: colors.textSecondary }]}>
-                Stake SOL to become a beacon node. Co-sign confidential transactions and earn fees from the network.
+                Beacon nodes are always-on relays that keep the mesh alive. They announce themselves to the network, forward encrypted packets across hops, and co-sign confidential Solana transactions — earning fees from every co-sign.{'\n\n'}
+                Unlike regular peers, beacons run 24/7 and are reachable from any transport — BLE, LoRa, TCP. The more beacons online, the stronger and more resilient the mesh becomes.{'\n\n'}
+                Stake {STAKE_SOL} SOL to register. Your stake is fully returned when you deregister.
               </Text>
 
               <Pressable
@@ -244,10 +247,10 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 
 const S = StyleSheet.create({
   // ── Outer ───────────────────────────────────────────────────────────────────
-  wrap:         { paddingHorizontal: 20, marginTop: 20 },
+  wrap:         { paddingHorizontal: 20, marginTop: 16, marginBottom: 16, flex: 1 },
   labelRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sectionLabel: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  card:         { borderRadius: 16, overflow: 'hidden' },
+  card:         { borderRadius: 16, overflow: 'hidden', flex: 1 },
 
   // ── Active state ────────────────────────────────────────────────────────────
   activeHero:   { flexDirection: 'row', borderBottomWidth: 0.5, paddingVertical: 20, paddingHorizontal: 18 },

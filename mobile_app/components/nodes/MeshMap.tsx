@@ -439,23 +439,23 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
   return (
     <View style={[S.outer, { borderColor: colors.border, backgroundColor: colors.surface0 }]}>
 
-      {/* Header */}
-      <View style={[S.header, { borderBottomColor: expanded && !fullscreen ? colors.border : 'transparent' }]}>
-        <Pressable onPress={toggle} style={S.headerPress}>
+      {/* Header — full row is tappable for expand/collapse; maximize captures its own press */}
+      <Pressable onPress={toggle} style={[S.header, { borderBottomColor: expanded && !fullscreen ? colors.border : 'transparent' }]}>
+        <View style={S.headerPress}>
           <Text style={[S.headerLabel, { color: colors.textTertiary }]}>
             MESH TOPOLOGY
             <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
             <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
           </Text>
-          <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={13} color={colors.textTertiary} />
-        </Pressable>
+          <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSecondary} />
+        </View>
         <View style={S.headerBtns}>
           {isAnnouncing && <PulseDot size={5} />}
           <Pressable onPress={enterFullscreen} style={[S.iconBtn, S.fsBtn]} hitSlop={8}>
             <Feather name="maximize-2" size={14} color={colors.primary} />
           </Pressable>
         </View>
-      </View>
+      </Pressable>
 
       {/* Collapsible small viewport */}
       {!fullscreen && (
@@ -468,16 +468,6 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
             </GestureDetector>
           )}
           {selStrip(0)}
-          {expanded && (
-            <Pressable
-              onPress={enterFullscreen}
-              style={[S.fsEnterBtn, { backgroundColor: colors.surface1, borderColor: colors.border, bottom: sel ? 42 : 10 }]}
-              hitSlop={10}
-            >
-              <Feather name="maximize-2" size={13} color={colors.primary} />
-              <Text style={[S.pillTxt, { color: colors.primary }]}>EXPAND</Text>
-            </Pressable>
-          )}
         </Animated.View>
       )}
 
@@ -553,11 +543,6 @@ const S = StyleSheet.create({
   fsHeader:    { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.5,
                   paddingHorizontal: 12, paddingVertical: 10 },
 
-  // Shared pill style for EXPAND and EXIT buttons
-  fsEnterBtn:  { position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -44,
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                  paddingVertical: 9, paddingHorizontal: 18,
-                  borderRadius: 22, borderWidth: 0.5 },
   fsExitBtn:   { position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -44,
                   flexDirection: 'row', alignItems: 'center', gap: 6,
                   paddingVertical: 9, paddingHorizontal: 18,
