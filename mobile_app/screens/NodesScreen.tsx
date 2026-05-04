@@ -121,7 +121,7 @@ export default function NodesScreen() {
 
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
-          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} />
+          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} />
           <View style={S.filterOverlay}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterRow}>
               {FILTERS.map(f => {
