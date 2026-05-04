@@ -128,7 +128,7 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
   return (
     <View style={[S.header, { backgroundColor: colors.surface0, borderBottomColor: colors.borderSubtle, paddingTop: top + 10 }]}>
       <Pressable onPress={onOpen} style={[S.hamburger, baseGlass]}>
-        <Feather name="menu" size={16} color={colors.textSecondary} />
+        <Feather name={hasPeer ? 'arrow-left' : 'menu'} size={16} color={colors.textSecondary} />
       </Pressable>
 
       <View style={{ flex: 1 }}>

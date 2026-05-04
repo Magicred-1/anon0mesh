@@ -1,17 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, FlatList, ScrollView, Pressable, StyleSheet,
+  View, Text, ScrollView, Pressable, StyleSheet,
   Platform, PermissionsAndroid, InteractionManager,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
-import { useGlass } from '@/hooks/useGlass';
 import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
-import { NodeRow }         from '@/components/nodes/NodeRow';
-import { NodeRowSkeleton } from '@/components/nodes/NodeRowSkeleton';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { PulseDot }        from '@/components/ui/PulseDot';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
@@ -41,7 +38,6 @@ function peerToMapNode(p: LxmfPeer): NodeData {
 
 export default function NodesScreen() {
   const { colors } = useTheme();
-  const glass = useGlass();
   const { isRunning, isNativeAvailable, isAnnouncing, bleActive, peers, startBLE } = useLxmfContext();
 
   const [filter,         setFilter]         = useState<Filter>('all');
@@ -112,115 +108,68 @@ export default function NodesScreen() {
     for (const n of listNodes) c[n.iface] = (c[n.iface] ?? 0) + 1;
     return c;
   }, [listNodes]);
-  // Cap rendered rows — beyond 80 the ScrollView frame budget breaks on low-end devices
-  const MAX_ROWS = 80;
-  const shown    = useMemo(() => filtered.slice(0, MAX_ROWS), [filtered]);
-
   const loading = !isRunning || (isRunning && peers.length === 0);
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
 
-          <View style={S.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={[S.sub,   { color: colors.textTertiary }]}>ANONMESH</Text>
-              <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
-            </View>
-          </View>
+        <View style={S.header}>
+          <Text style={[S.sub,   { color: colors.textTertiary }]}>ANONMESH</Text>
+          <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
+        </View>
 
-
-          <View style={{ paddingTop: 14, paddingHorizontal: 20 }}>
-            <MeshMap nodes={listNodes} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} />
-          </View>
-
-          <FlatList
-            horizontal
-            data={FILTERS}
-            keyExtractor={f => f}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={S.filterBar}
-            renderItem={({ item: f }) => {
-              const count   = ifaceCounts[f] ?? 0;
-              const active  = f === filter;
-              const isBle   = f === 'BLE';
-              return (
-                <Pressable
-                  onPress={() => setFilter(f)}
-                  style={[S.chip, {
-                    borderColor:     active ? colors.primary + '80' : colors.border,
-                    backgroundColor: active ? colors.primarySubtle  : 'transparent',
-                  }]}
-                >
-                  {isBle && bleActive && <PulseDot size={4} />}
-                  <Text style={[S.chipText, { color: active ? colors.primary : colors.textTertiary }]}>
-                    {f.toUpperCase()}
-                  </Text>
-                  {(isBle ? bleActive : count > 0) && (
-                    <Text style={[S.chipCount, { color: active ? colors.primary : colors.textTertiary }]}>
-                      {count}
+        {/* Map with filter chips overlaid at bottom */}
+        <View style={S.mapWrap}>
+          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} />
+          <View style={S.filterOverlay}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterRow}>
+              {FILTERS.map(f => {
+                const count  = ifaceCounts[f] ?? 0;
+                const active = f === filter;
+                const isBle  = f === 'BLE';
+                return (
+                  <Pressable
+                    key={f}
+                    onPress={() => setFilter(f)}
+                    style={[S.chip, {
+                      borderColor:     active ? colors.primary + '80' : colors.border,
+                      backgroundColor: active ? colors.primarySubtle  : colors.glass,
+                    }]}
+                  >
+                    {isBle && bleActive && <PulseDot size={4} />}
+                    <Text style={[S.chipText, { color: active ? colors.primary : colors.textTertiary }]}>
+                      {f.toUpperCase()}
                     </Text>
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-
-          <BeaconRegistry />
-
-          <View style={S.sectionRow}>
-            <Text style={[S.sectionText, { color: colors.textTertiary }]}>LINKED PEERS</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {isAnnouncing && <PulseDot size={5} />}
-              {loading
-                ? <Text style={[S.sectionCount, { color: colors.primary }]}>awaiting announces…</Text>
-                : <Text style={[S.sectionCount, { color: colors.textTertiary }]}>
-                    {shown.length}{filtered.length > MAX_ROWS ? `+` : ''} of {listNodes.length}
-                  </Text>
-              }
-            </View>
+                    {(isBle ? bleActive : count > 0) && (
+                      <Text style={[S.chipCount, { color: active ? colors.primary : colors.textTertiary }]}>
+                        {count}
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
+        </View>
 
-          {/* Bounded scrollable peer box — ScrollView is safe to nest inside ScrollView */}
-          <View style={[S.peerBox, glass]}>
-            {loading
-              ? [0,1,2,3,4].map(i => <NodeRowSkeleton key={i} />)
-              : (
-                <ScrollView
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
-                  style={S.peerScroll}
-                >
-                  {shown.map(n => (
-                    <NodeRow key={n.destHash ?? n.handle} n={n} selected={n.handle === selectedHandle} />
-                  ))}
-                </ScrollView>
-              )
-            }
-          </View>
+        {/* Beacon Registry — fills remaining screen height */}
+        <BeaconRegistry />
 
-        </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
 const S = StyleSheet.create({
-  root:         { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 },
-  title:        { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
-  sub:          { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginTop: 2 },
-  filterBar:    { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2, gap: 6 },
-  chip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: 4 },
-  chipText:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  sectionRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  sectionText:  { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  sectionCount: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
-  list:         { flexGrow: 1 },
-  peerBox:      { marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', maxHeight: 340 },
-  peerScroll:   { flexGrow: 0 },
-  listContent:  { flexGrow: 1 },
-  chipCount:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, opacity: 0.8 },
-
+  root:          { flex: 1 },
+  header:        { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
+  title:         { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
+  sub:           { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
+  mapWrap:       { position: 'relative', paddingHorizontal: 20, paddingTop: 10 },
+  filterOverlay: { position: 'absolute', bottom: 8, left: 20, right: 20 },
+  filterRow:     { gap: 6, paddingHorizontal: 2 },
+  chip:          { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: 4 },
+  chipText:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  chipCount:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, opacity: 0.8 },
 });

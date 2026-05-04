@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { fontFamily } from '@/theme';
 import { CYAN, BG } from './constants';
@@ -8,7 +8,6 @@ const BORDER = 'rgba(0,229,255,0.13)';
 
 interface Props {
   isLoading:       boolean;
-  isConnected:     boolean;
   isSolanaMobile:  boolean;
   nickname:        string;
   overlayOpacity:  Animated.Value;
@@ -39,10 +38,24 @@ function LoadingDots() {
 }
 
 export const LoadingOverlay = memo(function LoadingOverlay({
-  isLoading, isConnected, isSolanaMobile, nickname,
+  isLoading, isSolanaMobile, nickname,
   overlayOpacity, enteringOpacity, statusOpacity, nicknameOpacity, btnOpacity,
 }: Readonly<Props>) {
-  const cursor = useRef(new Animated.Value(1)).current;
+  const cursor   = useRef(new Animated.Value(1)).current;
+  const bgOpacity = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(false);
+
+  // bg fade in/out — independent of parent element animations
+  useEffect(() => {
+    if (isLoading) {
+      setMounted(true);
+      Animated.timing(bgOpacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    } else {
+      Animated.timing(bgOpacity, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
+        setMounted(false);
+      });
+    }
+  }, [isLoading, bgOpacity]);
 
   useEffect(() => {
     const blink = Animated.loop(Animated.sequence([
@@ -53,10 +66,10 @@ export const LoadingOverlay = memo(function LoadingOverlay({
     return () => blink.stop();
   }, [isLoading, cursor]);
 
-  if (!isLoading && !isConnected) return null;
+  if (!mounted) return null;
 
   return (
-    <View style={S.bg}>
+    <Animated.View style={[S.bg, { opacity: bgOpacity }]}>
       <Animated.View style={[S.center, { opacity: overlayOpacity }]}>
         <View style={S.card}>
           <Animated.Text style={[S.label, { opacity: enteringOpacity }]}>
@@ -80,7 +93,7 @@ export const LoadingOverlay = memo(function LoadingOverlay({
           </Animated.View>
         </View>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 });
 
