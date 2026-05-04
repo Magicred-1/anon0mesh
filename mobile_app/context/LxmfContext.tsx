@@ -17,6 +17,7 @@ import {
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
+import * as ExpoCrypto from 'expo-crypto';
 
 const IDENTITY_SCHEMA_VERSION = 1;
 
@@ -261,14 +262,7 @@ export interface LxmfGroup {
 }
 
 function generateKeyHex(): string {
-  const buf = new Uint8Array(16);
-  const cryptoApi = globalThis.crypto ?? (globalThis as Record<string, unknown>).msCrypto;
-  const api = cryptoApi as { getRandomValues?: (buf: Uint8Array) => Uint8Array } | undefined;
-  if (api?.getRandomValues) {
-    api.getRandomValues(buf);
-  } else {
-    for (let i = 0; i < buf.length; i++) buf[i] = Math.trunc(Math.random() * 256);
-  }
+  const buf = ExpoCrypto.getRandomBytes(16);
   return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
 }
 

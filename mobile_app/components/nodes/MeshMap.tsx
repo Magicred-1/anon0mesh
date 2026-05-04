@@ -24,15 +24,19 @@ const NODE_R     = 12;
 const MAX_NODES  = 35; // keep View count bounded — 35 is plenty for readability
 
 const RING: Record<number, number> = { 1: 90, 2: 165, 3: 235 };
-const RING_DEFAULT = 305;
+const RING_DEFAULT   = 305;
+const MIN_ARC_GAP    = NODE_R * 2 + 20; // arc spacing per node — includes label breathing room
+const CROSS_RING_GAP = NODE_R * 2 + 12; // min radial distance between adjacent ring edges
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
-  nodes:        NodeData[];
-  selected:     string | null;
-  onSelect:     (h: string | null) => void;
-  syncing?:     boolean;
-  isAnnouncing?: boolean;
+  nodes:           NodeData[];
+  selected:        string | null;
+  onSelect:        (h: string | null) => void;
+  syncing?:        boolean;
+  isAnnouncing?:   boolean;
+  selStripBottom?: number;
+  filterRow?:      React.ReactNode;
 }
 
 // Ghost placeholder positions — 3 equidistant nodes on ring-1 (radius 90, phase -90°)
@@ -52,13 +56,29 @@ function layout(nodes: NodeData[]): Placed[] {
     if (!byHop.has(h)) byHop.set(h, []);
     byHop.get(h)!.push(n);
   }
+
+  // Step 1: per-ring radius — enforce minimum arc spacing so same-ring nodes don't overlap
+  const hopRadii = new Map<number, number>();
+  for (const [h, grp] of byHop) {
+    const baseRad = RING[h] ?? RING_DEFAULT + (h - 3) * 70;
+    const minRad  = grp.length > 1 ? (grp.length * MIN_ARC_GAP) / (2 * Math.PI) : 0;
+    hopRadii.set(h, Math.max(baseRad, minRad));
+  }
+
+  // Step 2: enforce radial gap between adjacent rings so cross-ring nodes don't overlap
+  const sortedHops = [...hopRadii.keys()].sort((a, b) => a - b);
+  for (let i = 1; i < sortedHops.length; i++) {
+    const prev   = sortedHops[i - 1];
+    const curr   = sortedHops[i];
+    const needed = hopRadii.get(prev)! + CROSS_RING_GAP;
+    if (hopRadii.get(curr)! < needed) hopRadii.set(curr, needed);
+  }
+
   const out: Placed[] = [];
   for (const [h, grp] of byHop) {
-    const baseRad = RING[h] ?? RING_DEFAULT;
-    const minRad  = grp.length > 1 ? (grp.length * (NODE_R * 2 + 8)) / (2 * Math.PI) : 0;
-    const rad     = Math.max(baseRad, minRad);
-    const phase   = (h * 23 - 90) * (Math.PI / 180);
-    const step    = (2 * Math.PI) / grp.length;
+    const rad   = hopRadii.get(h)!;
+    const phase = (h * 23 - 90) * (Math.PI / 180);
+    const step  = (2 * Math.PI) / grp.length;
     grp.forEach((node, i) => {
       const a = phase + step * i;
       out.push({ node, x: ME_X + rad * Math.cos(a), y: ME_Y + rad * Math.sin(a), r: NODE_R });
@@ -164,7 +184,7 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing }: Props) {
+export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow }: Props) {
   const { colors } = useTheme();
   const insets     = useSafeAreaInsets();
 
@@ -467,7 +487,12 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
               </View>
             </GestureDetector>
           )}
-          {selStrip(0)}
+          {selStrip(selStripBottom)}
+          {filterRow && (
+            <View style={S.filterRowWrap} pointerEvents="box-none">
+              {filterRow}
+            </View>
+          )}
         </Animated.View>
       )}
 
@@ -495,6 +520,13 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
                 {selStrip(insets.bottom)}
               </View>
             </GestureDetector>
+
+            {/* Filter chips — outside GestureDetector so taps aren't swallowed */}
+            {filterRow && (
+              <View style={[S.filterRowWrap, { bottom: insets.bottom + 64 }]} pointerEvents="box-none">
+                {filterRow}
+              </View>
+            )}
 
             {/* EXIT pill outside GestureDetector — Pressable inside GestureDetector gets cancelled by tap gesture */}
             <Pressable
@@ -542,6 +574,8 @@ const S = StyleSheet.create({
   fsRoot:      { flex: 1 },
   fsHeader:    { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.5,
                   paddingHorizontal: 12, paddingVertical: 10 },
+
+  filterRowWrap: { position: 'absolute', left: 0, right: 0 },
 
   fsExitBtn:   { position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -44,
                   flexDirection: 'row', alignItems: 'center', gap: 6,
