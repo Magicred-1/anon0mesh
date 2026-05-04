@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
-  View, ScrollView, Text,
+  View, ScrollView, Text, Image, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Dimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
-  useSharedValue, useAnimatedStyle, withSpring, runOnJS,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming, withSequence, withRepeat, withDelay, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme';
+import { useTheme, fontFamily } from '@/theme';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { SystemLine }            from '@/components/messages/SystemLine';
 import { MessageBubble }         from '@/components/messages/MessageBubble';
@@ -35,6 +35,7 @@ import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
 import { formatAgo }             from '@/utils/time';
+import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
 function decodeBody(b64: string): string {
   try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { return ''; }
@@ -145,6 +146,90 @@ function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: strin
   }
 
   return out;
+}
+
+// ── No-peers empty state ─────────────────────────────────────────────────────
+
+function NoPeersScreen({
+  colors, bottomInset, onCreateGroup, onJoinGroup,
+}: {
+  colors: ReturnType<typeof useTheme>['colors'];
+  bottomInset: number;
+  onCreateGroup: () => void;
+  onJoinGroup: () => void;
+}) {
+  const ring1 = useSharedValue(0);
+  const ring2 = useSharedValue(0);
+  const ring3 = useSharedValue(0);
+
+  useEffect(() => {
+    const sonar = (sv: typeof ring1, delay: number) => {
+      sv.value = withDelay(delay, withRepeat(
+        withSequence(withTiming(1, { duration: 2200 }), withTiming(0, { duration: 0 })),
+        -1, false,
+      ));
+    };
+    sonar(ring1, 0);
+    sonar(ring2, 733);
+    sonar(ring3, 1466);
+  }, [ring1, ring2, ring3]);
+
+  const r1Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 1 - ring1.value) * 0.32,
+    transform: [{ scale: 1 + ring1.value * 2.4 }],
+  }));
+  const r2Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 1 - ring2.value) * 0.32,
+    transform: [{ scale: 1 + ring2.value * 2.4 }],
+  }));
+  const r3Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 1 - ring3.value) * 0.32,
+    transform: [{ scale: 1 + ring3.value * 2.4 }],
+  }));
+
+  const R = 72;
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: bottomInset + 48 }}>
+      <View style={{ width: R * 3, height: R * 3, alignItems: 'center', justifyContent: 'center' }}>
+        <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r1Style]} />
+        <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r2Style]} />
+        <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r3Style]} />
+        <View style={{
+          width: R, height: R, borderRadius: R / 2,
+          backgroundColor: colors.primarySubtle,
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Image
+            source={require('@/assets/icons/anonmesh_white_icon.png')}
+            style={{ width: 38, height: 38, tintColor: colors.primary }}
+            resizeMode="contain"
+          />
+        </View>
+      </View>
+
+      <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textPrimary, fontSize: 12, letterSpacing: 3, marginTop: 32 }}>
+        SCANNING FOR PEERS
+      </Text>
+      <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 48, lineHeight: 18 }}>
+        Anyone nearby running anonmesh{'\n'}will appear automatically.
+      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 32 }}>
+        <TouchableOpacity
+          onPress={onCreateGroup}
+          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
+        >
+          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: 11, letterSpacing: 1 }}>NEW GROUP</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onJoinGroup}
+          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
+        >
+          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: 11, letterSpacing: 1 }}>JOIN GROUP</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -426,6 +511,8 @@ export default function MessagesScreen() {
     setMsgs([{ id: nextId(), kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` }]);
   }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW]);
 
+  useFocusEffect(useCallback(() => { requestBLEPermissions(); }, []));
+
   // Track focus so notifications aren't suppressed when user is on another tab
   useFocusEffect(useCallback(() => {
     messagesFocusedRef.current = true;
@@ -450,13 +537,35 @@ export default function MessagesScreen() {
   }, [lxmfPeers, pickPeer, getDisplayName]));
 
   if (!activePeerHex) {
+    if (livePeers.length === 0) {
+      return (
+        <View style={[S.root, { backgroundColor: colors.background }]}>
+          <NoPeersScreen
+            colors={colors}
+            bottomInset={insets.bottom}
+            onCreateGroup={() => setCreateGroupVisible(true)}
+            onJoinGroup={() => setJoinGroupVisible(true)}
+          />
+          <CreateGroupModal
+            visible={createGroupVisible}
+            onClose={() => setCreateGroupVisible(false)}
+            onCreate={createGroup}
+          />
+          <JoinGroupModal
+            visible={joinGroupVisible}
+            onClose={() => setJoinGroupVisible(false)}
+            onJoin={joinGroup}
+          />
+        </View>
+      );
+    }
     return (
       <View style={[S.root, { backgroundColor: colors.background }]}>
         <PeersDrawer
           active={activePeer}
           onPick={pickPeer}
           syncing={!isRunning}
-          peers={livePeers.length > 0 ? livePeers : undefined}
+          peers={livePeers}
           onNewHash={hash => pickPeer({
             handle:   getDisplayName(hash) || hash.slice(0, 8),
             hops:     0,
