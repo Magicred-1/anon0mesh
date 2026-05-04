@@ -77,7 +77,7 @@ jobs:
           EOF
 
       - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '[:space:]' | base64 --decode > mobile_app/android/app/release.keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '[:space:]' | base64 --ignore-garbage --decode > mobile_app/android/app/release.keystore
 
       - name: Get version
         id: version
