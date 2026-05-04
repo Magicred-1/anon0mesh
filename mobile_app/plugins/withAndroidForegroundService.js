@@ -52,7 +52,7 @@ class LxmfForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             startForeground(NOTIF_ID, notification)
         }
@@ -129,12 +129,7 @@ function withAndroidForegroundService(config) {
         perms.push({ $: { 'android:name': name } });
     };
     addPerm('android.permission.FOREGROUND_SERVICE');
-    addPerm('android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE');
-    addPerm('android.permission.BLUETOOTH_ADVERTISE');
-    addPerm('android.permission.BLUETOOTH_CONNECT');
-    addPerm('android.permission.BLUETOOTH_SCAN');
-    addPerm('android.permission.CHANGE_WIFI_STATE');
-    addPerm('android.permission.CHANGE_NETWORK_STATE');
+    addPerm('android.permission.FOREGROUND_SERVICE_DATA_SYNC');
 
     const app = manifest.application[0];
     if (!app.service) app.service = [];
@@ -143,7 +138,7 @@ function withAndroidForegroundService(config) {
       app.service.push({
         $: {
           'android:name':                  fqn,
-          'android:foregroundServiceType': 'connectedDevice',
+          'android:foregroundServiceType': 'dataSync',
           'android:exported':              'false',
         },
       });
