@@ -87,6 +87,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease \
+            -Pandroid.enableArtProfiles=false \
             -PRELEASE_STORE_FILE=release.keystore \
             -PRELEASE_STORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
             -PRELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
