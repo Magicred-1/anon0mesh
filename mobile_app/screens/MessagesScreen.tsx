@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming, withSequence, withRepeat, withDelay, runOnJS,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, withSequence, withRepeat, withDelay, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, fontFamily } from '@/theme';
@@ -37,8 +37,24 @@ import { messagesFocusedRef }     from '@/hooks/messagesFocused';
 import { formatAgo }             from '@/utils/time';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
-function decodeBody(b64: string): string {
-  try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { return ''; }
+function looksReadable(s: string): boolean {
+  if (!s) return false;
+  let bad = 0;
+  const len = Math.min(s.length, 300);
+  for (let i = 0; i < len; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0xFFFD || (c < 0x20 && c !== 0x09 && c !== 0x0A && c !== 0x0D)) bad++;
+  }
+  return bad / len < 0.1;
+}
+
+function decodeBody(raw: string): string {
+  if (!raw) return '';
+  try {
+    const decoded = Buffer.from(raw, 'base64').toString('utf-8');
+    if (looksReadable(decoded)) return decoded;
+  } catch {}
+  return raw;
 }
 
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
@@ -255,7 +271,7 @@ export default function MessagesScreen() {
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
 
   const screenW = useRef(Dimensions.get('window').width).current;
-  const chatTx  = useSharedValue(0);
+  const chatTx  = useSharedValue(screenW); // start off-screen; slides in on peer pick
 
   const scrollRef        = useRef<ScrollView>(null);
   const activePeerHexRef = useRef<string | null>(null);
@@ -389,19 +405,19 @@ export default function MessagesScreen() {
 
   // Animated slide-out, then reset — used by both header back button and pan gesture
   const goBack = useCallback(() => {
-    chatTx.value = withSpring(screenW, { damping: 22, stiffness: 220 }, () => runOnJS(resetChat)());
+    chatTx.value = withTiming(screenW, { duration: 200, easing: Easing.in(Easing.cubic) }, () => runOnJS(resetChat)());
   }, [chatTx, screenW, resetChat]);
 
   // Slide in from right whenever a peer is newly selected
   useEffect(() => {
     if (activePeerHex !== null) {
       chatTx.value = screenW;
-      chatTx.value = withSpring(0, { damping: 22, stiffness: 280, overshootClamping: true });
+      chatTx.value = withTiming(0, { duration: 240, easing: Easing.out(Easing.cubic) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePeerHex]);
 
-  const chatAnim = useAnimatedStyle(() => ({ flex: 1, transform: [{ translateX: chatTx.value }] }));
+  const chatAnim = useAnimatedStyle(() => ({ transform: [{ translateX: chatTx.value }] }));
 
   const backPan = useMemo(() => Gesture.Pan()
     .activeOffsetX([14, 10_000])
@@ -409,9 +425,9 @@ export default function MessagesScreen() {
     .onUpdate(e => { chatTx.value = Math.max(0, e.translationX); })
     .onEnd(e => {
       if (chatTx.value > screenW * 0.3 || e.velocityX > 500) {
-        chatTx.value = withSpring(screenW, { damping: 20, stiffness: 160, velocity: e.velocityX }, () => runOnJS(resetChat)());
+        chatTx.value = withSpring(screenW, { damping: 25, stiffness: 300, velocity: e.velocityX }, () => runOnJS(resetChat)());
       } else {
-        chatTx.value = withSpring(0, { damping: 20, stiffness: 300, velocity: e.velocityX });
+        chatTx.value = withSpring(0, { damping: 25, stiffness: 500, velocity: e.velocityX });
       }
     }),
   // chatTx and resetChat are stable refs — eslint doesn't know that
@@ -536,31 +552,17 @@ export default function MessagesScreen() {
     return () => { messagesFocusedRef.current = false; };
   }, [lxmfPeers, pickPeer, getDisplayName]));
 
-  if (!activePeerHex) {
-    if (livePeers.length === 0) {
-      return (
-        <View style={[S.root, { backgroundColor: colors.background }]}>
-          <NoPeersScreen
-            colors={colors}
-            bottomInset={insets.bottom}
-            onCreateGroup={() => setCreateGroupVisible(true)}
-            onJoinGroup={() => setJoinGroupVisible(true)}
-          />
-          <CreateGroupModal
-            visible={createGroupVisible}
-            onClose={() => setCreateGroupVisible(false)}
-            onCreate={createGroup}
-          />
-          <JoinGroupModal
-            visible={joinGroupVisible}
-            onClose={() => setJoinGroupVisible(false)}
-            onJoin={joinGroup}
-          />
-        </View>
-      );
-    }
-    return (
-      <View style={[S.root, { backgroundColor: colors.background }]}>
+  return (
+    <View style={[S.root, { backgroundColor: colors.background }]}>
+      {/* Background layer — peers list or empty state, always mounted */}
+      {livePeers.length === 0 ? (
+        <NoPeersScreen
+          colors={colors}
+          bottomInset={insets.bottom}
+          onCreateGroup={() => setCreateGroupVisible(true)}
+          onJoinGroup={() => setJoinGroupVisible(true)}
+        />
+      ) : (
         <PeersDrawer
           active={activePeer}
           onPick={pickPeer}
@@ -581,59 +583,48 @@ export default function MessagesScreen() {
           onJoinGroup={() => setJoinGroupVisible(true)}
           onLeaveGroup={addrHex => leaveGroup(addrHex)}
         />
-        <CreateGroupModal
-          visible={createGroupVisible}
-          onClose={() => setCreateGroupVisible(false)}
-          onCreate={createGroup}
-        />
-        <JoinGroupModal
-          visible={joinGroupVisible}
-          onClose={() => setJoinGroupVisible(false)}
-          onJoin={joinGroup}
-        />
-      </View>
-    );
-  }
+      )}
 
-  return (
-    <View style={[S.root, { backgroundColor: colors.background }]}>
-      <GestureDetector gesture={backPan}>
-        <Reanimated.View style={chatAnim}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <ThreadHeader
-              peer={activePeer}
-              selfName={displayName || undefined}
-              hops={activePeerObj?.hops}
-              iface={activePeerObj?.iface as 'TCP' | 'BLE' | 'RNode' | undefined}
-              online={activePeerObj?.online}
-              onOpen={goBack}
-              onShareQR={groups.some(g => g.addrHex === activePeerHex)
-                ? () => setShareSheetOpen(true)
-                : undefined}
-            />
-            {queuedCount > 0 && (
-              <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
-                <Feather name="clock" size={11} color={colors.primary} />
-                <Text style={[S.queueBannerText, { color: colors.primary }]}>
-                  {queuedCount} message{queuedCount > 1 ? 's' : ''} queued — will deliver when peer is reachable
-                </Text>
-              </View>
-            )}
-            <ScrollView
-              ref={scrollRef}
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingTop: 14, paddingBottom: 4 }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {msgs.map(m => renderMsg(m, getSendState))}
-              <View style={{ height: 4 }} />
-            </ScrollView>
-            <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
-            <View style={{ height: kbShown ? 0 : insets.bottom, backgroundColor: colors.surface0 }} />
-          </KeyboardAvoidingView>
-        </Reanimated.View>
-      </GestureDetector>
+      {/* Chat panel — always mounted, slides over peers list via translateX */}
+      <Reanimated.View style={[S.chatPanel, { backgroundColor: colors.background }, chatAnim]}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ThreadHeader
+            peer={activePeer}
+            selfName={displayName || undefined}
+            hops={activePeerObj?.hops}
+            iface={activePeerObj?.iface as 'TCP' | 'BLE' | 'RNode' | undefined}
+            online={activePeerObj?.online}
+            onOpen={goBack}
+            onShareQR={groups.some(g => g.addrHex === activePeerHex)
+              ? () => setShareSheetOpen(true)
+              : undefined}
+          />
+          {queuedCount > 0 && (
+            <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
+              <Feather name="clock" size={11} color={colors.primary} />
+              <Text style={[S.queueBannerText, { color: colors.primary }]}>
+                {queuedCount} message{queuedCount > 1 ? 's' : ''} queued — will deliver when peer is reachable
+              </Text>
+            </View>
+          )}
+          <GestureDetector gesture={backPan}>
+            <View style={{ flex: 1 }}>
+              <ScrollView
+                ref={scrollRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingTop: 14, paddingBottom: 4 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {msgs.map(m => renderMsg(m, getSendState))}
+                <View style={{ height: 4 }} />
+              </ScrollView>
+              <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
+            </View>
+          </GestureDetector>
+          <View style={{ height: kbShown ? 0 : insets.bottom, backgroundColor: colors.surface0 }} />
+        </KeyboardAvoidingView>
+      </Reanimated.View>
 
       <ActionGrid
         visible={actionGridVisible}
@@ -663,6 +654,7 @@ export default function MessagesScreen() {
 
 const S = StyleSheet.create({
   root:            { flex: 1 },
+  chatPanel:       { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   queueBanner:     { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 0.5 },
   queueBannerText: { fontSize: 11, letterSpacing: 0.3, flex: 1 },
 });

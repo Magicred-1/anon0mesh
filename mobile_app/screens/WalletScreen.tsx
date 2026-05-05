@@ -1,19 +1,19 @@
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, Animated, Pressable, RefreshControl,
+  ActivityIndicator, Modal, Pressable, RefreshControl,
   ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 
-import { useLxmfContext } from '@/context/LxmfContext';
-import { useWallet }      from '@/context/WalletContext';
-import { useHideBalance } from '@/src/hooks/useHideBalance';
+import { ReceivePanel } from '@/components/wallet/ReceivePanel';
+import { useLxmfContext }   from '@/context/LxmfContext';
+import { useWallet }        from '@/context/WalletContext';
+import { useHideBalance }   from '@/src/hooks/useHideBalance';
 import { useWalletBalance } from '@/src/hooks/useWalletBalance';
-import { useNetworkMode }  from '@/src/hooks/useNetworkMode';
+import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
 import type { TokenBalance } from '@/src/services/walletData';
 import { fontFamily, useTheme } from '@/theme';
 
@@ -47,59 +47,6 @@ function relTime(ms: number) {
   return `${Math.floor(d / 86_400_000)}d ago`;
 }
 
-const NET_CFG = {
-  online:   { label: 'ONLINE',      icon: 'wifi'     as const, color: '#00E5FF' },
-  mesh:     { label: 'MESH RELAY',  icon: 'radio'    as const, color: '#00E5FF' },
-  isolated: { label: 'ISOLATED',    icon: 'wifi-off' as const, color: '#FF4444' },
-};
-
-// ── pigeon ────────────────────────────────────────────────────────────────────
-
-function PigeonIcon() {
-  const float   = useRef(new Animated.Value(0)).current;
-  const flap    = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(float, { toValue: -3, duration: 1400, useNativeDriver: true }),
-        Animated.timing(float, { toValue:  0, duration: 1400, useNativeDriver: true }),
-      ]),
-    ).start();
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(flap, { toValue: 0.35, duration: 320, useNativeDriver: true }),
-        Animated.timing(flap, { toValue: 1,    duration: 320, useNativeDriver: true }),
-      ]),
-    ).start();
-    return () => { float.stopAnimation(); flap.stopAnimation(); };
-  }, [float, flap]);
-
-  return (
-    <Animated.View style={{ transform: [{ translateY: float }] }}>
-      <View style={{ width: 28, height: 22 }}>
-        {/* static body parts */}
-        <Svg width={28} height={22} viewBox="0 0 26 20" style={{ position: 'absolute' }}>
-          <Path d="M13 12 C9 15, 4 14, 2 11 C5 11, 9 12, 13 13Z" fill="#006880" />
-          <Ellipse cx={12} cy={13} rx={5} ry={3} fill="#00c8e0" />
-          <Ellipse cx={16.5} cy={11} rx={2.5} ry={2} fill="#00d4f0" />
-          <Circle cx={18.5} cy={9.5} r={2.8} fill="#00c8e0" />
-          <Circle cx={19.5} cy={8.8} r={0.9} fill="#001a22" />
-          <Circle cx={19.8} cy={8.6} r={0.35} fill="#00e5ff" />
-          <Path d="M21 9.5 L24.5 9 L21 8.5Z" fill="#00aac0" />
-          <Path d="M7 14 L3 17.5 L5.5 14.5 L4 18.5 L7 15 L6.5 19 L8.5 15Z" fill="#00aac0" opacity={0.85} />
-        </Svg>
-        {/* flapping wing — scaleY on wrapper View */}
-        <Animated.View style={{ position: 'absolute', width: 28, height: 22, transform: [{ scaleY: flap }] }}>
-          <Svg width={28} height={22} viewBox="0 0 26 20">
-            <Path d="M13 11 C10 6, 4 5, 2 9 C6 8, 10 10, 13 12Z" fill="#00e5ff" />
-          </Svg>
-        </Animated.View>
-      </View>
-    </Animated.View>
-  );
-}
-
 // ── tiles ─────────────────────────────────────────────────────────────────────
 
 function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly toggle: () => void }) {
@@ -110,13 +57,15 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
   const hasWallet   = isConnected && Boolean(publicKey);
   const initialLoad = hasWallet && solBalance === null && lastFetched === null;
   const splTokens   = tokens.filter((t: TokenBalance) => t.symbol !== 'SOL');
+
   let solText: string;
-  if (hidden)              solText = HIDDEN;
+  if (hidden)                   solText = HIDDEN;
   else if (solBalance === null) solText = '—';
-  else                     solText = fmtSol(solBalance);
+  else                          solText = fmtSol(solBalance);
 
   return (
-    <View style={[S.tile, S.balanceTile, { backgroundColor: colors.surface1, borderColor: colors.borderStrong }]}>
+    <View style={[S.tile, S.balanceTile, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+      <View style={[S.accentBar, { backgroundColor: colors.primary }]} />
       <View style={S.tileHeaderRow}>
         <Text style={[S.tileLabel, { color: colors.textTertiary }]}>TOTAL BALANCE</Text>
         <View style={S.tileHeaderRight}>
@@ -129,19 +78,13 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
           </Pressable>
         </View>
       </View>
-
       <View style={S.amountRow}>
         {initialLoad
           ? <ActivityIndicator color={colors.primary} />
-          : (
-            <Text numberOfLines={1} adjustsFontSizeToFit style={[S.bigNum, { color: colors.textPrimary }]}>
-              {solText}
-            </Text>
-          )
+          : <Text numberOfLines={1} adjustsFontSizeToFit style={[S.bigNum, { color: colors.textPrimary }]}>{solText}</Text>
         }
-        <Text style={[S.unit, { color: colors.textTertiary }]}>SOL</Text>
+        <Text style={[S.unit, { color: colors.primary }]}>SOL</Text>
       </View>
-
       {splTokens.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.splStrip}>
           {splTokens.map((t: TokenBalance) => {
@@ -158,67 +101,6 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
           })}
         </ScrollView>
       )}
-    </View>
-  );
-}
-
-function NetworkTile() {
-  const { colors } = useTheme();
-  const { mode, adapter } = useNetworkMode();
-  const cfg = NET_CFG[mode];
-  const pulse = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (mode === 'online') { pulse.setValue(1); return; }
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 0.25, duration: 900, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 1,    duration: 900, useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [mode, pulse]);
-
-  return (
-    <View style={[S.tile, S.halfTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-      <Text style={[S.tileLabel, { color: colors.textTertiary }]}>NETWORK</Text>
-      <View style={S.statIconRow}>
-        {mode === 'online' ? (
-          <PigeonIcon />
-        ) : (
-          <>
-            <Animated.View style={[S.netDot, { backgroundColor: cfg.color, opacity: pulse }]} />
-            <Feather name={cfg.icon} size={20} color={cfg.color} />
-          </>
-        )}
-      </View>
-      <Text style={[S.halfValue, { color: cfg.color }]}>{cfg.label}</Text>
-      {mode === 'mesh' && adapter.relayHash
-        ? <Text style={[S.tileLabel, { color: colors.textTertiary, marginTop: 2 }]}>
-            via {adapter.relayHash.slice(0, 8)}
-          </Text>
-        : null
-      }
-    </View>
-  );
-}
-
-function PeersTile() {
-  const { colors } = useTheme();
-  const { peers } = useLxmfContext();
-  const total  = peers.length;
-  const online = peers.filter(p => p.online).length;
-  const active = online > 0;
-
-  return (
-    <View style={[S.tile, S.halfTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-      <Text style={[S.tileLabel, { color: colors.textTertiary }]}>PEERS</Text>
-      <View style={S.statIconRow}>
-        <Feather name="users" size={20} color={active ? colors.primary : colors.textTertiary} />
-      </View>
-      <Text style={[S.halfValue, { color: active ? colors.primary : colors.textTertiary }]}>{total}</Text>
-      <Text style={[S.tileLabel, { color: colors.textTertiary, marginTop: 2 }]}>
-        {online} reachable(s)
-      </Text>
     </View>
   );
 }
@@ -245,17 +127,20 @@ function ActionTiles() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             router.push(a.route as never);
           }}
-          style={({ pressed }) => [
-            S.tile,
-            S.actionTile,
-            {
-              backgroundColor: a.primary ? colors.primary : colors.surface1,
-              borderColor:     a.primary ? colors.borderStrong : colors.border,
-              opacity:         ('soon' in a && a.soon) ? 0.45 : pressed ? 0.7 : 1,
-            },
-          ]}
+          style={({ pressed }) => {
+            const soon = 'soon' in a && a.soon;
+            const pressedOpacity = pressed ? 0.7 : 1;
+            const opacity = soon ? 0.4 : pressedOpacity;
+            return [S.tile, S.actionTile, {
+              backgroundColor: a.primary ? colors.primary : colors.surface2,
+              borderColor:     a.primary ? colors.primary : colors.border,
+              opacity,
+            }];
+          }}
         >
-          <Feather name={a.icon} size={20} color={a.primary ? '#08080A' : colors.primary} />
+          <View style={[S.actionIconWrap, { backgroundColor: a.primary ? 'rgba(0,0,0,0.15)' : colors.primarySubtle }]}>
+            <Feather name={a.icon} size={18} color={a.primary ? '#08080A' : colors.primary} />
+          </View>
           <Text style={[S.actionLabel, { color: a.primary ? '#08080A' : colors.textSecondary }]}>
             {a.label}
           </Text>
@@ -275,9 +160,8 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
   const initialLoad = activityLoading && lastFetched === null;
 
   return (
-    <View style={[S.tile, S.activityTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-      <Text style={[S.tileLabel, { color: colors.textTertiary, marginBottom: 12 }]}>RECENT ACTIVITY</Text>
-
+    <View style={[S.tile, S.activityTile, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+      <Text style={[S.tileLabel, { color: colors.textTertiary, marginBottom: 14 }]}>RECENT ACTIVITY</Text>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={S.activityScroll}
@@ -287,22 +171,31 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
             onRefresh={onRefresh}
             tintColor={colors.primary}
             colors={[colors.primary]}
-            progressBackgroundColor={colors.surface1}
+            progressBackgroundColor={colors.surface2}
           />
         }
       >
-        {initialLoad && <View style={S.center}><ActivityIndicator color={colors.primary} size="small" /></View>}
-        {!initialLoad && activityError && <View style={S.center}><Text style={[S.tileLabel, { color: colors.textTertiary }]}>{activityError}</Text></View>}
+        {initialLoad && (
+          <View style={S.center}><ActivityIndicator color={colors.primary} size="small" /></View>
+        )}
+        {!initialLoad && activityError && (
+          <View style={S.center}>
+            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>{activityError}</Text>
+          </View>
+        )}
         {!initialLoad && !activityError && activity.length === 0 && (
-          <View style={S.center}><Text style={[S.tileLabel, { color: colors.textTertiary }]}>no activity yet</Text></View>
+          <View style={S.center}>
+            <MaterialCommunityIcons name="bird" size={26} color={colors.textTertiary} style={{ marginBottom: 6 }} />
+            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>NO ACTIVITY YET</Text>
+          </View>
         )}
         {!initialLoad && activity.map((tx, i) => {
           const out    = tx.direction === 'send';
-          const color  = out ? '#FF4444' : '#14F195';
+          const color  = out ? '#FF6B6B' : '#14F195';
           const sign   = out ? '−' : '+';
-          const amount = hidden ? '•••' : `${sign}${tx.amountSol.toFixed(4)} SOL`;
+          const amount = hidden ? '•••' : `${sign}${tx.amountSol.toFixed(4)}`;
           const fallback = out ? 'Sent' : 'Received';
-          const label    = tx.counterparty
+          const label  = tx.counterparty
             ? `${tx.counterparty.slice(0, 4)}…${tx.counterparty.slice(-4)}`
             : fallback;
           return (
@@ -310,14 +203,17 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
               key={tx.signature}
               style={[S.activityRow, i < activity.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle }]}
             >
-              <View style={[S.activityIcon, { backgroundColor: color + '18' }]}>
-                <Feather name={out ? 'arrow-up-right' : 'arrow-down-left'} size={13} color={color} />
+              <View style={[S.activityIconWrap, { backgroundColor: color + '18' }]}>
+                <Feather name={out ? 'arrow-up-right' : 'arrow-down-left'} size={14} color={color} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[S.activityLabel, { color: colors.textPrimary }]} numberOfLines={1}>{label}</Text>
-                <Text style={[S.activityTime, { color: colors.textTertiary }]}>{relTime(tx.createdAt)}</Text>
+                <Text style={[S.activityTime,  { color: colors.textTertiary }]}>{relTime(tx.createdAt)}</Text>
               </View>
-              <Text style={[S.activityAmount, { color }]}>{amount}</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[S.activityAmount, { color }]}>{amount}</Text>
+                <Text style={[S.activityTime, { color: colors.textTertiary }]}>SOL</Text>
+              </View>
             </View>
           );
         })}
@@ -329,10 +225,14 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
 // ── screen ────────────────────────────────────────────────────────────────────
 
 export default function WalletScreen() {
-  const { colors } = useTheme();
+  const { colors }         = useTheme();
   const { hidden, toggle } = useHideBalance();
-  const { refetch } = useWalletBalance();
+  const { refetch }        = useWalletBalance();
+  const { publicKey }      = useWallet();
+  const { peers }          = useLxmfContext();
+  const { mode }           = useNetworkMode();
   const [refreshing, setRefreshing] = useState(false);
+  const [showReceive, setShowReceive] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -341,28 +241,80 @@ export default function WalletScreen() {
     setRefreshing(false);
   }, [refetch]);
 
+  const addr        = publicKey?.toBase58();
+  const onlinePeers = peers.filter(p => p.online).length;
+  const netColor    = mode === 'isolated' ? colors.error : colors.primary;
+  let netLabel = 'OFFLINE';
+  if (mode === 'online') netLabel = 'ONLINE';
+  else if (mode === 'mesh') netLabel = 'MESH';
+
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={S.grid}>
+
+          {/* ── Header ── */}
           <View style={S.header}>
             <View>
-              <Text style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
-              <Text style={[S.screenTitle, { color: colors.textPrimary }]}>wallet</Text>
+              <Text style={[S.kicker,      { color: colors.textTertiary }]}>ANONMESH</Text>
+              <Text style={[S.screenTitle, { color: colors.textPrimary  }]}>wallet</Text>
+            </View>
+
+            <View style={S.headerRight}>
+              {/* Network chip */}
+              <View style={[S.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                {(mode === 'online' || mode === 'mesh')
+                  ? <MaterialCommunityIcons name="bird" size={12} color={netColor} />
+                  : <View style={[S.chipDot, { backgroundColor: netColor }]} />
+                }
+                <Text style={[S.chipText, { color: netColor }]}>{netLabel}</Text>
+              </View>
+
+              {/* Peers chip */}
+              <View style={[S.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                <Feather name="users" size={10} color={onlinePeers > 0 ? colors.primary : colors.textTertiary} />
+                <Text style={[S.chipText, { color: onlinePeers > 0 ? colors.primary : colors.textTertiary }]}>
+                  {peers.length}
+                </Text>
+              </View>
+
+              {/* QR button */}
+              {addr && (
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setShowReceive(true);
+                  }}
+                  style={({ pressed }) => [
+                    S.qrBtn,
+                    { backgroundColor: colors.surface2, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Ionicons name="qr-code" size={16} color={colors.primary} />
+                </Pressable>
+              )}
             </View>
           </View>
 
           <BalanceTile hidden={hidden} toggle={toggle} />
-
-          <View style={S.row}>
-            <NetworkTile />
-            <PeersTile />
-          </View>
-
           <ActionTiles />
           <ActivityTile refreshing={refreshing} onRefresh={handleRefresh} />
+
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={showReceive}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReceive(false)}
+      >
+        <Pressable style={S.modalBackdrop} onPress={() => setShowReceive(false)} />
+        <View style={[S.modalSheet, { backgroundColor: colors.surface1 }]}>
+          <View style={[S.modalHandle, { backgroundColor: colors.border }]} />
+          <ReceivePanel />
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -372,13 +324,26 @@ export default function WalletScreen() {
 const GAP = 10;
 
 const S = StyleSheet.create({
-  root:            { flex: 1 },
-  grid:            { flex: 1, paddingHorizontal: 16, paddingTop: 0, gap: GAP, paddingBottom: 16 },
-  header:          { flexDirection: 'row', alignItems: 'center', paddingTop: 16, paddingBottom: 6 },
-  kicker:          { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
-  screenTitle:     { fontFamily: fontFamily.sansSb, fontSize: 22, letterSpacing: -0.5 },
+  root:  { flex: 1 },
+  grid:  { flex: 1, paddingHorizontal: 16, paddingTop: 0, gap: GAP, paddingBottom: 16 },
 
-  tile:            { borderRadius: 20, borderWidth: 0.5, padding: 16, overflow: 'hidden' },
+  // header
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, paddingBottom: 6 },
+  kicker:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, marginBottom: 2 },
+  screenTitle: { fontFamily: fontFamily.sansSb, fontSize: 22, letterSpacing: -0.5 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 20, borderWidth: 0.5 },
+  chipDot:     { width: 5, height: 5, borderRadius: 3 },
+  chipText:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
+  qrBtn:       { width: 32, height: 32, borderRadius: 16, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+
+  // receive modal
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalSheet:    { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: 32 },
+  modalHandle:   { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
+
+  tile:      { borderRadius: 18, borderWidth: 0.5, padding: 16, overflow: 'hidden' },
+  accentBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderTopLeftRadius: 18, borderTopRightRadius: 18 },
 
   // balance
   balanceTile:     { gap: 10 },
@@ -394,26 +359,20 @@ const S = StyleSheet.create({
   splSymbol:       { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
   splAmount:       { fontFamily: fontFamily.sansMd, fontSize: 11 },
 
-  // half tiles
-  row:             { flexDirection: 'row', gap: GAP },
-  halfTile:        { flex: 1, gap: 6, minHeight: 110 },
-  statIconRow:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  netDot:          { width: 7, height: 7, borderRadius: 4 },
-  halfValue:       { fontFamily: fontFamily.sansBold, fontSize: 26, letterSpacing: -0.5 },
-
-  // action tiles
-  actionRow:       { flexDirection: 'row', gap: GAP },
-  actionTile:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 18 },
-  actionLabel:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
-  soonBadge:       { fontFamily: fontFamily.sansMd, fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase' },
+  // actions
+  actionRow:      { flexDirection: 'row', gap: GAP },
+  actionTile:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 20 },
+  actionIconWrap: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  actionLabel:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
+  soonBadge:      { fontFamily: fontFamily.sansMd, fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase' },
 
   // activity
   activityTile:    { flex: 1 },
   activityScroll:  { flexGrow: 1 },
-  center:          { paddingVertical: 20, alignItems: 'center' },
-  activityRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  activityIcon:    { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  activityLabel:   { fontFamily: fontFamily.sansMd, fontSize: 12 },
-  activityTime:    { fontFamily: fontFamily.sansMd, fontSize: 10, marginTop: 1 },
-  activityAmount:  { fontFamily: fontFamily.sansSb, fontSize: 12 },
+  center:          { paddingVertical: 24, alignItems: 'center', gap: 4 },
+  activityRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+  activityIconWrap:{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  activityLabel:   { fontFamily: fontFamily.sansMd, fontSize: 12, marginBottom: 2 },
+  activityTime:    { fontFamily: fontFamily.sansMd, fontSize: 10 },
+  activityAmount:  { fontFamily: fontFamily.sansSb, fontSize: 13 },
 });

@@ -93,11 +93,14 @@ function applyAnnounceEvent(
   bleActive: boolean,
 ): { peerChanged: boolean; nameChanged: boolean } {
   if (e.type !== 'announceReceived') return { peerChanged: false, nameChanged: false };
-  const hash = (e.destHash ?? (e as any).dest_hash ?? e.address ?? e.source) as string | undefined;
+  const hash = (e.destHash ?? (e as any).dest_hash ?? (e as any).peer ?? e.address ?? e.source) as string | undefined;
   if (typeof hash !== 'string' || hash === ownHash)
     return { peerChanged: false, nameChanged: false };
 
-  const rawAppData = typeof e.appData === 'string' ? e.appData : (e as any).app_data;
+  let rawAppData: string | undefined;
+  if (typeof e.appData === 'string') rawAppData = e.appData;
+  else if (typeof (e as any).app_data === 'string') rawAppData = (e as any).app_data;
+  else rawAppData = (e as any).data;
   const appData    = typeof rawAppData === 'string' ? rawAppData : '';
   const isBeaconNode = appData.startsWith('anonmesh::beacon::v1');
   const nameRaw  = isBeaconNode ? (appData.split('\0')[1] ?? '') : appData.trim();
