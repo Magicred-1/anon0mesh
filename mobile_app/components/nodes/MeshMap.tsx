@@ -30,13 +30,14 @@ const CROSS_RING_GAP = NODE_R * 2 + 12; // min radial distance between adjacent 
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
-  nodes:           NodeData[];
-  selected:        string | null;
-  onSelect:        (h: string | null) => void;
-  syncing?:        boolean;
-  isAnnouncing?:   boolean;
-  selStripBottom?: number;
-  filterRow?:      React.ReactNode;
+  nodes:            NodeData[];
+  selected:         string | null;
+  onSelect:         (h: string | null) => void;
+  syncing?:         boolean;
+  isAnnouncing?:    boolean;
+  selStripBottom?:  number;
+  filterRow?:       React.ReactNode;
+  onExpandChange?:  (expanded: boolean) => void;
 }
 
 // Ghost placeholder positions — 3 equidistant nodes on ring-1 (radius 90, phase -90°)
@@ -184,7 +185,7 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow }: Props) {
+export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow, onExpandChange }: Props) {
   const { colors } = useTheme();
   const insets     = useSafeAreaInsets();
 
@@ -201,9 +202,10 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
         toValue: next ? VIEWPORT_H : 0,
         useNativeDriver: false, overshootClamping: true, tension: 70, friction: 12,
       }).start();
+      onExpandChange?.(next);
       return next;
     });
-  }, [heightAnim]);
+  }, [heightAnim, onExpandChange]);
 
   // ── Pulse — stable interpolations so useMemo canvas dep is stable ─────────
   const pulse      = useRef(new Animated.Value(0)).current;

@@ -1,11 +1,9 @@
-import React, { memo, useState, useRef, useCallback } from 'react';
+import React, { memo, useState, useRef, useCallback, useEffect } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
-import { PulseDot } from '@/components/ui/PulseDot';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { useNetworkMode } from '@/src/hooks/useNetworkMode';
@@ -13,6 +11,9 @@ import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 const BEACON_STALE_MS = 120_000;
 const STAKE_SOL       = '0.5';
 const NETWORK_FEE     = '~0.000005';
+const STAKE_NUM       = 0.5;
+const JITO_RATE       = 0.8734;
+const JITO_APY        = 0.085;
 
 interface Props {
   readonly initialActive?: boolean;
@@ -21,21 +22,29 @@ interface Props {
 
 export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _initialActive = false, style }: Props) {
   const { colors } = useTheme();
-  const glass       = useGlass();
-  const softGlass   = useGlass('soft');
-  const accentGlass = useGlass('accent');
+  const glass     = useGlass();
+  const softGlass = useGlass('soft');
   const { isBeacon, setBeaconMode, beacons, peers } = useLxmfContext();
   const reachableCount = beacons.filter(b => Date.now() - b.lastAnnounce < BEACON_STALE_MS).length
     + peers.filter(p => p.online).length;
   const { mode: networkMode } = useNetworkMode();
   const hasInternet = networkMode === 'online';
 
-  const active = isBeacon;
-  const [modal, setModal] = useState(false);
-  const [cosigns]             = useState(24);
-  const [earned]              = useState(0.000312);
+  const active          = isBeacon;
+  const [cosigns]       = useState(24);
+  const [earned]        = useState(0.000312);
+  const [modal, setModal]         = useState(false);
+  const [stakeModal, setStakeModal] = useState(false);
+  const [stakeAmt, setStakeAmt]   = useState(0.5);
+  const autoActivatedRef  = useRef(false);
+  const sheetAnim         = useRef(new Animated.Value(0)).current;
+  const stakeAnim         = useRef(new Animated.Value(0)).current;
 
-  const sheetAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!hasInternet || active || autoActivatedRef.current) return;
+    autoActivatedRef.current = true;
+    setBeaconMode(true);
+  }, [hasInternet, active, setBeaconMode]);
 
   const openModal = useCallback(() => {
     setModal(true);
@@ -47,197 +56,213 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
       .start(() => setModal(false));
   }, [sheetAnim]);
 
-  const sheetY    = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [600, 0], extrapolate: 'clamp' });
-  const overlayOp = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
+  const openStake = useCallback(() => {
+    setStakeModal(true);
+    Animated.spring(stakeAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
+  }, [stakeAnim]);
+
+  const dismissStake = useCallback(() => {
+    Animated.timing(stakeAnim, { toValue: 0, duration: 220, useNativeDriver: true })
+      .start(() => setStakeModal(false));
+  }, [stakeAnim]);
+
+  const sheetY      = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
+  const overlayOp   = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
+  const stakeSheetY = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
+  const stakeOvOp   = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
+
+  const jitoAmt   = (STAKE_NUM * JITO_RATE).toFixed(3);
+  const yieldAmt  = (STAKE_NUM * JITO_APY).toFixed(4);
+  const repScore  = Math.round(STAKE_NUM * 200);
+
+  const newTotal = STAKE_NUM + stakeAmt;
+  const newYield = (newTotal * JITO_APY).toFixed(4);
+  const newRep   = Math.round(newTotal * 200);
 
   return (
     <>
-      {/* ── Card ────────────────────────────────────────────────────────── */}
       <View style={[S.wrap, style]}>
         <View style={S.labelRow}>
           <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>BEACON REGISTRY</Text>
-          <Pill label={active ? 'ACTIVE BEACON' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
+          <Pill label={active ? 'ACTIVE' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
         </View>
 
-        <View style={[S.card, glass]}>
+        <View style={[S.card, glass, { borderColor: active ? colors.borderStrong : colors.border }]}>
+          {active && <View style={[S.accentBar, { backgroundColor: colors.primary }]} />}
+
           {active ? (
             <>
-              {/* ── Active hero ── */}
-              <View style={[S.activeHero, { borderBottomColor: colors.borderSubtle }]}>
-                {/* Earned SOL */}
-                <View style={S.earnedBlock}>
-                  <View style={S.earnedRow}>
-                    <SolanaIcon size={22} color={colors.primary} />
-                    <Text style={[S.earnedVal, { color: colors.textPrimary }]}>{earned.toFixed(6)}</Text>
-                  </View>
-                  <Text style={[S.earnedLabel, { color: colors.textTertiary }]}>SOL EARNED</Text>
+              <View style={S.hero}>
+                <View style={S.heroAmt}>
+                  <SolanaIcon size={16} color={colors.primary} />
+                  <Text style={[S.heroNum, { color: colors.textPrimary }]}>{earned.toFixed(6)}</Text>
                 </View>
+                <Text style={[S.heroLabel, { color: colors.textTertiary }]}>SOL EARNED</Text>
+              </View>
 
-                {/* Vertical divider */}
-                <View style={[S.heroDivider, { backgroundColor: colors.borderSubtle }]} />
-
-                {/* Co-signs */}
-                <View style={S.cosignBlock}>
-                  <View style={S.earnedRow}>
-                    <Text style={[S.cosignVal, { color: colors.textPrimary }]}>{cosigns}</Text>
-                  </View>
-                  <Text style={[S.earnedLabel, { color: colors.textTertiary }]}>CO-SIGNS</Text>
+              <View style={[S.repRow, { borderTopColor: colors.borderSubtle, borderBottomColor: colors.borderSubtle }]}>
+                <View style={S.repCell}>
+                  <Text style={[S.repNum, { color: colors.textPrimary }]}>{repScore}</Text>
+                  <Text style={[S.repLabel, { color: colors.textTertiary }]}>REP SCORE</Text>
+                </View>
+                <View style={[S.repDivider, { backgroundColor: colors.borderSubtle }]} />
+                <View style={S.repCell}>
+                  <Text style={[S.repNum, { color: colors.textPrimary }]}>{jitoAmt}</Text>
+                  <Text style={[S.repLabel, { color: colors.textTertiary }]}>JITOSOL</Text>
+                  <Pressable
+                    onPress={openStake}
+                    style={({ pressed }) => [S.stakeChip, { borderColor: colors.primary + '60', backgroundColor: colors.primary + '18', opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name="plus" size={9} color={colors.primary} />
+                    <Text style={[S.stakeChipText, { color: colors.primary }]}>Stake</Text>
+                  </Pressable>
+                </View>
+                <View style={[S.repDivider, { backgroundColor: colors.borderSubtle }]} />
+                <View style={S.repCell}>
+                  <Text style={[S.repNum, { color: colors.primary }]}>+{yieldAmt}</Text>
+                  <Text style={[S.repLabel, { color: colors.textTertiary }]}>SOL / YR</Text>
                 </View>
               </View>
 
-              {/* ── Status chips ── */}
-              <View style={[S.chipsRow, { borderBottomColor: colors.borderSubtle }]}>
-                <View style={[S.chip, softGlass]}>
-                  <View style={[S.chipDot, { backgroundColor: colors.primary }]} />
-                  <Text style={[S.chipText, { color: colors.textSecondary }]}>Solana Devnet</Text>
-                </View>
-                <View style={[S.chip, softGlass]}>
-                  <Feather name="lock" size={9} color={colors.textTertiary} />
-                  <Text style={[S.chipText, { color: colors.textSecondary }]}>{STAKE_SOL} SOL locked</Text>
-                </View>
-                <View style={[S.chip, softGlass]}>
-                  <PulseDot size={5} />
-                  <Text style={[S.chipText, { color: colors.primary }]}>{reachableCount} reachable</Text>
-                </View>
+              <View style={S.footer}>
+                <Text style={[S.footerStat, { color: colors.textSecondary }]}>
+                  <Text style={[S.footerNum, { color: colors.textPrimary }]}>{cosigns}</Text>{'  '}co-signs
+                </Text>
+                <View style={[S.footerDot, { backgroundColor: colors.borderSubtle }]} />
+                <Text style={[S.footerStat, { color: colors.textSecondary }]}>
+                  <Text style={[S.footerNum, { color: colors.primary }]}>{reachableCount}</Text>{'  '}reachable
+                </Text>
               </View>
-
-              {/* ── Deregister ── */}
-              <Pressable
-                onPress={openModal}
-                style={({ pressed }) => [S.deregBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Feather name="radio" size={12} color={colors.textTertiary} />
-                <Text style={[S.deregText, { color: colors.textTertiary }]}>DEREGISTER BEACON</Text>
-              </Pressable>
             </>
           ) : (
             <>
-              {/* ── Inactive stats ── */}
-              <View style={[S.statsRow, { borderBottomColor: colors.borderSubtle }]}>
-                <View style={S.stat}>
-                  <Text style={[S.statVal, { color: colors.textPrimary }]}>{reachableCount}</Text>
-                  <Text style={[S.statKey, { color: colors.textTertiary }]}>ACTIVE BEACONS</Text>
-                </View>
-                <View style={[S.statDivider, { backgroundColor: colors.borderSubtle }]} />
-                <View style={S.stat}>
-                  <Text style={[S.statVal, { color: colors.textPrimary }]}>{STAKE_SOL} SOL</Text>
-                  <Text style={[S.statKey, { color: colors.textTertiary }]}>STAKE REQUIRED</Text>
-                </View>
-              </View>
-
               <Text style={[S.desc, { color: colors.textSecondary }]}>
-                Beacon nodes are always-on relays that keep the mesh alive. They announce themselves to the network, forward encrypted packets across hops, and co-sign confidential Solana transactions — earning fees from every co-sign.{'\n\n'}
-                Unlike regular peers, beacons run 24/7 and are reachable from any transport — BLE, LoRa, TCP. The more beacons online, the stronger and more resilient the mesh becomes.{'\n\n'}
-                Stake {STAKE_SOL} SOL to register. Your stake is fully returned when you deregister.
+                Relay traffic across the mesh, co-sign Solana transactions, earn fees. Stake {STAKE_SOL} SOL — fully returned on exit.
               </Text>
-
               <Pressable
                 onPress={hasInternet ? openModal : undefined}
                 style={({ pressed }) => {
-                  let opacity = 0.4;
-                  if (hasInternet) opacity = pressed ? 0.85 : 1;
-                  return [S.regBtn, accentGlass, { opacity }];
+                  let opacity = 0.35;
+                  if (hasInternet) opacity = pressed ? 0.75 : 1;
+                  return [S.regBtn, { backgroundColor: colors.primary, opacity }];
                 }}
               >
-                <Feather name="radio" size={13} color={colors.primary} />
-                <Text style={[S.regText, { color: colors.primary }]}>
-                  {hasInternet ? 'REGISTER AS BEACON' : 'REQUIRES INTERNET'}
+                <Text style={[S.regText, { color: colors.textInverse }]}>
+                  {hasInternet ? 'Register as Beacon' : 'Requires Internet'}
                 </Text>
+                {hasInternet && <Feather name="arrow-right" size={14} color={colors.textInverse} />}
               </Pressable>
             </>
           )}
         </View>
       </View>
 
-      {/* ── Modal ───────────────────────────────────────────────────────── */}
       <Modal visible={modal} transparent animationType="none" onRequestClose={dismiss}>
         <View style={StyleSheet.absoluteFill}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.75)', opacity: overlayOp }]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
           </Animated.View>
 
           <Animated.View style={[S.sheet, { backgroundColor: colors.glass, borderColor: colors.border, transform: [{ translateY: sheetY }] }]}>
-            <View style={[S.grab, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
+            <View style={[S.grab, { backgroundColor: colors.border }]} />
 
-            {/* Header */}
-            <View style={S.header}>
-              <View>
-                <Text style={[S.tag,   { color: colors.textTertiary }]}>ANONMESH NETWORK</Text>
-                <Text style={[S.title, { color: colors.textPrimary }]}>
-                  {active ? 'Deregister Beacon' : 'Become a Beacon'}
-                </Text>
-              </View>
-              <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]}>
+            <View style={S.sheetHeader}>
+              <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>Become a Beacon</Text>
+              <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]} hitSlop={8}>
                 <Feather name="x" size={14} color={colors.textSecondary} />
               </Pressable>
             </View>
 
-            {/* Fee breakdown — register only */}
-            {!active && (
-              <View style={{ gap: 8 }}>
-                {([
-                  { icon: 'lock'   as const, bg: colors.primarySubtle,  iconColor: colors.primary,       label: 'Stake (locked)',  val: `${STAKE_SOL} SOL`,   valColor: colors.textPrimary  },
-                  { icon: 'zap'    as const, bg: colors.surface1,        iconColor: colors.textTertiary,  label: 'Network fee',     val: `${NETWORK_FEE} SOL`, valColor: colors.textTertiary },
-                  { icon: 'shield' as const, bg: colors.accentSubtle,    iconColor: colors.accent,        label: 'Role assigned',   val: 'Co-signer',          valColor: colors.accent       },
-                ] as const).map((row, i) => (
-                  <Reanimated.View key={row.label} entering={FadeIn.delay(i * 260).duration(280)}>
-                    <Pressable style={[S.feeRow, glass]}>
-                      <View style={[S.feeIcon, { backgroundColor: row.bg }]}>
-                        <Feather name={row.icon} size={13} color={row.iconColor} />
-                      </View>
-                      <Text style={[S.feeLabel, { color: colors.textSecondary }]}>{row.label}</Text>
-                      <Text style={[S.feeVal, { color: row.valColor }]}>{row.val}</Text>
-                    </Pressable>
-                  </Reanimated.View>
-                ))}
-              </View>
-            )}
+            <View style={S.feeList}>
+              {[
+                { icon: 'lock'        as const, label: 'Stake (returned on exit)', value: `${STAKE_SOL} SOL`,   dim: false },
+                { icon: 'zap'         as const, label: 'Network fee',              value: `${NETWORK_FEE} SOL`, dim: true  },
+                { icon: 'trending-up' as const, label: 'Earn from co-signs',       value: 'ongoing',            dim: false },
+              ].map(row => (
+                <View key={row.label} style={[S.feeRow, { borderBottomColor: colors.borderSubtle }]}>
+                  <Feather name={row.icon} size={13} color={row.dim ? colors.textTertiary : colors.primary} />
+                  <Text style={[S.feeLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+                  <Text style={[S.feeVal, { color: row.dim ? colors.textTertiary : colors.textPrimary }]}>{row.value}</Text>
+                </View>
+              ))}
+            </View>
 
-            {/* Deregister warning rows */}
-            {active && (
-              <View style={{ gap: 8 }}>
-                {([
-                  { icon: 'trending-up' as const, bg: colors.accentSubtle, iconColor: colors.accent,       label: 'Earnings to date',  val: `◎ ${earned.toFixed(6)}`, valColor: colors.accent       },
-                  { icon: 'unlock'      as const, bg: colors.surface1,     iconColor: colors.textTertiary,  label: 'Stake returned',    val: `${STAKE_SOL} SOL`,        valColor: colors.textPrimary  },
-                  { icon: 'x-circle'   as const, bg: colors.error + '18', iconColor: colors.error,         label: 'Co-sign role lost', val: 'Immediately',             valColor: colors.error        },
-                ] as const).map((row, i) => (
-                  <Reanimated.View key={row.label} entering={FadeIn.delay(i * 260).duration(280)}>
-                    <View style={[S.feeRow, glass]}>
-                      <View style={[S.feeIcon, { backgroundColor: row.bg }]}>
-                        <Feather name={row.icon} size={13} color={row.iconColor} />
-                      </View>
-                      <Text style={[S.feeLabel, { color: colors.textSecondary }]}>{row.label}</Text>
-                      <Text style={[S.feeVal, { color: row.valColor }]}>{row.val}</Text>
-                    </View>
-                  </Reanimated.View>
-                ))}
-              </View>
-            )}
+            <Pressable
+              onPress={() => { setBeaconMode(true); dismiss(); }}
+              style={({ pressed }) => [S.actionBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+            >
+              <Feather name="lock" size={14} color={colors.textInverse} />
+              <Text style={[S.actionText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
 
-            <Text style={[S.sheetDesc, { color: colors.textSecondary }]}>
-              {active
-                ? `${STAKE_SOL} SOL stake returns to your wallet. Co-sign fees stop immediately.`
-                : `Your wallet will be charged ${STAKE_SOL} SOL as stake. Authenticate to confirm.`}
-            </Text>
+      {/* ── Stake Modal ── */}
+      <Modal visible={stakeModal} transparent animationType="none" onRequestClose={dismissStake}>
+        <View style={StyleSheet.absoluteFill}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.75)', opacity: stakeOvOp }]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={dismissStake} />
+          </Animated.View>
 
-            {/* Primary action */}
-            {active ? (
-              <Pressable
-                onPress={() => { setBeaconMode(false); dismiss(); }}
-                style={({ pressed }) => [S.deregModalBtn, { borderColor: colors.error + '40', opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Feather name="trash-2" size={13} color={colors.error} />
-                <Text style={[S.deregModalText, { color: colors.error }]}>CONFIRM DEREGISTER</Text>
+          <Animated.View style={[S.sheet, { backgroundColor: colors.glass, borderColor: colors.border, transform: [{ translateY: stakeSheetY }] }]}>
+            <View style={[S.grab, { backgroundColor: colors.border }]} />
+
+            <View style={S.sheetHeader}>
+              <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>Stake More SOL</Text>
+              <Pressable onPress={dismissStake} style={[S.closeBtn, softGlass]} hitSlop={8}>
+                <Feather name="x" size={14} color={colors.textSecondary} />
               </Pressable>
-            ) : (
+            </View>
+
+            {/* Stepper */}
+            <View style={[S.stepper, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
               <Pressable
-                onPress={() => { setBeaconMode(true); dismiss(); }}
-                style={({ pressed }) => [S.signBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+                onPress={() => setStakeAmt(a => Math.max(0.5, Number.parseFloat((a - 0.5).toFixed(1))))}
+                hitSlop={16}
+                style={({ pressed }) => [S.stepBtn, { opacity: pressed || stakeAmt <= 0.5 ? 0.35 : 1 }]}
               >
-                <Feather name="lock" size={14} color={colors.textInverse} />
-                <Text style={[S.signText, { color: colors.textInverse }]}>SIGN WITH BIOMETRICS</Text>
+                <Feather name="minus" size={20} color={colors.textPrimary} />
               </Pressable>
-            )}
+              <View style={S.stepCenter}>
+                <SolanaIcon size={14} color={colors.primary} />
+                <Text style={[S.stepAmt, { color: colors.textPrimary }]}>{stakeAmt.toFixed(1)}</Text>
+                <Text style={[S.stepUnit, { color: colors.textTertiary }]}>SOL</Text>
+              </View>
+              <Pressable
+                onPress={() => setStakeAmt(a => Number.parseFloat((a + 0.5).toFixed(1)))}
+                hitSlop={16}
+                style={({ pressed }) => [S.stepBtn, { opacity: pressed ? 0.35 : 1 }]}
+              >
+                <Feather name="plus" size={20} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+
+            {/* Impact rows */}
+            <View style={[S.impactBox, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+              <View style={[S.impactRow, { borderBottomColor: colors.borderSubtle }]}>
+                <Feather name="shield" size={12} color={colors.primary} />
+                <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Rep score</Text>
+                <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>{repScore}</Text>
+                <Feather name="arrow-right" size={10} color={colors.textTertiary} />
+                <Text style={[S.impactRowAfter, { color: colors.primary }]}>{newRep}</Text>
+              </View>
+              <View style={S.impactRow}>
+                <Feather name="trending-up" size={12} color={colors.primary} />
+                <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Yield / yr</Text>
+                <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>+{yieldAmt}</Text>
+                <Feather name="arrow-right" size={10} color={colors.textTertiary} />
+                <Text style={[S.impactRowAfter, { color: colors.primary }]}>+{newYield} SOL</Text>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={dismissStake}
+              style={({ pressed }) => [S.actionBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+            >
+              <Feather name="lock" size={14} color={colors.textInverse} />
+              <Text style={[S.actionText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
+            </Pressable>
           </Animated.View>
         </View>
       </Modal>
@@ -246,64 +271,62 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 });
 
 const S = StyleSheet.create({
-  // ── Outer ───────────────────────────────────────────────────────────────────
-  wrap:         { paddingHorizontal: 20, marginTop: 16, marginBottom: 16, flex: 1 },
-  labelRow:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sectionLabel: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  card:         { borderRadius: 16, overflow: 'hidden', flex: 1 },
+  wrap:        { paddingHorizontal: 20, marginTop: 16, marginBottom: 16 },
+  labelRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  sectionLabel:{ fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
 
-  // ── Active state ────────────────────────────────────────────────────────────
-  activeHero:   { flexDirection: 'row', borderBottomWidth: 0.5, paddingVertical: 20, paddingHorizontal: 18 },
-  earnedBlock:  { flex: 1, alignItems: 'center', gap: 4 },
-  cosignBlock:  { flex: 1, alignItems: 'center', gap: 4 },
-  earnedRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  earnedVal:    { fontFamily: fontFamily.sansBold, fontSize: 22, letterSpacing: -0.5, lineHeight: 30 },
-  cosignVal:    { fontFamily: fontFamily.sansBold, fontSize: 28, letterSpacing: -1, lineHeight: 34 },
-  earnedLabel:  { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
-  heroDivider:  { width: 0.5, marginVertical: 4, marginHorizontal: 16 },
+  card:        { borderRadius: 18, overflow: 'hidden', borderWidth: 0.5 },
+  accentBar:   { height: 2 },
 
-  chipsRow:     { flexDirection: 'row', gap: 6, padding: 12, borderBottomWidth: 0.5, justifyContent: 'space-between' },
-  chip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 99 },
-  chipDot:      { width: 6, height: 6, borderRadius: 3 },
-  chipText:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5 },
+  hero:        { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  heroAmt:     { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  heroNum:     { fontFamily: fontFamily.sansBold, fontSize: 28, letterSpacing: -1 },
+  heroLabel:   { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase' },
 
-  // ── Inactive state ───────────────────────────────────────────────────────────
-  statsRow:     { flexDirection: 'row', borderBottomWidth: 0.5, paddingVertical: 14, paddingHorizontal: 16 },
-  stat:         { flex: 1, alignItems: 'center', gap: 3 },
-  statVal:      { fontFamily: fontFamily.sansMd, fontSize: 15, fontWeight: '600' },
-  statKey:      { fontFamily: fontFamily.sansMd, fontSize: 8, letterSpacing: 2, textTransform: 'uppercase' },
-  statDivider:  { width: 0.5, marginVertical: 4 },
-  desc:         { fontFamily: fontFamily.sansMd, fontSize: 11, lineHeight: 17, padding: 16, paddingTop: 12 },
+  repRow:      { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, paddingVertical: 14 },
+  repCell:     { flex: 1, alignItems: 'center', gap: 4 },
+  repNum:      { fontFamily: fontFamily.sansBold, fontSize: 16, letterSpacing: -0.5 },
+  repLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
+  repDivider:  { width: 0.5, marginVertical: 4 },
+  stakeChip:     { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 0.5, marginTop: 2 },
+  stakeChipText: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5 },
 
-  regBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  margin: 12, marginTop: 0, padding: 12, borderRadius: 12 },
-  regText:      { fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
-  deregBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  margin: 12, marginTop: 0, padding: 11, borderRadius: 12, borderWidth: 0.5 },
-  deregText:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  footer:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  footerStat:  { fontFamily: fontFamily.sansMd, fontSize: 12 },
+  footerNum:   { fontFamily: fontFamily.sansBold, fontSize: 14 },
+  footerDot:   { width: 3, height: 3, borderRadius: 2 },
 
-  // ── Modal ────────────────────────────────────────────────────────────────────
-  sheet:        { position: 'absolute', bottom: 0, left: 0, right: 0,
-                  borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
-                  padding: 14, paddingBottom: 32, borderWidth: 0.5 },
-  grab:         { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
-  header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  tag:          { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:        { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
-  closeBtn:     { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  desc:        { fontFamily: fontFamily.sansMd, fontSize: 12.5, lineHeight: 19, padding: 18, paddingBottom: 14 },
+  regBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+                 margin: 14, marginTop: 0, paddingVertical: 14, borderRadius: 13 },
+  regText:     { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
 
-  feeRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14, borderRadius: 14 },
-  feeIcon:      { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  feeLabel:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 12 },
-  feeVal:       { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600' },
-  sheetDesc:    { fontFamily: fontFamily.sansMd, fontSize: 12, lineHeight: 18,
-                  marginTop: 12, marginBottom: 20, opacity: 0.65 },
+  sheet:       { position: 'absolute', bottom: 0, left: 0, right: 0,
+                 borderTopLeftRadius: 22, borderTopRightRadius: 22,
+                 paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12, borderWidth: 0.5 },
+  grab:        { width: 32, height: 3.5, borderRadius: 99, alignSelf: 'center', marginBottom: 20 },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sheetTitle:  { fontFamily: fontFamily.sansBold, fontSize: 20, letterSpacing: -0.4 },
+  closeBtn:    { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  feeList:     { gap: 0, marginBottom: 24 },
+  feeRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 0.5 },
+  feeLabel:    { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 13 },
+  feeVal:      { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
+  actionBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                 paddingVertical: 15, borderRadius: 14 },
+  actionText:  { fontFamily: fontFamily.sansMd, fontSize: 14, fontWeight: '600', letterSpacing: 0.2 },
 
-  signBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  padding: 15, borderRadius: 14 },
-  signText:     { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '700', letterSpacing: 2.5, textTransform: 'uppercase' },
+  stepper:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                borderRadius: 18, borderWidth: 0.5, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 14 },
+  stepBtn:    { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  stepCenter: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  stepAmt:    { fontFamily: fontFamily.sansBold, fontSize: 36, letterSpacing: -1.5 },
+  stepUnit:   { fontFamily: fontFamily.sansMd, fontSize: 14, letterSpacing: 0.5, marginBottom: 2 },
 
-  deregModalBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    padding: 14, borderRadius: 14, borderWidth: 0.5 },
-  deregModalText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
+  impactBox:      { borderRadius: 14, borderWidth: 0.5, overflow: 'hidden', marginBottom: 20 },
+  impactRow:      { flexDirection: 'row', alignItems: 'center', gap: 8,
+                    paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 0.5 },
+  impactRowLabel: { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 13 },
+  impactRowBefore:{ fontFamily: fontFamily.sansMd, fontSize: 13 },
+  impactRowAfter: { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
 });
