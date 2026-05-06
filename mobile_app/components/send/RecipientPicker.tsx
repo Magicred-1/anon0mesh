@@ -20,6 +20,7 @@ import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
+import { DEMO_MODE, DEMO_RECIPIENT_ADDRESS } from "@/src/utils/demoMode";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -35,10 +36,6 @@ function formatBalance(amount: number, maxDecimals: number): string {
 
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-// Devnet filler for testing the flow without scanning. Solana Explorer
-// sample account.
-const MOCK_DEVNET_ADDRESS = "9A8uBzYXR2Dy5mJqZ6wmKdP9rKfChS7mZXAZWV7kP8fH";
-
 function isValidSolanaAddress(addr: string): boolean {
   return BASE58_RE.test(addr.trim());
 }
@@ -50,7 +47,7 @@ function shortAddress(addr: string): string {
 
 function handleScan() {
   haptics.tap();
-  Alert.alert("QR scan coming soon", "Paste an address or use the dev mock fill for now.");
+  Alert.alert("QR scan coming soon", "Paste an address or use the devnet fill for now.");
 }
 
 // ── sub-components ────────────────────────────────────────────────────────────
@@ -91,7 +88,7 @@ function AddressFeedback({
 export function RecipientPicker() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [address, setAddress] = useState("");
+  const [address, setAddress] = useState(DEMO_MODE ? DEMO_RECIPIENT_ADDRESS : "");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
   const { tokens } = useWalletBalance();
@@ -124,9 +121,9 @@ export function RecipientPicker() {
     }
   }
 
-  function handleMockFill() {
+  function handleDemoFill() {
     haptics.tap();
-    setAddress(MOCK_DEVNET_ADDRESS);
+    setAddress(DEMO_RECIPIENT_ADDRESS);
   }
 
   return (
@@ -230,16 +227,16 @@ export function RecipientPicker() {
               </Text>
             </Pressable>
 
-            {/* ── Dev mock fill ── */}
-            {__DEV__ ? (
+            {/* ── Demo fill ── */}
+            {DEMO_MODE ? (
               <Pressable
-                accessibilityLabel="Fill mock Solana devnet address"
-                onPress={handleMockFill}
+                accessibilityLabel="Fill demo Solana devnet address"
+                onPress={handleDemoFill}
                 style={[S.devPill, { backgroundColor: colors.accentSubtle, borderColor: colors.border }]}
               >
                 <Feather name="code" size={13} color={colors.accent} />
                 <Text style={[S.devPillText, { color: colors.accent }]}>
-                  dev: fill mock devnet address
+                  demo: fill devnet address
                 </Text>
               </Pressable>
             ) : null}

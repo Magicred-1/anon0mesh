@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
-  View, ScrollView, Text, Pressable,
-  StyleSheet, Animated, KeyboardAvoidingView, Platform, PanResponder, Keyboard,
+  View, ScrollView, Text, Image, TouchableOpacity,
+  StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Dimensions,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, {
+  useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, withSequence, withRepeat, withDelay, runOnJS,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme, fontFamily } from '@/theme';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { SystemLine }            from '@/components/messages/SystemLine';
 import { MessageBubble }         from '@/components/messages/MessageBubble';
@@ -17,22 +21,40 @@ import { InlineTxCard }          from '@/components/messages/InlineTxCard';
 import { Composer }              from '@/components/messages/Composer';
 import { ThreadHeader }          from '@/components/messages/ThreadHeader';
 import { PeersDrawer }           from '@/components/messages/PeersDrawer';
-import { DRAWER_W, type Peer } from '@/components/messages/constants';
+import { CreateGroupModal }      from '@/components/messages/CreateGroupModal';
+import { JoinGroupModal }        from '@/components/messages/JoinGroupModal';
+import { ChannelShareSheet }     from '@/components/messages/ChannelShareSheet';
+import { type Peer }             from '@/components/messages/constants';
 import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
-import { PulseDot } from '@/components/ui/PulseDot';
-import { Feather } from '@expo/vector-icons';
-import { useWallet } from '@/context/WalletContext';
+import { Feather }               from '@expo/vector-icons';
+import { useWallet }             from '@/context/WalletContext';
 import type { AnyMsg, ChatMsg, MediaMsg } from '@/components/messages/types';
-import type { MediaPayload } from '@/components/messages/Composer';
+import type { MediaPayload }     from '@/components/messages/Composer';
 import type { LxmfPeer, StoredMessage } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
-import { setDrawerOpen } from '@/hooks/drawerState';
-import { formatAgo } from '@/utils/time';
+import { formatAgo }             from '@/utils/time';
+import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
-function decodeBody(b64: string): string {
-  try { return Buffer.from(b64, 'base64').toString('utf-8'); } catch { return ''; }
+function looksReadable(s: string): boolean {
+  if (!s) return false;
+  let bad = 0;
+  const len = Math.min(s.length, 300);
+  for (let i = 0; i < len; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0xFFFD || (c < 0x20 && c !== 0x09 && c !== 0x0A && c !== 0x0D)) bad++;
+  }
+  return bad / len < 0.1;
+}
+
+function decodeBody(raw: string): string {
+  if (!raw) return '';
+  try {
+    const decoded = Buffer.from(raw, 'base64').toString('utf-8');
+    if (looksReadable(decoded)) return decoded;
+  } catch {}
+  return raw;
 }
 
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
@@ -105,67 +127,6 @@ function lxmfPeerToPeer(p: LxmfPeer): Peer {
   };
 }
 
-// ── No-peer empty state ───────────────────────────────────────────────────────
-
-function NoPeerState({ onOpen, peerCount }: { readonly onOpen: () => void; readonly peerCount: number }) {
-  const { colors } = useTheme();
-  const iconOpacity = useRef(new Animated.Value(0.1)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(iconOpacity, { toValue: 0.22, duration: 2400, useNativeDriver: true }),
-        Animated.timing(iconOpacity, { toValue: 0.1,  duration: 2400, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [iconOpacity]);
-
-  const peerLabel = peerCount === 1 ? 'peer' : 'peers';
-  const subtitleText = peerCount > 0
-    ? `${peerCount} ${peerLabel} in range · pick one to start`
-    : 'Waiting for peers to announce nearby';
-
-  return (
-    <View style={N.root}>
-      <Animated.Image
-        source={require('@/assets/icons/anonmesh_white_icon.png')}
-        style={[N.icon, { opacity: iconOpacity, tintColor: colors.primary }]}
-        resizeMode="contain"
-      />
-
-      <Text style={[N.title, { color: colors.textPrimary }]}>No conversation open</Text>
-
-      <Text style={[N.sub, { color: colors.textTertiary }]}>
-        {subtitleText}
-      </Text>
-
-      <Pressable onPress={onOpen} style={[N.btn, { backgroundColor: colors.primarySubtle }]}>
-        <Feather name="users" size={14} color={colors.primary} />
-        <Text style={[N.btnTxt, { color: colors.primary }]}>Browse Peers</Text>
-      </Pressable>
-
-      <View style={N.hint}>
-        {peerCount === 0 && <PulseDot size={5} />}
-        <Text style={[N.hintTxt, { color: colors.textTertiary }]}>
-          {peerCount === 0 ? 'scanning mesh…' : 'or swipe right to open peers'}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-const N = StyleSheet.create({
-  root:   { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  icon:   { width: 88, height: 88 },
-  title:  { fontSize: 20, fontWeight: '600', letterSpacing: -0.3, marginTop: 24, textAlign: 'center' },
-  sub:    { fontSize: 13, marginTop: 10, textAlign: 'center', lineHeight: 20 },
-  btn:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 30,
-            paddingVertical: 12, paddingHorizontal: 26, borderRadius: 16 },
-  btnTxt: { fontSize: 13, fontWeight: '500', letterSpacing: 0.4 },
-  hint:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 44 },
-  hintTxt:{ fontSize: 10, letterSpacing: 1.8, textTransform: 'uppercase' },
-});
-
 // ── Incoming message parsing ──────────────────────────────────────────────────
 
 function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | null {
@@ -203,11 +164,99 @@ function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: strin
   return out;
 }
 
+// ── No-peers empty state ─────────────────────────────────────────────────────
+
+function NoPeersScreen({
+  colors, bottomInset, onCreateGroup, onJoinGroup,
+}: {
+  colors: ReturnType<typeof useTheme>['colors'];
+  bottomInset: number;
+  onCreateGroup: () => void;
+  onJoinGroup: () => void;
+}) {
+  const ring1 = useSharedValue(0);
+  const ring2 = useSharedValue(0);
+  const ring3 = useSharedValue(0);
+
+  useEffect(() => {
+    const sonar = (sv: typeof ring1, delay: number) => {
+      sv.value = withDelay(delay, withRepeat(
+        withSequence(withTiming(1, { duration: 2200 }), withTiming(0, { duration: 0 })),
+        -1, false,
+      ));
+    };
+    sonar(ring1, 0);
+    sonar(ring2, 733);
+    sonar(ring3, 1466);
+  }, [ring1, ring2, ring3]);
+
+  const r1Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 1 - ring1.value) * 0.32,
+    transform: [{ scale: 1 + ring1.value * 2.4 }],
+  }));
+  const r2Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 1 - ring2.value) * 0.32,
+    transform: [{ scale: 1 + ring2.value * 2.4 }],
+  }));
+  const r3Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 1 - ring3.value) * 0.32,
+    transform: [{ scale: 1 + ring3.value * 2.4 }],
+  }));
+
+  const R = 72;
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: bottomInset + 48 }}>
+      <View style={{ width: R * 3, height: R * 3, alignItems: 'center', justifyContent: 'center' }}>
+        <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r1Style]} />
+        <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r2Style]} />
+        <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r3Style]} />
+        <View style={{
+          width: R, height: R, borderRadius: R / 2,
+          backgroundColor: colors.primarySubtle,
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Image
+            source={require('@/assets/icons/anonmesh_white_icon.png')}
+            style={{ width: 38, height: 38, tintColor: colors.primary }}
+            resizeMode="contain"
+          />
+        </View>
+      </View>
+
+      <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textPrimary, fontSize: 12, letterSpacing: 3, marginTop: 32 }}>
+        SCANNING FOR PEERS
+      </Text>
+      <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 48, lineHeight: 18 }}>
+        Anyone nearby running anonmesh{'\n'}will appear automatically.
+      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 32 }}>
+        <TouchableOpacity
+          onPress={onCreateGroup}
+          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
+        >
+          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: 11, letterSpacing: 1 }}>NEW GROUP</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onJoinGroup}
+          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
+        >
+          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: 11, letterSpacing: 1 }}>JOIN GROUP</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
-  const { isRunning, isAnnouncing, displayName, peers: lxmfPeers, events, send, getDisplayName, getPeerMessages, myAddress } = useLxmfContext();
+  const {
+    isRunning, displayName, peers: lxmfPeers, events, send,
+    getDisplayName, getPeerMessages, myAddress,
+    groups, createGroup, joinGroup, leaveGroup,
+  } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
   const { publicKey } = useWallet();
@@ -215,20 +264,23 @@ export default function MessagesScreen() {
   const [msgs,             setMsgs]             = useState<AnyMsg[]>([]);
   const [activePeer,       setActivePeer]        = useState('');
   const [activePeerHex,    setActivePeerHex]     = useState<string | null>(null);
-  const [drawerVisible,    setDrawerVisible]     = useState(false);
-  const [actionGridVisible, setActionGridVisible] = useState(false);
+  const [actionGridVisible,  setActionGridVisible]  = useState(false);
+  const [createGroupVisible, setCreateGroupVisible] = useState(false);
+  const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
+  const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
 
-  const scrollRef          = useRef<ScrollView>(null);
-  const drawerAnim         = useRef(new Animated.Value(-DRAWER_W)).current;
-  const drawerOpenRef      = useRef(false);
-  const activePeerHexRef   = useRef<string | null>(null);
-  const lastEvtCountRef    = useRef(0);
-  const lastFirstEvtRef    = useRef<(typeof events)[0] | null>(null);
-  const idToSeqRef         = useRef<Map<number, number>>(new Map());
-  const immediateTimers    = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-  const threadsRef         = useRef<Map<string, AnyMsg[]>>(new Map());
-  const msgsRef            = useRef<AnyMsg[]>([]);
+  const screenW = useRef(Dimensions.get('window').width).current;
+  const chatTx  = useSharedValue(screenW); // start off-screen; slides in on peer pick
+
+  const scrollRef        = useRef<ScrollView>(null);
+  const activePeerHexRef = useRef<string | null>(null);
+  const lastEvtCountRef  = useRef(0);
+  const lastFirstEvtRef  = useRef<(typeof events)[0] | null>(null);
+  const idToSeqRef       = useRef<Map<number, number>>(new Map());
+  const immediateTimers  = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const threadsRef       = useRef<Map<string, AnyMsg[]>>(new Map());
+  const msgsRef          = useRef<AnyMsg[]>([]);
 
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: false }); }, []);
   useEffect(() => { scrollRef.current?.scrollToEnd({ animated: true  }); }, [msgs]);
@@ -320,78 +372,67 @@ export default function MessagesScreen() {
     return seqStates.get(seq);
   }, [seqStates]);
 
-  const livePeers: Peer[] = useMemo(
-    () => lxmfPeers.map(lxmfPeerToPeer),
-    [lxmfPeers],
-  );
+  const livePeers: Peer[] = useMemo(() => {
+    const dms = lxmfPeers.map(lxmfPeerToPeer);
+    const groupPeers: Peer[] = groups.map(g => ({
+      handle:   g.name,
+      destHash: g.addrHex,
+      hops:     0,
+      iface:    'TCP' as const,
+      online:   true,
+      unread:   0,
+      last:     '',
+      time:     '',
+      beacon:   false,
+      isGroup:  true,
+    }));
+    return [...groupPeers, ...dms];
+  }, [lxmfPeers, groups]);
 
   const activePeerObj = useMemo(
     () => livePeers.find(p => p.destHash === activePeerHex) ?? null,
     [livePeers, activePeerHex],
   );
 
-  const openDrawer = useCallback(() => {
-    drawerOpenRef.current = true;
-    setDrawerOpen(true);
-    setDrawerVisible(true);
-    Animated.spring(drawerAnim, { toValue: 0,        useNativeDriver: true, overshootClamping: true }).start();
-  }, [drawerAnim]);
+  // State reset — called on JS thread after slide-out animation completes
+  const resetChat = useCallback(() => {
+    if (activePeerHexRef.current) threadsRef.current.set(activePeerHexRef.current, msgsRef.current);
+    activePeerHexRef.current      = null;
+    activeConversationRef.current = null;
+    setActivePeer('');
+    setActivePeerHex(null);
+  }, []);
 
-  const closeDrawer = useCallback(() => {
-    drawerOpenRef.current = false;
-    setDrawerOpen(false);
-    Animated.spring(drawerAnim, { toValue: -DRAWER_W, useNativeDriver: true, overshootClamping: true })
-      .start(({ finished }) => { if (finished) setDrawerVisible(false); });
-  }, [drawerAnim]);
+  // Animated slide-out, then reset — used by both header back button and pan gesture
+  const goBack = useCallback(() => {
+    chatTx.value = withTiming(screenW, { duration: 200, easing: Easing.in(Easing.cubic) }, () => runOnJS(resetChat)());
+  }, [chatTx, screenW, resetChat]);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-        !drawerOpenRef.current && dx > 10 && Math.abs(dx) > Math.abs(dy) * 1.5,
-      onPanResponderGrant: () => {
-        drawerOpenRef.current = true;
-        setDrawerOpen(true);
-        setDrawerVisible(true);
-      },
-      onPanResponderMove: (_, { dx }) => {
-        drawerAnim.setValue(Math.min(0, Math.max(-DRAWER_W, -DRAWER_W + dx)));
-      },
-      onPanResponderRelease: (_, { dx, vx }) => {
-        if (dx > DRAWER_W / 3 || vx > 0.5) {
-          Animated.spring(drawerAnim, { toValue: 0,        useNativeDriver: true, overshootClamping: true }).start();
-        } else {
-          drawerOpenRef.current = false;
-          setDrawerOpen(false);
-          Animated.spring(drawerAnim, { toValue: -DRAWER_W, useNativeDriver: true, overshootClamping: true })
-            .start(({ finished }) => { if (finished) setDrawerVisible(false); });
-        }
-      },
-    })
-  ).current;
+  // Slide in from right whenever a peer is newly selected
+  useEffect(() => {
+    if (activePeerHex !== null) {
+      chatTx.value = screenW;
+      chatTx.value = withTiming(0, { duration: 240, easing: Easing.out(Easing.cubic) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePeerHex]);
 
-  const closeSwipePanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, { dx }) => {
-        if (dx < 0) drawerAnim.setValue(Math.max(-DRAWER_W, dx));
-      },
-      onPanResponderRelease: (_, { dx, dy, vx }) => {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) { closeDrawer(); return; }
-        if (dx < -(DRAWER_W / 3) || vx < -0.5) {
-          closeDrawer();
-        } else {
-          Animated.spring(drawerAnim, { toValue: 0, useNativeDriver: true, overshootClamping: true }).start();
-        }
-      },
-      onPanResponderTerminate: () => {
-        Animated.spring(drawerAnim, { toValue: 0, useNativeDriver: true, overshootClamping: true }).start();
-      },
-    })
-  ).current;
+  const chatAnim = useAnimatedStyle(() => ({ transform: [{ translateX: chatTx.value }] }));
 
-  const overlayOpacity = drawerAnim.interpolate({
-    inputRange: [-DRAWER_W, 0], outputRange: [0, 0.55], extrapolate: 'clamp',
-  });
+  const backPan = useMemo(() => Gesture.Pan()
+    .activeOffsetX([14, 10_000])
+    .failOffsetY([-12, 12])
+    .onUpdate(e => { chatTx.value = Math.max(0, e.translationX); })
+    .onEnd(e => {
+      if (chatTx.value > screenW * 0.3 || e.velocityX > 500) {
+        chatTx.value = withSpring(screenW, { damping: 25, stiffness: 300, velocity: e.velocityX }, () => runOnJS(resetChat)());
+      } else {
+        chatTx.value = withSpring(0, { damping: 25, stiffness: 500, velocity: e.velocityX });
+      }
+    }),
+  // chatTx and resetChat are stable refs — eslint doesn't know that
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  []);
 
   const sendMsg = useCallback(async (text: string) => {
     const now   = new Date().toTimeString().slice(0, 8);
@@ -466,9 +507,9 @@ export default function MessagesScreen() {
     const newHash = p.destHash ?? null;
     activePeerHexRef.current      = newHash;
     activeConversationRef.current = newHash;
+    chatTx.value = screenW; // park off-screen before state change so slide-in useEffect animates from there
     setActivePeer(p.handle);
     setActivePeerHex(newHash);
-    closeDrawer();
 
     const cached = newHash ? threadsRef.current.get(newHash) : undefined;
     if (cached) { setMsgs(cached); return; }
@@ -484,7 +525,9 @@ export default function MessagesScreen() {
     }
 
     setMsgs([{ id: nextId(), kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` }]);
-  }, [closeDrawer, getPeerMessages, getDisplayName, myAddress]);
+  }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW]);
+
+  useFocusEffect(useCallback(() => { requestBLEPermissions(); }, []));
 
   // Track focus so notifications aren't suppressed when user is on another tab
   useFocusEffect(useCallback(() => {
@@ -492,7 +535,7 @@ export default function MessagesScreen() {
     const hash = pendingConversationRef.current;
     if (hash) {
       pendingConversationRef.current = null;
-      if (hash === activePeerHexRef.current) return; // already in this thread
+      if (hash === activePeerHexRef.current) return;
       const peer = lxmfPeers.find(p => p.destHash === hash);
       pickPeer(peer ? lxmfPeerToPeer(peer) : {
         handle:   getDisplayName(hash),
@@ -511,76 +554,20 @@ export default function MessagesScreen() {
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={{ flex: 1 }} edges={[]}>
-        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-            <ThreadHeader
-              peer={activePeerHex ? activePeer : null}
-              selfName={displayName || undefined}
-              hops={activePeerObj?.hops}
-              iface={activePeerObj?.iface as 'TCP' | 'BLE' | 'RNode' | undefined}
-              online={activePeerObj?.online}
-              onOpen={openDrawer}
-            />
-            {activePeerHex ? (
-              <>
-                {queuedCount > 0 && (
-                  <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
-                    <Feather name="clock" size={11} color={colors.primary} />
-                    <Text style={[S.queueBannerText, { color: colors.primary }]}>
-                      {queuedCount} message{queuedCount > 1 ? 's' : ''} queued — will deliver when peer is reachable
-                    </Text>
-                  </View>
-                )}
-                <ScrollView
-                  ref={scrollRef}
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingTop: 14, paddingBottom: 4 }}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {msgs.map(m => renderMsg(m, getSendState))}
-                  <View style={{ height: 4 }} />
-                </ScrollView>
-                <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
-                {/* Safe-area spacer: collapses when keyboard is up (KAV padding already covers it) */}
-                <View style={{ height: kbShown ? 0 : insets.bottom }} />
-              </>
-            ) : (
-              <NoPeerState onOpen={openDrawer} peerCount={livePeers.length} />
-            )}
-          </KeyboardAvoidingView>
-        </View>
-      </SafeAreaView>
-
-      {drawerVisible && (
-        <View style={[StyleSheet.absoluteFill, { zIndex: 40 }]} {...closeSwipePanResponder.panHandlers}>
-          <Animated.View
-            style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: overlayOpacity }]}
-            pointerEvents="none"
-          />
-        </View>
-      )}
-
-      <ActionGrid
-        visible={actionGridVisible}
-        hasWallet={!!publicKey}
-        walletAddress={publicKey?.toBase58()}
-        onAction={handleGridAction}
-        onClose={() => setActionGridVisible(false)}
-      />
-
-      <Animated.View style={[
-        S.drawer,
-        { backgroundColor: colors.glass, borderRightColor: colors.border },
-        { transform: [{ translateX: drawerAnim }] },
-      ]}>
+      {/* Background layer — peers list or empty state, always mounted */}
+      {livePeers.length === 0 ? (
+        <NoPeersScreen
+          colors={colors}
+          bottomInset={insets.bottom}
+          onCreateGroup={() => setCreateGroupVisible(true)}
+          onJoinGroup={() => setJoinGroupVisible(true)}
+        />
+      ) : (
         <PeersDrawer
           active={activePeer}
           onPick={pickPeer}
           syncing={!isRunning}
-          peers={livePeers.length > 0 ? livePeers : undefined}
-          isAnnouncing={isAnnouncing}
+          peers={livePeers}
           onNewHash={hash => pickPeer({
             handle:   getDisplayName(hash) || hash.slice(0, 8),
             hops:     0,
@@ -592,19 +579,82 @@ export default function MessagesScreen() {
             beacon:   false,
             destHash: hash,
           })}
+          onCreateGroup={() => setCreateGroupVisible(true)}
+          onJoinGroup={() => setJoinGroupVisible(true)}
+          onLeaveGroup={addrHex => leaveGroup(addrHex)}
         />
-      </Animated.View>
+      )}
+
+      {/* Chat panel — always mounted, slides over peers list via translateX */}
+      <Reanimated.View style={[S.chatPanel, { backgroundColor: colors.background }, chatAnim]}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ThreadHeader
+            peer={activePeer}
+            selfName={displayName || undefined}
+            hops={activePeerObj?.hops}
+            iface={activePeerObj?.iface as 'TCP' | 'BLE' | 'RNode' | undefined}
+            online={activePeerObj?.online}
+            onOpen={goBack}
+            onShareQR={groups.some(g => g.addrHex === activePeerHex)
+              ? () => setShareSheetOpen(true)
+              : undefined}
+          />
+          {queuedCount > 0 && (
+            <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
+              <Feather name="clock" size={11} color={colors.primary} />
+              <Text style={[S.queueBannerText, { color: colors.primary }]}>
+                {queuedCount} message{queuedCount > 1 ? 's' : ''} queued — will deliver when peer is reachable
+              </Text>
+            </View>
+          )}
+          <GestureDetector gesture={backPan}>
+            <View style={{ flex: 1 }}>
+              <ScrollView
+                ref={scrollRef}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingTop: 14, paddingBottom: 4 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {msgs.map(m => renderMsg(m, getSendState))}
+                <View style={{ height: 4 }} />
+              </ScrollView>
+              <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
+            </View>
+          </GestureDetector>
+          <View style={{ height: kbShown ? 0 : insets.bottom, backgroundColor: colors.surface0 }} />
+        </KeyboardAvoidingView>
+      </Reanimated.View>
+
+      <ActionGrid
+        visible={actionGridVisible}
+        hasWallet={!!publicKey}
+        walletAddress={publicKey?.toBase58()}
+        onAction={handleGridAction}
+        onClose={() => setActionGridVisible(false)}
+      />
+      <CreateGroupModal
+        visible={createGroupVisible}
+        onClose={() => setCreateGroupVisible(false)}
+        onCreate={createGroup}
+      />
+      <JoinGroupModal
+        visible={joinGroupVisible}
+        onClose={() => setJoinGroupVisible(false)}
+        onJoin={joinGroup}
+      />
+      <ChannelShareSheet
+        visible={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        group={groups.find(g => g.addrHex === activePeerHex) ?? null}
+      />
     </View>
   );
 }
 
 const S = StyleSheet.create({
   root:            { flex: 1 },
+  chatPanel:       { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   queueBanner:     { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 0.5 },
   queueBannerText: { fontSize: 11, letterSpacing: 0.3, flex: 1 },
-  drawer: {
-    position: 'absolute', top: 0, bottom: 0, left: 0, width: DRAWER_W,
-    zIndex: 41, borderTopRightRadius: 18, borderBottomRightRadius: 18,
-    borderRightWidth: 0.5, overflow: 'hidden',
-  },
 });

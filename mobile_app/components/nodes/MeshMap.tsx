@@ -24,15 +24,20 @@ const NODE_R     = 12;
 const MAX_NODES  = 35; // keep View count bounded — 35 is plenty for readability
 
 const RING: Record<number, number> = { 1: 90, 2: 165, 3: 235 };
-const RING_DEFAULT = 305;
+const RING_DEFAULT   = 305;
+const MIN_ARC_GAP    = NODE_R * 2 + 20; // arc spacing per node — includes label breathing room
+const CROSS_RING_GAP = NODE_R * 2 + 12; // min radial distance between adjacent ring edges
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
-  nodes:        NodeData[];
-  selected:     string | null;
-  onSelect:     (h: string | null) => void;
-  syncing?:     boolean;
-  isAnnouncing?: boolean;
+  nodes:            NodeData[];
+  selected:         string | null;
+  onSelect:         (h: string | null) => void;
+  syncing?:         boolean;
+  isAnnouncing?:    boolean;
+  selStripBottom?:  number;
+  filterRow?:       React.ReactNode;
+  onExpandChange?:  (expanded: boolean) => void;
 }
 
 // Ghost placeholder positions — 3 equidistant nodes on ring-1 (radius 90, phase -90°)
@@ -52,13 +57,29 @@ function layout(nodes: NodeData[]): Placed[] {
     if (!byHop.has(h)) byHop.set(h, []);
     byHop.get(h)!.push(n);
   }
+
+  // Step 1: per-ring radius — enforce minimum arc spacing so same-ring nodes don't overlap
+  const hopRadii = new Map<number, number>();
+  for (const [h, grp] of byHop) {
+    const baseRad = RING[h] ?? RING_DEFAULT + (h - 3) * 70;
+    const minRad  = grp.length > 1 ? (grp.length * MIN_ARC_GAP) / (2 * Math.PI) : 0;
+    hopRadii.set(h, Math.max(baseRad, minRad));
+  }
+
+  // Step 2: enforce radial gap between adjacent rings so cross-ring nodes don't overlap
+  const sortedHops = [...hopRadii.keys()].sort((a, b) => a - b);
+  for (let i = 1; i < sortedHops.length; i++) {
+    const prev   = sortedHops[i - 1];
+    const curr   = sortedHops[i];
+    const needed = hopRadii.get(prev)! + CROSS_RING_GAP;
+    if (hopRadii.get(curr)! < needed) hopRadii.set(curr, needed);
+  }
+
   const out: Placed[] = [];
   for (const [h, grp] of byHop) {
-    const baseRad = RING[h] ?? RING_DEFAULT;
-    const minRad  = grp.length > 1 ? (grp.length * (NODE_R * 2 + 8)) / (2 * Math.PI) : 0;
-    const rad     = Math.max(baseRad, minRad);
-    const phase   = (h * 23 - 90) * (Math.PI / 180);
-    const step    = (2 * Math.PI) / grp.length;
+    const rad   = hopRadii.get(h)!;
+    const phase = (h * 23 - 90) * (Math.PI / 180);
+    const step  = (2 * Math.PI) / grp.length;
     grp.forEach((node, i) => {
       const a = phase + step * i;
       out.push({ node, x: ME_X + rad * Math.cos(a), y: ME_Y + rad * Math.sin(a), r: NODE_R });
@@ -164,14 +185,14 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing }: Props) {
+export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow, onExpandChange }: Props) {
   const { colors } = useTheme();
   const insets     = useSafeAreaInsets();
 
   // ── Collapse / fullscreen ─────────────────────────────────────────────────
-  const [expanded,   setExpanded]   = useState(false);
+  const [expanded,   setExpanded]   = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
-  const heightAnim = useRef(new Animated.Value(0)).current;
+  const heightAnim = useRef(new Animated.Value(VIEWPORT_H)).current;
   const shouldRenderCanvas = expanded || fullscreen;
 
   const toggle = useCallback(() => {
@@ -181,9 +202,10 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
         toValue: next ? VIEWPORT_H : 0,
         useNativeDriver: false, overshootClamping: true, tension: 70, friction: 12,
       }).start();
+      onExpandChange?.(next);
       return next;
     });
-  }, [heightAnim]);
+  }, [heightAnim, onExpandChange]);
 
   // ── Pulse — stable interpolations so useMemo canvas dep is stable ─────────
   const pulse      = useRef(new Animated.Value(0)).current;
@@ -439,23 +461,23 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
   return (
     <View style={[S.outer, { borderColor: colors.border, backgroundColor: colors.surface0 }]}>
 
-      {/* Header */}
-      <View style={[S.header, { borderBottomColor: expanded && !fullscreen ? colors.border : 'transparent' }]}>
-        <Pressable onPress={toggle} style={S.headerPress}>
+      {/* Header — full row is tappable for expand/collapse; maximize captures its own press */}
+      <Pressable onPress={toggle} style={[S.header, { borderBottomColor: expanded && !fullscreen ? colors.border : 'transparent' }]}>
+        <View style={S.headerPress}>
           <Text style={[S.headerLabel, { color: colors.textTertiary }]}>
             MESH TOPOLOGY
             <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
             <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
           </Text>
-          <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={13} color={colors.textTertiary} />
-        </Pressable>
+          <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSecondary} />
+        </View>
         <View style={S.headerBtns}>
           {isAnnouncing && <PulseDot size={5} />}
           <Pressable onPress={enterFullscreen} style={[S.iconBtn, S.fsBtn]} hitSlop={8}>
             <Feather name="maximize-2" size={14} color={colors.primary} />
           </Pressable>
         </View>
-      </View>
+      </Pressable>
 
       {/* Collapsible small viewport */}
       {!fullscreen && (
@@ -467,16 +489,11 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
               </View>
             </GestureDetector>
           )}
-          {selStrip(0)}
-          {expanded && (
-            <Pressable
-              onPress={enterFullscreen}
-              style={[S.fsEnterBtn, { backgroundColor: colors.surface1, borderColor: colors.border, bottom: sel ? 42 : 10 }]}
-              hitSlop={10}
-            >
-              <Feather name="maximize-2" size={13} color={colors.primary} />
-              <Text style={[S.pillTxt, { color: colors.primary }]}>EXPAND</Text>
-            </Pressable>
+          {selStrip(selStripBottom)}
+          {filterRow && (
+            <View style={S.filterRowWrap} pointerEvents="box-none">
+              {filterRow}
+            </View>
           )}
         </Animated.View>
       )}
@@ -505,6 +522,13 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
                 {selStrip(insets.bottom)}
               </View>
             </GestureDetector>
+
+            {/* Filter chips — outside GestureDetector so taps aren't swallowed */}
+            {filterRow && (
+              <View style={[S.filterRowWrap, { bottom: insets.bottom + 64 }]} pointerEvents="box-none">
+                {filterRow}
+              </View>
+            )}
 
             {/* EXIT pill outside GestureDetector — Pressable inside GestureDetector gets cancelled by tap gesture */}
             <Pressable
@@ -553,11 +577,8 @@ const S = StyleSheet.create({
   fsHeader:    { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.5,
                   paddingHorizontal: 12, paddingVertical: 10 },
 
-  // Shared pill style for EXPAND and EXIT buttons
-  fsEnterBtn:  { position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -44,
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                  paddingVertical: 9, paddingHorizontal: 18,
-                  borderRadius: 22, borderWidth: 0.5 },
+  filterRowWrap: { position: 'absolute', left: 0, right: 0 },
+
   fsExitBtn:   { position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -44,
                   flexDirection: 'row', alignItems: 'center', gap: 6,
                   paddingVertical: 9, paddingHorizontal: 18,

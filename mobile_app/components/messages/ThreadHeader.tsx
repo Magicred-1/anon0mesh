@@ -8,12 +8,13 @@ import { useGlass } from '../../hooks/useGlass';
 import { useLxmfContext } from '@/context/LxmfContext';
 
 interface Props {
-  peer:      string | null;
-  selfName?: string;
-  hops?:     number;
-  iface?:    'TCP' | 'BLE' | 'RNode';
-  online?:   boolean;
-  onOpen:    () => void;
+  peer:         string | null;
+  selfName?:    string;
+  hops?:        number;
+  iface?:       'TCP' | 'BLE' | 'RNode';
+  online?:      boolean;
+  onOpen:       () => void;
+  onShareQR?:   () => void;
 }
 
 // ── Peer info row ─────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ function EditIcon({ onPress }: { readonly onPress: () => void }) {
 
 // ── ThreadHeader ──────────────────────────────────────────────────────────────
 
-export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, onOpen }: Props) {
+export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, onOpen, onShareQR }: Props) {
   const { colors }            = useTheme();
   const baseGlass             = useGlass();
   const { updateDisplayName } = useLxmfContext();
@@ -107,14 +108,27 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
   }, []);
 
   let rightSlot: React.ReactNode;
-  if (hasPeer)        rightSlot = <PeerPill online={online} />;
-  else if (editing)   rightSlot = <EditActions onConfirm={confirm} onCancel={cancel} />;
-  else                rightSlot = <EditIcon onPress={startEdit} />;
+  if (hasPeer && onShareQR) {
+    rightSlot = (
+      <View style={S.rightGroup}>
+        <Pressable onPress={onShareQR} hitSlop={10} style={S.qrBtn}>
+          <Feather name="share-2" size={14} color={colors.textTertiary} />
+        </Pressable>
+        <PeerPill online={online} />
+      </View>
+    );
+  } else if (hasPeer) {
+    rightSlot = <PeerPill online={online} />;
+  } else if (editing) {
+    rightSlot = <EditActions onConfirm={confirm} onCancel={cancel} />;
+  } else {
+    rightSlot = <EditIcon onPress={startEdit} />;
+  }
 
   return (
     <View style={[S.header, { backgroundColor: colors.surface0, borderBottomColor: colors.borderSubtle, paddingTop: top + 10 }]}>
       <Pressable onPress={onOpen} style={[S.hamburger, baseGlass]}>
-        <Feather name="menu" size={16} color={colors.textSecondary} />
+        <Feather name={hasPeer ? 'arrow-left' : 'menu'} size={16} color={colors.textSecondary} />
       </Pressable>
 
       <View style={{ flex: 1 }}>
@@ -160,4 +174,6 @@ const S = StyleSheet.create({
   nameRow:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
   editBtn:     { padding: 4 },
   editActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rightGroup:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  qrBtn:       { padding: 4 },
 });

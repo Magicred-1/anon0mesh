@@ -180,7 +180,7 @@ export default function SettingsScreen() {
               <Text style={[S.actionText, { color: colors.primary }]}>ADD</Text>
             </Pressable>
           }>
-            paired hardware
+            hardware radio
           </SectionLabel>
 
           <View style={{ paddingHorizontal: 16 }}>
@@ -217,8 +217,8 @@ export default function SettingsScreen() {
                   <Feather name="plus" size={18} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[S.hwName,   { color: colors.textPrimary }]}>pair an rnode</Text>
-                  <Text style={[S.hwSerial, { color: colors.textTertiary }]}>EXTEND RANGE WITH LoRa HARDWARE</Text>
+                  <Text style={[S.hwName,   { color: colors.textPrimary }]}>pair with hardware</Text>
+                  <Text style={[S.hwSerial, { color: colors.textTertiary }]}>BOOST MESH RANGE WITH LoRa RADIO</Text>
                 </View>
                 <Feather name="chevron-right" size={13} color={colors.textTertiary} />
               </Pressable>
@@ -229,9 +229,9 @@ export default function SettingsScreen() {
           <SectionLabel>privacy & security</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
-              <SettingsRow icon="lock" label="biometric unlock" sub="face id · required for transactions" right={<Toggle on={biometric} onChange={v => { if (v) setBiometric(true); else setDisableBioOpen(true); }} />} />
-              <SettingsRow icon="refresh-cw" label="rotate keypair"    sub="generate new ed25519 · keeps handle" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setRotateOpen(true)} />
-              <SettingsRow icon="upload"     label="export secret key" sub="wallet private key · keep it private"       right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
+              <SettingsRow icon="lock" label="biometric lock" sub="face id / touch id · required for transactions" right={<Toggle on={biometric} onChange={v => { if (v) setBiometric(true); else setDisableBioOpen(true); }} />} />
+              <SettingsRow icon="refresh-cw" label="rotate identity keys" sub="new signing key · your handle stays the same" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setRotateOpen(true)} />
+              <SettingsRow icon="upload"     label="export wallet key" sub="back up your private key · never share it" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
             </View>
           </View>
 
@@ -239,9 +239,8 @@ export default function SettingsScreen() {
           <SectionLabel>network</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
-              <SettingsRow icon="share-2"        label="mesh over cellular"  sub="fall back to 4g/5g when mesh is sparse"  right={<Toggle on={meshOnCell}    onChange={setMeshOnCell}    />} />
-              <SettingsRow icon="message-circle" label="notifications"       sub="encrypted · mesh-delivered"               right={<Toggle on={notifications} onChange={setNotifications} />} />
-              <SettingsRow icon="zap"            label="preferred interface" sub="auto · prioritizes lora when paired"      right={<Text style={[S.valueText, { color: colors.textSecondary }]}>AUTO</Text>} last />
+              <SettingsRow icon="share-2"        label="cellular fallback"    sub="use 4g/5g when off-mesh or peers unreachable"  right={<Toggle on={meshOnCell}    onChange={setMeshOnCell}    />} />
+              <SettingsRow icon="message-circle" label="message notifications" sub="encrypted · mesh-delivered"             right={<Toggle on={notifications} onChange={setNotifications} />} last />
             </View>
           </View>
 
@@ -258,7 +257,7 @@ export default function SettingsScreen() {
               style={[S.signOut, { borderColor: colors.error + '38', opacity: walletLoading ? 0.5 : 1 }]}
             >
               <Text style={[S.signOutText, { color: colors.error }]}>
-                {walletLoading ? 'DISCONNECTING…' : 'SIGN OUT · BURN SESSION'}
+                {walletLoading ? 'DISCONNECTING…' : 'SIGN OUT · CLEAR KEYS'}
               </Text>
             </Pressable>
           </View>

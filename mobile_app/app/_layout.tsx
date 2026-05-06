@@ -28,6 +28,7 @@ import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
 import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 import { pendingConversationRef }    from '@/hooks/pendingConversation';
+import { useBackgroundService }      from '@/hooks/useBackgroundService';
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -81,6 +82,8 @@ function AppShell() {
   const handleInApp = useCallback((n: NotificationPayload) => {
     setActiveNotif(n);
   }, []);
+
+  useBackgroundService();
 
   return (
     <View style={[R.appRoot, { backgroundColor: colors.background }]}>

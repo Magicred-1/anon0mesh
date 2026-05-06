@@ -1,0 +1,114 @@
+name: Release Android
+
+on:
+  push:
+    branches: [v3]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile_app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: mobile_app
+
+      - name: Prebuild Android
+        run: npx expo prebuild --platform android --no-install
+        working-directory: mobile_app
+
+      - name: Patch build.gradle for release signing
+        working-directory: mobile_app/android
+        run: |
+          python3 - <<'EOF'
+          import re
+
+          with open('app/build.gradle', 'r') as f:
+              content = f.read()
+
+          release_config = """
+                  release {
+                      if (project.hasProperty('RELEASE_STORE_FILE')) {
+                          storeFile file(project.property('RELEASE_STORE_FILE'))
+                          storePassword project.property('RELEASE_STORE_PASSWORD')
+                          keyAlias project.property('RELEASE_KEY_ALIAS')
+                          keyPassword project.property('RELEASE_KEY_PASSWORD')
+                      } else {
+                          storeFile file('debug.keystore')
+                          storePassword 'android'
+                          keyAlias 'androiddebugkey'
+                          keyPassword 'android'
+                      }
+                  }"""
+
+          # Append release signing config inside signingConfigs block
+          content = re.sub(
+              r'(signingConfigs \{.*?debug \{.*?\})',
+              r'\1' + release_config,
+              content,
+              flags=re.DOTALL
+          )
+
+          # Point release buildType at the new config instead of debug
+          content = content.replace(
+              'signingConfig signingConfigs.debug\n            def enableShrinkResources',
+              'signingConfig signingConfigs.release\n            def enableShrinkResources',
+          )
+
+          with open('app/build.gradle', 'w') as f:
+              f.write(content)
+
+          print('build.gradle patched for release signing')
+          EOF
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '[:space:]' | base64 --ignore-garbage --decode > mobile_app/android/app/release.keystore
+
+      - name: Get version
+        id: version
+        run: echo "version=$(jq -r '.expo.version' mobile_app/app.json)" >> $GITHUB_OUTPUT
+
+      - name: Disable ART profile compilation
+        working-directory: mobile_app/android
+        run: |
+          echo "" >> app/build.gradle
+          echo "// CI: profman absent on ubuntu-latest — skip ART profile tasks" >> app/build.gradle
+          echo "tasks.configureEach { if (name.contains('ArtProfile')) enabled = false }" >> app/build.gradle
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -PRELEASE_STORE_FILE=release.keystore \
+            -PRELEASE_STORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -PRELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
+            -PRELEASE_KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
+        working-directory: mobile_app/android
+
+      - name: Rename APK
+        run: |
+          mv mobile_app/android/app/build/outputs/apk/release/app-release.apk \
+             anonmesh-v${{ steps.version.outputs.version }}.apk
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: anonmesh v${{ steps.version.outputs.version }}
+          files: anonmesh-v${{ steps.version.outputs.version }}.apk
+          generate_release_notes: true

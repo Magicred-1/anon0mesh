@@ -20,9 +20,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
 
   // If already connected when screen mounts (back-nav from tabs), skip animation delay.
-  const alreadyConnectedRef = useRef(isConnected && !!publicKey);
-
-  const overlayOpacity   = useRef(new Animated.Value(0)).current;
+const overlayOpacity   = useRef(new Animated.Value(0)).current;
   const enteringOpacity  = useRef(new Animated.Value(0)).current;
   const statusOpacity    = useRef(new Animated.Value(0)).current;
   const nicknameOpacity  = useRef(new Animated.Value(0)).current;
@@ -48,7 +46,7 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     if (!isConnected || !publicKey) return;
-    const delay = alreadyConnectedRef.current ? 0 : 2200;
+    const delay = 0;
     const t = setTimeout(() => router.replace('/(tabs)'), delay);
     return () => clearTimeout(t);
   }, [isConnected, publicKey, router]);
@@ -87,7 +85,7 @@ export default function OnboardingScreen() {
         {/* Bottom panel — extends behind home indicator, padding absorbs inset */}
         <View style={[S.panel, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
           <Text style={S.title}>Join the Mesh</Text>
-          <Text style={S.subtitle}>No servers. No accounts. Just signal.</Text>
+          <Text style={S.subtitle}>Encrypted communication and Confidential Offline Transactions.</Text>
 
           <CTAButtons
             isLoading={isLoading}
@@ -101,7 +99,6 @@ export default function OnboardingScreen() {
 
       <LoadingOverlay
         isLoading={isLoading}
-        isConnected={isConnected && !!publicKey}
         isSolanaMobile={!!isSolanaMobile}
         nickname={nickname}
         overlayOpacity={overlayOpacity}

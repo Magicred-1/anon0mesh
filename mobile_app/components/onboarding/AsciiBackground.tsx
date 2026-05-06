@@ -78,9 +78,10 @@ export const AsciiBackground = memo(function AsciiBackground() {
         base[idx*3+1] = (Math.random() - 0.5) * 2;
         base[idx*3+2] = zOff + (Math.random() - 0.5) * 1.5;
         const b = 0.5 + 0.5 * (r / (ribbonCount - 1));
+        const br = 0.75 + Math.random() * 0.25;
         colors[idx*3]   = 0;
-        colors[idx*3+1] = b * (0.75 + Math.random() * 0.25);
-        colors[idx*3+2] = b;
+        colors[idx*3+1] = b * br * 0.898; // #00e5ff G channel ratio
+        colors[idx*3+2] = b * br;
       }
     }
 
@@ -163,7 +164,7 @@ export const AsciiBackground = memo(function AsciiBackground() {
           );
           float bit = texture2D(tFont, fUV).r;
           if (bit < 0.5) discard;
-          vec3 col = mix(vec3(0.0, 0.88, 1.0), s.rgb * 1.4, 0.25);
+          vec3 col = mix(vec3(0.0, 0.898, 1.0), s.rgb * 1.4, 0.25);
           gl_FragColor = vec4(col, 0.60 * lum * 1.8);
         }
       `,
