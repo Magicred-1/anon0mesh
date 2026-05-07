@@ -330,8 +330,7 @@ export async function estimateSplTransferFeeLamports({
  * MWA mode → reauthorizes or refreshes authorization, asks Seed Vault
  * to sign, then submits via the selected RPC adapter.
  *
- * SOL-only for now. USDC / SPL token transfers need associated
- * token account handling which lands with the Jupiter integration.
+ * SPL token transfers share the same signer/submission path below.
  */
 export async function sendSolTransfer({
   walletAdapter,
