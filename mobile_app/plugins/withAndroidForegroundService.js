@@ -128,6 +128,13 @@ function withAndroidForegroundService(config) {
       if (!perms.some((p) => p.$['android:name'] === name))
         perms.push({ $: { 'android:name': name } });
     };
+    addPerm('android.permission.BLUETOOTH');
+    addPerm('android.permission.BLUETOOTH_ADMIN');
+    addPerm('android.permission.BLUETOOTH_SCAN');
+    addPerm('android.permission.BLUETOOTH_CONNECT');
+    addPerm('android.permission.BLUETOOTH_ADVERTISE');
+    addPerm('android.permission.ACCESS_FINE_LOCATION');
+    addPerm('android.permission.ACCESS_COARSE_LOCATION');
     addPerm('android.permission.FOREGROUND_SERVICE');
     addPerm('android.permission.FOREGROUND_SERVICE_DATA_SYNC');
 

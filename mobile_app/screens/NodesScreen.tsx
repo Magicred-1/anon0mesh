@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  Platform, PermissionsAndroid, InteractionManager,
+  InteractionManager,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { PendingCosigns, type PendingCosign } from '@/components/nodes/PendingCo
 import { PulseDot }        from '@/components/ui/PulseDot';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
+import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
 // Converts a peer to NodeData WITHOUT latency — stable identity for MeshMap.
 // Latency is added separately for the list so MeshMap topology doesn't re-layout on every timer tick.
@@ -54,17 +55,8 @@ export default function NodesScreen() {
 
   const enableBle = useCallback(async () => {
     if (bleActive) return; // already started — don't re-trigger GATT registration
-    if (Platform.OS === 'android') {
-      const perms = Platform.Version >= 31
-        ? [
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
-            PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          ]
-        : [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
-      const results = await PermissionsAndroid.requestMultiple(perms);
-      if (Object.values(results).some(r => r !== PermissionsAndroid.RESULTS.GRANTED)) return;
-    }
+    const permissionStatus = await requestBLEPermissions();
+    if (permissionStatus !== 'granted' && permissionStatus !== 'not_required') return;
     startBLE();
   }, [bleActive, startBLE]);
 
