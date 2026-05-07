@@ -17,6 +17,16 @@ import {
   WalletMode,
 } from '../src/infrastructure/wallet';
 
+// Recovery export return shape. The user-cancel path stays silent ({ ok: false }
+// with no message) because surfacing "you cancelled" as an error is hostile UX.
+// Real system failures (keychain read failed, decrypt failed) carry the actual
+// reason so the modal can render it inline next to the failed-state card —
+// previously these were buried in a separate Alert popup that got covered by
+// the modal sheet.
+export type ExportPrivateKeyResult =
+  | { ok: true; secretKey: string }
+  | { ok: false; message?: string };
+
 interface WalletContextValue {
   wallet: IWalletAdapter | null;
   walletMode: WalletMode | null;
@@ -32,7 +42,7 @@ interface WalletContextValue {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   refresh: () => Promise<void>;
-  exportPrivateKey: () => Promise<string | null>;
+  exportPrivateKey: () => Promise<ExportPrivateKeyResult>;
   error: string | null;
 }
 
@@ -174,17 +184,16 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
     setIsConnected(wallet.isConnected());
   }, [wallet, initialize]);
 
-  const exportPrivateKey = useCallback(async (): Promise<string | null> => {
-    if (!wallet) return null;
+  const exportPrivateKey = useCallback(async (): Promise<ExportPrivateKeyResult> => {
+    if (!wallet) return { ok: false, message: 'Wallet not connected.' };
     try {
       const secretKey = await wallet.exportSecretKey();
-      return bs58.encode(secretKey);
+      return { ok: true, secretKey: bs58.encode(secretKey) };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg === 'Authentication cancelled') return null;
+      if (msg === 'Authentication cancelled') return { ok: false };
       console.error('[wallet/exportPrivateKey] failed:', msg, err);
-      Alert.alert('Export failed', msg);
-      return null;
+      return { ok: false, message: msg };
     }
   }, [wallet]);
 
