@@ -20,6 +20,7 @@ import type { IWalletAdapter } from "@/src/infrastructure/wallet";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 import { parseBaseUnits } from "@/src/utils/amount";
+import { summarizeError } from "@/src/utils/errors";
 const APP_IDENTITY = {
   name: "anonmesh",
   uri: "https://anonme.sh",
@@ -86,8 +87,13 @@ interface MwaAuthResult {
 }
 
 function isWalletDenial(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  const normalized = msg.toLowerCase();
+  const summary = summarizeError(err, "");
+  const normalized = [
+    summary.message,
+    summary.name,
+    summary.code,
+    summary.raw,
+  ].filter(Boolean).join(" ").toLowerCase();
   return (
     normalized.includes("authentication cancelled") ||
     normalized.includes("authorization request failed") ||
@@ -102,11 +108,26 @@ function isWalletDenial(err: unknown): boolean {
   );
 }
 
-function normalizeWalletError(err: unknown): never {
+function normalizeWalletError(err: unknown, fallback?: string): never {
   if (isWalletDenial(err)) {
     throw new TransactionNotApprovedError();
   }
+  if (fallback) {
+    throw new Error(summarizeError(err, fallback).message);
+  }
   throw err;
+}
+
+async function submitSignedTransaction(
+  rpcAdapter: IRpcAdapter,
+  tx: Transaction,
+): Promise<string> {
+  try {
+    return await rpcAdapter.sendRawTransaction(tx.serialize());
+  } catch (err: unknown) {
+    const summary = summarizeError(err, "RPC rejected the transaction without returning a reason");
+    throw new Error(`Transaction submission failed: ${summary.message}`);
+  }
 }
 
 function buildSolTransferTransaction({
@@ -203,7 +224,7 @@ async function signAndSubmitTransaction({
     try {
       const keypair = Keypair.fromSecretKey(secretKey);
       tx.sign(keypair);
-      signature = await rpcAdapter.sendRawTransaction(tx.serialize());
+      signature = await submitSignedTransaction(rpcAdapter, tx);
     } finally {
       secretKey.fill(0);
     }
@@ -212,33 +233,37 @@ async function signAndSubmitTransaction({
 
   const cachedToken = await secureGet(SecureKeys.MWA_TOKEN);
   const signedTransactions: Transaction[] = [];
-  await transact(async (mwaWallet) => {
-    const auth = await mwaWallet.reauthorize({
-      auth_token: cachedToken ?? "",
-      identity: APP_IDENTITY,
+  try {
+    await transact(async (mwaWallet) => {
+      const auth = await mwaWallet.reauthorize({
+        auth_token: cachedToken ?? "",
+        identity: APP_IDENTITY,
+      });
+      const nextToken = (auth as MwaAuthResult).auth_token;
+      if (nextToken) await secureSet(SecureKeys.MWA_TOKEN, nextToken);
+
+      const sessionPubkey = new PublicKey(Buffer.from(auth.accounts[0].address, "base64"));
+
+      if (sessionPubkey.toBase58() !== expectedPubkey.toBase58()) {
+        throw new Error(
+          `MWA account mismatch - expected ${expectedPubkey.toBase58().slice(0, 8)}..., wallet returned ${sessionPubkey.toBase58().slice(0, 8)}.... Reconnect the correct account.`,
+        );
+      }
+
+      tx.feePayer = sessionPubkey;
+      const signed = await mwaWallet.signTransactions({ transactions: [tx] });
+      if (signed[0]) signedTransactions[0] = signed[0];
     });
-    const nextToken = (auth as MwaAuthResult).auth_token;
-    if (nextToken) await secureSet(SecureKeys.MWA_TOKEN, nextToken);
-
-    const sessionPubkey = new PublicKey(Buffer.from(auth.accounts[0].address, "base64"));
-
-    if (sessionPubkey.toBase58() !== expectedPubkey.toBase58()) {
-      throw new Error(
-        `MWA account mismatch — expected ${expectedPubkey.toBase58().slice(0, 8)}…, wallet returned ${sessionPubkey.toBase58().slice(0, 8)}…. Reconnect the correct account.`,
-      );
-    }
-
-    tx.feePayer = sessionPubkey;
-    const signed = await mwaWallet.signTransactions({ transactions: [tx] });
-    if (signed[0]) signedTransactions[0] = signed[0];
-  });
+  } catch (err: unknown) {
+    normalizeWalletError(err, "Wallet signing failed before returning a reason");
+  }
 
   const signedTx = signedTransactions[0];
   if (!signedTx) {
     throw new TransactionNotApprovedError();
   }
 
-  const signature = await rpcAdapter.sendRawTransaction(signedTx.serialize());
+  const signature = await submitSignedTransaction(rpcAdapter, signedTx);
   return { signature, explorerUrl: buildDevnetExplorerTxUrl(signature) };
 }
 

@@ -98,7 +98,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
             <View style={[S.warn, { backgroundColor: colors.error + '14', borderColor: colors.error + '38' }]}>
               <Feather name="alert-triangle" size={14} color={colors.error} style={{ marginTop: 1 }} />
               <Text style={[S.warnText, { color: colors.error }]}>
-                No mnemonic exists for this wallet. This base58 recovery key controls the wallet; store it offline only.
+                This wallet does not use a 12- or 24-word seed phrase. The copied base58 recovery key is the backup; store it offline only.
               </Text>
             </View>
 

@@ -12,6 +12,7 @@ const {
 } = await import("../src/services/addressBookCore.ts");
 const { formatRecoveryKey } = await import("../src/utils/recoveryKey.ts");
 const { parseBaseUnits } = await import("../src/utils/amount.ts");
+const { summarizeError } = await import("../src/utils/errors.ts");
 const { buildDevnetExplorerTxUrl } = await import("../src/services/explorer.ts");
 
 function key(index) {
@@ -114,9 +115,29 @@ function testExplorerUrls() {
   );
 }
 
+function testErrorSummaries() {
+  assert.equal(
+    summarizeError("", "fallback message").message,
+    "fallback message",
+  );
+  assert.equal(
+    summarizeError({}, "fallback message").message,
+    "fallback message",
+  );
+  assert.equal(
+    summarizeError({ code: -32002, error: "WalletBusy" }, "fallback message").message,
+    "WalletBusy -32002",
+  );
+  assert.equal(
+    summarizeError(new Error("boom"), "fallback message").message,
+    "boom",
+  );
+}
+
 testSolanaPayUri();
 testAddressBookCore();
 testRecoveryKeyFormatting();
 testBaseUnitParsing();
 testExplorerUrls();
+testErrorSummaries();
 console.log("Tier 0 service checks passed");

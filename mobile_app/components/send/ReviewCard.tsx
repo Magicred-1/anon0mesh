@@ -18,6 +18,7 @@ import {
   TransactionNotApprovedError,
 } from "@/src/services/sendTransaction";
 import { DEMO_MODE } from "@/src/utils/demoMode";
+import { summarizeError } from "@/src/utils/errors";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
@@ -221,9 +222,13 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
         params: { amount, symbol, txId: result.signature },
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const summary = summarizeError(err, "Transaction failed before the wallet returned a reason");
       console.error("[send/ReviewCard] transfer failed", {
-        message,
+        message: summary.message,
+        name: summary.name ?? null,
+        code: summary.code ?? null,
+        raw: summary.raw ?? null,
+        cause: summary.cause ?? null,
         symbol,
         mintAddress: normalizedMint || null,
         networkMode: rpcAdapter.mode,
@@ -234,7 +239,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
               kind: "approval",
               message: "Approve the transaction in your wallet to submit it.",
             }
-          : { kind: "send", message },
+          : { kind: "send", message: summary.message },
       );
       setSliderResetKey((k) => k + 1);
     } finally {
