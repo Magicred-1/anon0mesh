@@ -1,52 +1,16 @@
-import { PublicKey } from "@solana/web3.js";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  type AddressBookEntry,
+  normalizeAddressBookEntries,
+  removeAddressBookEntry,
+  sortAndCapAddressBookEntries,
+  updateAddressBookEntryLabel,
+  upsertAddressBookEntry,
+} from "@/src/services/addressBookCore";
 import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 
-export interface AddressBookEntry {
-  label: string;
-  pubkey: string;
-  lastUsed: number;
-  count: number;
-}
-
-const MAX_RECIPIENTS = 50;
-
-function shortAddress(addr: string): string {
-  return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
-}
-
-function normalizePubkey(pubkey: string): string | null {
-  try {
-    return new PublicKey(pubkey.trim()).toBase58();
-  } catch {
-    return null;
-  }
-}
-
-function normalizeEntry(entry: Partial<AddressBookEntry>): AddressBookEntry | null {
-  if (typeof entry.pubkey !== "string") return null;
-  const pubkey = normalizePubkey(entry.pubkey);
-  if (!pubkey) return null;
-
-  const count = Number.isFinite(entry.count) && Number(entry.count) > 0
-    ? Math.floor(Number(entry.count))
-    : 1;
-  const lastUsed = Number.isFinite(entry.lastUsed) && Number(entry.lastUsed) > 0
-    ? Number(entry.lastUsed)
-    : Date.now();
-  const label = typeof entry.label === "string" && entry.label.trim()
-    ? entry.label.trim().slice(0, 48)
-    : shortAddress(pubkey);
-
-  return { label, pubkey, lastUsed, count };
-}
-
-function sortAndCap(entries: AddressBookEntry[]): AddressBookEntry[] {
-  return [...entries]
-    .sort((a, b) => b.lastUsed - a.lastUsed)
-    .slice(0, MAX_RECIPIENTS);
-}
+export type { AddressBookEntry } from "@/src/services/addressBookCore";
 
 export async function readAddressBook(): Promise<AddressBookEntry[]> {
   const raw = await secureGet(SecureKeys.ADDRESS_BOOK);
@@ -55,68 +19,35 @@ export async function readAddressBook(): Promise<AddressBookEntry[]> {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    const deduped = new Map<string, AddressBookEntry>();
-    for (const item of parsed) {
-      const entry = normalizeEntry(item as Partial<AddressBookEntry>);
-      if (!entry) continue;
-      const existing = deduped.get(entry.pubkey);
-      if (!existing || entry.lastUsed > existing.lastUsed) {
-        deduped.set(entry.pubkey, entry);
-      }
-    }
-    return sortAndCap([...deduped.values()]);
+    return normalizeAddressBookEntries(parsed);
   } catch {
     return [];
   }
 }
 
 export async function writeAddressBook(entries: AddressBookEntry[]): Promise<void> {
-  await secureSet(SecureKeys.ADDRESS_BOOK, JSON.stringify(sortAndCap(entries)));
+  await secureSet(SecureKeys.ADDRESS_BOOK, JSON.stringify(sortAndCapAddressBookEntries(entries)));
 }
 
 export async function saveAddressBookRecipient(pubkey: string, label?: string): Promise<AddressBookEntry[]> {
-  const normalized = normalizePubkey(pubkey);
-  if (!normalized) return readAddressBook();
-
-  const now = Date.now();
   const entries = await readAddressBook();
-  const existing = entries.find((entry) => entry.pubkey === normalized);
-  const nextEntry: AddressBookEntry = {
-    label: label?.trim() || existing?.label || shortAddress(normalized),
-    pubkey: normalized,
-    lastUsed: now,
-    count: (existing?.count ?? 0) + 1,
-  };
-
-  const next = [nextEntry, ...entries.filter((entry) => entry.pubkey !== normalized)];
+  const next = upsertAddressBookEntry(entries, pubkey, label);
   await writeAddressBook(next);
-  return sortAndCap(next);
+  return next;
 }
 
 export async function updateAddressBookRecipient(
   pubkey: string,
   label: string,
 ): Promise<AddressBookEntry[]> {
-  const normalized = normalizePubkey(pubkey);
-  if (!normalized) return readAddressBook();
-
   const entries = await readAddressBook();
-  const existing = entries.find((entry) => entry.pubkey === normalized);
-  if (!existing) return entries;
-
-  const nextLabel = label.trim().slice(0, 48) || shortAddress(normalized);
-  const next = entries.map((entry) =>
-    entry.pubkey === normalized ? { ...entry, label: nextLabel } : entry,
-  );
+  const next = updateAddressBookEntryLabel(entries, pubkey, label);
   await writeAddressBook(next);
-  return sortAndCap(next);
+  return next;
 }
 
 export async function deleteAddressBookRecipient(pubkey: string): Promise<AddressBookEntry[]> {
-  const normalized = normalizePubkey(pubkey);
-  if (!normalized) return readAddressBook();
-
-  const next = (await readAddressBook()).filter((entry) => entry.pubkey !== normalized);
+  const next = removeAddressBookEntry(await readAddressBook(), pubkey);
   await writeAddressBook(next);
   return next;
 }

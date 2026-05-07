@@ -10,6 +10,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "validate:tier0:services": "node --no-warnings --experimental-transform-types ./scripts/validate-tier0-services.mjs",
     "validate:tier0": "bash ./scripts/validate-tier0.sh"
   },
   "dependencies": {
