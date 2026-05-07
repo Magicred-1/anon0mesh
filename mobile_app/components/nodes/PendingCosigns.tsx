@@ -3,7 +3,8 @@ import {
   NativeScrollEvent, NativeSyntheticEvent,
   ScrollView, StyleSheet, Text, View, Pressable, useWindowDimensions,
 } from 'react-native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 
@@ -33,20 +34,21 @@ function short(hash: string) {
   return `${hash.slice(0, 6)}…${hash.slice(-6)}`;
 }
 
-const H_PAD  = 20;
-const PEEK   = 14;
+// No H_PAD — parent (WalletScreen grid) owns horizontal padding
+const PEEK     = 14;  // next card peek amount
 const CARD_GAP = 10;
+// cardW accounts for wallet grid's paddingHorizontal: 16 on each side
+const WALLET_PAD = 32;
 
 export const PendingCosigns = memo(function PendingCosigns({ items, onSign, onReject }: Props) {
-  const { colors }          = useTheme();
-  const { width: sw }       = useWindowDimensions();
-  const cardW               = sw - H_PAD * 2 - PEEK;
-  const [dot, setDot]       = useState(0);
-  const scrollRef           = useRef<ScrollView>(null);
+  const { colors }     = useTheme();
+  const { width: sw }  = useWindowDimensions();
+  const cardW          = sw - WALLET_PAD - PEEK;
+  const [dot, setDot]  = useState(0);
+  const scrollRef      = useRef<ScrollView>(null);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const x = e.nativeEvent.contentOffset.x;
-    setDot(Math.round(x / (cardW + CARD_GAP)));
+    setDot(Math.round(e.nativeEvent.contentOffset.x / (cardW + CARD_GAP)));
   }, [cardW]);
 
   const isEmpty = items.length === 0;
@@ -139,27 +141,25 @@ const CosignCard = memo(function CosignCard({
       {/* Top row: from + time */}
       <View style={S.cardTop}>
         <View style={[S.fromPill, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-          <Feather name="user" size={10} color={colors.textTertiary} />
+          <Feather name="user" size={9} color={colors.textTertiary} />
           <Text style={[S.fromHash, { color: colors.textSecondary }]}>{short(item.fromHash)}</Text>
         </View>
         <Text style={[S.timeAgo, { color: colors.textTertiary }]}>{relTime(item.requestedAt)}</Text>
       </View>
 
-      {/* Amount hero */}
-      <View style={S.amountRow}>
-        <Text style={[S.amount, { color: colors.textPrimary }]}>
-          {item.amountSol.toFixed(4)}
-        </Text>
-        <Text style={[S.amountUnit, { color: colors.primary }]}>SOL</Text>
+      {/* Amount + tx hash inline */}
+      <View style={S.amountBlock}>
+        <View style={S.amountRow}>
+          <Text style={[S.amount, { color: colors.textPrimary }]}>{item.amountSol.toFixed(4)}</Text>
+          <Text style={[S.amountUnit, { color: colors.primary }]}>SOL</Text>
+        </View>
+        <Text style={[S.txHash, { color: colors.textTertiary }]}>{short(item.txHash)}</Text>
       </View>
 
-      {/* Tx hash */}
-      <Text style={[S.txHash, { color: colors.textTertiary }]}>{short(item.txHash)}</Text>
-
-      {/* Divider + fee */}
+      {/* Fee row */}
       <View style={[S.feeRow, { borderTopColor: colors.borderSubtle }]}>
         <View style={[S.feeIcon, { backgroundColor: colors.primarySubtle }]}>
-          <Feather name="zap" size={10} color={colors.primary} />
+          <Feather name="zap" size={9} color={colors.primary} />
         </View>
         <Text style={[S.feeLabel, { color: colors.textTertiary }]}>Your fee</Text>
         <Text style={[S.feeVal, { color: colors.primary }]}>+{item.feeSol.toFixed(6)} SOL</Text>
@@ -174,13 +174,13 @@ const CosignCard = memo(function CosignCard({
             { borderColor: colors.border, backgroundColor: colors.surface2, opacity: pressed ? 0.5 : 1 },
           ]}
         >
-          <Feather name="x" size={15} color={colors.textTertiary} />
+          <Feather name="x" size={14} color={colors.textTertiary} />
         </Pressable>
         <Pressable
           onPress={handleSign}
           style={({ pressed }) => [S.signBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 }]}
         >
-          <Feather name="lock" size={13} color={colors.textInverse} />
+          <Feather name="lock" size={12} color={colors.textInverse} />
           <Text style={[S.signText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
         </Pressable>
       </View>
@@ -189,48 +189,47 @@ const CosignCard = memo(function CosignCard({
 });
 
 const S = StyleSheet.create({
-  wrap:         { marginBottom: 32 },
+  wrap:         { marginBottom: 0 },
   labelRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   sectionLabel: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
   badge:        { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, borderWidth: 0.5 },
   badgeText:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1 },
 
-  emptyCard:    { borderRadius: 16, borderWidth: 0.5, padding: 18,
+  emptyCard:    { borderRadius: 14, borderWidth: 0.5, padding: 14,
                   flexDirection: 'row', alignItems: 'center', gap: 10 },
   emptyText:    { fontFamily: fontFamily.sansMd, fontSize: 12 },
 
   list:         { paddingRight: PEEK },
 
-  dots:         { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 12 },
+  dots:         { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
   dot:          { width: 4, height: 4, borderRadius: 2 },
-  dotActive:    { width: 16 },
+  dotActive:    { width: 14 },
 
-  card:         { borderRadius: 18, borderWidth: 0.5, overflow: 'hidden',
-                  padding: 16, gap: 12 },
+  card:         { borderRadius: 16, borderWidth: 0.5, overflow: 'hidden', padding: 14, gap: 10 },
   cardAccent:   { position: 'absolute', top: 0, left: 0, right: 0, height: 2 },
 
   cardTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  fromPill:     { flexDirection: 'row', alignItems: 'center', gap: 5,
-                  paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 0.5 },
+  fromPill:     { flexDirection: 'row', alignItems: 'center', gap: 4,
+                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 0.5 },
   fromHash:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.3 },
   timeAgo:      { fontFamily: fontFamily.sansMd, fontSize: 10 },
 
-  amountRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
-  amount:       { fontFamily: fontFamily.sansBold, fontSize: 34, letterSpacing: -1.5, lineHeight: 38 },
-  amountUnit:   { fontFamily: fontFamily.sansMd, fontSize: 15, letterSpacing: 0.5, marginBottom: 4 },
-
-  txHash:       { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5, marginTop: -4 },
+  amountBlock:  { gap: 2 },
+  amountRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
+  amount:       { fontFamily: fontFamily.sansBold, fontSize: 26, letterSpacing: -1, lineHeight: 30 },
+  amountUnit:   { fontFamily: fontFamily.sansMd, fontSize: 13, letterSpacing: 0.5, marginBottom: 2 },
+  txHash:       { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5, opacity: 0.5 },
 
   feeRow:       { flexDirection: 'row', alignItems: 'center', gap: 8,
-                  borderTopWidth: 0.5, paddingTop: 12 },
-  feeIcon:      { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+                  borderTopWidth: 0.5, paddingTop: 10 },
+  feeIcon:      { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   feeLabel:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 11 },
   feeVal:       { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600' },
 
   actions:      { flexDirection: 'row', gap: 8 },
-  rejectBtn:    { width: 44, height: 44, borderRadius: 13, borderWidth: 0.5,
+  rejectBtn:    { width: 40, height: 40, borderRadius: 12, borderWidth: 0.5,
                   alignItems: 'center', justifyContent: 'center' },
   signBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                  gap: 8, height: 44, borderRadius: 13 },
-  signText:     { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
+                  gap: 7, height: 40, borderRadius: 12 },
+  signText:     { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600' },
 });

@@ -141,15 +141,18 @@ function withAndroidForegroundService(config) {
     const app = manifest.application[0];
     if (!app.service) app.service = [];
     const fqn = `${pkg}.LxmfForegroundService`;
-    if (!app.service.some((s) => s.$['android:name'] === fqn)) {
-      app.service.push({
-        $: {
-          'android:name':                  fqn,
-          'android:foregroundServiceType': 'dataSync',
-          'android:exported':              'false',
-        },
-      });
-    }
+    // Remove any stale entries (relative or FQN, any foregroundServiceType)
+    app.service = app.service.filter((s) => {
+      const name = s.$['android:name'];
+      return name !== fqn && name !== '.LxmfForegroundService' && name !== 'LxmfForegroundService';
+    });
+    app.service.push({
+      $: {
+        'android:name':                  fqn,
+        'android:foregroundServiceType': 'dataSync',
+        'android:exported':              'false',
+      },
+    });
     return cfg;
   });
 

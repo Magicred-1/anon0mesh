@@ -129,9 +129,11 @@ export const PeersDrawer = memo(function PeersDrawer({
   const dmPeers  = peers.filter(p => !p.isGroup);
   const online   = dmPeers.filter(p => p.online).length;
 
-  const [query,       setQuery]       = useState('');
-  const [hash,        setHash]        = useState('');
+  const [input,       setInput]       = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  const isHash   = /^[0-9a-fA-F]{16,}$/.test(input.trim());
+  const canStart = isHash;
 
   // Unified list: unread first, then preserve arrival order
   const allConvos = [...groups, ...dmPeers].sort((a, b) => {
@@ -139,11 +141,9 @@ export const PeersDrawer = memo(function PeersDrawer({
     return 0;
   });
 
-  const filtered = query
-    ? allConvos.filter(p => p.handle.toLowerCase().includes(query.toLowerCase()))
+  const filtered = (!isHash && input.trim().length > 0)
+    ? allConvos.filter(p => p.handle.toLowerCase().includes(input.toLowerCase()))
     : allConvos;
-
-  const canStart = hash.trim().length > 0;
 
   return (
     <View style={{ flex: 1 }}>
@@ -161,26 +161,35 @@ export const PeersDrawer = memo(function PeersDrawer({
         </View>
       </SafeAreaView>
 
-      {/* ── DM hash input — always visible ──────────────────────────────── */}
+      {/* ── Unified search / hash input ──────────────────────────────────── */}
       <View style={S.composePanel}>
-        <View style={[S.hashRow, softGlass]}>
-          <Feather name="at-sign" size={14} color={colors.textTertiary} />
+        <View style={[S.hashRow, softGlass, isHash && { borderColor: colors.primary + '60', borderWidth: 0.5 }]}>
+          <Feather
+            name={isHash ? 'at-sign' : 'search'}
+            size={14}
+            color={isHash ? colors.primary : colors.textTertiary}
+          />
           <TextInput
             style={[S.hashInput, { color: colors.textPrimary }]}
-            placeholder="paste hash or scan…"
+            placeholder="search or paste hash…"
             placeholderTextColor={colors.textTertiary}
-            value={hash}
-            onChangeText={setHash}
+            value={input}
+            onChangeText={setInput}
             autoCapitalize="none"
             autoCorrect={false}
           />
+          {input.length > 0 && (
+            <Pressable onPress={() => setInput('')} hitSlop={10}>
+              <Feather name="x" size={13} color={colors.textTertiary} />
+            </Pressable>
+          )}
           <Pressable onPress={() => setScannerOpen(true)} hitSlop={8}>
             <Feather name="camera" size={15} color={colors.primary} />
           </Pressable>
         </View>
         {canStart && (
           <Pressable
-            onPress={() => { onNewHash?.(hash.trim()); setHash(''); }}
+            onPress={() => { onNewHash?.(input.trim()); setInput(''); }}
             style={[S.startBtn, { backgroundColor: colors.primary }]}
           >
             <Text style={[S.startBtnText, { color: '#08080A' }]}>OPEN CONVERSATION</Text>
@@ -198,26 +207,6 @@ export const PeersDrawer = memo(function PeersDrawer({
           <Feather name="plus" size={13} color="#08080A" />
           <Text style={[S.channelActionText, { color: '#08080A' }]}>CREATE</Text>
         </Pressable>
-      </View>
-
-      {/* ── Search ──────────────────────────────────────────────────────── */}
-      <View style={S.searchWrap}>
-        <View style={[S.searchBox, softGlass]}>
-          <Feather name="search" size={14} color={colors.textTertiary} />
-          <TextInput
-            placeholder="Search…"
-            placeholderTextColor={colors.textTertiary}
-            style={[S.searchInput, { color: colors.textPrimary }]}
-            value={query}
-            onChangeText={setQuery}
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery('')} hitSlop={12}>
-              <Feather name="x" size={13} color={colors.textTertiary} />
-            </Pressable>
-          )}
-        </View>
       </View>
 
       {/* ── Conversation list ────────────────────────────────────────────── */}
@@ -298,7 +287,7 @@ export const PeersDrawer = memo(function PeersDrawer({
 
         {!syncing && filtered.length === 0 && (
           <Text style={[S.emptyNote, { color: colors.textTertiary }]}>
-            {query ? 'No matches' : 'No conversations yet'}
+            {input && !isHash ? 'No matches' : 'No conversations yet'}
           </Text>
         )}
       </ScrollView>
@@ -328,18 +317,14 @@ const S = StyleSheet.create({
 
   // ── Compose panel ────────────────────────────────────────────────────────────
   composePanel:    { paddingHorizontal: 14, paddingBottom: 10, gap: 8 },
-  hashRow:         { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 11, gap: 8 },
-  hashInput:       { fontFamily: fontFamily.sansMd, fontSize: 13, padding: 0, flex: 1 },
+  hashRow:         { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
+  hashInput:       { fontFamily: fontFamily.sansMd, fontSize: 14, padding: 0, flex: 1 },
   startBtn:        { padding: 13, borderRadius: 14, alignItems: 'center' },
   startBtnText:    { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
   channelBtnRow:   { flexDirection: 'row', gap: 6, paddingHorizontal: 14, paddingBottom: 10 },
   channelActionBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14 },
   channelActionText:{ fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase' },
 
-  // ── Search ───────────────────────────────────────────────────────────────────
-  searchWrap:   { paddingHorizontal: 14, paddingBottom: 10 },
-  searchBox:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 13, paddingVertical: 11, borderRadius: 14 },
-  searchInput:  { flex: 1, fontSize: 14, fontFamily: fontFamily.sansMd, padding: 0 },
 
   // ── List ─────────────────────────────────────────────────────────────────────
   listContent:  { paddingBottom: 28, paddingHorizontal: 6 },

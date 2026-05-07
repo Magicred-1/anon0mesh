@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   InteractionManager,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
 import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
@@ -41,6 +41,12 @@ function peerToMapNode(p: LxmfPeer): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const { isRunning, isNativeAvailable, isAnnouncing, bleActive, peers, startBLE } = useLxmfContext();
+
+  const router = useRouter();
+
+  const handleDirectMessage = useCallback((destHash: string, handle: string) => {
+    router.navigate({ pathname: '/(tabs)', params: { destHash, handle } });
+  }, [router]);
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
@@ -124,7 +130,7 @@ export default function NodesScreen() {
 
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
-          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} onExpandChange={setMapExpanded} />
+          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} onExpandChange={setMapExpanded} onDirectMessage={handleDirectMessage} />
           {mapExpanded && <View style={S.filterOverlay}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterRow}>
               {FILTERS.map(f => {
@@ -158,7 +164,6 @@ export default function NodesScreen() {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.bottomScroll}>
           <BeaconRegistry />
-          <PendingCosigns items={pendingCosigns} onSign={handleSign} onReject={handleReject} />
         </ScrollView>
 
       </SafeAreaView>

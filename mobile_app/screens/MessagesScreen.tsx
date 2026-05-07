@@ -1,7 +1,7 @@
 import "@/polyfills";
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   View, ScrollView, Text, Image, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Dimensions,
@@ -271,6 +271,9 @@ export default function MessagesScreen() {
   const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
   const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
+
+  const { destHash: paramDestHash, handle: paramHandle } = useLocalSearchParams<{ destHash?: string; handle?: string }>();
+  const handledDeepLinkRef = useRef<string | null>(null);
 
   const screenW = useRef(Dimensions.get('window').width).current;
   const chatTx  = useSharedValue(screenW); // start off-screen; slides in on peer pick
@@ -553,6 +556,25 @@ export default function MessagesScreen() {
     }
     return () => { messagesFocusedRef.current = false; };
   }, [lxmfPeers, pickPeer, getDisplayName]));
+
+  // Open a thread when navigated from another screen (e.g. Nodes DM button)
+  useFocusEffect(useCallback(() => {
+    if (!paramDestHash || !paramHandle) return;
+    if (handledDeepLinkRef.current === paramDestHash) return;
+    handledDeepLinkRef.current = paramDestHash;
+    const lxmfPeer = lxmfPeers.find(p => p.destHash === paramDestHash);
+    pickPeer(lxmfPeer ? lxmfPeerToPeer(lxmfPeer) : {
+      handle:   paramHandle,
+      hops:     0,
+      iface:    'TCP',
+      online:   true,
+      unread:   0,
+      last:     '—',
+      time:     '—',
+      beacon:   false,
+      destHash: paramDestHash,
+    });
+  }, [paramDestHash, paramHandle, lxmfPeers, pickPeer]));
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
