@@ -20,6 +20,7 @@ import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
+import { useAddressBook } from "@/src/services/addressBook";
 import { DEMO_MODE, DEMO_RECIPIENT_ADDRESS } from "@/src/utils/demoMode";
 import { fontFamily as FF, useTheme } from "@/theme";
 
@@ -92,6 +93,7 @@ export function RecipientPicker() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
   const { tokens } = useWalletBalance();
+  const { entries: addressBook } = useAddressBook();
   const token: TokenOption = tokenByName(selectedSymbol, tokens);
 
   const trimmedAddress = address.trim();
@@ -129,6 +131,11 @@ export function RecipientPicker() {
   function handleDemoFill() {
     haptics.tap();
     setAddress(DEMO_RECIPIENT_ADDRESS);
+  }
+
+  function handleSelectRecent(pubkey: string) {
+    haptics.select();
+    setAddress(pubkey);
   }
 
   return (
@@ -185,6 +192,49 @@ export function RecipientPicker() {
                 <Feather name="chevron-down" size={16} color={colors.primary} />
               </View>
             </Pressable>
+
+            {addressBook.length > 0 ? (
+              <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+                <Text style={[S.tileLabel, { color: colors.textTertiary }]}>RECENT</Text>
+                <View style={S.recentList}>
+                  {addressBook.slice(0, 5).map((entry) => (
+                    <Pressable
+                      accessibilityLabel={`Use recent recipient ${entry.label}`}
+                      accessibilityRole="button"
+                      key={entry.pubkey}
+                      onPress={() => handleSelectRecent(entry.pubkey)}
+                      style={({ pressed }) => [
+                        S.recentRow,
+                        {
+                          backgroundColor: colors.surface2,
+                          borderColor: colors.border,
+                          opacity: pressed ? 0.72 : 1,
+                        },
+                      ]}
+                    >
+                      <View style={S.recentMeta}>
+                        <Text numberOfLines={1} style={[S.recentLabel, { color: colors.textPrimary }]}>
+                          {entry.label}
+                        </Text>
+                        <Text numberOfLines={1} style={[S.recentAddress, { color: colors.textTertiary }]}>
+                          {shortAddress(entry.pubkey)}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          S.recentCount,
+                          { backgroundColor: colors.primarySubtle, borderColor: "rgba(0,229,255,0.25)" },
+                        ]}
+                      >
+                        <Text style={[S.recentCountText, { color: colors.primary }]}>
+                          {entry.count}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
 
             {/* ── Address tile ── */}
             <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
@@ -351,6 +401,47 @@ const S = StyleSheet.create({
   balanceChipText: {
     fontFamily: FF.mono,
     fontSize: 12,
+  },
+
+  // recent recipients
+  recentList: {
+    gap: 8,
+  },
+  recentRow: {
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 10,
+    minHeight: 52,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  recentMeta: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  recentLabel: {
+    fontFamily: FF.sansSb,
+    fontSize: 13,
+  },
+  recentAddress: {
+    fontFamily: FF.mono,
+    fontSize: 11,
+  },
+  recentCount: {
+    alignItems: "center",
+    borderRadius: 10,
+    borderWidth: 0.5,
+    height: 28,
+    justifyContent: "center",
+    minWidth: 28,
+    paddingHorizontal: 8,
+  },
+  recentCountText: {
+    fontFamily: FF.mono,
+    fontSize: 11,
   },
 
   // address tile

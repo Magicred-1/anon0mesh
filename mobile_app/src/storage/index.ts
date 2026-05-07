@@ -26,6 +26,8 @@ export const SecureKeys = {
   WALLET_AES_KEY:   'anon_wallet_aes_v1',
   WALLET_PUBKEY:    'anon_wallet_pubkey_v1',
   WALLET_MARKER:    'anon_wallet_marker_v1',
+  // Wallet address book — local-only recent recipients, never synced
+  ADDRESS_BOOK:     'address_book_v1',
   // MWA auth token
   MWA_TOKEN:        'mwa_auth_token_v1',
 } as const;

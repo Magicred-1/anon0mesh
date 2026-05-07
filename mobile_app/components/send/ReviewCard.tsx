@@ -9,6 +9,7 @@ import { SendScaffold } from "@/components/send/SendScaffold";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
+import { saveAddressBookRecipient } from "@/src/services/addressBook";
 import {
   estimateSplTransferFeeLamports,
   estimateSolTransferFeeLamports,
@@ -213,6 +214,8 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
               mintAddress: normalizedMint,
               decimals: tokenDecimals,
             });
+
+      await saveAddressBookRecipient(to);
 
       router.push({
         pathname: "/send/success",
