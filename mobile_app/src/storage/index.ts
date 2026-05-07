@@ -28,6 +28,8 @@ export const SecureKeys = {
   WALLET_MARKER:    'anon_wallet_marker_v1',
   // Wallet address book — local-only recent recipients, never synced
   ADDRESS_BOOK:     'address_book_v1',
+  // First-run education gate — kept local to this install
+  TUTORIAL_COMPLETED: 'tutorial_completed',
   // MWA auth token
   MWA_TOKEN:        'mwa_auth_token_v1',
 } as const;

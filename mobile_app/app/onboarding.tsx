@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useWallet } from '@/context/WalletContext';
 import { useLxmfContext } from '@/context/LxmfContext';
@@ -12,6 +12,9 @@ import {
   LoadingOverlay,
 } from '@/components/onboarding';
 import { BG } from '@/components/onboarding/constants';
+import { hasCompletedTutorial } from '@/src/services/tutorialState';
+
+const TUTORIAL_ROUTE = '/tutorial' as Href;
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -46,9 +49,21 @@ const overlayOpacity   = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!isConnected || !publicKey) return;
-    const delay = 0;
-    const t = setTimeout(() => router.replace('/(tabs)'), delay);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      hasCompletedTutorial()
+        .then((completed) => {
+          if (cancelled) return;
+          router.replace(completed ? '/(tabs)' : TUTORIAL_ROUTE);
+        })
+        .catch(() => {
+          if (!cancelled) router.replace(TUTORIAL_ROUTE);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [isConnected, publicKey, router]);
 
   const handleCreate = useCallback(async () => {

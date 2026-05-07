@@ -91,6 +91,7 @@ function AppShell() {
         <Stack initialRouteName="index" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="onboarding" />
+          <Stack.Screen name="tutorial" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
           <Stack.Screen name="receive" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="send/recipient" />
