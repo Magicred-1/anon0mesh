@@ -1,5 +1,5 @@
 import React, { memo, useState, useRef, useCallback, useEffect } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
@@ -36,6 +36,8 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const [modal, setModal]         = useState(false);
   const [stakeModal, setStakeModal] = useState(false);
   const [stakeAmt, setStakeAmt]   = useState(0.5);
+  const [rawAmt, setRawAmt]       = useState('0.5');
+  const amtInputRef = useRef<TextInput>(null);
   const autoActivatedRef  = useRef(false);
   const sheetAnim         = useRef(new Animated.Value(0)).current;
   const stakeAnim         = useRef(new Animated.Value(0)).current;
@@ -56,6 +58,12 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
       .start(() => setModal(false));
   }, [sheetAnim]);
 
+  const commitAmt = useCallback((v: number) => {
+    const n = Math.max(0.5, Number.parseFloat(Math.max(0.5, v).toFixed(1)));
+    setStakeAmt(n);
+    setRawAmt(n.toFixed(1));
+  }, []);
+
   const openStake = useCallback(() => {
     setStakeModal(true);
     Animated.spring(stakeAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
@@ -75,7 +83,8 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const yieldAmt  = (STAKE_NUM * JITO_APY).toFixed(4);
   const repScore  = Math.round(STAKE_NUM * 200);
 
-  const newTotal = STAKE_NUM + stakeAmt;
+  const previewAmt = Math.max(0.5, Number.parseFloat(rawAmt) || stakeAmt);
+  const newTotal = STAKE_NUM + previewAmt;
   const newYield = (newTotal * JITO_APY).toFixed(4);
   const newRep   = Math.round(newTotal * 200);
 
@@ -94,7 +103,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
             <>
               <View style={S.hero}>
                 <View style={S.heroAmt}>
-                  <SolanaIcon size={16} color={colors.primary} />
+                  <SolanaIcon size={26} color={colors.primary} />
                   <Text style={[S.heroNum, { color: colors.textPrimary }]}>{earned.toFixed(6)}</Text>
                 </View>
                 <Text style={[S.heroLabel, { color: colors.textTertiary }]}>SOL EARNED</Text>
@@ -200,7 +209,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 
       {/* ── Stake Modal ── */}
       <Modal visible={stakeModal} transparent animationType="none" onRequestClose={dismissStake}>
-        <View style={StyleSheet.absoluteFill}>
+        <KeyboardAvoidingView style={StyleSheet.absoluteFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.75)', opacity: stakeOvOp }]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={dismissStake} />
           </Animated.View>
@@ -218,19 +227,29 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
             {/* Stepper */}
             <View style={[S.stepper, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
               <Pressable
-                onPress={() => setStakeAmt(a => Math.max(0.5, Number.parseFloat((a - 0.5).toFixed(1))))}
+                onPress={() => commitAmt(stakeAmt - 0.5)}
                 hitSlop={16}
                 style={({ pressed }) => [S.stepBtn, { opacity: pressed || stakeAmt <= 0.5 ? 0.35 : 1 }]}
               >
                 <Feather name="minus" size={20} color={colors.textPrimary} />
               </Pressable>
               <View style={S.stepCenter}>
-                <SolanaIcon size={14} color={colors.primary} />
-                <Text style={[S.stepAmt, { color: colors.textPrimary }]}>{stakeAmt.toFixed(1)}</Text>
+                <SolanaIcon size={28} color={colors.primary} />
+                <TextInput
+                  ref={amtInputRef}
+                  style={[S.stepAmt, { color: colors.textPrimary }]}
+                  value={rawAmt}
+                  onChangeText={setRawAmt}
+                  onBlur={() => commitAmt(Number.parseFloat(rawAmt) || 0.5)}
+                  onSubmitEditing={() => commitAmt(Number.parseFloat(rawAmt) || 0.5)}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  selectTextOnFocus
+                />
                 <Text style={[S.stepUnit, { color: colors.textTertiary }]}>SOL</Text>
               </View>
               <Pressable
-                onPress={() => setStakeAmt(a => Number.parseFloat((a + 0.5).toFixed(1)))}
+                onPress={() => commitAmt(stakeAmt + 0.5)}
                 hitSlop={16}
                 style={({ pressed }) => [S.stepBtn, { opacity: pressed ? 0.35 : 1 }]}
               >
@@ -241,14 +260,14 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
             {/* Impact rows */}
             <View style={[S.impactBox, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
               <View style={[S.impactRow, { borderBottomColor: colors.borderSubtle }]}>
-                <Feather name="shield" size={12} color={colors.primary} />
+                <Feather name="shield" size={14} color={colors.primary} />
                 <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Rep score</Text>
                 <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>{repScore}</Text>
                 <Feather name="arrow-right" size={10} color={colors.textTertiary} />
                 <Text style={[S.impactRowAfter, { color: colors.primary }]}>{newRep}</Text>
               </View>
               <View style={S.impactRow}>
-                <Feather name="trending-up" size={12} color={colors.primary} />
+                <Feather name="trending-up" size={14} color={colors.primary} />
                 <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Yield / yr</Text>
                 <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>+{yieldAmt}</Text>
                 <Feather name="arrow-right" size={10} color={colors.textTertiary} />
@@ -264,7 +283,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               <Text style={[S.actionText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
             </Pressable>
           </Animated.View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -279,7 +298,7 @@ const S = StyleSheet.create({
   accentBar:   { height: 2 },
 
   hero:        { alignItems: 'center', paddingVertical: 28, gap: 6 },
-  heroAmt:     { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  heroAmt:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
   heroNum:     { fontFamily: fontFamily.sansBold, fontSize: 28, letterSpacing: -1 },
   heroLabel:   { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase' },
 
@@ -319,7 +338,7 @@ const S = StyleSheet.create({
   stepper:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                 borderRadius: 18, borderWidth: 0.5, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 14 },
   stepBtn:    { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  stepCenter: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  stepCenter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepAmt:    { fontFamily: fontFamily.sansBold, fontSize: 36, letterSpacing: -1.5 },
   stepUnit:   { fontFamily: fontFamily.sansMd, fontSize: 14, letterSpacing: 0.5, marginBottom: 2 },
 

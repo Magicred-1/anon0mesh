@@ -3,14 +3,13 @@ import {
   View, Text, ScrollView, Pressable, StyleSheet,
   Platform, PermissionsAndroid, InteractionManager,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, useTheme } from '@/theme';
 import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
-import { PendingCosigns, type PendingCosign } from '@/components/nodes/PendingCosigns';
 import { PulseDot }        from '@/components/ui/PulseDot';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
@@ -40,6 +39,12 @@ function peerToMapNode(p: LxmfPeer): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const { isRunning, isNativeAvailable, isAnnouncing, bleActive, peers, startBLE } = useLxmfContext();
+
+  const router = useRouter();
+
+  const handleDirectMessage = useCallback((destHash: string, handle: string) => {
+    router.navigate({ pathname: '/(tabs)', params: { destHash, handle } });
+  }, [router]);
 
   const [filter,         setFilter]         = useState<Filter>('all');
   const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
@@ -112,15 +117,6 @@ export default function NodesScreen() {
   }, [listNodes]);
   const loading = !isRunning || (isRunning && peers.length === 0);
 
-  const [pendingCosigns, setPendingCosigns] = useState<PendingCosign[]>([
-    { id: '1', txHash: 'A3f9c2e8b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3',  amountSol: 0.25,  feeSol: 0.000312, fromHash: 'B7d2a1f4c9e8b3a7d2a1f4c9e8b3a7d2', requestedAt: Date.now() - 90_000 },
-    { id: '2', txHash: 'C5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1', amountSol: 1.05,  feeSol: 0.000287, fromHash: 'D4b9c3e2a1f8d4b9c3e2a1f8d4b9c3e2', requestedAt: Date.now() - 240_000 },
-    { id: '3', txHash: 'E8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0', amountSol: 0.005, feeSol: 0.000198, fromHash: 'F2c8a7e4b1d0f2c8a7e4b1d0f2c8a7e4', requestedAt: Date.now() - 15_000 },
-  ]);
-
-  const handleSign   = useCallback((id: string) => setPendingCosigns(p => p.filter(x => x.id !== id)), []);
-  const handleReject = useCallback((id: string) => setPendingCosigns(p => p.filter(x => x.id !== id)), []);
-
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -132,7 +128,7 @@ export default function NodesScreen() {
 
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
-          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} onExpandChange={setMapExpanded} />
+          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} onExpandChange={setMapExpanded} onDirectMessage={handleDirectMessage} />
           {mapExpanded && <View style={S.filterOverlay}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterRow}>
               {FILTERS.map(f => {
@@ -166,7 +162,6 @@ export default function NodesScreen() {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.bottomScroll}>
           <BeaconRegistry />
-          <PendingCosigns items={pendingCosigns} onSign={handleSign} onReject={handleReject} />
         </ScrollView>
 
       </SafeAreaView>

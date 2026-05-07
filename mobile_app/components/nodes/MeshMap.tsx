@@ -4,7 +4,7 @@ import {
   View, Text, Pressable, StyleSheet, Animated, Easing, LayoutChangeEvent,
   Dimensions, Modal,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue, useAnimatedStyle, runOnJS,
@@ -30,14 +30,15 @@ const CROSS_RING_GAP = NODE_R * 2 + 12; // min radial distance between adjacent 
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Props {
-  nodes:            NodeData[];
-  selected:         string | null;
-  onSelect:         (h: string | null) => void;
-  syncing?:         boolean;
-  isAnnouncing?:    boolean;
-  selStripBottom?:  number;
-  filterRow?:       React.ReactNode;
-  onExpandChange?:  (expanded: boolean) => void;
+  nodes:               NodeData[];
+  selected:            string | null;
+  onSelect:            (h: string | null) => void;
+  syncing?:            boolean;
+  isAnnouncing?:       boolean;
+  selStripBottom?:     number;
+  filterRow?:          React.ReactNode;
+  onExpandChange?:     (expanded: boolean) => void;
+  onDirectMessage?:    (destHash: string, handle: string) => void;
 }
 
 // Ghost placeholder positions — 3 equidistant nodes on ring-1 (radius 90, phase -90°)
@@ -145,38 +146,42 @@ interface PeerNodeProps {
   textTertiary: string;
 }
 
+const IFACE_ICON: Record<string, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
+  TCP:   'wifi',
+  BLE:   'bluetooth',
+  RNode: 'radio-tower',
+};
+
 const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, textTertiary }: PeerNodeProps) {
-  const online = n.online !== false;
-  const avatar = nodeAvatar(n.handle);
-  const D      = r * 2;
+  const online     = n.online !== false;
+  const avatar     = nodeAvatar(n.handle);
+  const D          = r * 2;
+  let borderW = 0.5;
+  if (isSelected) borderW = 1.5;
+  else if (online) borderW = 1;
+  const borderClr  = isSelected || online ? ifcClr : 'rgba(255,255,255,0.10)';
   return (
     <View style={{ position: 'absolute', left: x - r - 6, top: y - r - 6, padding: 6, opacity: online ? 1 : 0.32 }}>
-      {isSelected && (
-        <View style={{
-          position: 'absolute', left: 2, top: 2,
-          width: D + 8, height: D + 8, borderRadius: r + 4,
-          borderWidth: 1.5, borderColor: ifcClr,
-        }} />
-      )}
       <View style={{
         width: D, height: D, borderRadius: r,
         backgroundColor: avatar.color,
-        borderWidth: online ? 1.5 : 0.5,
-        borderColor: online ? ifcClr : 'rgba(255,255,255,0.10)',
+        borderWidth: borderW,
+        borderColor: borderClr,
         alignItems: 'center', justifyContent: 'center',
       }}>
         <Text style={{ fontSize: r * 0.9, color: '#fff', fontWeight: '700', includeFontPadding: false }}>
           {avatar.initial}
         </Text>
       </View>
-      {online && (
-        <View style={{
-          position: 'absolute', right: 4, top: 4,
-          width: 5, height: 5, borderRadius: 2.5,
-          backgroundColor: ifcClr,
-          borderWidth: 1, borderColor: '#000c14',
-        }} />
-      )}
+      {/* Interface type badge — top-right corner */}
+      <View style={{
+        position: 'absolute', right: 2, top: 2,
+        width: 13, height: 13, borderRadius: 3,
+        backgroundColor: 'rgba(0,12,20,0.72)',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <MaterialCommunityIcons name={IFACE_ICON[n.iface] ?? 'wifi'} size={8} color={ifcClr} />
+      </View>
       <Text style={[S.label, { color: isSelected ? ifcClr : textTertiary, left: -2, top: D + 7, width: D + 12, textAlign: 'center' }]}>
         {n.handle.replace('@', '').slice(0, 10)}
       </Text>
@@ -185,7 +190,7 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow, onExpandChange }: Props) {
+export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow, onExpandChange, onDirectMessage }: Props) {
   const { colors } = useTheme();
   const insets     = useSafeAreaInsets();
 
@@ -451,6 +456,16 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
       <Text style={[S.stripMeta, { color: colors.textTertiary }]}>
         {`${sel.node.iface}  ·  ${sel.node.hops} HOP${sel.node.hops === 1 ? '' : 'S'}  ·  ${sel.node.latency}`}
       </Text>
+      {onDirectMessage && (
+        <Pressable
+          onPress={() => onDirectMessage(sel.node.destHash ?? '', sel.node.handle)}
+          hitSlop={8}
+          style={({ pressed }) => [S.dmBtn, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '55', opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Feather name="message-circle" size={10} color={colors.primary} />
+          <Text style={[S.dmTxt, { color: colors.primary }]}>DM</Text>
+        </Pressable>
+      )}
       <Pressable onPress={() => onSelect(null)} hitSlop={10}>
         <Feather name="x" size={11} color={colors.textTertiary} />
       </Pressable>
@@ -572,6 +587,9 @@ const S = StyleSheet.create({
                   paddingHorizontal: 12, paddingVertical: 6, borderTopWidth: 0.5 },
   stripHandle: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 0.5 },
   stripMeta:   { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1 },
+  dmBtn:       { flexDirection: 'row', alignItems: 'center', gap: 4,
+                 paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 0.5 },
+  dmTxt:       { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1, textTransform: 'uppercase' },
 
   fsRoot:      { flex: 1 },
   fsHeader:    { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.5,
