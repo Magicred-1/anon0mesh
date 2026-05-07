@@ -9,12 +9,16 @@ import { SendScaffold } from "@/components/send/SendScaffold";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
+import { saveAddressBookRecipient } from "@/src/services/addressBook";
 import {
+  estimateSplTransferFeeLamports,
   estimateSolTransferFeeLamports,
+  sendSplTransfer,
   sendSolTransfer,
   TransactionNotApprovedError,
 } from "@/src/services/sendTransaction";
 import { DEMO_MODE } from "@/src/utils/demoMode";
+import { summarizeError } from "@/src/utils/errors";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
@@ -66,6 +70,9 @@ interface ReviewCardProps {
   readonly to: string;
   readonly amount: string;
   readonly symbol: string;
+  readonly mintAddress?: string | string[];
+  readonly decimals?: string | string[];
+  readonly programId?: string | string[];
 }
 
 // ── DetailRow ─────────────────────────────────────────────────────────────────
@@ -104,37 +111,54 @@ function DetailRow({ icon, label, secondary, value, valueComponent, colors }: De
 
 // ── ReviewCard ────────────────────────────────────────────────────────────────
 
-export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
+export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programId }: ReviewCardProps) {
   const router = useRouter();
   const { colors } = useTheme();
   const { wallet } = useWallet();
   const { adapter: rpcAdapter, mode: networkMode } = useNetworkMode();
 
-  const [stealthEnabled, setStealthEnabled] = useState(false);
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
   const [isConfirming, setIsConfirming] = useState(false);
   const [sliderResetKey, setSliderResetKey] = useState(0);
+  const normalizedMint = typeof mintAddress === "string" ? mintAddress : "";
+  const normalizedProgramId = typeof programId === "string" ? programId : "";
+  const tokenDecimals =
+    typeof decimals === "string" && decimals.length > 0 ? Number.parseInt(decimals, 10) : 6;
+  const isToken2022 = normalizedProgramId === "spl-token-2022";
 
   useEffect(() => {
     let cancelled = false;
 
     async function estimateFee() {
-      if (symbol !== "SOL" || !wallet) {
+      if (!wallet) {
         setFeeLabel("Fee unavailable");
         return;
       }
 
       setFeeLabel("Calculating...");
       try {
-        const lamports = await withTimeout(
-          estimateSolTransferFeeLamports({
-            walletAdapter: wallet,
-            recipientAddress: to,
-            amountSOL: Number.parseFloat(amount),
-          }),
-          FEE_ESTIMATE_TIMEOUT_MS,
-        );
+        const lamports =
+          symbol === "SOL"
+            ? await withTimeout(
+                estimateSolTransferFeeLamports({
+                  walletAdapter: wallet,
+                  recipientAddress: to,
+                  amountSOL: amount,
+                }),
+                FEE_ESTIMATE_TIMEOUT_MS,
+              )
+            : await withTimeout(
+                estimateSplTransferFeeLamports({
+                  walletAdapter: wallet,
+                  recipientAddress: to,
+                  amount,
+                  mintAddress: normalizedMint,
+                  decimals: tokenDecimals,
+                  programId: normalizedProgramId,
+                }),
+                FEE_ESTIMATE_TIMEOUT_MS,
+              );
         if (!cancelled) setFeeLabel(formatSolFee(lamports));
       } catch {
         if (!cancelled) setFeeLabel("Fee unavailable");
@@ -145,13 +169,25 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
     return () => {
       cancelled = true;
     };
-  }, [amount, symbol, to, wallet]);
+  }, [amount, normalizedMint, normalizedProgramId, symbol, to, tokenDecimals, wallet]);
 
   async function handleConfirm() {
     if (isConfirming) return;
 
-    if (symbol !== "SOL") {
-      setError({ kind: "unsupported", message: `${symbol} transfers are not implemented yet` });
+    if (symbol !== "SOL" && !normalizedMint) {
+      setError({
+        kind: "unsupported",
+        message: `${symbol} is missing its token mint. Refresh balances and try again.`,
+      });
+      setSliderResetKey((k) => k + 1);
+      return;
+    }
+
+    if (symbol !== "SOL" && isToken2022) {
+      setError({
+        kind: "unsupported",
+        message: `${symbol} is a Token-2022 mint. Token-2022 sends are not supported yet — coming soon.`,
+      });
       setSliderResetKey((k) => k + 1);
       return;
     }
@@ -175,25 +211,49 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
     setIsConfirming(true);
 
     try {
-      const result = await sendSolTransfer({
-        walletAdapter: wallet,
-        rpcAdapter,
-        recipientAddress: to,
-        amountSOL: Number.parseFloat(amount),
-      });
+      const result =
+        symbol === "SOL"
+          ? await sendSolTransfer({
+              walletAdapter: wallet,
+              rpcAdapter,
+              recipientAddress: to,
+              amountSOL: amount,
+            })
+          : await sendSplTransfer({
+              walletAdapter: wallet,
+              rpcAdapter,
+              recipientAddress: to,
+              amount,
+              mintAddress: normalizedMint,
+              decimals: tokenDecimals,
+              programId: normalizedProgramId,
+            });
+
+      await saveAddressBookRecipient(to);
 
       router.push({
         pathname: "/send/success",
         params: { amount, symbol, txId: result.signature },
       });
     } catch (err: unknown) {
+      const summary = summarizeError(err, "Transaction failed before the wallet returned a reason");
+      console.error("[send/ReviewCard] transfer failed", {
+        message: summary.message,
+        name: summary.name ?? null,
+        code: summary.code ?? null,
+        raw: summary.raw ?? null,
+        cause: summary.cause ?? null,
+        symbol,
+        mintAddress: normalizedMint || null,
+        networkMode: rpcAdapter.mode,
+      });
       setError(
         err instanceof TransactionNotApprovedError
           ? {
               kind: "approval",
               message: "Approve the transaction in your wallet to submit it.",
             }
-          : { kind: "send", message: err instanceof Error ? err.message : "Send failed" },
+          : { kind: "send", message: summary.message },
       );
       setSliderResetKey((k) => k + 1);
     } finally {
@@ -288,24 +348,29 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
           </View>
         ) : null}
 
-        {/* Stealth toggle tile */}
+        {/* Stealth preview tile */}
         <Pressable
-          accessibilityLabel={stealthEnabled ? "Disable stealth default" : "Enable stealth default"}
+          accessibilityLabel="Stealth transfer preview is not active"
           accessibilityRole="button"
-          onPress={() => setStealthEnabled((s) => !s)}
+          onPress={() => {
+            setError({
+              kind: "unsupported",
+              message: "Stealth transfer is a preview only. This send will use the standard devnet transfer path.",
+            });
+          }}
           style={[S.tile, S.stealthTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}
         >
           <View style={S.stealthLeft}>
             <Feather
               name="eye-off"
               size={16}
-              color={stealthEnabled ? colors.accent : colors.textTertiary}
+              color={colors.textTertiary}
             />
-            <Text style={[S.stealthLabel, { color: stealthEnabled ? colors.accent : colors.textPrimary }]}>
-              Stealth
+            <Text style={[S.stealthLabel, { color: colors.textPrimary }]}>
+              Stealth preview
             </Text>
           </View>
-          <Pill label={stealthEnabled ? "On" : "Off"} tone={stealthEnabled ? "purple" : "neutral"} />
+          <Pill label="Not active" tone="neutral" />
         </Pressable>
 
         {/* Error */}

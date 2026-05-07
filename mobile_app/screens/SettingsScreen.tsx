@@ -7,7 +7,7 @@ import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
 import { useWallet } from '@/context/WalletContext';
 import { useLxmfContext } from '@/context/LxmfContext';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useNotificationEnabled } from '@/hooks/useNotificationEnabled';
@@ -23,6 +23,7 @@ import {
 
 const SCREEN_W    = Dimensions.get('window').width;
 const CARD_OUTER  = 32; // 16px padding each side
+const CONTACTS_ROUTE = '/contacts' as Href;
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -230,8 +231,9 @@ export default function SettingsScreen() {
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
               <SettingsRow icon="lock" label="biometric lock" sub="face id / touch id · required for transactions" right={<Toggle on={biometric} onChange={v => { if (v) setBiometric(true); else setDisableBioOpen(true); }} />} />
+              <SettingsRow icon="book-open" label="address book" sub="local recipients · labels never sync" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => router.push(CONTACTS_ROUTE)} />
               <SettingsRow icon="refresh-cw" label="rotate identity keys" sub="new signing key · your handle stays the same" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setRotateOpen(true)} />
-              <SettingsRow icon="upload"     label="export wallet key" sub="back up your private key · never share it" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
+              <SettingsRow icon="key"        label="reveal recovery key" sub="biometric required · store offline only" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
             </View>
           </View>
 

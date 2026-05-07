@@ -58,6 +58,13 @@ const E = StyleSheet.create({
   text: { flex: 1, fontSize: 12, lineHeight: 17 },
 });
 
+function NotificationBridge({ onInApp }: { readonly onInApp: (n: NotificationPayload) => void }) {
+  const [notifsEnabled] = useNotificationEnabled();
+  useMessageNotifications(onInApp, notifsEnabled);
+  usePeerCountNotification(notifsEnabled);
+  return null;
+}
+
 function AppShell() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -77,9 +84,6 @@ function AppShell() {
   }, []);
 
   useBackgroundService();
-  const [notifsEnabled] = useNotificationEnabled();
-  useMessageNotifications(handleInApp, notifsEnabled);
-  usePeerCountNotification(notifsEnabled);
 
   return (
     <View style={[R.appRoot, { backgroundColor: colors.background }]}>
@@ -87,7 +91,9 @@ function AppShell() {
         <Stack initialRouteName="index" screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="onboarding" />
+          <Stack.Screen name="tutorial" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="contacts" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="receive" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="send/recipient" />
           <Stack.Screen name="send/amount" />
@@ -98,6 +104,7 @@ function AppShell() {
       </NavThemeProvider>
 
       <LxmfErrorBanner />
+      <NotificationBridge onInApp={handleInApp} />
 
       <InAppNotificationBanner
         notification={activeNotif}

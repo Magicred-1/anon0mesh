@@ -83,6 +83,13 @@ jobs:
         id: version
         run: echo "version=$(jq -r '.expo.version' mobile_app/app.json)" >> $GITHUB_OUTPUT
 
+      - name: Disable ART profile compilation
+        working-directory: mobile_app/android
+        run: |
+          echo "" >> app/build.gradle
+          echo "// CI: profman absent on ubuntu-latest — skip ART profile tasks" >> app/build.gradle
+          echo "tasks.configureEach { if (name.contains('ArtProfile')) enabled = false }" >> app/build.gradle
+
       - name: Build release APK
         run: |
           chmod +x gradlew

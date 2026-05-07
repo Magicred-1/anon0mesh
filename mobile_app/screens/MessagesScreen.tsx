@@ -1,3 +1,5 @@
+import "@/polyfills";
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {

@@ -42,8 +42,8 @@ export const ReceivePanel = memo(function ReceivePanel() {
       </View>
 
       <View style={[S.infoCard, accentGlass]}>
-        <Feather name="lock" size={12} color={colors.primary} />
-        <Text style={[S.infoText, { color: colors.primary }]}>CONFIDENTIAL · MPC-SHIELDED RECEIVE</Text>
+        <Feather name="radio" size={12} color={colors.primary} />
+        <Text style={[S.infoText, { color: colors.primary }]}>SHARE THIS QR - YOUR FIRST INBOUND SHOWS IN ACTIVITY</Text>
       </View>
 
       <Pressable onPress={copy} style={[S.copyBtn, softGlass]}>

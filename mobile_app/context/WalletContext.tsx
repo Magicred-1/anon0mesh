@@ -182,6 +182,7 @@ export function WalletProvider({ children, autoInitialize = true }: WalletProvid
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg === 'Authentication cancelled') return null;
+      console.error('[wallet/exportPrivateKey] failed:', msg, err);
       Alert.alert('Export failed', msg);
       return null;
     }

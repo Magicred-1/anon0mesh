@@ -54,7 +54,8 @@ export const PendingCosigns = memo(function PendingCosigns({ items, onSign, onRe
   const isEmpty = items.length === 0;
 
   return (
-    <View style={S.wrap}>
+    <View style={[S.wrap, { paddingHorizontal: H_PAD }]}>
+      {/* Section header */}
       <View style={S.labelRow}>
         <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>PENDING CO-SIGNS</Text>
         {!isEmpty && (
@@ -114,7 +115,7 @@ function EmptyState() {
   const glass      = useGlass();
   return (
     <View style={[S.emptyCard, glass, { borderColor: colors.border }]}>
-      <MaterialCommunityIcons name="bird" size={18} color={colors.textTertiary} />
+      <MaterialCommunityIcons name="bird" size={20} color={colors.textTertiary} />
       <Text style={[S.emptyText, { color: colors.textTertiary }]}>No pending requests</Text>
     </View>
   );

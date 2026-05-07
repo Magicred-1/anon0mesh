@@ -1,6 +1,6 @@
 type Iface = 'TCP' | 'BLE' | 'RNode';
 
-export const NODES: Array<{ handle: string; hops: number; iface: Iface; signal: number; latency: string; beacon?: boolean; online?: boolean; weak?: boolean }> = [
+export const NODES: { handle: string; hops: number; iface: Iface; signal: number; latency: string; beacon?: boolean; online?: boolean; weak?: boolean }[] = [
   { handle: '@beacon_prime', hops: 0, iface: 'TCP',   signal: 4, beacon: true,  latency: '12ms'  },
   { handle: '@node_a1b2',    hops: 1, iface: 'TCP',   signal: 4,                latency: '48ms'  },
   { handle: '@node_7f3a',    hops: 3, iface: 'RNode', signal: 3, online: true,  latency: '112ms' },

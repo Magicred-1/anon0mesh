@@ -1,3 +1,5 @@
+import "@/polyfills";
+
 import { PublicKey } from '@solana/web3.js';
 import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
 import { SecureKeys, secureGet, secureSet, secureDelete } from '@/src/storage';

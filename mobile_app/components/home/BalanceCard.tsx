@@ -38,7 +38,7 @@ function formatTokenAmount(amount: number, maxDecimals: number): string {
 }
 
 export function BalanceCard() {
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const { colors, spacing, fontFamily, fontSize } = useTheme();
   const { hidden, toggle } = useHideBalance();
   const { isConnected, publicKey } = useWallet();
   const { solBalance, tokens, loading, lastFetched } = useWalletBalance();
@@ -136,6 +136,7 @@ export function BalanceCard() {
           {splTokens.map((token: TokenBalance) => {
             const color = TOKEN_COLORS[token.symbol] ?? colors.textSecondary;
             const amount = hidden ? HIDDEN_MASK : formatTokenAmount(token.uiAmount, token.maxDecimals);
+            const isToken2022 = token.programId === "spl-token-2022";
             return (
               <View key={token.mintAddress ?? token.symbol} style={[styles.tokenCard, { backgroundColor: colors.surface1, borderColor: colors.borderSubtle }]}>
                 <View style={[styles.dot, { backgroundColor: color + "22" }]}>
@@ -150,6 +151,11 @@ export function BalanceCard() {
                 <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: 10, marginTop: 1 }}>
                   {token.name}
                 </Text>
+                {isToken2022 ? (
+                  <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.mono, fontSize: 9, letterSpacing: 0.6, marginTop: 4, opacity: 0.8 }}>
+                    SPL-2022 · view only
+                  </Text>
+                ) : null}
               </View>
             );
           })}

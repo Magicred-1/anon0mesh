@@ -227,7 +227,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
             {/* Stepper */}
             <View style={[S.stepper, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
               <Pressable
-                onPress={() => commitAmt(stakeAmt - 0.5)}
+                onPress={() => setStakeAmt(a => Math.max(0.5, Number.parseFloat((a - 0.5).toFixed(1))))}
                 hitSlop={16}
                 style={({ pressed }) => [S.stepBtn, { opacity: pressed || stakeAmt <= 0.5 ? 0.35 : 1 }]}
               >
