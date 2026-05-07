@@ -9,7 +9,11 @@ export interface SolanaPayUriParams {
 const AMOUNT_RE = /^\d+(\.\d{1,9})?$/;
 
 function normalizeAmount(amount: string | undefined): string | null {
-  const trimmed = amount?.trim();
+  // Solana Pay spec mandates "." as decimal separator. Locales that surface
+  // a comma decimal-pad (de-DE, fr-FR, pt-BR, es-ES, …) deliver "0,5" from
+  // the receive amount field; without this swap the URI omits amount=
+  // entirely and the QR receiver sees "no amount requested".
+  const trimmed = amount?.trim().replace(",", ".");
   if (!trimmed || !AMOUNT_RE.test(trimmed)) return null;
   const numeric = Number(trimmed);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
