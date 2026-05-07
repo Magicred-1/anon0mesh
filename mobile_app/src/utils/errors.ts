@@ -21,6 +21,11 @@ function safeStringify(value: unknown): string | undefined {
     return value.trim().length > 0 ? value : undefined;
   }
 
+  if (value instanceof Error) {
+    const parts = [value.name, value.message].filter(Boolean).join(": ");
+    return parts.length > 0 ? parts : undefined;
+  }
+
   try {
     const serialized = JSON.stringify(value);
     return serialized && serialized !== "{}" ? serialized : undefined;
