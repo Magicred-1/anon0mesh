@@ -1,3 +1,5 @@
+import "@/polyfills";
+
 import {
   Connection,
   Keypair,

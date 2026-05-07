@@ -1,3 +1,5 @@
+import "@/polyfills";
+
 import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as LocalAuthentication from 'expo-local-authentication';

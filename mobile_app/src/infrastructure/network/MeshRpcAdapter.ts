@@ -1,3 +1,5 @@
+import "@/polyfills";
+
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import type { IRpcAdapter, MeshRpcRequest, MeshRpcResponse } from './types';
