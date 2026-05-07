@@ -2,8 +2,7 @@ import React, { memo, useState } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '@/theme';
-import { fontFamily } from '@/theme';
+import { fontFamily, useTheme } from '@/theme';
 import type { MediaMsg } from './types';
 
 const SCREEN_W = Dimensions.get('window').width;

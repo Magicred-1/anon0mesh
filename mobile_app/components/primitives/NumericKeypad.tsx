@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useCallback } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Pressable } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
@@ -256,5 +256,3 @@ function KeyButton({ label, onPress }: { label: string; onPress: (key: string) =
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({});

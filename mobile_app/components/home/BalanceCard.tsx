@@ -38,7 +38,7 @@ function formatTokenAmount(amount: number, maxDecimals: number): string {
 }
 
 export function BalanceCard() {
-  const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  const { colors, spacing, fontFamily, fontSize } = useTheme();
   const { hidden, toggle } = useHideBalance();
   const { isConnected, publicKey } = useWallet();
   const { solBalance, tokens, loading, lastFetched } = useWalletBalance();
