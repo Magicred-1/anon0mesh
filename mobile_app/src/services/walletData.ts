@@ -122,7 +122,7 @@ interface TransferInfo {
 interface SplTransferInfo {
   source: string;
   destination: string;
-  mint: string;
+  mint: string | null;
 }
 
 function extractSystemTransfer(
@@ -167,7 +167,7 @@ function extractSplTransfer(
   const destination = typeof info.destination === "string" ? info.destination : null;
   const mint = typeof info.mint === "string" ? info.mint : null;
 
-  if (!source || !destination || !mint) return null;
+  if (!source || !destination) return null;
   return { source, destination, mint };
 }
 
@@ -198,8 +198,10 @@ function walletTokenDelta(
   decimals: number;
   mint: string;
   symbol: string;
+  tokenAccount: string;
   tokenAccountIndex: number;
 } | null {
+  const keys = parsedTx.transaction.message.accountKeys;
   const pre = new Map<string, bigint>();
   for (const bal of parsedTx.meta?.preTokenBalances ?? []) {
     if (bal.owner !== walletAddress) continue;
@@ -214,16 +216,30 @@ function walletTokenDelta(
     const delta = after - before;
     if (delta === 0n) continue;
     const resolved = resolveMint(bal.mint);
+    const tokenAccount = keys[bal.accountIndex]?.pubkey.toBase58();
+    if (!tokenAccount) continue;
     return {
       amountBaseUnits: delta,
       decimals: bal.uiTokenAmount.decimals,
       mint: bal.mint,
       symbol: resolved.symbol,
+      tokenAccount,
       tokenAccountIndex: bal.accountIndex,
     };
   }
 
   return null;
+}
+
+function tokenAccountOwners(parsedTx: ParsedTransactionWithMeta): Map<string, string> {
+  const owners = new Map<string, string>();
+  const keys = parsedTx.transaction.message.accountKeys;
+  for (const bal of [...(parsedTx.meta?.preTokenBalances ?? []), ...(parsedTx.meta?.postTokenBalances ?? [])]) {
+    if (!bal.owner) continue;
+    const tokenAccount = keys[bal.accountIndex]?.pubkey.toBase58();
+    if (tokenAccount) owners.set(tokenAccount, bal.owner);
+  }
+  return owners;
 }
 
 function toActivity(
@@ -244,17 +260,20 @@ function toActivity(
     const tokenDelta = walletTokenDelta(walletAddress, parsedTx);
     if (!tokenDelta) return null;
 
-    const keys = parsedTx.transaction.message.accountKeys;
-    const walletTokenAccount = keys[tokenDelta.tokenAccountIndex]?.pubkey.toBase58();
     const splTransfer = parsedTx.transaction.message.instructions
       .map(extractSplTransfer)
-      .find((ix) => ix?.mint === tokenDelta.mint && (ix.source === walletTokenAccount || ix.destination === walletTokenAccount));
+      .find((ix) =>
+        (ix?.mint === null || ix?.mint === tokenDelta.mint) &&
+        (ix.source === tokenDelta.tokenAccount || ix.destination === tokenDelta.tokenAccount),
+      );
 
     const direction: ActivityDirection = tokenDelta.amountBaseUnits < 0n ? "send" : "receive";
-    const counterparty =
-      direction === "send"
-        ? splTransfer?.destination ?? tokenDelta.mint
-        : splTransfer?.source ?? tokenDelta.mint;
+    const owners = tokenAccountOwners(parsedTx);
+    const counterpartyTokenAccount =
+      direction === "send" ? splTransfer?.destination : splTransfer?.source;
+    const counterparty = counterpartyTokenAccount
+      ? owners.get(counterpartyTokenAccount) ?? counterpartyTokenAccount
+      : tokenDelta.mint;
     const amountAbs = tokenDelta.amountBaseUnits < 0n ? -tokenDelta.amountBaseUnits : tokenDelta.amountBaseUnits;
     const createdAt = blockTime ? blockTime * 1000 : Date.now();
 
