@@ -101,17 +101,28 @@ export interface ActivityEntry {
   signature: string;
   direction: ActivityDirection;
   status: ActivityStatus;
-  amountLamports: number;
+  amountBaseUnits: string;
+  amountLamports?: number;
   amountSol: number;
-  symbol: "SOL";
+  symbol: string;
+  mintAddress?: string;
   counterparty: string;
   createdAt: number;
+  feeLamports: number | null;
+  memo: string | null;
+  slot: number | null;
 }
 
 interface TransferInfo {
   source: string;
   destination: string;
   lamports: number;
+}
+
+interface SplTransferInfo {
+  source: string;
+  destination: string;
+  mint: string;
 }
 
 function extractSystemTransfer(
@@ -141,6 +152,80 @@ function extractSystemTransfer(
   return { source, destination, lamports };
 }
 
+function extractSplTransfer(
+  instruction: ParsedInstruction | PartiallyDecodedInstruction,
+): SplTransferInfo | null {
+  if (!("parsed" in instruction)) return null;
+  if (instruction.program !== "spl-token" && instruction.program !== "spl-token-2022") return null;
+  const parsed = instruction.parsed;
+  if (!parsed || typeof parsed !== "object") return null;
+  if (!("type" in parsed) || (parsed.type !== "transfer" && parsed.type !== "transferChecked")) return null;
+  if (!("info" in parsed) || typeof parsed.info !== "object" || parsed.info === null) return null;
+
+  const info = parsed.info as { source?: unknown; destination?: unknown; mint?: unknown };
+  const source = typeof info.source === "string" ? info.source : null;
+  const destination = typeof info.destination === "string" ? info.destination : null;
+  const mint = typeof info.mint === "string" ? info.mint : null;
+
+  if (!source || !destination || !mint) return null;
+  return { source, destination, mint };
+}
+
+function extractMemo(parsedTx: ParsedTransactionWithMeta): string | null {
+  for (const instruction of parsedTx.transaction.message.instructions) {
+    if (!("parsed" in instruction)) continue;
+    if (instruction.program !== "spl-memo") continue;
+    const parsed = instruction.parsed;
+    if (typeof parsed === "string") return parsed;
+    if (parsed && typeof parsed === "object" && "memo" in parsed && typeof parsed.memo === "string") {
+      return parsed.memo;
+    }
+  }
+  return null;
+}
+
+function tokenAmount(raw: unknown): bigint {
+  if (typeof raw === "string" && /^\d+$/.test(raw)) return BigInt(raw);
+  if (typeof raw === "number" && Number.isFinite(raw)) return BigInt(Math.trunc(raw));
+  return 0n;
+}
+
+function walletTokenDelta(
+  walletAddress: string,
+  parsedTx: ParsedTransactionWithMeta,
+): {
+  amountBaseUnits: bigint;
+  decimals: number;
+  mint: string;
+  symbol: string;
+  tokenAccountIndex: number;
+} | null {
+  const pre = new Map<string, bigint>();
+  for (const bal of parsedTx.meta?.preTokenBalances ?? []) {
+    if (bal.owner !== walletAddress) continue;
+    pre.set(`${bal.accountIndex}:${bal.mint}`, tokenAmount(bal.uiTokenAmount.amount));
+  }
+
+  for (const bal of parsedTx.meta?.postTokenBalances ?? []) {
+    if (bal.owner !== walletAddress) continue;
+    const key = `${bal.accountIndex}:${bal.mint}`;
+    const before = pre.get(key) ?? 0n;
+    const after = tokenAmount(bal.uiTokenAmount.amount);
+    const delta = after - before;
+    if (delta === 0n) continue;
+    const resolved = resolveMint(bal.mint);
+    return {
+      amountBaseUnits: delta,
+      decimals: bal.uiTokenAmount.decimals,
+      mint: bal.mint,
+      symbol: resolved.symbol,
+      tokenAccountIndex: bal.accountIndex,
+    };
+  }
+
+  return null;
+}
+
 function toActivity(
   walletAddress: string,
   signature: string,
@@ -150,11 +235,45 @@ function toActivity(
   if (!parsedTx?.meta) return null;
 
   const failed = parsedTx.meta.err !== null;
+  const memo = extractMemo(parsedTx);
   const transfer = parsedTx.transaction.message.instructions
     .map((ix) => extractSystemTransfer(ix, walletAddress))
     .find(Boolean);
 
-  if (!transfer) return null;
+  if (!transfer) {
+    const tokenDelta = walletTokenDelta(walletAddress, parsedTx);
+    if (!tokenDelta) return null;
+
+    const keys = parsedTx.transaction.message.accountKeys;
+    const walletTokenAccount = keys[tokenDelta.tokenAccountIndex]?.pubkey.toBase58();
+    const splTransfer = parsedTx.transaction.message.instructions
+      .map(extractSplTransfer)
+      .find((ix) => ix?.mint === tokenDelta.mint && (ix.source === walletTokenAccount || ix.destination === walletTokenAccount));
+
+    const direction: ActivityDirection = tokenDelta.amountBaseUnits < 0n ? "send" : "receive";
+    const counterparty =
+      direction === "send"
+        ? splTransfer?.destination ?? tokenDelta.mint
+        : splTransfer?.source ?? tokenDelta.mint;
+    const amountAbs = tokenDelta.amountBaseUnits < 0n ? -tokenDelta.amountBaseUnits : tokenDelta.amountBaseUnits;
+    const createdAt = blockTime ? blockTime * 1000 : Date.now();
+
+    return {
+      id: signature,
+      signature,
+      direction,
+      status: failed ? "Failed" : "Settled",
+      amountBaseUnits: amountAbs.toString(),
+      amountSol: Number(amountAbs) / Math.pow(10, tokenDelta.decimals),
+      symbol: tokenDelta.symbol,
+      mintAddress: tokenDelta.mint,
+      counterparty,
+      createdAt,
+      feeLamports: parsedTx.meta.fee ?? null,
+      memo,
+      slot: parsedTx.slot ?? null,
+    };
+  }
 
   const direction: ActivityDirection = transfer.source === walletAddress ? "send" : "receive";
   const counterparty = direction === "send" ? transfer.destination : transfer.source;
@@ -165,11 +284,15 @@ function toActivity(
     signature,
     direction,
     status: failed ? "Failed" : "Settled",
+    amountBaseUnits: String(transfer.lamports),
     amountLamports: transfer.lamports,
     amountSol: transfer.lamports / LAMPORTS_PER_SOL,
     symbol: "SOL",
     counterparty,
     createdAt,
+    feeLamports: parsedTx.meta.fee ?? null,
+    memo,
+    slot: parsedTx.slot ?? null,
   };
 }
 

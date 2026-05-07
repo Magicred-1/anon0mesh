@@ -102,7 +102,12 @@ export function RecipientPicker() {
     haptics.confirm();
     router.push({
       pathname: "/send/amount",
-      params: { to: trimmedAddress, symbol: token.symbol },
+      params: {
+        decimals: String(token.maxDecimals),
+        mint: token.mintAddress ?? "",
+        symbol: token.symbol,
+        to: trimmedAddress,
+      },
     });
   }
 

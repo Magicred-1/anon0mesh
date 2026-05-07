@@ -10,7 +10,9 @@ import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
 import {
+  estimateSplTransferFeeLamports,
   estimateSolTransferFeeLamports,
+  sendSplTransfer,
   sendSolTransfer,
   TransactionNotApprovedError,
 } from "@/src/services/sendTransaction";
@@ -66,6 +68,8 @@ interface ReviewCardProps {
   readonly to: string;
   readonly amount: string;
   readonly symbol: string;
+  readonly mintAddress?: string | string[];
+  readonly decimals?: string | string[];
 }
 
 // ── DetailRow ─────────────────────────────────────────────────────────────────
@@ -104,7 +108,7 @@ function DetailRow({ icon, label, secondary, value, valueComponent, colors }: De
 
 // ── ReviewCard ────────────────────────────────────────────────────────────────
 
-export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
+export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: ReviewCardProps) {
   const router = useRouter();
   const { colors } = useTheme();
   const { wallet } = useWallet();
@@ -115,26 +119,41 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
   const [feeLabel, setFeeLabel] = useState("Calculating...");
   const [isConfirming, setIsConfirming] = useState(false);
   const [sliderResetKey, setSliderResetKey] = useState(0);
+  const normalizedMint = typeof mintAddress === "string" ? mintAddress : "";
+  const tokenDecimals =
+    typeof decimals === "string" && decimals.length > 0 ? Number.parseInt(decimals, 10) : 6;
 
   useEffect(() => {
     let cancelled = false;
 
     async function estimateFee() {
-      if (symbol !== "SOL" || !wallet) {
+      if (!wallet) {
         setFeeLabel("Fee unavailable");
         return;
       }
 
       setFeeLabel("Calculating...");
       try {
-        const lamports = await withTimeout(
-          estimateSolTransferFeeLamports({
-            walletAdapter: wallet,
-            recipientAddress: to,
-            amountSOL: Number.parseFloat(amount),
-          }),
-          FEE_ESTIMATE_TIMEOUT_MS,
-        );
+        const lamports =
+          symbol === "SOL"
+            ? await withTimeout(
+                estimateSolTransferFeeLamports({
+                  walletAdapter: wallet,
+                  recipientAddress: to,
+                  amountSOL: Number.parseFloat(amount),
+                }),
+                FEE_ESTIMATE_TIMEOUT_MS,
+              )
+            : await withTimeout(
+                estimateSplTransferFeeLamports({
+                  walletAdapter: wallet,
+                  recipientAddress: to,
+                  amount,
+                  mintAddress: normalizedMint,
+                  decimals: tokenDecimals,
+                }),
+                FEE_ESTIMATE_TIMEOUT_MS,
+              );
         if (!cancelled) setFeeLabel(formatSolFee(lamports));
       } catch {
         if (!cancelled) setFeeLabel("Fee unavailable");
@@ -145,13 +164,16 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
     return () => {
       cancelled = true;
     };
-  }, [amount, symbol, to, wallet]);
+  }, [amount, normalizedMint, symbol, to, tokenDecimals, wallet]);
 
   async function handleConfirm() {
     if (isConfirming) return;
 
-    if (symbol !== "SOL") {
-      setError({ kind: "unsupported", message: `${symbol} transfers are not implemented yet` });
+    if (symbol !== "SOL" && !normalizedMint) {
+      setError({
+        kind: "unsupported",
+        message: `${symbol} is missing its token mint. Refresh balances and try again.`,
+      });
       setSliderResetKey((k) => k + 1);
       return;
     }
@@ -175,12 +197,22 @@ export function ReviewCard({ to, amount, symbol }: ReviewCardProps) {
     setIsConfirming(true);
 
     try {
-      const result = await sendSolTransfer({
-        walletAdapter: wallet,
-        rpcAdapter,
-        recipientAddress: to,
-        amountSOL: Number.parseFloat(amount),
-      });
+      const result =
+        symbol === "SOL"
+          ? await sendSolTransfer({
+              walletAdapter: wallet,
+              rpcAdapter,
+              recipientAddress: to,
+              amountSOL: Number.parseFloat(amount),
+            })
+          : await sendSplTransfer({
+              walletAdapter: wallet,
+              rpcAdapter,
+              recipientAddress: to,
+              amount,
+              mintAddress: normalizedMint,
+              decimals: tokenDecimals,
+            });
 
       router.push({
         pathname: "/send/success",
