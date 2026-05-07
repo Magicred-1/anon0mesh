@@ -56,6 +56,14 @@ export function tokenByName(sym: string, tokens: TokenBalance[] = []): TokenOpti
   };
 }
 
+// Token-2022 mints are filtered out of the picker. The send path defaults
+// to the legacy SPL-Token program and silently misbehaves on T22 mints
+// that have transfer-fee or other extensions, so we keep T22 read-only
+// in the balance list and never offer it as a send option.
+function isSendable(token: TokenBalance): boolean {
+  return token.programId !== "spl-token-2022";
+}
+
 interface TokenPickerProps {
   visible: boolean;
   selected: string;
@@ -100,7 +108,8 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
     transform: [{ translateY: translateY.value }],
   }));
 
-  const visibleTokens = tokens.length > 0 ? tokens : [DEFAULT_SOL_TOKEN];
+  const sendable = tokens.filter(isSendable);
+  const visibleTokens = sendable.length > 0 ? sendable : [DEFAULT_SOL_TOKEN];
 
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>

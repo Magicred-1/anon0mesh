@@ -15,6 +15,7 @@ const { parseBaseUnits } = await import("../src/utils/amount.ts");
 const { summarizeError } = await import("../src/utils/errors.ts");
 const { buildDevnetExplorerTxUrl } = await import("../src/services/explorer.ts");
 const { isWalletDenial } = await import("../src/utils/walletDenial.ts");
+const { assertSendableSplProgram, UnsupportedTokenProgramError } = await import("../src/services/walletData.ts");
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -237,6 +238,34 @@ function testWalletDenialPatterns() {
   }
 }
 
+function testSplProgramGuard() {
+  // The bottom-line guard against Token-2022 sends. Picker hides T22
+  // upstream; this is the last line of defense before signing keys see
+  // the transaction. Test all known shapes of programId input.
+  assertSendableSplProgram("spl-token");
+
+  assert.throws(
+    () => assertSendableSplProgram("spl-token-2022"),
+    (err) => err instanceof UnsupportedTokenProgramError && /Token-2022/.test(err.message),
+    "spl-token-2022 must throw UnsupportedTokenProgramError",
+  );
+  assert.throws(
+    () => assertSendableSplProgram(undefined),
+    (err) => err instanceof UnsupportedTokenProgramError,
+    "missing programId must throw (defense-in-depth against tampered router params)",
+  );
+  assert.throws(
+    () => assertSendableSplProgram(""),
+    (err) => err instanceof UnsupportedTokenProgramError,
+    "empty programId must throw",
+  );
+  assert.throws(
+    () => assertSendableSplProgram("spl-token-3000"),
+    (err) => err instanceof UnsupportedTokenProgramError,
+    "unknown programId must throw",
+  );
+}
+
 testSolanaPayUri();
 testAddressBookCore();
 testRecoveryKeyFormatting();
@@ -244,4 +273,5 @@ testBaseUnitParsing();
 testExplorerUrls();
 testErrorSummaries();
 testWalletDenialPatterns();
+testSplProgramGuard();
 console.log("Tier 0 service checks passed");

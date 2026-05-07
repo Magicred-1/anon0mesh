@@ -72,6 +72,7 @@ interface ReviewCardProps {
   readonly symbol: string;
   readonly mintAddress?: string | string[];
   readonly decimals?: string | string[];
+  readonly programId?: string | string[];
 }
 
 // ── DetailRow ─────────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ function DetailRow({ icon, label, secondary, value, valueComponent, colors }: De
 
 // ── ReviewCard ────────────────────────────────────────────────────────────────
 
-export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: ReviewCardProps) {
+export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programId }: ReviewCardProps) {
   const router = useRouter();
   const { colors } = useTheme();
   const { wallet } = useWallet();
@@ -121,8 +122,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
   const [isConfirming, setIsConfirming] = useState(false);
   const [sliderResetKey, setSliderResetKey] = useState(0);
   const normalizedMint = typeof mintAddress === "string" ? mintAddress : "";
+  const normalizedProgramId = typeof programId === "string" ? programId : "";
   const tokenDecimals =
     typeof decimals === "string" && decimals.length > 0 ? Number.parseInt(decimals, 10) : 6;
+  const isToken2022 = normalizedProgramId === "spl-token-2022";
 
   useEffect(() => {
     let cancelled = false;
@@ -152,6 +155,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
                   amount,
                   mintAddress: normalizedMint,
                   decimals: tokenDecimals,
+                  programId: normalizedProgramId,
                 }),
                 FEE_ESTIMATE_TIMEOUT_MS,
               );
@@ -165,7 +169,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
     return () => {
       cancelled = true;
     };
-  }, [amount, normalizedMint, symbol, to, tokenDecimals, wallet]);
+  }, [amount, normalizedMint, normalizedProgramId, symbol, to, tokenDecimals, wallet]);
 
   async function handleConfirm() {
     if (isConfirming) return;
@@ -174,6 +178,15 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
       setError({
         kind: "unsupported",
         message: `${symbol} is missing its token mint. Refresh balances and try again.`,
+      });
+      setSliderResetKey((k) => k + 1);
+      return;
+    }
+
+    if (symbol !== "SOL" && isToken2022) {
+      setError({
+        kind: "unsupported",
+        message: `${symbol} is a Token-2022 mint. Token-2022 sends are not supported yet — coming soon.`,
       });
       setSliderResetKey((k) => k + 1);
       return;
@@ -213,6 +226,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
               amount,
               mintAddress: normalizedMint,
               decimals: tokenDecimals,
+              programId: normalizedProgramId,
             });
 
       await saveAddressBookRecipient(to);

@@ -107,6 +107,7 @@ export function RecipientPicker() {
       params: {
         decimals: String(token.maxDecimals),
         mint: token.mintAddress ?? "",
+        programId: token.programId ?? "",
         symbol: token.symbol,
         to: trimmedAddress,
       },

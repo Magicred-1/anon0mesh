@@ -12,12 +12,36 @@ export const SOL_DECIMALS = 9;
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
+export type SplProgramId = "spl-token" | "spl-token-2022";
+
 export interface TokenBalance {
   symbol: string;
   name: string;
   uiAmount: number;
   maxDecimals: number;
   mintAddress?: string;
+  // Tags the SPL program that owns the mint. Token-2022 mints are filtered
+  // from the send picker; sendSplTransfer refuses to build a transaction
+  // unless this is "spl-token" because @solana/spl-token transfer helpers
+  // default to the legacy program ID and silently misbehave on T22 mints
+  // that have transfer-fee, confidential-transfers, or interest-bearing
+  // extensions. Native SOL omits this field.
+  programId?: SplProgramId;
+}
+
+export class UnsupportedTokenProgramError extends Error {
+  constructor(programId: string) {
+    super(`Token-2022 sends are not supported yet (program ${programId})`);
+    this.name = "UnsupportedTokenProgramError";
+  }
+}
+
+export function assertSendableSplProgram(programId: string | undefined): asserts programId is "spl-token" {
+  if (programId === "spl-token") return;
+  if (!programId || programId === "spl-token-2022") {
+    throw new UnsupportedTokenProgramError(programId ?? "unknown");
+  }
+  throw new UnsupportedTokenProgramError(programId);
 }
 
 export interface WalletSnapshot {
@@ -53,16 +77,21 @@ export async function fetchSplTokens(
   connection: Connection,
   publicKey: PublicKey,
 ): Promise<TokenBalance[]> {
-  const programs = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID];
+  const programs: { id: PublicKey; tag: SplProgramId }[] = [
+    { id: TOKEN_PROGRAM_ID, tag: "spl-token" },
+    { id: TOKEN_2022_PROGRAM_ID, tag: "spl-token-2022" },
+  ];
   const results = await Promise.all(
-    programs.map((programId) =>
-      connection.getParsedTokenAccountsByOwner(publicKey, { programId }),
+    programs.map(({ id, tag }) =>
+      connection
+        .getParsedTokenAccountsByOwner(publicKey, { programId: id })
+        .then((response) => ({ response, tag })),
     ),
   );
 
   const tokens: TokenBalance[] = [];
-  for (const { value } of results) {
-    for (const { account } of value) {
+  for (const { response, tag } of results) {
+    for (const { account } of response.value) {
       const info = account.data.parsed?.info;
       const tokenAmount = info?.tokenAmount;
       if (!tokenAmount) continue;
@@ -80,6 +109,7 @@ export async function fetchSplTokens(
         uiAmount,
         maxDecimals: decimals,
         mintAddress: mint,
+        programId: tag,
       });
     }
   }

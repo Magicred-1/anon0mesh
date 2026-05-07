@@ -29,9 +29,16 @@ export function AmountKeypad() {
   const {
     decimals: decimalsParam,
     mint,
+    programId: programIdParam,
     symbol: symbolParam,
     to,
-  } = useLocalSearchParams<{ decimals?: string; mint?: string; symbol?: string; to: string }>();
+  } = useLocalSearchParams<{
+    decimals?: string;
+    mint?: string;
+    programId?: string;
+    symbol?: string;
+    to: string;
+  }>();
   const { tokens } = useWalletBalance();
 
   const symbol = typeof symbolParam === "string" && symbolParam.length > 0 ? symbolParam : "SOL";
@@ -62,6 +69,7 @@ export function AmountKeypad() {
         amount,
         decimals: String(Number.isFinite(tokenDecimals) ? tokenDecimals : token.maxDecimals),
         mint: typeof mint === "string" ? mint : "",
+        programId: typeof programIdParam === "string" ? programIdParam : (token.programId ?? ""),
         symbol: token.symbol,
         to: recipient,
       },

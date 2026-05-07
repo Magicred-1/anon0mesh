@@ -18,6 +18,7 @@ import { Buffer } from "buffer";
 import type { IRpcAdapter } from "@/src/infrastructure/network";
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
+import { assertSendableSplProgram } from "@/src/services/walletData";
 import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 import { parseBaseUnits } from "@/src/utils/amount";
 import { summarizeError } from "@/src/utils/errors";
@@ -54,6 +55,7 @@ export interface SendSplParams {
   amount: string;
   mintAddress: string;
   decimals: number;
+  programId?: string;
 }
 
 export interface EstimateSolTransferFeeParams {
@@ -68,6 +70,7 @@ export interface EstimateSplTransferFeeParams {
   amount: string;
   mintAddress: string;
   decimals: number;
+  programId?: string;
 }
 
 export interface SendResult {
@@ -137,13 +140,21 @@ async function buildSplTransferTransaction({
   amount,
   mintAddress,
   decimals,
+  programId,
 }: {
   fromPubkey: PublicKey;
   recipientAddress: string;
   amount: string;
   mintAddress: string;
   decimals: number;
+  programId?: string;
 }): Promise<Transaction> {
+  // Bottom-line guard against any caller (including direct deep-links to
+  // /send/review with a tampered programId param) trying to build an SPL
+  // transfer for a Token-2022 mint. The picker filters T22 upstream; this
+  // is the last line of defense before signing keys see the transaction.
+  assertSendableSplProgram(programId);
+
   let toOwner: PublicKey;
   let mint: PublicKey;
   try {
@@ -275,6 +286,7 @@ export async function estimateSplTransferFeeLamports({
   amount,
   mintAddress,
   decimals,
+  programId,
 }: EstimateSplTransferFeeParams): Promise<number> {
   const fromPubkey = walletAdapter.getPublicKey();
   if (!fromPubkey) {
@@ -287,6 +299,7 @@ export async function estimateSplTransferFeeLamports({
     amount,
     mintAddress,
     decimals,
+    programId,
   });
   const { blockhash } = await solanaConnection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
@@ -334,6 +347,7 @@ export async function sendSplTransfer({
   amount,
   mintAddress,
   decimals,
+  programId,
 }: SendSplParams): Promise<SendResult> {
   const fromPubkey = walletAdapter.getPublicKey();
   if (!fromPubkey) {
@@ -346,6 +360,7 @@ export async function sendSplTransfer({
     amount,
     mintAddress,
     decimals,
+    programId,
   });
   return signAndSubmitTransaction({ walletAdapter, rpcAdapter, tx, expectedPubkey: fromPubkey });
 }
