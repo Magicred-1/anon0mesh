@@ -14,6 +14,7 @@ import { DepthButton, Icon, Pill } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import * as haptics from "@/src/design-system/haptics";
 import { useGlass } from "@/hooks/useGlass";
+import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { useTheme } from "@/theme";
 
 function shortReference(id: string) {
@@ -60,9 +61,7 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
 
   function handleExplorer() {
     haptics.tap();
-    const encodedTxId = encodeURIComponent(txId);
-    const url = `https://explorer.solana.com/tx/${encodedTxId}?cluster=devnet`;
-    Linking.openURL(url).catch(() => undefined);
+    Linking.openURL(buildDevnetExplorerTxUrl(txId)).catch(() => undefined);
   }
 
   return (

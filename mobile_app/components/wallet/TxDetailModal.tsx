@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { DepthButton, Icon, Pill } from "@/components/primitives";
 import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
+import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 interface TxDetailModalProps {
@@ -32,10 +33,6 @@ function formatAmount(tx: ActivityEntry): string {
       ? tx.amountSol.toFixed(6)
       : tx.amountSol.toLocaleString("en-US", { maximumFractionDigits: tx.symbol === "SOL" ? 6 : 4 });
   return `${sign}${amount} ${tx.symbol}`;
-}
-
-function explorerUrl(signature: string): string {
-  return `https://explorer.solana.com/tx/${encodeURIComponent(signature)}?cluster=devnet`;
 }
 
 function DetailRow({
@@ -81,7 +78,7 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
 
   async function handleExplorer() {
     haptics.tap();
-    await WebBrowser.openBrowserAsync(explorerUrl(activeTx.signature));
+    await WebBrowser.openBrowserAsync(buildDevnetExplorerTxUrl(activeTx.signature));
   }
 
   return (

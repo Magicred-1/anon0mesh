@@ -17,6 +17,7 @@ import { Buffer } from "buffer";
 
 import type { IRpcAdapter } from "@/src/infrastructure/network";
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
+import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 import { parseBaseUnits } from "@/src/utils/amount";
 const APP_IDENTITY = {
@@ -82,10 +83,6 @@ export class TransactionNotApprovedError extends Error {
 interface MwaAuthResult {
   auth_token: string;
   accounts: { address: string }[];
-}
-
-function explorerUrl(signature: string): string {
-  return `https://explorer.solana.com/tx/${encodeURIComponent(signature)}?cluster=devnet`;
 }
 
 function isWalletDenial(err: unknown): boolean {
@@ -210,7 +207,7 @@ async function signAndSubmitTransaction({
     } finally {
       secretKey.fill(0);
     }
-    return { signature, explorerUrl: explorerUrl(signature) };
+    return { signature, explorerUrl: buildDevnetExplorerTxUrl(signature) };
   }
 
   const cachedToken = await secureGet(SecureKeys.MWA_TOKEN);
@@ -242,7 +239,7 @@ async function signAndSubmitTransaction({
   }
 
   const signature = await rpcAdapter.sendRawTransaction(signedTx.serialize());
-  return { signature, explorerUrl: explorerUrl(signature) };
+  return { signature, explorerUrl: buildDevnetExplorerTxUrl(signature) };
 }
 
 export async function estimateSolTransferFeeLamports({

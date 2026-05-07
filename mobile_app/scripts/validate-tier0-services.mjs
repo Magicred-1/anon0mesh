@@ -12,6 +12,7 @@ const {
 } = await import("../src/services/addressBookCore.ts");
 const { formatRecoveryKey } = await import("../src/utils/recoveryKey.ts");
 const { parseBaseUnits } = await import("../src/utils/amount.ts");
+const { buildDevnetExplorerTxUrl } = await import("../src/services/explorer.ts");
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -106,8 +107,16 @@ function testBaseUnitParsing() {
   assert.throws(() => parseBaseUnits("-1", 9), /Invalid amount/);
 }
 
+function testExplorerUrls() {
+  assert.equal(
+    buildDevnetExplorerTxUrl("abc+/="),
+    "https://explorer.solana.com/tx/abc%2B%2F%3D?cluster=devnet",
+  );
+}
+
 testSolanaPayUri();
 testAddressBookCore();
 testRecoveryKeyFormatting();
 testBaseUnitParsing();
+testExplorerUrls();
 console.log("Tier 0 service checks passed");
