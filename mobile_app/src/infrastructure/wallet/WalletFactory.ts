@@ -38,8 +38,13 @@ export const WalletFactory = {
   },
 
   async createLocal(): Promise<LocalWallet> {
-    // Guard: reconnect if wallet already exists rather than overwriting keypair
+    // Guard: reconnect if wallet already exists rather than overwriting keypair.
+    // If storage is partial, the wallet cannot export or sign reliably; recreate it.
     if (await LocalWallet.exists()) {
+      if (!await LocalWallet.isFullyIntact()) {
+        await LocalWallet.delete();
+        return LocalWallet.create();
+      }
       const w = new LocalWallet();
       await w.connect();
       return w;
