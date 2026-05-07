@@ -21,6 +21,7 @@ import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 import { parseBaseUnits } from "@/src/utils/amount";
 import { summarizeError } from "@/src/utils/errors";
+import { isWalletDenial } from "@/src/utils/walletDenial";
 const APP_IDENTITY = {
   name: "anonmesh",
   uri: "https://anonme.sh",
@@ -84,28 +85,6 @@ export class TransactionNotApprovedError extends Error {
 interface MwaAuthResult {
   auth_token: string;
   accounts: { address: string }[];
-}
-
-function isWalletDenial(err: unknown): boolean {
-  const summary = summarizeError(err, "");
-  const normalized = [
-    summary.message,
-    summary.name,
-    summary.code,
-    summary.raw,
-  ].filter(Boolean).join(" ").toLowerCase();
-  return (
-    normalized.includes("authentication cancelled") ||
-    normalized.includes("authorization request failed") ||
-    normalized.includes("authorization cancelled") ||
-    normalized.includes("auth request failed") ||
-    normalized.includes("cancelled") ||
-    normalized.includes("canceled") ||
-    normalized.includes("declined") ||
-    normalized.includes("denied") ||
-    normalized.includes("rejected") ||
-    normalized.includes("user refused")
-  );
 }
 
 function normalizeWalletError(err: unknown, fallback?: string): never {

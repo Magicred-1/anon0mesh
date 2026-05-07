@@ -14,6 +14,7 @@ const { formatRecoveryKey } = await import("../src/utils/recoveryKey.ts");
 const { parseBaseUnits } = await import("../src/utils/amount.ts");
 const { summarizeError } = await import("../src/utils/errors.ts");
 const { buildDevnetExplorerTxUrl } = await import("../src/services/explorer.ts");
+const { isWalletDenial } = await import("../src/utils/walletDenial.ts");
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -44,6 +45,24 @@ function testSolanaPayUri() {
   );
 
   assert.throws(() => buildSolanaPayUri({ recipient: "  " }), /Recipient is required/);
+
+  const tooManyDecimals = buildSolanaPayUri({
+    recipient: "11111111111111111111111111111111",
+    amount: "1.0000000001",
+  });
+  assert.ok(!tooManyDecimals.includes("amount="), "10-decimal SOL amount should be dropped, not encoded");
+
+  const negativeAmount = buildSolanaPayUri({
+    recipient: "11111111111111111111111111111111",
+    amount: "-1",
+  });
+  assert.ok(!negativeAmount.includes("amount="), "negative amount should be dropped");
+
+  const nanAmount = buildSolanaPayUri({
+    recipient: "11111111111111111111111111111111",
+    amount: "abc",
+  });
+  assert.ok(!nanAmount.includes("amount="), "non-numeric amount should be dropped");
 }
 
 function testAddressBookCore() {
@@ -102,16 +121,28 @@ function testBaseUnitParsing() {
   assert.equal(parseBaseUnits("1", 9), 1_000_000_000n);
   assert.equal(parseBaseUnits("0.000000001", 9), 1n);
   assert.equal(parseBaseUnits("001.2300", 6), 1_230_000n);
+  assert.equal(parseBaseUnits(" 1.5 ", 9), 1_500_000_000n);
+  assert.equal(parseBaseUnits("1000000", 6), 1_000_000_000_000n);
   assert.throws(() => parseBaseUnits("1abc", 9), /Invalid amount/);
   assert.throws(() => parseBaseUnits("1.0000000001", 9), /Too many decimal places/);
   assert.throws(() => parseBaseUnits("0", 9), /Invalid amount/);
+  assert.throws(() => parseBaseUnits("0.0", 9), /Invalid amount/);
   assert.throws(() => parseBaseUnits("-1", 9), /Invalid amount/);
+  assert.throws(() => parseBaseUnits("", 9), /Invalid amount/);
+  assert.throws(() => parseBaseUnits(".", 9), /Invalid amount/);
+  assert.throws(() => parseBaseUnits("1e3", 9), /Invalid amount/);
+  assert.throws(() => parseBaseUnits("1,5", 9), /Invalid amount/);
 }
 
 function testExplorerUrls() {
   assert.equal(
     buildDevnetExplorerTxUrl("abc+/="),
     "https://explorer.solana.com/tx/abc%2B%2F%3D?cluster=devnet",
+  );
+  const realLookingSig = "5".repeat(88);
+  assert.equal(
+    buildDevnetExplorerTxUrl(realLookingSig),
+    `https://explorer.solana.com/tx/${realLookingSig}?cluster=devnet`,
   );
 }
 
@@ -132,6 +163,78 @@ function testErrorSummaries() {
     summarizeError(new Error("boom"), "fallback message").message,
     "boom",
   );
+  assert.equal(
+    summarizeError(new Error(""), "fallback message").message,
+    "fallback message",
+  );
+  const wrapped = new Error("outer");
+  wrapped.cause = new Error("inner");
+  assert.match(
+    summarizeError(wrapped, "fallback").cause ?? "",
+    /inner/,
+  );
+  assert.equal(
+    summarizeError(null, "fallback").message,
+    "fallback",
+  );
+  assert.equal(
+    summarizeError(undefined, "fallback").message,
+    "fallback",
+  );
+  assert.equal(
+    summarizeError({ message: "primary", error: "secondary", code: 42 }, "fallback").message,
+    "primary",
+  );
+  assert.equal(
+    summarizeError({ name: "Boom", error: "Bang" }, "fallback").message,
+    "Boom",
+  );
+}
+
+function testWalletDenialPatterns() {
+  // Each fragment from DENIAL_FRAGMENTS — case insensitive, embedded in
+  // error message, error name, error code, or raw object — must classify
+  // as a user-cancellation so the UI shows "you cancelled" instead of
+  // "wallet signing failed".
+  const positives = [
+    new Error("Authentication cancelled"),
+    new Error("Authorization request failed"),
+    new Error("AUTH REQUEST FAILED on Seed Vault"),
+    new Error("user cancelled the authorization"),
+    new Error("transaction was canceled by user"),
+    new Error("User declined"),
+    new Error("Permission denied"),
+    new Error("Operation rejected"),
+    new Error("user refused to sign"),
+    { error: "Cancelled", code: -32000 },
+    { name: "AuthCancelled", message: "" },
+    { code: "USER_REJECTED" },
+  ];
+  for (const err of positives) {
+    assert.equal(
+      isWalletDenial(err),
+      true,
+      `expected denial: ${typeof err === "object" ? JSON.stringify(err) : String(err)}`,
+    );
+  }
+
+  const negatives = [
+    new Error("Network request timed out"),
+    new Error("Insufficient funds for fee"),
+    new Error("Blockhash not found"),
+    { code: -32602, message: "Invalid params" },
+    null,
+    undefined,
+    "",
+    {},
+  ];
+  for (const err of negatives) {
+    assert.equal(
+      isWalletDenial(err),
+      false,
+      `expected non-denial: ${typeof err === "object" ? JSON.stringify(err) : String(err)}`,
+    );
+  }
 }
 
 testSolanaPayUri();
@@ -140,4 +243,5 @@ testRecoveryKeyFormatting();
 testBaseUnitParsing();
 testExplorerUrls();
 testErrorSummaries();
+testWalletDenialPatterns();
 console.log("Tier 0 service checks passed");
