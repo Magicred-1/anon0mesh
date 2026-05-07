@@ -93,6 +93,7 @@ function AppShell() {
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="tutorial" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="contacts" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="receive" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="send/recipient" />
           <Stack.Screen name="send/amount" />

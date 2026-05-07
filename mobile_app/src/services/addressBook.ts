@@ -93,6 +93,34 @@ export async function saveAddressBookRecipient(pubkey: string, label?: string): 
   return sortAndCap(next);
 }
 
+export async function updateAddressBookRecipient(
+  pubkey: string,
+  label: string,
+): Promise<AddressBookEntry[]> {
+  const normalized = normalizePubkey(pubkey);
+  if (!normalized) return readAddressBook();
+
+  const entries = await readAddressBook();
+  const existing = entries.find((entry) => entry.pubkey === normalized);
+  if (!existing) return entries;
+
+  const nextLabel = label.trim().slice(0, 48) || shortAddress(normalized);
+  const next = entries.map((entry) =>
+    entry.pubkey === normalized ? { ...entry, label: nextLabel } : entry,
+  );
+  await writeAddressBook(next);
+  return sortAndCap(next);
+}
+
+export async function deleteAddressBookRecipient(pubkey: string): Promise<AddressBookEntry[]> {
+  const normalized = normalizePubkey(pubkey);
+  if (!normalized) return readAddressBook();
+
+  const next = (await readAddressBook()).filter((entry) => entry.pubkey !== normalized);
+  await writeAddressBook(next);
+  return next;
+}
+
 export function useAddressBook() {
   const [entries, setEntries] = useState<AddressBookEntry[]>([]);
 
@@ -105,9 +133,19 @@ export function useAddressBook() {
     setEntries(next);
   }, []);
 
+  const updateRecipient = useCallback(async (pubkey: string, label: string) => {
+    const next = await updateAddressBookRecipient(pubkey, label);
+    setEntries(next);
+  }, []);
+
+  const deleteRecipient = useCallback(async (pubkey: string) => {
+    const next = await deleteAddressBookRecipient(pubkey);
+    setEntries(next);
+  }, []);
+
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  return { entries, refresh, saveRecipient };
+  return { entries, refresh, saveRecipient, updateRecipient, deleteRecipient };
 }
