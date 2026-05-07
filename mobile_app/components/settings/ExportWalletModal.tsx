@@ -19,6 +19,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const [revealed,  setRevealed]  = useState(false);
   const [loading,   setLoading]   = useState(false);
   const [failed,    setFailed]    = useState(false);
+  const [failMessage, setFailMessage] = useState<string | null>(null);
   const [keyCopied, setKeyCopied] = useState(false);
   const [copiedAck, setCopiedAck] = useState(false);
   const [captureBlock, setCaptureBlock] = useState<CaptureBlockState>('pending');
@@ -74,9 +75,18 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
     if (captureBlock !== 'blocked') return;
     setLoading(true);
     setFailed(false);
+    setFailMessage(null);
     setCopiedAck(false);
-    const key = await exportPrivateKey();
-    if (key) { setSecretKey(key); } else { setFailed(true); }
+    const result = await exportPrivateKey();
+    if (result.ok) {
+      setSecretKey(result.secretKey);
+    } else if (result.message) {
+      setFailed(true);
+      setFailMessage(result.message);
+    }
+    // result.ok === false with no message = user cancelled biometric.
+    // Stay in initial state silently — re-prompting them with "try again" is
+    // hostile when they meant to dismiss.
     setLoading(false);
   }, [exportPrivateKey, captureBlock]);
 
@@ -155,6 +165,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
                 revealed={revealed}
                 copied={keyCopied}
                 failed={failed}
+                failMessage={failMessage}
                 masked={masked}
                 captureReady={captureBlock === 'blocked'}
                 onAuthenticate={authenticate}
