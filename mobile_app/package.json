@@ -9,7 +9,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "validate:tier0": "bash ./scripts/validate-tier0.sh"
   },
   "dependencies": {
     "@expo-google-fonts/space-grotesk": "^0.4.1",
