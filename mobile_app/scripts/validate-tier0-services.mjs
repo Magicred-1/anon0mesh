@@ -10,6 +10,7 @@ const {
   updateAddressBookEntryLabel,
   upsertAddressBookEntry,
 } = await import("../src/services/addressBookCore.ts");
+const { formatRecoveryKey } = await import("../src/utils/recoveryKey.ts");
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -84,6 +85,17 @@ function testAddressBookCore() {
   assert.equal(capped[0].label, `entry ${MAX_ADDRESS_BOOK_RECIPIENTS + 5}`);
 }
 
+function testRecoveryKeyFormatting() {
+  assert.equal(formatRecoveryKey(""), "");
+  assert.equal(formatRecoveryKey("1234567890", 4), "1234\n5678\n90");
+  assert.equal(
+    formatRecoveryKey("111111111111111111111122222222222222222222223333", 22),
+    "1111111111111111111111\n2222222222222222222222\n3333",
+  );
+  assert.equal(formatRecoveryKey("abc", 0), "a\nb\nc");
+}
+
 testSolanaPayUri();
 testAddressBookCore();
+testRecoveryKeyFormatting();
 console.log("Tier 0 service checks passed");
