@@ -56,6 +56,17 @@ export function tokenByName(sym: string, tokens: TokenBalance[] = []): TokenOpti
   };
 }
 
+// Send picker is temporarily SOL-only. Token-2022 has been filtered since
+// the legacy transferInstruction silently misbehaves on T22 extensions, and
+// legacy SPL devnet send is currently failing on-device with a separate
+// pre-existing error (under root-cause). Until that lands, hide every SPL
+// entry from the picker — balance card still surfaces SPL holdings as
+// view-only so users see what they hold without a broken send path. SOL
+// is the only adapter-routed send that has been verified end-to-end.
+function isSendable(token: TokenBalance): boolean {
+  return token.symbol === "SOL" && !token.programId;
+}
+
 interface TokenPickerProps {
   visible: boolean;
   selected: string;
@@ -100,7 +111,9 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
     transform: [{ translateY: translateY.value }],
   }));
 
-  const visibleTokens = tokens.length > 0 ? tokens : [DEFAULT_SOL_TOKEN];
+  const sendable = tokens.filter(isSendable);
+  const visibleTokens = sendable.length > 0 ? sendable : [DEFAULT_SOL_TOKEN];
+  const hiddenSplCount = tokens.length - sendable.length;
 
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
@@ -246,7 +259,9 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
                       fontSize: fontSize.xs,
                     }}
                   >
-                    Balances pulled live from devnet
+                    {hiddenSplCount > 0
+                      ? "Token sends temporarily SOL-only — coming soon"
+                      : "Balances pulled live from devnet"}
                   </Text>
                 </View>
               </Animated.View>

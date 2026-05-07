@@ -1,3 +1,5 @@
+import "@/polyfills";
+
 import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -152,10 +154,15 @@ export class LocalWallet implements IWalletAdapter {
     const keypair = Keypair.fromSeed(seed);
     const payload = aesEncrypt(aesKey, keypair.secretKey);
 
+    // Marker is the LAST write. If the app dies between any earlier step and
+    // this line, next launch sees exists()=false and runs onboarding cleanly.
+    // Reversing this order silently destroys partial-state seeds because
+    // WalletFactory.hasLocalWallet() delete()s any "marker present, secret
+    // missing" state to recover from cross-build keychain mismatches.
     await secureSet(SecureKeys.WALLET_AES_KEY, Buffer.from(aesKey).toString('base64'));
     await secureSet(SecureKeys.WALLET_PUBKEY, keypair.publicKey.toBase58());
-    await secureSet(SecureKeys.WALLET_MARKER, 'true');
     await secureSet(SecureKeys.WALLET_SECRET, JSON.stringify(payload));
+    await secureSet(SecureKeys.WALLET_MARKER, 'true');
 
     const w = new LocalWallet();
     w._publicKey = keypair.publicKey;

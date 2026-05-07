@@ -33,7 +33,6 @@ export function QRCode({ size = 180, data = 'anonmesh' }: Readonly<{ size?: numb
         alignItems: 'center', justifyContent: 'center',
       }}>
         <Image
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
           source={require('@/assets/icons/anonmesh_white_icon.png')}
           style={{ width: logoSize, height: logoSize, tintColor: colors.primary }}
           resizeMode="contain"

@@ -3,7 +3,6 @@ import {
   TextInput,
   View,
   Text,
-  Pressable,
   StyleSheet,
   type TextInputProps,
   type ViewStyle,

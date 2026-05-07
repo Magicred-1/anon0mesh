@@ -3,8 +3,7 @@ import {
   NativeScrollEvent, NativeSyntheticEvent,
   ScrollView, StyleSheet, Text, View, Pressable, useWindowDimensions,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 

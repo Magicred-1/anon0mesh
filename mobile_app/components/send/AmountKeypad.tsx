@@ -26,11 +26,27 @@ function shortAddress(addr: string) {
 export function AmountKeypad() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { to, symbol: symbolParam } = useLocalSearchParams<{ to: string; symbol?: string }>();
+  const {
+    decimals: decimalsParam,
+    mint,
+    programId: programIdParam,
+    symbol: symbolParam,
+    to,
+  } = useLocalSearchParams<{
+    decimals?: string;
+    mint?: string;
+    programId?: string;
+    symbol?: string;
+    to: string;
+  }>();
   const { tokens } = useWalletBalance();
 
   const symbol = typeof symbolParam === "string" && symbolParam.length > 0 ? symbolParam : "SOL";
   const token = tokenByName(symbol, tokens);
+  const tokenDecimals =
+    typeof decimalsParam === "string" && decimalsParam.length > 0
+      ? Number.parseInt(decimalsParam, 10)
+      : token.maxDecimals;
   const [amount, setAmount] = useState("0");
 
   const recipient = typeof to === "string" ? to : "";
@@ -51,6 +67,9 @@ export function AmountKeypad() {
       pathname: "/send/review",
       params: {
         amount,
+        decimals: String(Number.isFinite(tokenDecimals) ? tokenDecimals : token.maxDecimals),
+        mint: typeof mint === "string" ? mint : "",
+        programId: typeof programIdParam === "string" ? programIdParam : (token.programId ?? ""),
         symbol: token.symbol,
         to: recipient,
       },

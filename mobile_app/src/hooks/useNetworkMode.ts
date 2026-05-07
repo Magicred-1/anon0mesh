@@ -1,3 +1,5 @@
+import "@/polyfills";
+
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLxmfContext } from '@/context/LxmfContext';

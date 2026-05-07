@@ -8,6 +8,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import Animated, {
@@ -25,6 +26,7 @@ import { SegmentedControl, TokenLogo } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
+import { buildSolanaPayUri } from "@/src/services/solanaPayUri";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
@@ -54,6 +56,7 @@ export default function ReceiveScreen() {
   const { displayName } = useLxmfContext();
   const [mode, setMode] = useState<string>("standard");
   const [copied, setCopied] = useState(false);
+  const [requestAmount, setRequestAmount] = useState("");
   const copyPulse = useSharedValue(0);
   const dragY = useSharedValue(0);
 
@@ -94,6 +97,17 @@ export default function ReceiveScreen() {
 
   const isStealth   = mode === "stealth";
   const activeAddress = isStealth ? stealthAddress : walletAddress;
+  const qrValue = useMemo(() => {
+    if (!activeAddress) return "";
+    if (isStealth) return activeAddress;
+    return buildSolanaPayUri({
+      recipient: activeAddress,
+      amount: requestAmount,
+      label: "AnonMesh",
+      message: `${alias} on AnonMesh`,
+      memo: "anonmesh-receive",
+    });
+  }, [activeAddress, alias, isStealth, requestAmount]);
 
   async function handleCopy() {
     if (!activeAddress) return;
@@ -187,10 +201,28 @@ export default function ReceiveScreen() {
                     logoMargin={3}
                     logoSize={36}
                     size={186}
-                    value={activeAddress}
+                    value={qrValue}
                   />
                 </View>
               </View>
+
+              {!isStealth && (
+                <View style={[S.amountBox, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                  <Text style={[S.amountLabel, { color: colors.textTertiary }]}>REQUEST</Text>
+                  <TextInput
+                    accessibilityLabel="Requested SOL amount"
+                    inputMode="decimal"
+                    keyboardType="decimal-pad"
+                    onChangeText={setRequestAmount}
+                    placeholder="optional amount"
+                    placeholderTextColor={colors.textTertiary}
+                    selectionColor={colors.primary}
+                    style={[S.amountInput, { color: colors.textPrimary }]}
+                    value={requestAmount}
+                  />
+                  <Text style={[S.amountUnit, { color: colors.textTertiary }]}>SOL</Text>
+                </View>
+              )}
 
               <Text style={[S.alias, { color: colors.textPrimary }]} numberOfLines={1}>
                 {alias}
@@ -204,15 +236,13 @@ export default function ReceiveScreen() {
                 <TokenLogo size={14} symbol="SOL" />
                 <TokenLogo size={14} symbol="USDC" />
                 <Text style={[S.networkLabel, { color: colors.textTertiary }]}>
-                  SOLANA{isStealth ? " · STEALTH" : ""}
+                  {isStealth ? "SOLANA · STEALTH" : "SOLANA PAY"}
                 </Text>
               </View>
 
               {isStealth && (
                 <Text style={[S.stealthNote, { color: colors.textTertiary }]}>
-                  only works with{" "}
-                  <Text style={{ color: colors.primary, fontFamily: FF.sansSb }}>anonmesh</Text>
-                  {" "}senders
+                  preview only · not a spendable Solana address
                 </Text>
               )}
             </View>
@@ -297,6 +327,10 @@ const S = StyleSheet.create({
   qrCard:       { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 10, borderWidth: 0.5 },
   alias:        { fontFamily: FF.sansSb, fontSize: 15 },
   mono:         { fontFamily: FF.mono, fontSize: 12 },
+  amountBox:    { alignItems: "center", borderRadius: 14, borderWidth: 0.5, flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, width: "100%" },
+  amountLabel:  { fontFamily: FF.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: "uppercase" },
+  amountInput:  { flex: 1, fontFamily: FF.mono, fontSize: 15, minWidth: 0, paddingVertical: 8, textAlign: "right" },
+  amountUnit:   { fontFamily: FF.sansMd, fontSize: 10, letterSpacing: 1.2 },
   networkRow:   { flexDirection: "row", alignItems: "center", gap: 6 },
   networkLabel: { fontFamily: FF.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: "uppercase" },
   stealthNote:  { fontFamily: FF.sansMd, fontSize: 11, letterSpacing: 0.2, textAlign: "center" },

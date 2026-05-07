@@ -1,9 +1,9 @@
-import * as Linking from "expo-linking";
-import React from "react";
+import React, { useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { Icon, Pill, PressSurface } from "@/components/primitives";
 import type { PillTone } from "@/components/primitives";
+import { TxDetailModal } from "@/components/wallet/TxDetailModal";
 import { useHideBalance } from "@/src/hooks/useHideBalance";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import type { ActivityEntry } from "@/src/services/walletData";
@@ -45,6 +45,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const { hidden } = useHideBalance();
   const { activity, activityLoading, activityError, lastFetched } = useWalletBalance();
+  const [selectedTx, setSelectedTx] = useState<ActivityEntry | null>(null);
 
   const initialLoad = activityLoading && lastFetched === null;
   const visible = activity.slice(0, limit);
@@ -82,7 +83,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
             fontSize: fontSize.md,
           }}
         >
-          {activityError ? (isRateLimit ? "Devnet is rate-limiting us" : "Activity unavailable") : "No activity yet"}
+          {activityError ? (isRateLimit ? "Devnet is rate-limiting us" : "Activity unavailable") : "First transfer lands here"}
         </Text>
         <Text
           style={{
@@ -95,27 +96,35 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
         >
           {activityError
             ? "Pull to refresh in a moment. Public devnet throttles heavy wallets."
-            : "Sent or received SOL will show up here."}
+            : "Send a tiny devnet payment or share your receive QR; the real signature and fee will be saved here."}
         </Text>
       </View>
     );
   }
 
   return (
-    <View style={{ gap: spacing[2], paddingHorizontal: spacing[5] }}>
-      {visible.map((tx) => (
-        <ActivityRow
-          key={tx.id}
-          hidden={hidden}
-          tx={tx}
-          colors={colors}
-          radii={radii}
-          spacing={spacing}
-          fontFamily={fontFamily}
-          fontSize={fontSize}
-        />
-      ))}
-    </View>
+    <>
+      <View style={{ gap: spacing[2], paddingHorizontal: spacing[5] }}>
+        {visible.map((tx) => (
+          <ActivityRow
+            key={tx.id}
+            hidden={hidden}
+            tx={tx}
+            colors={colors}
+            radii={radii}
+            spacing={spacing}
+            fontFamily={fontFamily}
+            fontSize={fontSize}
+            onPress={() => setSelectedTx(tx)}
+          />
+        ))}
+      </View>
+      <TxDetailModal
+        tx={selectedTx}
+        visible={selectedTx !== null}
+        onClose={() => setSelectedTx(null)}
+      />
+    </>
   );
 }
 
@@ -127,6 +136,7 @@ function ActivityRow({
   spacing,
   fontFamily,
   fontSize,
+  onPress,
 }: {
   hidden: boolean;
   tx: ActivityEntry;
@@ -135,6 +145,7 @@ function ActivityRow({
   spacing: ReturnType<typeof useTheme>["spacing"];
   fontFamily: ReturnType<typeof useTheme>["fontFamily"];
   fontSize: ReturnType<typeof useTheme>["fontSize"];
+  onPress: () => void;
 }) {
   const isSend = tx.direction === "send";
   const amountText = hidden ? HIDDEN_AMOUNT : `${isSend ? "-" : "+"}${formatAmount(tx.amountSol)}`;
@@ -144,14 +155,12 @@ function ActivityRow({
 
   function handlePress() {
     haptics.tap();
-    Linking.openURL(
-      `https://explorer.solana.com/tx/${encodeURIComponent(tx.signature)}?cluster=devnet`,
-    ).catch(() => undefined);
+    onPress();
   }
 
   return (
     <PressSurface
-      accessibilityLabel={`${isSend ? "Sent" : "Received"} ${formatAmount(tx.amountSol)} SOL. Tap to open on explorer.`}
+      accessibilityLabel={`${isSend ? "Sent" : "Received"} ${formatAmount(tx.amountSol)} ${tx.symbol}. Tap for transaction details.`}
       onPress={handlePress}
       style={{
         backgroundColor: colors.surface0,

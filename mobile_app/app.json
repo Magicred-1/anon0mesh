@@ -15,8 +15,15 @@
         "NSCameraUsageDescription": "This app requires camera access to scan QR codes for connecting with peers and sharing content.",
         "NSPhotoLibraryUsageDescription": "Allow anonmesh to access your photo library to send images in encrypted chats.",
         "NSFaceIDUsageDescription": "This app uses Face ID to securely authenticate you when accessing sensitive features or information within the app.",
-        "UIBackgroundModes": ["bluetooth-central", "bluetooth-peripheral", "fetch", "processing"],
-        "BGTaskSchedulerPermittedIdentifiers": ["magicred1.anonmesh.app.background-processing"]
+        "UIBackgroundModes": [
+          "bluetooth-central",
+          "bluetooth-peripheral",
+          "fetch",
+          "processing"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "magicred1.anonmesh.app.background-processing"
+        ]
       },
       "entitlements": {
         "aps-environment": "production"
@@ -24,6 +31,15 @@
     },
     "android": {
       "package": "magicred1.anonmesh.app",
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_ADVERTISE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0E0E12",
         "foregroundImage": "./assets/images/favicon.png"
@@ -79,6 +95,7 @@
       ],
       "expo-secure-store",
       "expo-local-authentication",
+      "./plugins/withDisableAndroidContentCapture",
       [
         "expo-notifications",
         {
@@ -87,7 +104,8 @@
         }
       ],
       "@magicred-1/react-native-lxmf",
-      "./plugins/withAndroidForegroundService"
+      "./plugins/withAndroidForegroundService",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
