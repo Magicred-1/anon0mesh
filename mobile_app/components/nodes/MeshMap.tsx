@@ -428,8 +428,8 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
 
       {/* Empty state — no peers and not syncing */}
       {nodes.length === 0 && !syncing && (
-        <Text style={[S.empty, { color: colors.textTertiary, left: ME_X - 55, top: ME_Y + ME_R + 14 }]}>
-          awaiting peers…
+        <Text style={[S.empty, { color: colors.textTertiary, left: ME_X - 120, top: ME_Y + ME_R + 14 }]}>
+          open AnonMesh on a nearby phone
         </Text>
       )}
 
@@ -565,7 +565,8 @@ const S = StyleSheet.create({
   label:       { position: 'absolute', width: 36, textAlign: 'center',
                   fontFamily: fontFamily.sansMd, fontSize: 6, letterSpacing: 0.3 },
   empty:       { position: 'absolute', fontFamily: fontFamily.sansMd,
-                  fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
+                  fontSize: 9, letterSpacing: 1.5, textAlign: 'center',
+                  textTransform: 'uppercase', width: 240 },
 
   strip:       { position: 'absolute', bottom: 0, left: 0, right: 0,
                   flexDirection: 'row', alignItems: 'center', gap: 7,

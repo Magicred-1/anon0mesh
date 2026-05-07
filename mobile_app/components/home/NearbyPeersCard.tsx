@@ -58,14 +58,14 @@ export function NearbyPeersCard() {
   //   offline     : "Mesh offline"
   //   ble peers   : "N nearby" (BLE physical proximity)
   //   only hub    : "Connected via hub" (TCP-only fallback)
-  //   nothing     : "Scanning for peers…"
+  //   nothing     : "No nearby peers yet"
   const label = !isRunning
     ? "Mesh offline"
     : freshCount > 0
       ? `${freshCount.toLocaleString()} ${freshCount === 1 ? "peer" : "peers"} nearby`
       : hubCount > 0
         ? `Connected via hub · ${hubCount.toLocaleString()} reachable`
-        : "Scanning for peers…";
+        : "No nearby peers yet";
 
   const anyLive = freshCount > 0 || hubCount > 0;
   const pillLabel: string = !isRunning

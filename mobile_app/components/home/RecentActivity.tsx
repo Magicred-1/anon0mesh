@@ -83,7 +83,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
             fontSize: fontSize.md,
           }}
         >
-          {activityError ? (isRateLimit ? "Devnet is rate-limiting us" : "Activity unavailable") : "No activity yet"}
+          {activityError ? (isRateLimit ? "Devnet is rate-limiting us" : "Activity unavailable") : "First transfer lands here"}
         </Text>
         <Text
           style={{
@@ -96,7 +96,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
         >
           {activityError
             ? "Pull to refresh in a moment. Public devnet throttles heavy wallets."
-            : "Sent or received SOL will show up here."}
+            : "Send a tiny devnet payment or share your receive QR; the real signature and fee will be saved here."}
         </Text>
       </View>
     );
