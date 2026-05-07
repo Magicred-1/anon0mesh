@@ -3,7 +3,6 @@ import "@/polyfills";
 import {
   Connection,
   Keypair,
-  LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -19,6 +18,7 @@ import { Buffer } from "buffer";
 import type { IRpcAdapter } from "@/src/infrastructure/network";
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
 import { SecureKeys, secureGet, secureSet } from "@/src/storage";
+import { parseBaseUnits } from "@/src/utils/amount";
 const APP_IDENTITY = {
   name: "anonmesh",
   uri: "https://anonme.sh",
@@ -41,7 +41,7 @@ export interface SendSolParams {
   walletAdapter: IWalletAdapter;
   rpcAdapter: IRpcAdapter;
   recipientAddress: string;
-  amountSOL: number;
+  amountSOL: string;
 }
 
 export interface SendSplParams {
@@ -56,7 +56,7 @@ export interface SendSplParams {
 export interface EstimateSolTransferFeeParams {
   walletAdapter: IWalletAdapter;
   recipientAddress: string;
-  amountSOL: number;
+  amountSOL: string;
 }
 
 export interface EstimateSplTransferFeeParams {
@@ -119,7 +119,7 @@ function buildSolTransferTransaction({
 }: {
   fromPubkey: PublicKey;
   recipientAddress: string;
-  amountSOL: number;
+  amountSOL: string;
 }): Transaction {
   let toPubkey: PublicKey;
   try {
@@ -128,33 +128,10 @@ function buildSolTransferTransaction({
     throw new Error("Invalid recipient address");
   }
 
-  const lamports = Math.round(amountSOL * LAMPORTS_PER_SOL);
-  if (!Number.isFinite(lamports) || lamports <= 0) {
-    throw new Error("Invalid amount");
-  }
-
+  const lamports = parseBaseUnits(amountSOL, 9);
   return new Transaction().add(
     SystemProgram.transfer({ fromPubkey, toPubkey, lamports }),
   );
-}
-
-function parseTokenUnits(amount: string, decimals: number): bigint {
-  const normalized = amount.trim();
-  if (!/^\d+(\.\d+)?$/.test(normalized)) {
-    throw new Error("Invalid amount");
-  }
-
-  const [whole, fraction = ""] = normalized.split(".");
-  if (fraction.length > decimals) {
-    throw new Error(`Too many decimal places for this token`);
-  }
-
-  const units = `${whole}${fraction.padEnd(decimals, "0")}`.replace(/^0+(?=\d)/, "");
-  const value = BigInt(units || "0");
-  if (value <= 0n) {
-    throw new Error("Invalid amount");
-  }
-  return value;
 }
 
 async function buildSplTransferTransaction({
@@ -183,7 +160,7 @@ async function buildSplTransferTransaction({
     throw new Error("Invalid token decimals");
   }
 
-  const rawAmount = parseTokenUnits(amount, decimals);
+  const rawAmount = parseBaseUnits(amount, decimals);
   const fromAta = await getAssociatedTokenAddress(mint, fromPubkey);
   const toAta = await getAssociatedTokenAddress(mint, toOwner);
 

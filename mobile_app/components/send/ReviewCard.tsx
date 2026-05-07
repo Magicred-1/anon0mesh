@@ -141,7 +141,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
                 estimateSolTransferFeeLamports({
                   walletAdapter: wallet,
                   recipientAddress: to,
-                  amountSOL: Number.parseFloat(amount),
+                  amountSOL: amount,
                 }),
                 FEE_ESTIMATE_TIMEOUT_MS,
               )
@@ -204,7 +204,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
               walletAdapter: wallet,
               rpcAdapter,
               recipientAddress: to,
-              amountSOL: Number.parseFloat(amount),
+              amountSOL: amount,
             })
           : await sendSplTransfer({
               walletAdapter: wallet,

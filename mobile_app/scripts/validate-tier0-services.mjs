@@ -11,6 +11,7 @@ const {
   upsertAddressBookEntry,
 } = await import("../src/services/addressBookCore.ts");
 const { formatRecoveryKey } = await import("../src/utils/recoveryKey.ts");
+const { parseBaseUnits } = await import("../src/utils/amount.ts");
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -95,7 +96,18 @@ function testRecoveryKeyFormatting() {
   assert.equal(formatRecoveryKey("abc", 0), "a\nb\nc");
 }
 
+function testBaseUnitParsing() {
+  assert.equal(parseBaseUnits("1", 9), 1_000_000_000n);
+  assert.equal(parseBaseUnits("0.000000001", 9), 1n);
+  assert.equal(parseBaseUnits("001.2300", 6), 1_230_000n);
+  assert.throws(() => parseBaseUnits("1abc", 9), /Invalid amount/);
+  assert.throws(() => parseBaseUnits("1.0000000001", 9), /Too many decimal places/);
+  assert.throws(() => parseBaseUnits("0", 9), /Invalid amount/);
+  assert.throws(() => parseBaseUnits("-1", 9), /Invalid amount/);
+}
+
 testSolanaPayUri();
 testAddressBookCore();
 testRecoveryKeyFormatting();
+testBaseUnitParsing();
 console.log("Tier 0 service checks passed");
