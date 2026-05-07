@@ -11,6 +11,7 @@ export interface KeyBoxProps {
   copied: boolean;
   failed: boolean;
   masked: string;
+  captureReady?: boolean;
   onAuthenticate: () => void;
   onRevealIn: () => void;
   onRevealOut: () => void;
@@ -19,6 +20,7 @@ export interface KeyBoxProps {
 
 export function KeyBox({
   loading, secretKey, revealed, copied, failed, masked,
+  captureReady = true,
   onAuthenticate, onRevealIn, onRevealOut, onCopy,
 }: Readonly<KeyBoxProps>) {
   const { colors } = useTheme();
@@ -27,6 +29,14 @@ export function KeyBox({
     return (
       <View style={[S.box, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
         <Text style={[S.hint, { color: colors.textTertiary }]}>AUTHENTICATING…</Text>
+      </View>
+    );
+  }
+
+  if (!captureReady && !secretKey) {
+    return (
+      <View style={[S.box, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
+        <Text style={[S.hint, { color: colors.textTertiary }]}>PREPARING SECURE WINDOW…</Text>
       </View>
     );
   }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
+import { AppState, View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as ScreenCapture from 'expo-screen-capture';
@@ -7,6 +7,8 @@ import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { useWallet } from '@/context/WalletContext';
 import { KeyBox } from './KeyBox';
+
+type CaptureBlockState = 'pending' | 'blocked' | 'unavailable';
 
 export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const { colors } = useTheme();
@@ -19,27 +21,64 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const [failed,    setFailed]    = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
   const [copiedAck, setCopiedAck] = useState(false);
+  const [captureBlock, setCaptureBlock] = useState<CaptureBlockState>('pending');
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
   }, [sheetAnim]);
 
+  // Track whether preventScreenCaptureAsync actually succeeded. Previously we
+  // fired it and forgot — if it rejected (older OS, sandbox issue, race with
+  // another capture-protected screen), the user could reveal a recovery key
+  // with screenshots fully unblocked while the UI still claimed otherwise.
+  // Now: gate the authenticate tap, scrub any rendered secret if protection
+  // lapses, and re-apply prevention on AppState foreground in case the OS
+  // dropped the flag while the app was backgrounded.
   useEffect(() => {
-    ScreenCapture.preventScreenCaptureAsync().catch(() => undefined);
+    let mounted = true;
+
+    async function applyBlock() {
+      try {
+        await ScreenCapture.preventScreenCaptureAsync();
+        if (mounted) setCaptureBlock('blocked');
+      } catch {
+        if (mounted) setCaptureBlock('unavailable');
+      }
+    }
+
+    applyBlock();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') applyBlock();
+    });
+
     return () => {
+      mounted = false;
+      sub.remove();
       ScreenCapture.allowScreenCaptureAsync().catch(() => undefined);
     };
   }, []);
 
+  // If capture protection ever lapses while a secret is on screen, drop it
+  // immediately. The user backgrounding mid-reveal can cause the prevention
+  // call to fail when the app foregrounds.
+  useEffect(() => {
+    if (captureBlock === 'unavailable' && (secretKey || revealed)) {
+      setSecretKey(null);
+      setRevealed(false);
+      setCopiedAck(false);
+    }
+  }, [captureBlock, secretKey, revealed]);
+
   const authenticate = useCallback(async () => {
+    if (captureBlock !== 'blocked') return;
     setLoading(true);
     setFailed(false);
     setCopiedAck(false);
     const key = await exportPrivateKey();
     if (key) { setSecretKey(key); } else { setFailed(true); }
     setLoading(false);
-  }, [exportPrivateKey]);
+  }, [exportPrivateKey, captureBlock]);
 
   const copyKey = useCallback(async () => {
     if (!secretKey) return;
@@ -102,18 +141,28 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
               </Text>
             </View>
 
-            <KeyBox
-              loading={loading}
-              secretKey={secretKey}
-              revealed={revealed}
-              copied={keyCopied}
-              failed={failed}
-              masked={masked}
-              onAuthenticate={authenticate}
-              onRevealIn={() => setRevealed(true)}
-              onRevealOut={() => setRevealed(false)}
-              onCopy={copyKey}
-            />
+            {captureBlock === 'unavailable' ? (
+              <View style={[S.warn, { backgroundColor: colors.error + '14', borderColor: colors.error + '38' }]}>
+                <Feather name="alert-octagon" size={14} color={colors.error} style={{ marginTop: 1 }} />
+                <Text style={[S.warnText, { color: colors.error }]}>
+                  Secure window unavailable on this device. Recovery export is disabled because screenshots cannot be blocked here. Try again on another device, or close and reopen this screen.
+                </Text>
+              </View>
+            ) : (
+              <KeyBox
+                loading={loading}
+                secretKey={secretKey}
+                revealed={revealed}
+                copied={keyCopied}
+                failed={failed}
+                masked={masked}
+                captureReady={captureBlock === 'blocked'}
+                onAuthenticate={authenticate}
+                onRevealIn={() => setRevealed(true)}
+                onRevealOut={() => setRevealed(false)}
+                onCopy={copyKey}
+              />
+            )}
 
             {!!secretKey && (
               <>
