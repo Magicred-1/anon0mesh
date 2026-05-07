@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Animated } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import * as ScreenCapture from 'expo-screen-capture';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { useWallet } from '@/context/WalletContext';
@@ -17,15 +18,24 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const [loading,   setLoading]   = useState(false);
   const [failed,    setFailed]    = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
+  const [copiedAck, setCopiedAck] = useState(false);
   const sheetAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
   }, [sheetAnim]);
 
+  useEffect(() => {
+    ScreenCapture.preventScreenCaptureAsync().catch(() => undefined);
+    return () => {
+      ScreenCapture.allowScreenCaptureAsync().catch(() => undefined);
+    };
+  }, []);
+
   const authenticate = useCallback(async () => {
     setLoading(true);
     setFailed(false);
+    setCopiedAck(false);
     const key = await exportPrivateKey();
     if (key) { setSecretKey(key); } else { setFailed(true); }
     setLoading(false);
@@ -39,6 +49,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   }, [secretKey]);
 
   const dismiss = () => {
+    if (secretKey && !copiedAck) return;
     Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(onClose);
   };
 
@@ -60,7 +71,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
             <View>
               <Text style={[S.tag,   { color: colors.textTertiary }]}>EXPORT WALLET</Text>
               <Text style={[S.title, { color: colors.textPrimary }]}>
-                {walletMode === 'mwa' ? 'not available' : 'secret key'}
+                {walletMode === 'mwa' ? 'not available' : 'recovery key'}
               </Text>
             </View>
             <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]}>
@@ -88,7 +99,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
               <View style={[S.warn, { backgroundColor: colors.error + '14', borderColor: colors.error + '38' }]}>
                 <Feather name="alert-triangle" size={14} color={colors.error} style={{ marginTop: 1 }} />
                 <Text style={[S.warnText, { color: colors.error }]}>
-                  Never share this key. Store offline only. Anyone with this key controls your wallet.
+                  No mnemonic exists for this wallet. This base58 recovery key controls the wallet; store it offline only.
                 </Text>
               </View>
 
@@ -106,13 +117,30 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
               />
 
               {!!secretKey && (
-                <Text style={[S.hint, { color: colors.textTertiary, textAlign: 'center' }]}>
-                  HOLD TO REVEAL · BASE58 ENCODED
-                </Text>
+                <>
+                  <Text style={[S.hint, { color: colors.textTertiary, textAlign: 'center' }]}>
+                    HOLD TO REVEAL · SCREENSHOTS BLOCKED · BASE58 ENCODED
+                  </Text>
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: copiedAck }}
+                    onPress={() => setCopiedAck(v => !v)}
+                    style={[S.ackRow, { borderColor: copiedAck ? colors.primary + '66' : colors.border, backgroundColor: colors.surface1 }]}
+                  >
+                    <Feather name={copiedAck ? 'check-square' : 'square'} size={14} color={copiedAck ? colors.primary : colors.textTertiary} />
+                    <Text style={[S.ackText, { color: copiedAck ? colors.primary : colors.textSecondary }]}>
+                      I copied this recovery key
+                    </Text>
+                  </Pressable>
+                </>
               )}
 
-              <Pressable onPress={dismiss} style={[S.doneBtn, softGlass]}>
-                <Text style={[S.doneBtnText, { color: colors.textSecondary }]}>DONE</Text>
+              <Pressable
+                disabled={!!secretKey && !copiedAck}
+                onPress={dismiss}
+                style={[S.doneBtn, softGlass, { opacity: secretKey && !copiedAck ? 0.45 : 1 }]}
+              >
+                <Text style={[S.doneBtnText, { color: secretKey && !copiedAck ? colors.textTertiary : colors.textSecondary }]}>DONE</Text>
               </Pressable>
             </View>
           )}
@@ -136,6 +164,8 @@ const S = StyleSheet.create({
   warn:        { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, borderWidth: 0.5 },
   warnText:    { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 11, lineHeight: 17, letterSpacing: 0.2 },
   hint:        { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
+  ackRow:      { alignItems: 'center', borderRadius: 12, borderWidth: 0.5, flexDirection: 'row', gap: 8, justifyContent: 'center', padding: 12 },
+  ackText:     { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
   doneBtn:     { width: '100%', padding: 13, borderRadius: 12, alignItems: 'center', marginTop: 4 },
   doneBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
 });

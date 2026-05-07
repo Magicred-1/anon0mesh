@@ -48,6 +48,7 @@
     "expo-navigation-bar": "~5.0.10",
     "expo-notifications": "~0.32.16",
     "expo-router": "~6.0.23",
+    "expo-screen-capture": "~8.0.9",
     "expo-secure-store": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",

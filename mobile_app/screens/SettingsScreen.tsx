@@ -231,7 +231,7 @@ export default function SettingsScreen() {
             <View style={[S.section, baseGlass]}>
               <SettingsRow icon="lock" label="biometric lock" sub="face id / touch id · required for transactions" right={<Toggle on={biometric} onChange={v => { if (v) setBiometric(true); else setDisableBioOpen(true); }} />} />
               <SettingsRow icon="refresh-cw" label="rotate identity keys" sub="new signing key · your handle stays the same" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setRotateOpen(true)} />
-              <SettingsRow icon="upload"     label="export wallet key" sub="back up your private key · never share it" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
+              <SettingsRow icon="key"        label="reveal recovery key" sub="biometric required · store offline only" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => setExportOpen(true)} last />
             </View>
           </View>
 
