@@ -22,6 +22,9 @@ npx expo install --check
 section "Tier 0 service checks"
 npm run validate:tier0:services
 
+section "Tier 0 config checks"
+node ./scripts/validate-tier0-config.mjs
+
 section "Fake money-state scan"
 if rg -n "sim_xxx|Demo transfer|fake success|simulated success|simulated transfer" app components src; then
   printf '\nFound forbidden fake transaction wording.\n' >&2
