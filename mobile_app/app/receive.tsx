@@ -242,9 +242,7 @@ export default function ReceiveScreen() {
 
               {isStealth && (
                 <Text style={[S.stealthNote, { color: colors.textTertiary }]}>
-                  only works with{" "}
-                  <Text style={{ color: colors.primary, fontFamily: FF.sansSb }}>anonmesh</Text>
-                  {" "}senders
+                  preview only · not a spendable Solana address
                 </Text>
               )}
             </View>

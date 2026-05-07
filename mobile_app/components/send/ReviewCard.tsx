@@ -115,7 +115,6 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
   const { wallet } = useWallet();
   const { adapter: rpcAdapter, mode: networkMode } = useNetworkMode();
 
-  const [stealthEnabled, setStealthEnabled] = useState(false);
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
   const [isConfirming, setIsConfirming] = useState(false);
@@ -222,13 +221,20 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
         params: { amount, symbol, txId: result.signature },
       });
     } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[send/ReviewCard] transfer failed", {
+        message,
+        symbol,
+        mintAddress: normalizedMint || null,
+        networkMode: rpcAdapter.mode,
+      });
       setError(
         err instanceof TransactionNotApprovedError
           ? {
               kind: "approval",
               message: "Approve the transaction in your wallet to submit it.",
             }
-          : { kind: "send", message: err instanceof Error ? err.message : "Send failed" },
+          : { kind: "send", message },
       );
       setSliderResetKey((k) => k + 1);
     } finally {
@@ -323,24 +329,29 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals }: Review
           </View>
         ) : null}
 
-        {/* Stealth toggle tile */}
+        {/* Stealth preview tile */}
         <Pressable
-          accessibilityLabel={stealthEnabled ? "Disable stealth default" : "Enable stealth default"}
+          accessibilityLabel="Stealth transfer preview is not active"
           accessibilityRole="button"
-          onPress={() => setStealthEnabled((s) => !s)}
+          onPress={() => {
+            setError({
+              kind: "unsupported",
+              message: "Stealth transfer is a preview only. This send will use the standard devnet transfer path.",
+            });
+          }}
           style={[S.tile, S.stealthTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}
         >
           <View style={S.stealthLeft}>
             <Feather
               name="eye-off"
               size={16}
-              color={stealthEnabled ? colors.accent : colors.textTertiary}
+              color={colors.textTertiary}
             />
-            <Text style={[S.stealthLabel, { color: stealthEnabled ? colors.accent : colors.textPrimary }]}>
-              Stealth
+            <Text style={[S.stealthLabel, { color: colors.textPrimary }]}>
+              Stealth preview
             </Text>
           </View>
-          <Pill label={stealthEnabled ? "On" : "Off"} tone={stealthEnabled ? "purple" : "neutral"} />
+          <Pill label="Not active" tone="neutral" />
         </Pressable>
 
         {/* Error */}
