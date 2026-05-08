@@ -58,10 +58,21 @@ export const Composer = memo(function Composer({ onSend, onMedia, onGrid }: Prop
 
   return (
     <View style={[S.bar, { backgroundColor: colors.surface0, borderTopColor: colors.borderSubtle }]}>
-      <Pressable style={[S.iconBtn, baseGlass]} onPress={onGrid} hitSlop={8}>
+      {/* Asymmetric hitSlop: outer sides get the full 8pt for tap-target
+          comfort, inner sides get 4pt so adjacent buttons can't overlap
+          in the 10pt gap (8+8>10 would steal taps unpredictably). */}
+      <Pressable
+        style={[S.iconBtn, baseGlass]}
+        onPress={onGrid}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 4 }}
+      >
         <Feather name="grid" size={18} color={colors.textSecondary} />
       </Pressable>
-      <Pressable style={[S.iconBtn, baseGlass]} onPress={pickMedia} hitSlop={8}>
+      <Pressable
+        style={[S.iconBtn, baseGlass]}
+        onPress={pickMedia}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+      >
         <Feather name="image" size={18} color={colors.textSecondary} />
       </Pressable>
       <View style={[S.field, baseGlass]}>
