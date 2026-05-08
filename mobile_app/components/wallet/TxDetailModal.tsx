@@ -1,5 +1,5 @@
 import * as Clipboard from "expo-clipboard";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -47,6 +47,11 @@ function DetailRow({
 }) {
   const { colors } = useTheme();
   const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+  }, []);
 
   async function handleCopy() {
     if (!copyValue) return;
@@ -54,7 +59,14 @@ function DetailRow({
     try {
       await Clipboard.setStringAsync(copyValue);
       setCopied(true);
-      setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+      // Clear any in-flight reset before scheduling the next one. Without this,
+      // rapid re-taps stack timers and an earlier one can flip `copied` back to
+      // false before the latest tap's window finishes.
+      if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => {
+        resetTimer.current = null;
+        setCopied(false);
+      }, COPY_FEEDBACK_MS);
     } catch {
       setCopied(false);
     }
@@ -98,7 +110,12 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
           justifyContent:flex-end). Sheet has no parent Pressable so nested
           action buttons receive presses without responder competition. */}
       <View style={S.root}>
-        <Pressable style={S.dismissArea} onPress={onClose} />
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no"
+          style={S.dismissArea}
+          onPress={onClose}
+        />
         <SafeAreaView
           edges={["bottom"]}
           style={[S.sheet, { backgroundColor: colors.surface0, borderColor: colors.borderStrong }]}
