@@ -92,6 +92,14 @@ function testSolanaPayUri() {
     "solana:11111111111111111111111111111111?amount=0.001&label=AnonMesh&message=AnonMesh+receive",
     "padded comma decimal must trim and normalize",
   );
+  // Multiple separators are not a valid number in any locale. Normalizer
+  // replaces only the first comma; the second survives and fails AMOUNT_RE,
+  // so the URI must omit amount= rather than encode garbage.
+  const multiComma = buildSolanaPayUri({
+    recipient: "11111111111111111111111111111111",
+    amount: "1,2,3",
+  });
+  assert.ok(!multiComma.includes("amount="), "multi-comma input must be rejected, not normalized");
 }
 
 function testAddressBookCore() {

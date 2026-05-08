@@ -34,7 +34,10 @@ export function KeyBox({
     );
   }
 
-  if (!captureReady && !secretKey) {
+  if (!captureReady) {
+    // Belt-and-suspenders: even if a stale secret prop survives a render
+    // during the AppState resume reapply window, never render it until the
+    // parent confirms screen-capture prevention is back in place.
     return (
       <View style={[S.box, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
         <Text style={[S.hint, { color: colors.textTertiary }]}>PREPARING SECURE WINDOW…</Text>
