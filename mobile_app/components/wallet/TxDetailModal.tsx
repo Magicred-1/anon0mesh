@@ -1,10 +1,9 @@
 import * as Clipboard from "expo-clipboard";
-import * as WebBrowser from "expo-web-browser";
 import React, { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { DepthButton, Icon, Pill } from "@/components/primitives";
+import { Icon, Pill } from "@/components/primitives";
 import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
@@ -87,9 +86,9 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
   if (!tx) return null;
   const activeTx = tx;
 
-  async function handleExplorer() {
+  function handleExplorer() {
     haptics.tap();
-    await WebBrowser.openBrowserAsync(buildDevnetExplorerTxUrl(activeTx.signature));
+    Linking.openURL(buildDevnetExplorerTxUrl(activeTx.signature)).catch(() => undefined);
   }
 
   return (
@@ -138,8 +137,32 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
             </View>
 
             <View style={S.actions}>
-              <DepthButton label="Explorer" onPress={handleExplorer} size="md" tone="cyan" variant="secondary" style={S.actionButton} />
-              <DepthButton label="Close" onPress={onClose} size="md" tone="cyan" variant="primary" style={S.actionButton} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open in Explorer"
+                onPress={handleExplorer}
+                style={({ pressed }) => [
+                  S.actionBtn,
+                  S.actionBtnSecondary,
+                  { borderColor: colors.border, backgroundColor: colors.surface1 },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={[S.actionBtnText, { color: colors.textPrimary }]}>Explorer</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={onClose}
+                style={({ pressed }) => [
+                  S.actionBtn,
+                  S.actionBtnPrimary,
+                  { backgroundColor: colors.primary },
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={[S.actionBtnText, { color: "#08080A" }]}>Close</Text>
+              </Pressable>
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -243,7 +266,22 @@ const S = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-  actionButton: {
+  actionBtn: {
+    alignItems: "center",
+    borderRadius: 12,
     flex: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  actionBtnSecondary: {
+    borderWidth: 1,
+  },
+  actionBtnPrimary: {},
+  actionBtnText: {
+    fontFamily: FF.sansSb,
+    fontSize: 14,
+    letterSpacing: 0.3,
   },
 });
