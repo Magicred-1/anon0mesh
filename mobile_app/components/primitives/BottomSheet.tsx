@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  Easing,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -50,9 +51,15 @@ import { useTheme } from "@/theme";
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
-const SPRING_OPEN = { damping: 22, stiffness: 250 } as const;
+// Open + close use timing with iOS-feel ease-out cubic — spring physics
+// over SCREEN_HEIGHT travel are underdamped (oscillate / overshoot) and
+// don't match Apple's modal-sheet animation curve. Timing is deterministic
+// and matches the platform.
+const TIMING_OPEN = { duration: 320, easing: Easing.out(Easing.cubic) } as const;
+const TIMING_CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) } as const;
+// Snap-back after partial drag uses a real spring — short distance, no
+// overshoot risk, feels natural after interactive gesture.
 const SPRING_BACK = { damping: 22, stiffness: 320 } as const;
-const TIMING_CLOSE = { duration: 220 } as const;
 
 export interface AppBottomSheetProps {
   readonly visible: boolean;
@@ -91,11 +98,11 @@ export function AppBottomSheet({
   useEffect(() => {
     if (visible) {
       // Ensure mounted=true BEFORE animating so the Modal is on-screen by
-      // the time the spring runs. Reset translateY off-screen first in case
-      // a previous open was interrupted mid-animation.
+      // the time the open animation runs. Reset translateY off-screen first
+      // in case a previous open was interrupted mid-animation.
       setMounted(true);
       translateY.value = SCREEN_HEIGHT;
-      translateY.value = withSpring(0, SPRING_OPEN);
+      translateY.value = withTiming(0, TIMING_OPEN);
     } else if (mounted) {
       translateY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE, (finished) => {
         if (finished) runOnJS(finalizeClose)();
@@ -103,12 +110,14 @@ export function AppBottomSheet({
     }
   }, [visible, mounted, translateY, finalizeClose]);
 
+  // activeOffsetY(12) — single positive number — activates ONLY on
+  // downward translation past 12pt. (Array form [12, SCREEN_HEIGHT]
+  // means "activate when Y is OUTSIDE [12, SCREEN_HEIGHT]", which is
+  // upward past 12 — opposite of what a pull-down dismiss needs.)
   const panGesture = Gesture.Pan()
-    .activeOffsetY([12, SCREEN_HEIGHT])
+    .activeOffsetY(12)
     .failOffsetY(-10)
     .onUpdate((e) => {
-      // Clamp to non-negative so users can't pull the sheet up past its
-      // resting position. Native-thread write — UI follows finger 1:1.
       translateY.value = Math.max(0, e.translationY);
     })
     .onEnd((e) => {
