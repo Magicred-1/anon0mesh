@@ -63,7 +63,11 @@ export const AppBottomSheet = forwardRef<AppBottomSheetHandle, AppBottomSheetPro
     else sheetRef.current?.dismiss();
   }, [visible]);
 
-  const snapPoints = useMemo(() => (snapPoint ? [snapPoint] : undefined), [snapPoint]);
+  // Default to a single 85% snap when the consumer doesn't override.
+  // Dynamic sizing is finicky on first present (BottomSheetView measurement
+  // race in v5.x) — locking a snap point is more reliable across surfaces.
+  // Consumers that want content-sized sheets can pass snapPoint="CONTENT_HEIGHT".
+  const snapPoints = useMemo(() => [snapPoint ?? "85%"], [snapPoint]);
 
   const handleDismiss = useCallback(() => {
     onClose();
@@ -95,10 +99,9 @@ export const AppBottomSheet = forwardRef<AppBottomSheetHandle, AppBottomSheetPro
       ]}
       handleIndicatorStyle={{ backgroundColor: colors.textTertiary }}
       handleStyle={hideHandle ? S.handleHidden : S.handle}
-      enableDynamicSizing={!snapPoints}
+      enableDynamicSizing={false}
       enablePanDownToClose
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
+      index={0}
       onDismiss={handleDismiss}
       snapPoints={snapPoints}
     >
