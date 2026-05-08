@@ -103,8 +103,8 @@ export default function ReceiveScreen() {
     return buildSolanaPayUri({
       recipient: activeAddress,
       amount: requestAmount,
-      label: "AnonMesh",
-      message: `${alias} on AnonMesh`,
+      label: "anonmesh",
+      message: `${alias} on anonmesh`,
       memo: "anonmesh-receive",
     });
   }, [activeAddress, alias, isStealth, requestAmount]);

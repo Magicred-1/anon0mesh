@@ -434,7 +434,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
       {/* Empty state — no peers and not syncing */}
       {nodes.length === 0 && !syncing && (
         <Text style={[S.empty, { color: colors.textTertiary, left: ME_X - 120, top: ME_Y + ME_R + 14 }]}>
-          open AnonMesh on a nearby phone
+          open anonmesh on a nearby phone
         </Text>
       )}
 

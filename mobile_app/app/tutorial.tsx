@@ -37,7 +37,7 @@ export default function TutorialScreen() {
       {
         icon: "identity-chip",
         kicker: "Identity",
-        title: "AnonMesh is your encrypted mesh identity.",
+        title: "anonmesh is your encrypted mesh identity.",
         body: "Your wallet and LXMF address stay on this device. Messages move over the mesh, and payments settle through Solana when you choose to send.",
         statLabel: "Wallet",
         statValue: shortAddress(publicKey?.toBase58()),
@@ -86,7 +86,7 @@ export default function TutorialScreen() {
     <SafeAreaView style={[S.root, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
       <View style={S.header}>
         <Text style={[S.brand, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
-          {displayName || "AnonMesh"}
+          {displayName || "anonmesh"}
         </Text>
         <Pressable onPress={finish} hitSlop={12} style={S.skip}>
           <Text style={[S.skipText, { color: colors.textTertiary, fontFamily: fontFamily.sans }]}>Skip</Text>
@@ -147,7 +147,7 @@ export default function TutorialScreen() {
           style={S.footerButton}
         />
         <DepthButton
-          label={isLast ? "Open AnonMesh" : "Next"}
+          label={isLast ? "Open anonmesh" : "Next"}
           onPress={next}
           size="md"
           tone="cyan"
