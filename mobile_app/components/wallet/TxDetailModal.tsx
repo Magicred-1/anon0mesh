@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
-import React from "react";
+import React, { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -9,6 +9,8 @@ import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { fontFamily as FF, useTheme } from "@/theme";
+
+const COPY_FEEDBACK_MS = 1400;
 
 interface TxDetailModalProps {
   readonly tx: ActivityEntry | null;
@@ -45,12 +47,21 @@ function DetailRow({
   readonly copyValue?: string;
 }) {
   const { colors } = useTheme();
+  const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
     if (!copyValue) return;
     haptics.tap();
-    await Clipboard.setStringAsync(copyValue);
+    try {
+      await Clipboard.setStringAsync(copyValue);
+      setCopied(true);
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+    } catch {
+      setCopied(false);
+    }
   }
+
+  const iconColor = copied ? colors.primary : colors.textTertiary;
 
   return (
     <Pressable
@@ -62,10 +73,10 @@ function DetailRow({
     >
       <Text style={[S.detailLabel, { color: colors.textTertiary }]}>{label}</Text>
       <View style={S.detailValueWrap}>
-        <Text numberOfLines={2} style={[S.detailValue, { color: colors.textPrimary }]}>
+        <Text numberOfLines={2} style={[S.detailValue, { color: copied ? colors.primary : colors.textPrimary }]}>
           {value}
         </Text>
-        {copyValue ? <Icon name="copy" size={13} color={colors.textTertiary} /> : null}
+        {copyValue ? <Icon name={copied ? "check" : "copy"} size={13} color={iconColor} /> : null}
       </View>
     </Pressable>
   );
@@ -83,9 +94,17 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={S.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <SafeAreaView edges={["bottom"]} style={[S.sheet, { backgroundColor: colors.surface0, borderColor: colors.borderStrong }]}>
+      <Pressable style={S.backdrop} onPress={onClose}>
+        {/* Inner Pressable absorbs taps on the sheet so they don't bubble up
+            to the backdrop and trigger dismiss. Previous implementation used
+            an absoluteFill Pressable as a sibling to the sheet, which on
+            Android intercepted taps to DepthButton's nested Pressable inside
+            the sheet (close/explorer buttons silently swallowed). */}
+        <Pressable
+          onPress={() => undefined}
+          style={[S.sheet, { backgroundColor: colors.surface0, borderColor: colors.borderStrong }]}
+        >
+        <SafeAreaView edges={["bottom"]}>
           <View style={S.handleWrap}>
             <View style={[S.handle, { backgroundColor: colors.textTertiary }]} />
           </View>
@@ -125,7 +144,8 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
             </View>
           </ScrollView>
         </SafeAreaView>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
