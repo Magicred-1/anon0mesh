@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { AppState, Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
@@ -74,7 +74,7 @@ interface Props {
 
 export function QRScannerModal({ visible, onResult, onClose }: Props) {
   const { colors } = useTheme();
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
   const [label, setLabel] = useState<string | null>(null);
 
@@ -87,6 +87,18 @@ export function QRScannerModal({ visible, onResult, onClose }: Props) {
       requestPermission();
     }
   }, [visible, permission, requestPermission]);
+
+  // Refresh permission state when the app returns to foreground while the
+  // scanner is open — covers the "deny → open Settings → grant → return"
+  // flow. getPermission reads OS state silently (no prompt), so this is a
+  // no-op when nothing changed and grants live without a re-mount.
+  useEffect(() => {
+    if (!visible) return;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') getPermission();
+    });
+    return () => sub.remove();
+  }, [visible, getPermission]);
 
   const onBarcodeScanned = useCallback(({ data }: { data: string }) => {
     if (scannedRef.current) return;
