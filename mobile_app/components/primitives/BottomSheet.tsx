@@ -11,6 +11,7 @@ import {
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   Easing,
+  Extrapolation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -152,7 +153,17 @@ export function AppBottomSheet({
   }));
 
   const backdropAnimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(translateY.value, [0, SCREEN_HEIGHT], [0.7, 0]),
+    // Clamp: a fast flick can leave translateY momentarily past SCREEN_HEIGHT
+    // before the close timing settles; without clamping, opacity would
+    // extrapolate negative and React Native renders that as 0 (no harm) on
+    // current platforms but treating it as "above 0.7 / below 0" is undefined
+    // for future Reanimated/RN versions.
+    opacity: interpolate(
+      translateY.value,
+      [0, SCREEN_HEIGHT],
+      [0.7, 0],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   return (

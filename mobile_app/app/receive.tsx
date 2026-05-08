@@ -89,15 +89,24 @@ export default function ReceiveScreen() {
     transform: [{ translateY: dragY.value }],
   }));
 
-  // Dismiss: pure router.back. The slide-down animation has already
-  // completed before this fires (sequenced via the timing's completion
-  // callback), and the route has animation:'none', so unmount is instant
-  // and invisible — the user sees the wallet screen exactly as our
+  // Final unmount step. Route is animation:'none' so router.back() is
+  // instant — by the time it fires the slide-down has already pushed the
+  // content off-screen, so the user sees the wallet screen exactly as our
   // off-screen frame ended.
   const dismissRoute = React.useCallback(() => {
     haptics.tap();
     router.back();
   }, [router]);
+
+  // Single dismiss path. Every non-gesture exit (header X, hardware back if
+  // we add it, etc.) MUST go through here so it plays the same slide-down
+  // before unmount. Calling router.back() directly skips the animation and
+  // shows a black-flash since the route is animation:'none'.
+  const animateAndDismiss = React.useCallback(() => {
+    dragY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE, (finished) => {
+      if (finished) runOnJS(dismissRoute)();
+    });
+  }, [dragY, dismissRoute]);
 
   const panGesture = useMemo(
     () =>
@@ -109,19 +118,12 @@ export default function ReceiveScreen() {
         })
         .onEnd((e) => {
           if (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY) {
-            // Sequence: our timing slides the inner Animated.View fully
-            // off-screen, then the completion callback fires router.back.
-            // Route is animation:'none' so unmount is instant — by the
-            // time native unmount happens, the user already sees the
-            // wallet screen behind. Single animation, no compounding.
-            dragY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE, (finished) => {
-              if (finished) runOnJS(dismissRoute)();
-            });
+            runOnJS(animateAndDismiss)();
           } else {
             dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
           }
         }),
-    [dragY, dismissRoute],
+    [dragY, animateAndDismiss],
   );
 
   const walletAddress = publicKey?.toBase58() ?? "";
@@ -202,7 +204,7 @@ export default function ReceiveScreen() {
               <Text style={[S.screenTitle, { color: colors.textPrimary }]}>receive</Text>
             </View>
             <Pressable
-              onPress={() => router.back()}
+              onPress={animateAndDismiss}
               hitSlop={10}
               style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
             >
