@@ -86,8 +86,14 @@ export default function ReceiveScreen() {
         })
         .onEnd((e) => {
           if (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY) {
-            dragY.value = withTiming(800, { duration: 200 });
-            runOnJS(dismissRoute)();
+            // Sequence the dismiss animations: our timing slides the inner
+            // Animated.View off-screen first, then the completion callback
+            // fires router.back. The native back animation runs after,
+            // starting from the already-off-screen state — invisible. No
+            // double-animation jitter.
+            dragY.value = withTiming(800, { duration: 220 }, (finished) => {
+              if (finished) runOnJS(dismissRoute)();
+            });
           } else {
             dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
           }
@@ -140,7 +146,11 @@ export default function ReceiveScreen() {
   if (!activeAddress) {
     return (
       <GestureDetector gesture={panGesture}>
-        <Animated.View style={[S.root, contentStyle, { backgroundColor: colors.background }]}>
+        <Animated.View
+          collapsable={false}
+          renderToHardwareTextureAndroid
+          style={[S.root, contentStyle, { backgroundColor: colors.background }]}
+        >
           <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
             <BottomSheetHandleBar />
             <View style={[S.grid, { flex: 1, justifyContent: "center", alignItems: "center" }]}>
