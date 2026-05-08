@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { Keypair } from "@solana/web3.js";
 
-const { buildSolanaPayUri } = await import("../src/services/solanaPayUri.ts");
+const { buildSolanaPayUri, parseSolanaPayUri } = await import("../src/services/solanaPayUri.ts");
 const {
   MAX_ADDRESS_BOOK_RECIPIENTS,
   normalizeAddressBookEntries,
@@ -64,6 +64,100 @@ function testSolanaPayUri() {
     amount: "abc",
   });
   assert.ok(!nanAmount.includes("amount="), "non-numeric amount should be dropped");
+}
+
+function testParseSolanaPayUri() {
+  // 32-char base58 system address — same fixture the builder tests use.
+  const ADDR = "11111111111111111111111111111111";
+  // 44-char base58 — exercises the upper end of the regex range.
+  const MINT = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
+  const REF1 = key(7);
+  const REF2 = key(8);
+
+  // Bare base58 — recipient only.
+  assert.deepEqual(parseSolanaPayUri(ADDR), { recipient: ADDR });
+  assert.deepEqual(parseSolanaPayUri(`  ${ADDR}  `), { recipient: ADDR });
+  assert.deepEqual(parseSolanaPayUri(MINT), { recipient: MINT });
+
+  // solana: URI without params.
+  assert.deepEqual(parseSolanaPayUri(`solana:${ADDR}`), { recipient: ADDR });
+
+  // Case-insensitive scheme (spec is case-insensitive).
+  assert.deepEqual(parseSolanaPayUri(`SOLANA:${ADDR}`), { recipient: ADDR });
+
+  // Amount only.
+  assert.deepEqual(parseSolanaPayUri(`solana:${ADDR}?amount=0.05`), {
+    recipient: ADDR,
+    amount: "0.05",
+  });
+
+  // Full param set with URL-encoded label/message.
+  assert.deepEqual(
+    parseSolanaPayUri(
+      `solana:${ADDR}?amount=1.23&label=Anon%20Mesh&message=scan%20me&memo=hi`,
+    ),
+    {
+      recipient: ADDR,
+      amount: "1.23",
+      label: "Anon Mesh",
+      message: "scan me",
+      memo: "hi",
+    },
+  );
+
+  // spl-token mint surfaced separately so callers can route per asset.
+  assert.deepEqual(
+    parseSolanaPayUri(`solana:${ADDR}?amount=10&spl-token=${MINT}`),
+    { recipient: ADDR, amount: "10", splToken: MINT },
+  );
+
+  // Bad spl-token mint is filtered out, not surfaced as a partial result.
+  const bogusToken = parseSolanaPayUri(`solana:${ADDR}?spl-token=not-a-mint`);
+  assert.equal(bogusToken?.recipient, ADDR);
+  assert.equal(bogusToken?.splToken, undefined);
+
+  // Multi-reference: kept as array, base58-validated.
+  assert.deepEqual(
+    parseSolanaPayUri(`solana:${ADDR}?reference=${REF1}&reference=${REF2}`),
+    { recipient: ADDR, reference: [REF1, REF2] },
+  );
+
+  // Reference filter drops invalid entries while keeping valid ones.
+  const mixedRefs = parseSolanaPayUri(
+    `solana:${ADDR}?reference=${REF1}&reference=not-base58&reference=${REF2}`,
+  );
+  assert.deepEqual(mixedRefs?.reference, [REF1, REF2]);
+
+  // All-invalid references → reference field omitted entirely.
+  const noValidRefs = parseSolanaPayUri(`solana:${ADDR}?reference=junk`);
+  assert.equal(noValidRefs?.reference, undefined);
+
+  // Amount edge cases — rejected silently, recipient still surfaces so the
+  // user can pick the amount on the keypad.
+  assert.deepEqual(parseSolanaPayUri(`solana:${ADDR}?amount=0`), { recipient: ADDR });
+  assert.deepEqual(parseSolanaPayUri(`solana:${ADDR}?amount=-1`), { recipient: ADDR });
+  assert.deepEqual(parseSolanaPayUri(`solana:${ADDR}?amount=abc`), { recipient: ADDR });
+
+  // 9 decimals is the SOL/spec ceiling.
+  assert.deepEqual(parseSolanaPayUri(`solana:${ADDR}?amount=0.123456789`), {
+    recipient: ADDR,
+    amount: "0.123456789",
+  });
+
+  // 10 decimals: dropped, parser must not encode an out-of-range amount.
+  assert.deepEqual(parseSolanaPayUri(`solana:${ADDR}?amount=0.1234567890`), {
+    recipient: ADDR,
+  });
+
+  // Invalid inputs return null — caller handles "QR not recognised".
+  assert.equal(parseSolanaPayUri(""), null);
+  assert.equal(parseSolanaPayUri("   "), null);
+  assert.equal(parseSolanaPayUri("https://example.com/not-a-pay"), null);
+  assert.equal(parseSolanaPayUri("lxmf://abc1234567890abc1234567890abc12"), null);
+  assert.equal(parseSolanaPayUri("solana:not-an-address"), null);
+  assert.equal(parseSolanaPayUri("solana:"), null);
+  // Address with disallowed base58 chars (0, O, I, l) → null.
+  assert.equal(parseSolanaPayUri("0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl"), null);
 }
 
 function testAddressBookCore() {
@@ -267,6 +361,7 @@ function testSplProgramGuard() {
 }
 
 testSolanaPayUri();
+testParseSolanaPayUri();
 testAddressBookCore();
 testRecoveryKeyFormatting();
 testBaseUnitParsing();
