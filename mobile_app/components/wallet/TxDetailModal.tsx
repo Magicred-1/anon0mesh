@@ -94,17 +94,16 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <Pressable style={S.backdrop} onPress={onClose}>
-        {/* Inner Pressable absorbs taps on the sheet so they don't bubble up
-            to the backdrop and trigger dismiss. Previous implementation used
-            an absoluteFill Pressable as a sibling to the sheet, which on
-            Android intercepted taps to DepthButton's nested Pressable inside
-            the sheet (close/explorer buttons silently swallowed). */}
-        <Pressable
-          onPress={() => undefined}
+      {/* Dismiss-Pressable fills only the space above the sheet (flex:1 inside
+          a flex-end column) so it never overlaps the sheet area. Sheet is a
+          plain SafeAreaView — no parent Pressable to claim the responder
+          before nested DepthButton presses register. */}
+      <View style={S.root}>
+        <Pressable style={S.dismissArea} onPress={onClose} />
+        <SafeAreaView
+          edges={["bottom"]}
           style={[S.sheet, { backgroundColor: colors.surface0, borderColor: colors.borderStrong }]}
         >
-        <SafeAreaView edges={["bottom"]}>
           <View style={S.handleWrap}>
             <View style={[S.handle, { backgroundColor: colors.textTertiary }]} />
           </View>
@@ -144,17 +143,19 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
             </View>
           </ScrollView>
         </SafeAreaView>
-        </Pressable>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
 
 const S = StyleSheet.create({
-  backdrop: {
+  root: {
     backgroundColor: "rgba(0,0,0,0.68)",
     flex: 1,
     justifyContent: "flex-end",
+  },
+  dismissArea: {
+    flex: 1,
   },
   sheet: {
     borderTopLeftRadius: 22,
