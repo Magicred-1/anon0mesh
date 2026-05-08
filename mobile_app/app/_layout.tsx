@@ -94,13 +94,20 @@ function AppShell() {
           <Stack.Screen name="tutorial" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
           <Stack.Screen name="contacts" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          {/* transparentModal (vs modal) so the route container's background
-              is transparent. After our local pan-to-dismiss slides the
-              inner content off-screen, the native back animation runs over
-              transparent — no black flash of an empty container. Receive
-              content owns its own backgroundColor so the visible area
-              still looks identical. */}
-          <Stack.Screen name="receive" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
+          {/* Receive owns its own enter + exit animation via Reanimated.
+              transparentModal + animation:'none' + transparent contentStyle
+              means the route container is invisible at every phase. No
+              native enter slide, no native back slide, no empty-container
+              black flash — the receive screen's own Animated.View handles
+              all motion against the wallet screen showing through behind. */}
+          <Stack.Screen
+            name="receive"
+            options={{
+              presentation: 'transparentModal',
+              animation: 'none',
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
+          />
           <Stack.Screen name="send/recipient" />
           <Stack.Screen name="send/amount" />
           <Stack.Screen name="send/review" />
