@@ -1,154 +1,211 @@
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-  BottomSheetModal,
-  BottomSheetView,
-} from "@gorhom/bottom-sheet";
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useTheme } from "@/theme";
 
-// Single source of truth for bottom-sheet behavior across the app. Wraps
-// @gorhom/bottom-sheet's imperative BottomSheetModal with our visual chrome
-// (handle, backdrop fade tied to drag progress, glass surface) and standard
-// physics (snappy spring, flick-to-dismiss, pan-from-anywhere). For sheets
-// with internal scroll, use BottomSheetScrollView/BottomSheetFlatList
-// re-exported below — gorhom wires the scroll-to-dismiss handoff
-// automatically (drag down on scrolled-to-top dismisses; mid-content scrolls
-// first, then hands off).
+// Single source of truth for app bottom-sheet behavior. Built on
+// react-native-gesture-handler + Reanimated so the gesture and animation
+// run on the UI thread (1:1 finger tracking, no JS lag). Native RN Modal
+// gives us a real platform overlay; we own the in-modal layout, gesture,
+// and animation.
 //
-// Usage:
-//   <AppBottomSheet visible={visible} onClose={() => setVisible(false)}>
-//     <YourContent />
-//   </AppBottomSheet>
+// Behavior:
+// - Pan from anywhere on the sheet body. Inner Pressables/inputs still
+//   receive their taps (Pan.activeOffsetY only claims after 12pt of
+//   downward motion).
+// - Native-thread translateY follows the finger 1:1 during drag.
+// - Release past distance threshold OR with high downward velocity
+//   dismisses; otherwise springs back.
+// - Backdrop opacity interpolates with drag progress so the dim fades as
+//   the sheet leaves.
+// - Spring physics tuned snappy (damping 22, stiffness 250) — feels Apple-
+//   adjacent without the gorhom dependency.
+//
+// Does NOT (yet) implement:
+// - Scroll-to-dismiss handoff for inner ScrollView. Sheets with scrollable
+//   content should add `simultaneousWithExternalGesture(scrollRef)` on
+//   the pan gesture and gate translateY updates on scrollOffset === 0.
+//   Add when the first consumer needs it (TxDetailModal post-merge).
+// - Snap points. Single-position sheets only. Add if a sheet needs
+//   medium/large states.
+
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 800;
+const SPRING_OPEN = { damping: 22, stiffness: 250 } as const;
+const SPRING_BACK = { damping: 22, stiffness: 320 } as const;
+const TIMING_CLOSE = { duration: 220 } as const;
 
 export interface AppBottomSheetProps {
   readonly visible: boolean;
   readonly onClose: () => void;
   readonly children: React.ReactNode;
-  /**
-   * Snap point (e.g. "60%", "85%"). Omit to use dynamic sizing — the sheet
-   * fits its content height. Most consumers want this default.
-   */
-  readonly snapPoint?: string;
+  /** Hide the grab indicator. Apple convention keeps it; rare to disable. */
+  readonly hideHandle?: boolean;
   readonly contentStyle?: StyleProp<ViewStyle>;
   readonly backgroundColor?: string;
   readonly borderColor?: string;
-  /** Hide the grab indicator. Apple convention keeps it; rare to disable. */
-  readonly hideHandle?: boolean;
 }
 
-export interface AppBottomSheetHandle {
-  present: () => void;
-  dismiss: () => void;
-}
-
-export const AppBottomSheet = forwardRef<AppBottomSheetHandle, AppBottomSheetProps>(function AppBottomSheet(
-  { visible, onClose, children, snapPoint, contentStyle, backgroundColor, borderColor, hideHandle = false },
-  ref,
-) {
+export function AppBottomSheet({
+  visible,
+  onClose,
+  children,
+  hideHandle = false,
+  contentStyle,
+  backgroundColor,
+  borderColor,
+}: AppBottomSheetProps) {
   const { colors } = useTheme();
-  const sheetRef = useRef<BottomSheetModal>(null);
 
-  useImperativeHandle(ref, () => ({
-    present: () => sheetRef.current?.present(),
-    dismiss: () => sheetRef.current?.dismiss(),
+  // translateY: 0 = fully open at rest position. SCREEN_HEIGHT = fully
+  // off-screen. We animate between these two on visibility flip and during
+  // drag.
+  const translateY = useSharedValue(SCREEN_HEIGHT);
+
+  // Internal mounted state lags the visible prop on close so the slide-down
+  // animation finishes before the native Modal unmounts. Without this the
+  // Modal would unmount the instant `visible` flips false, snapping the
+  // sheet off-screen and skipping the animation.
+  const [mounted, setMounted] = useState(visible);
+  const finalizeClose = useCallback(() => setMounted(false), []);
+
+  useEffect(() => {
+    if (visible) {
+      // Ensure mounted=true BEFORE animating so the Modal is on-screen by
+      // the time the spring runs. Reset translateY off-screen first in case
+      // a previous open was interrupted mid-animation.
+      setMounted(true);
+      translateY.value = SCREEN_HEIGHT;
+      translateY.value = withSpring(0, SPRING_OPEN);
+    } else if (mounted) {
+      translateY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE, (finished) => {
+        if (finished) runOnJS(finalizeClose)();
+      });
+    }
+  }, [visible, mounted, translateY, finalizeClose]);
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetY([12, SCREEN_HEIGHT])
+    .failOffsetY(-10)
+    .onUpdate((e) => {
+      // Clamp to non-negative so users can't pull the sheet up past its
+      // resting position. Native-thread write — UI follows finger 1:1.
+      translateY.value = Math.max(0, e.translationY);
+    })
+    .onEnd((e) => {
+      const past = translateY.value > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY;
+      if (past) {
+        translateY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE);
+        runOnJS(onClose)();
+      } else {
+        translateY.value = withSpring(0, SPRING_BACK);
+      }
+    });
+
+  const sheetAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
   }));
 
-  // Sync imperative gorhom API with declarative `visible` prop. Consumers
-  // pass visible/onClose like a regular Modal; this bridges to gorhom.
-  useEffect(() => {
-    if (visible) sheetRef.current?.present();
-    else sheetRef.current?.dismiss();
-  }, [visible]);
-
-  // Default to a single 85% snap when the consumer doesn't override.
-  // Dynamic sizing is finicky on first present (BottomSheetView measurement
-  // race in v5.x) — locking a snap point is more reliable across surfaces.
-  // Consumers that want content-sized sheets can pass snapPoint="CONTENT_HEIGHT".
-  const snapPoints = useMemo(() => [snapPoint ?? "85%"], [snapPoint]);
-
-  const handleDismiss = useCallback(() => {
-    onClose();
-  }, [onClose]);
-
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        opacity={0.7}
-        pressBehavior="close"
-      />
-    ),
-    [],
-  );
+  const backdropAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateY.value, [0, SCREEN_HEIGHT], [0.7, 0]),
+  }));
 
   return (
-    <BottomSheetModal
-      ref={sheetRef}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={[
-        S.background,
-        {
-          backgroundColor: backgroundColor ?? colors.surface0,
-          borderColor: borderColor ?? colors.borderStrong,
-        },
-      ]}
-      handleIndicatorStyle={{ backgroundColor: colors.textTertiary }}
-      handleStyle={hideHandle ? S.handleHidden : S.handle}
-      enableDynamicSizing={false}
-      enablePanDownToClose
-      index={0}
-      onDismiss={handleDismiss}
-      snapPoints={snapPoints}
-    >
-      <BottomSheetView style={[S.content, contentStyle]}>{children}</BottomSheetView>
-    </BottomSheetModal>
-  );
-});
+    <Modal animationType="none" transparent visible={mounted} onRequestClose={onClose}>
+      <View style={S.root}>
+        {/* Dim overlay: full-screen, pointerEvents='none' so taps pass
+            through to the dismissArea / sheet beneath. Opacity drives off
+            the same shared value as the sheet so the dim fades as the
+            sheet slides away. */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, S.backdrop, backdropAnimStyle]}
+        />
 
-// Standalone grab-handle for surfaces that can't move to AppBottomSheet yet
-// (route-style modals like the receive screen). Visual matches the gorhom
-// indicator so the app feels consistent across the two flavors.
+        {/* DismissArea: flex:1 fills only the space above the sheet (sheet
+            has intrinsic height + maxHeight 90% pushed to bottom by
+            justifyContent:flex-end on root). Tap-to-close lives here, not
+            on an absoluteFill — so taps inside the sheet never hit a
+            backdrop sibling and lose to a parent gesture claim. Same fix
+            pattern as TxDetailModal post-debug. */}
+        <Pressable style={S.dismissArea} onPress={onClose} />
+
+        <GestureDetector gesture={panGesture}>
+          <Animated.View
+            style={[
+              S.sheet,
+              {
+                backgroundColor: backgroundColor ?? colors.surface0,
+                borderColor: borderColor ?? colors.borderStrong,
+              },
+              sheetAnimStyle,
+            ]}
+          >
+            <SafeAreaView edges={["bottom"]}>
+              {!hideHandle ? (
+                <View style={S.handleWrap}>
+                  <View style={[S.handleBar, { backgroundColor: colors.textTertiary }]} />
+                </View>
+              ) : null}
+              <View style={[S.content, contentStyle]}>{children}</View>
+            </SafeAreaView>
+          </Animated.View>
+        </GestureDetector>
+      </View>
+    </Modal>
+  );
+}
+
+// Standalone grab-handle for surfaces that aren't AppBottomSheets but want
+// the same visual indicator (e.g. route-style modals like the receive
+// screen). The gesture is owned by the consumer; this is the visual only.
 export function BottomSheetHandleBar({ style }: { readonly style?: StyleProp<ViewStyle> }) {
   const { colors } = useTheme();
   return (
-    <View style={[S.handleBarWrap, style]}>
+    <View style={[S.handleWrap, style]}>
       <View style={[S.handleBar, { backgroundColor: colors.textTertiary }]} />
     </View>
   );
 }
 
-// Re-export gorhom's scroll/list components so consumers don't need a
-// separate gorhom import. Use these inside AppBottomSheet content when
-// the sheet has scrollable content.
-export { BottomSheetScrollView, BottomSheetFlatList } from "@gorhom/bottom-sheet";
-
 const S = StyleSheet.create({
-  background: {
+  root: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  backdrop: {
+    backgroundColor: "#000000",
+  },
+  dismissArea: {
+    flex: 1,
+  },
+  sheet: {
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     borderTopWidth: 1,
+    maxHeight: "90%",
+    overflow: "hidden",
   },
-  handle: {
-    paddingBottom: 8,
-    paddingTop: 12,
-  },
-  handleHidden: {
-    height: 0,
-    opacity: 0,
-    paddingBottom: 0,
-    paddingTop: 0,
-  },
-  content: {
-    paddingBottom: 24,
-    paddingHorizontal: 16,
-    paddingTop: 4,
-  },
-  handleBarWrap: {
+  handleWrap: {
     alignItems: "center",
     paddingBottom: 8,
     paddingTop: 12,
@@ -158,5 +215,10 @@ const S = StyleSheet.create({
     height: 4,
     opacity: 0.5,
     width: 36,
+  },
+  content: {
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
 });
