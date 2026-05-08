@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Alert,
@@ -21,7 +21,6 @@ import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import { useAddressBook } from "@/src/services/addressBook";
-import { DEMO_MODE, DEMO_RECIPIENT_ADDRESS } from "@/src/utils/demoMode";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -48,7 +47,7 @@ function shortAddress(addr: string): string {
 
 function handleScan() {
   haptics.tap();
-  Alert.alert("QR scan coming soon", "Paste an address or use the devnet fill for now.");
+  Alert.alert("QR scan coming soon", "Paste an address for now.");
 }
 
 // ── sub-components ────────────────────────────────────────────────────────────
@@ -89,7 +88,8 @@ function AddressFeedback({
 export function RecipientPicker() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [address, setAddress] = useState(DEMO_MODE ? DEMO_RECIPIENT_ADDRESS : "");
+  const params = useLocalSearchParams<{ to?: string }>();
+  const [address, setAddress] = useState(typeof params.to === "string" ? params.to : "");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
   const { tokens } = useWalletBalance();
@@ -127,11 +127,6 @@ export function RecipientPicker() {
     } catch {
       // non-fatal
     }
-  }
-
-  function handleDemoFill() {
-    haptics.tap();
-    setAddress(DEMO_RECIPIENT_ADDRESS);
   }
 
   function handleSelectRecent(pubkey: string) {
@@ -283,19 +278,6 @@ export function RecipientPicker() {
               </Text>
             </Pressable>
 
-            {/* ── Demo fill ── */}
-            {DEMO_MODE ? (
-              <Pressable
-                accessibilityLabel="Fill demo Solana devnet address"
-                onPress={handleDemoFill}
-                style={[S.devPill, { backgroundColor: colors.accentSubtle, borderColor: colors.border }]}
-              >
-                <Feather name="code" size={13} color={colors.accent} />
-                <Text style={[S.devPillText, { color: colors.accent }]}>
-                  demo: fill devnet address
-                </Text>
-              </Pressable>
-            ) : null}
           </ScrollView>
         </KeyboardAvoidingView>
 
@@ -488,22 +470,6 @@ const S = StyleSheet.create({
     fontFamily: FF.sans,
     fontSize: 12,
     textAlign: "center",
-  },
-
-  // dev pill
-  devPill: {
-    alignItems: "center",
-    alignSelf: "flex-start",
-    borderRadius: 12,
-    borderWidth: 0.5,
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  devPillText: {
-    fontFamily: FF.mono,
-    fontSize: 11,
   },
 
   // footer
