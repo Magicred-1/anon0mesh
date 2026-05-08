@@ -80,7 +80,7 @@ export function AmountKeypad() {
     <SendScaffold
       onBack={() => router.back()}
       step={2}
-      title="Set amount"
+      title="set amount"
       footer={
         <DepthButton
           disabled={!isValid}
