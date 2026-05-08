@@ -214,7 +214,11 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
                 pressed && { opacity: 0.6 },
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`${out ? 'Sent' : 'Received'} ${fmtAmount(tx.amountSol, tx.decimals)} ${tx.symbol}. Tap for transaction details.`}
+              accessibilityLabel={
+                hidden
+                  ? `${out ? 'Sent' : 'Received'} transaction, amount hidden. Tap for transaction details.`
+                  : `${out ? 'Sent' : 'Received'} ${fmtAmount(tx.amountSol, tx.decimals)} ${tx.symbol}. Tap for transaction details.`
+              }
             >
               <View style={[S.activityIconWrap, { backgroundColor: color + '18' }]}>
                 <Feather name={out ? 'arrow-up-right' : 'arrow-down-left'} size={14} color={color} />
