@@ -3,7 +3,6 @@ import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-  PanResponder,
   Pressable,
   Share,
   StyleSheet,
@@ -11,8 +10,10 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -22,7 +23,7 @@ import Animated, {
 import { SafeAreaView } from "react-native-safe-area-context";
 import QRCodeSvg from "react-native-qrcode-svg";
 
-import { SegmentedControl, TokenLogo } from "@/components/primitives";
+import { BottomSheetHandleBar, SegmentedControl, TokenLogo } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
@@ -30,7 +31,7 @@ import { buildSolanaPayUri } from "@/src/services/solanaPayUri";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 const DISMISS_DISTANCE = 120;
-const DISMISS_VELOCITY = 0.8;
+const DISMISS_VELOCITY = 800;
 const GAP = 10;
 
 const ADDRESS_MODES = [
@@ -64,31 +65,34 @@ export default function ReceiveScreen() {
     transform: [{ translateY: dragY.value }],
   }));
 
-  const panResponder = useMemo(
+  // Replaced legacy PanResponder (JS-thread, laggy on Seeker) with
+  // gesture-handler Pan + Reanimated worklet writes — translateY updates
+  // on the UI thread so the sheet follows the finger 1:1 even under load.
+  // activeOffsetY/failOffsetY tuned to feel like Apple's modal sheet:
+  // any downward intention beyond 8pt activates dismiss; upward pan
+  // never claims the gesture (lets inner Pressables/inputs work).
+  const dismissRoute = React.useCallback(() => {
+    haptics.tap();
+    router.back();
+  }, [router]);
+
+  const panGesture = useMemo(
     () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: (_, g) =>
-          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
-        onMoveShouldSetPanResponderCapture: (_, g) =>
-          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderMove: (_, g) => {
-          dragY.value = Math.max(0, g.dy);
-        },
-        onPanResponderRelease: (_, g) => {
-          if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
-            haptics.tap();
-            router.back();
+      Gesture.Pan()
+        .activeOffsetY(8)
+        .failOffsetY(-10)
+        .onUpdate((e) => {
+          dragY.value = Math.max(0, e.translationY);
+        })
+        .onEnd((e) => {
+          if (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY) {
+            dragY.value = withTiming(800, { duration: 200 });
+            runOnJS(dismissRoute)();
           } else {
             dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
           }
-        },
-        onPanResponderTerminate: () => {
-          dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
-        },
-      }),
-    [dragY, router],
+        }),
+    [dragY, dismissRoute],
   );
 
   const walletAddress = publicKey?.toBase58() ?? "";
@@ -135,10 +139,10 @@ export default function ReceiveScreen() {
 
   if (!activeAddress) {
     return (
-      <View style={[S.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-        <Animated.View style={[S.fill, contentStyle]}>
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[S.root, contentStyle, { backgroundColor: colors.background }]}>
           <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
-            <GrabHandle color={colors.textTertiary} />
+            <BottomSheetHandleBar />
             <View style={[S.grid, { flex: 1, justifyContent: "center", alignItems: "center" }]}>
               <Text style={[S.noWalletTitle, { color: colors.textPrimary }]}>Connect wallet to receive</Text>
               <Text style={[S.noWalletSub, { color: colors.textSecondary }]}>
@@ -147,16 +151,16 @@ export default function ReceiveScreen() {
             </View>
           </SafeAreaView>
         </Animated.View>
-      </View>
+      </GestureDetector>
     );
   }
 
   return (
-    <View style={[S.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      <Animated.View style={[S.fill, contentStyle]}>
+    <GestureDetector gesture={panGesture}>
+      <Animated.View style={[S.root, contentStyle, { backgroundColor: colors.background }]}>
         <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
 
-          <GrabHandle color={colors.textTertiary} />
+          <BottomSheetHandleBar />
 
           {/* ── header ── */}
           <View style={S.header}>
@@ -293,15 +297,7 @@ export default function ReceiveScreen() {
           </View>
         </SafeAreaView>
       </Animated.View>
-    </View>
-  );
-}
-
-function GrabHandle({ color }: { readonly color: string }) {
-  return (
-    <View style={S.grabHandle}>
-      <View style={[S.grabPill, { backgroundColor: color }]} />
-    </View>
+    </GestureDetector>
   );
 }
 
@@ -309,9 +305,6 @@ const S = StyleSheet.create({
   root:         { flex: 1 },
   fill:         { flex: 1 },
   grid:         { paddingHorizontal: 16, gap: GAP, paddingBottom: 16 },
-
-  grabHandle:   { alignItems: "center", paddingVertical: 10 },
-  grabPill:     { width: 44, height: 4, borderRadius: 2, opacity: 0.4 },
 
   header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
   kicker:       { fontFamily: FF.sansMd, fontSize: 10, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },
