@@ -11,7 +11,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "validate:tier0:services": "node --no-warnings --experimental-transform-types ./scripts/validate-tier0-services.mjs",
-    "validate:tier0": "bash ./scripts/validate-tier0.sh"
+    "validate:tier0": "bash ./scripts/validate-tier0.sh",
+    "replay:tutorial:android": "adb shell am start -W -a android.intent.action.VIEW -d 'anonmesh://tutorial' magicred1.anonmesh.app",
+    "replay:tutorial:ios": "xcrun simctl openurl booted 'anonmesh://tutorial'"
   },
   "dependencies": {
     "@expo-google-fonts/space-grotesk": "^0.4.1",
