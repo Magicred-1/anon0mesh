@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   interpolate,
@@ -26,27 +26,40 @@ import { useTheme } from "@/theme";
 // react-native-gesture-handler + Reanimated so the gesture and animation
 // run on the UI thread (1:1 finger tracking, no JS lag). Native RN Modal
 // gives us a real platform overlay; we own the in-modal layout, gesture,
-// and animation.
+// and animation. Standard primitive — every new sheet in the app should
+// use this; no per-screen ad-hoc gesture/animation rewrites.
 //
 // Behavior:
 // - Pan from anywhere on the sheet body. Inner Pressables/inputs still
-//   receive their taps (Pan.activeOffsetY only claims after 12pt of
-//   downward motion).
+//   receive their taps (Pan.activeOffsetY(12) only claims after 12pt of
+//   downward motion; failOffsetY(-10) yields entirely on upward intent).
 // - Native-thread translateY follows the finger 1:1 during drag.
-// - Release past distance threshold OR with high downward velocity
-//   dismisses; otherwise springs back.
+// - Release past distance threshold (120pt) OR with high downward velocity
+//   (800px/s) dismisses; otherwise springs back to rest.
+// - Open uses timing (320ms ease-out cubic) — matches iOS modal sheet curve
+//   without the underdamped spring overshoot we'd get over SCREEN_HEIGHT.
+// - Close uses timing (220ms ease-in cubic).
+// - Snap-back after partial drag uses a real spring (damping 22, stiffness
+//   320) — short distance, no overshoot risk, feels natural after gesture.
 // - Backdrop opacity interpolates with drag progress so the dim fades as
 //   the sheet leaves.
-// - Spring physics tuned snappy (damping 22, stiffness 250) — feels Apple-
-//   adjacent without the gorhom dependency.
+// - Internal mounted state lags `visible` prop on close so the slide-down
+//   animation completes before the Modal unmounts.
 //
-// Does NOT (yet) implement:
-// - Scroll-to-dismiss handoff for inner ScrollView. Sheets with scrollable
-//   content should add `simultaneousWithExternalGesture(scrollRef)` on
-//   the pan gesture and gate translateY updates on scrollOffset === 0.
-//   Add when the first consumer needs it (TxDetailModal post-merge).
-// - Snap points. Single-position sheets only. Add if a sheet needs
-//   medium/large states.
+// Critical wiring:
+// - GestureHandlerRootView wraps the Modal contents. RN Modal renders in a
+//   separate native view tree (Window/Dialog on Android, separate UIWindow
+//   on iOS); the app-root GestureHandlerRootView does NOT propagate inside.
+//   Without this wrap, gestures silently fail inside the sheet.
+//
+// Future extensions (add when first consumer needs them):
+// - Scroll-to-dismiss handoff for inner ScrollView (TxDetailModal
+//   post-merge): add `simultaneousWithExternalGesture(scrollRef)` to the
+//   Pan + gate translateY updates on scrollOffset === 0.
+// - Snap points (medium/large rest states): replace the binary
+//   open/closed translateY targets with a snap-point array + projection.
+// - Keyboard avoidance for sheets with TextInput (recovery export, send
+//   amount entry): wrap content in KeyboardAvoidingView with offset.
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const DISMISS_DISTANCE = 120;
@@ -140,7 +153,14 @@ export function AppBottomSheet({
 
   return (
     <Modal animationType="none" transparent visible={mounted} onRequestClose={onClose}>
-      <View style={S.root}>
+      {/* RN Modal renders contents in a separate native view tree (a
+          new Window/Dialog on Android, a separate UIWindow on iOS).
+          The app-root GestureHandlerRootView does NOT propagate into
+          that tree, so gestures inside the modal need their own root.
+          Without this wrap, GestureDetector sees no gestures.
+          Documented in react-native-gesture-handler README under
+          "Using inside Modal". */}
+      <GestureHandlerRootView style={S.root}>
         {/* Dim overlay: full-screen, pointerEvents='none' so taps pass
             through to the dismissArea / sheet beneath. Opacity drives off
             the same shared value as the sheet so the dim fades as the
@@ -164,7 +184,7 @@ export function AppBottomSheet({
               S.sheet,
               {
                 backgroundColor: backgroundColor ?? colors.surface0,
-                borderColor: borderColor ?? colors.borderStrong,
+                borderColor: borderColor ?? colors.border,
               },
               sheetAnimStyle,
             ]}
@@ -179,7 +199,7 @@ export function AppBottomSheet({
             </SafeAreaView>
           </Animated.View>
         </GestureDetector>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -210,7 +230,10 @@ const S = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    borderTopWidth: 1,
+    // Hairline divider only (StyleSheet.hairlineWidth is sub-pixel on iOS,
+    // 1px on Android). Color defaults to colors.border (subtle), not
+    // borderStrong (cyan-tinted = visible blue line at top of sheet).
+    borderTopWidth: StyleSheet.hairlineWidth,
     maxHeight: "90%",
     overflow: "hidden",
   },
