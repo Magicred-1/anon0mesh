@@ -35,7 +35,7 @@ export default function TutorialScreen() {
     const onlinePeers = peers.filter((peer) => peer.online).length;
     return [
       {
-        icon: "identity-chip",
+        icon: "user",
         kicker: "Identity",
         title: "anonmesh is your encrypted mesh identity.",
         body: "Your wallet and LXMF address stay on this device. Messages move over the mesh, and payments settle through Solana when you choose to send.",
@@ -43,7 +43,7 @@ export default function TutorialScreen() {
         statValue: shortAddress(publicKey?.toBase58()),
       },
       {
-        icon: "signal",
+        icon: "radio",
         kicker: "Evidence",
         title: "Nearby counts come from live radio signals.",
         body: "Bluetooth scanning and advertising let the app prove local mesh reachability. Location permission is requested only because Android requires it for BLE discovery.",
