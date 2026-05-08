@@ -134,6 +134,7 @@ export interface ActivityEntry {
   amountBaseUnits: string;
   amountLamports?: number;
   amountSol: number;
+  decimals: number;
   symbol: string;
   mintAddress?: string;
   counterparty: string;
@@ -314,6 +315,7 @@ function toActivity(
       status: failed ? "Failed" : "Settled",
       amountBaseUnits: amountAbs.toString(),
       amountSol: Number(amountAbs) / Math.pow(10, tokenDelta.decimals),
+      decimals: tokenDelta.decimals,
       symbol: tokenDelta.symbol,
       mintAddress: tokenDelta.mint,
       counterparty,
@@ -336,6 +338,7 @@ function toActivity(
     amountBaseUnits: String(transfer.lamports),
     amountLamports: transfer.lamports,
     amountSol: transfer.lamports / LAMPORTS_PER_SOL,
+    decimals: SOL_DECIMALS,
     symbol: "SOL",
     counterparty,
     createdAt,
