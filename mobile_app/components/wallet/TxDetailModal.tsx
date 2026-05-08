@@ -93,10 +93,10 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      {/* Dismiss-Pressable fills only the space above the sheet (flex:1 inside
-          a flex-end column) so it never overlaps the sheet area. Sheet is a
-          plain SafeAreaView — no parent Pressable to claim the responder
-          before nested DepthButton presses register. */}
+      {/* Bottom-sheet split pattern: dismissArea is a flex:1 Pressable that
+          fills only the space above the sheet (column flex with
+          justifyContent:flex-end). Sheet has no parent Pressable so nested
+          action buttons receive presses without responder competition. */}
       <View style={S.root}>
         <Pressable style={S.dismissArea} onPress={onClose} />
         <SafeAreaView
@@ -156,7 +156,6 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
                 onPress={onClose}
                 style={({ pressed }) => [
                   S.actionBtn,
-                  S.actionBtnPrimary,
                   { backgroundColor: colors.primary },
                   pressed && { opacity: 0.85 },
                 ]}
@@ -278,7 +277,6 @@ const S = StyleSheet.create({
   actionBtnSecondary: {
     borderWidth: 1,
   },
-  actionBtnPrimary: {},
   actionBtnText: {
     fontFamily: FF.sansSb,
     fontSize: 14,
