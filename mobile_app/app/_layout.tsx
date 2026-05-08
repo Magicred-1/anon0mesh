@@ -94,7 +94,13 @@ function AppShell() {
           <Stack.Screen name="tutorial" options={{ gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
           <Stack.Screen name="contacts" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="receive" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          {/* transparentModal (vs modal) so the route container's background
+              is transparent. After our local pan-to-dismiss slides the
+              inner content off-screen, the native back animation runs over
+              transparent — no black flash of an empty container. Receive
+              content owns its own backgroundColor so the visible area
+              still looks identical. */}
+          <Stack.Screen name="receive" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="send/recipient" />
           <Stack.Screen name="send/amount" />
           <Stack.Screen name="send/review" />
