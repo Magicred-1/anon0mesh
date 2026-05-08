@@ -33,13 +33,17 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   // fired it and forgot — if it rejected (older OS, sandbox issue, race with
   // another capture-protected screen), the user could reveal a recovery key
   // with screenshots fully unblocked while the UI still claimed otherwise.
-  // Now: gate the authenticate tap, scrub any rendered secret if protection
-  // lapses, and re-apply prevention on AppState foreground in case the OS
-  // dropped the flag while the app was backgrounded.
+  // Now: pessimistically drop to 'pending' before each apply, gate the
+  // authenticate tap and the secret render on confirmed 'blocked', scrub any
+  // rendered secret if protection lapses, and re-apply prevention on AppState
+  // foreground in case the OS dropped the flag while the app was backgrounded.
   useEffect(() => {
     let mounted = true;
 
     async function applyBlock() {
+      // Reset before every attempt so the in-flight window between resume and
+      // confirmed prevention can never render the secret with stale 'blocked'.
+      if (mounted) setCaptureBlock('pending');
       try {
         await ScreenCapture.preventScreenCaptureAsync();
         if (mounted) setCaptureBlock('blocked');
@@ -60,11 +64,13 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // If capture protection ever lapses while a secret is on screen, drop it
-  // immediately. The user backgrounding mid-reveal can cause the prevention
-  // call to fail when the app foregrounds.
+  // Drop any in-memory secret whenever capture protection isn't currently
+  // confirmed-applied. Covers both 'unavailable' (prevention failed outright)
+  // and 'pending' (in-flight reapply on AppState resume). User re-authenticates
+  // after the window closes — strictly safer than holding the secret through
+  // a moment when screenshots may not actually be blocked.
   useEffect(() => {
-    if (captureBlock === 'unavailable' && (secretKey || revealed)) {
+    if (captureBlock !== 'blocked' && (secretKey || revealed)) {
       setSecretKey(null);
       setRevealed(false);
       setCopiedAck(false);
