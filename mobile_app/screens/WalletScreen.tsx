@@ -159,6 +159,7 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
   const { colors } = useTheme();
   const { hidden } = useHideBalance();
   const { activity, activityLoading, activityError, lastFetched } = useWalletBalance();
+  const [selectedTx, setSelectedTx] = useState<ActivityEntry | null>(null);
   const initialLoad = activityLoading && lastFetched === null;
 
   return (
@@ -201,9 +202,19 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
             ? `${tx.counterparty.slice(0, 4)}…${tx.counterparty.slice(-4)}`
             : fallback;
           return (
-            <View
+            <Pressable
               key={tx.signature}
-              style={[S.activityRow, i < activity.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                setSelectedTx(tx);
+              }}
+              style={({ pressed }) => [
+                S.activityRow,
+                i < activity.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle },
+                pressed && { opacity: 0.6 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`${out ? 'Sent' : 'Received'} ${fmtAmount(tx.amountSol, tx.decimals)} ${tx.symbol}. Tap for transaction details.`}
             >
               <View style={[S.activityIconWrap, { backgroundColor: color + '18' }]}>
                 <Feather name={out ? 'arrow-up-right' : 'arrow-down-left'} size={14} color={color} />
@@ -216,10 +227,15 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
                 <Text style={[S.activityAmount, { color }]}>{amount}</Text>
                 <Text style={[S.activityTime, { color: colors.textTertiary }]}>{tx.symbol}</Text>
               </View>
-            </View>
+            </Pressable>
           );
         })}
       </ScrollView>
+      <TxDetailModal
+        tx={selectedTx}
+        visible={selectedTx !== null}
+        onClose={() => setSelectedTx(null)}
+      />
     </View>
   );
 }
