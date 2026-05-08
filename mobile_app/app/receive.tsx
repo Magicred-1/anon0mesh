@@ -1,8 +1,9 @@
 import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
+  Dimensions,
   Pressable,
   Share,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  Easing,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -30,9 +32,19 @@ import { useWallet } from "@/context/WalletContext";
 import { buildSolanaPayUri } from "@/src/services/solanaPayUri";
 import { fontFamily as FF, useTheme } from "@/theme";
 
+// Use 'screen' (full device) not 'window' (excludes status bar) so the
+// translate-off animation pushes content fully past system UI on Android
+// (where the receive screen extends edge-to-edge under the gesture nav).
+// A leftover sliver here = the "little black box at bottom that waits"
+// the user reported.
+const SCREEN_HEIGHT = Dimensions.get("screen").height;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
 const GAP = 10;
+// Match AppBottomSheet primitive: ease-out cubic for entry, ease-in for
+// exit, ~320ms / 220ms. Same feel as Apple's modal-sheet curve.
+const TIMING_OPEN = { duration: 320, easing: Easing.out(Easing.cubic) } as const;
+const TIMING_CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) } as const;
 
 const ADDRESS_MODES = [
   { id: "standard", label: "Standard" },
@@ -59,18 +71,29 @@ export default function ReceiveScreen() {
   const [copied, setCopied] = useState(false);
   const [requestAmount, setRequestAmount] = useState("");
   const copyPulse = useSharedValue(0);
-  const dragY = useSharedValue(0);
+  // dragY drives translateY on the outer Animated.View. Starts off-screen
+  // (SCREEN_HEIGHT) and animates to 0 on mount — receive owns its OWN
+  // entry animation now, not the native Stack-modal slide. Combined with
+  // animation:'none' + presentation:'transparentModal' on the route
+  // (set in app/_layout.tsx), there are no native enter/exit animations
+  // to compete with this one — single source of truth, no jitter, no
+  // lingering empty-container black flash on dismiss.
+  const dragY = useSharedValue(SCREEN_HEIGHT);
+
+  // Mount: slide up from off-screen to rest position.
+  useEffect(() => {
+    dragY.value = withTiming(0, TIMING_OPEN);
+  }, [dragY]);
 
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: dragY.value }],
   }));
 
-  // Replaced legacy PanResponder (JS-thread, laggy on Seeker) with
-  // gesture-handler Pan + Reanimated worklet writes — translateY updates
-  // on the UI thread so the sheet follows the finger 1:1 even under load.
-  // activeOffsetY/failOffsetY tuned to feel like Apple's modal sheet:
-  // any downward intention beyond 8pt activates dismiss; upward pan
-  // never claims the gesture (lets inner Pressables/inputs work).
+  // Dismiss: pure router.back. The slide-down animation has already
+  // completed before this fires (sequenced via the timing's completion
+  // callback), and the route has animation:'none', so unmount is instant
+  // and invisible — the user sees the wallet screen exactly as our
+  // off-screen frame ended.
   const dismissRoute = React.useCallback(() => {
     haptics.tap();
     router.back();
@@ -86,12 +109,12 @@ export default function ReceiveScreen() {
         })
         .onEnd((e) => {
           if (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY) {
-            // Sequence the dismiss animations: our timing slides the inner
-            // Animated.View off-screen first, then the completion callback
-            // fires router.back. The native back animation runs after,
-            // starting from the already-off-screen state — invisible. No
-            // double-animation jitter.
-            dragY.value = withTiming(800, { duration: 220 }, (finished) => {
+            // Sequence: our timing slides the inner Animated.View fully
+            // off-screen, then the completion callback fires router.back.
+            // Route is animation:'none' so unmount is instant — by the
+            // time native unmount happens, the user already sees the
+            // wallet screen behind. Single animation, no compounding.
+            dragY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE, (finished) => {
               if (finished) runOnJS(dismissRoute)();
             });
           } else {

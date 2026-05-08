@@ -61,7 +61,11 @@ import { useTheme } from "@/theme";
 // - Keyboard avoidance for sheets with TextInput (recovery export, send
 //   amount entry): wrap content in KeyboardAvoidingView with offset.
 
-const SCREEN_HEIGHT = Dimensions.get("window").height;
+// Use 'screen' (full device) not 'window' (excludes status bar) so the
+// translate-off animation pushes content fully past system UI on Android.
+// 'window' can leave a sliver of content under the gesture nav for sheets
+// that extend edge-to-edge.
+const SCREEN_HEIGHT = Dimensions.get("screen").height;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
 // Open + close use timing with iOS-feel ease-out cubic — spring physics
