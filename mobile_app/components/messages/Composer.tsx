@@ -58,14 +58,14 @@ export const Composer = memo(function Composer({ onSend, onMedia, onGrid }: Prop
 
   return (
     <View style={[S.bar, { backgroundColor: colors.surface0, borderTopColor: colors.borderSubtle }]}>
-      <Pressable style={[S.iconBtn, baseGlass]} onPress={onGrid}>
-        <Feather name="grid" size={15} color={colors.textSecondary} />
+      <Pressable style={[S.iconBtn, baseGlass]} onPress={onGrid} hitSlop={8}>
+        <Feather name="grid" size={18} color={colors.textSecondary} />
       </Pressable>
-      <Pressable style={[S.iconBtn, baseGlass]} onPress={pickMedia}>
-        <Feather name="image" size={15} color={colors.textSecondary} />
+      <Pressable style={[S.iconBtn, baseGlass]} onPress={pickMedia} hitSlop={8}>
+        <Feather name="image" size={18} color={colors.textSecondary} />
       </Pressable>
       <View style={[S.field, baseGlass]}>
-        <Feather name="lock" size={13} color={colors.primary} />
+        <Feather name="lock" size={14} color={colors.primary} />
         <TextInput
           value={value}
           onChangeText={setValue}
@@ -78,12 +78,13 @@ export const Composer = memo(function Composer({ onSend, onMedia, onGrid }: Prop
       </View>
       <Pressable
         onPress={send}
+        hitSlop={8}
         style={[S.sendBtn, {
           backgroundColor: hasText ? colors.primary   : colors.surface2,
           borderColor:     hasText ? 'transparent'    : colors.border,
         }]}
       >
-        <MaterialCommunityIcons name="bird" size={18} color={hasText ? colors.background : colors.textTertiary} />
+        <MaterialCommunityIcons name="bird" size={20} color={hasText ? colors.background : colors.textTertiary} />
       </Pressable>
     </View>
   );
@@ -91,8 +92,8 @@ export const Composer = memo(function Composer({ onSend, onMedia, onGrid }: Prop
 
 const S = StyleSheet.create({
   bar:     { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, paddingHorizontal: 14, paddingBottom: 10, borderTopWidth: 0.5 },
-  iconBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   field:   { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12 },
   input:   { flex: 1, fontSize: 14 },
-  sendBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
+  sendBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
 });
