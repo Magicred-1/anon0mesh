@@ -12,13 +12,8 @@ export type {
   IconButtonTone,
 } from "./IconButton";
 
-export {
-  AppBottomSheet,
-  BottomSheetHandleBar,
-  BottomSheetScrollView,
-  BottomSheetFlatList,
-} from "./BottomSheet";
-export type { AppBottomSheetHandle, AppBottomSheetProps } from "./BottomSheet";
+export { AppBottomSheet, BottomSheetHandleBar } from "./BottomSheet";
+export type { AppBottomSheetProps } from "./BottomSheet";
 
 export { default as NumericKeypad } from "./NumericKeypad";
 
