@@ -74,6 +74,10 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
       setSecretKey(null);
       setRevealed(false);
       setCopiedAck(false);
+      // Without this, the 1.4s `keyCopied` flag from a copy-then-background
+      // can survive the scrub and the next reveal flashes a stale "COPIED"
+      // badge on a freshly re-authenticated session.
+      setKeyCopied(false);
     }
   }, [captureBlock, secretKey, revealed]);
 
@@ -83,6 +87,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
     setFailed(false);
     setFailMessage(null);
     setCopiedAck(false);
+    setKeyCopied(false);
     const result = await exportPrivateKey();
     if (result.ok) {
       setSecretKey(result.secretKey);
