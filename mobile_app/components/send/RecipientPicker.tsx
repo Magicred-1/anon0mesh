@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { QRScannerModal } from "@/components/messages/QRScannerModal";
 import { DepthButton, TokenLogo } from "@/components/primitives";
 import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
@@ -45,10 +46,6 @@ function shortAddress(addr: string): string {
   return `${addr.slice(0, 8)}…${addr.slice(-4)}`;
 }
 
-function handleScan() {
-  haptics.tap();
-  Alert.alert("QR scan coming soon", "Paste an address for now.");
-}
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
@@ -92,6 +89,7 @@ export function RecipientPicker() {
   const [address, setAddress] = useState(typeof params.to === "string" ? params.to : "");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const { tokens } = useWalletBalance();
   const { entries: addressBook } = useAddressBook();
   const token: TokenOption = tokenByName(selectedSymbol, tokens);
@@ -99,9 +97,7 @@ export function RecipientPicker() {
   const trimmedAddress = address.trim();
   const isValid = isValidSolanaAddress(trimmedAddress);
 
-  function handleNext() {
-    if (!isValid) return;
-    haptics.confirm();
+  function pushToAmount(recipient: string, prefilledAmount?: string) {
     router.push({
       pathname: "/send/amount",
       params: {
@@ -109,9 +105,21 @@ export function RecipientPicker() {
         mint: token.mintAddress ?? "",
         programId: token.programId ?? "",
         symbol: token.symbol,
-        to: trimmedAddress,
+        to: recipient,
+        ...(prefilledAmount ? { amount: prefilledAmount } : {}),
       },
     });
+  }
+
+  function handleNext() {
+    if (!isValid) return;
+    haptics.confirm();
+    pushToAmount(trimmedAddress);
+  }
+
+  function handleScan() {
+    haptics.tap();
+    setScannerOpen(true);
   }
 
   function handleSelectToken(next: TokenOption) {
@@ -299,6 +307,28 @@ export function RecipientPicker() {
         selected={token.symbol}
         onSelect={handleSelectToken}
         onClose={() => setPickerOpen(false)}
+      />
+
+      <QRScannerModal
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onResult={(result) => {
+          setScannerOpen(false);
+          if (result.type !== "solana") {
+            Alert.alert(
+              "QR not recognised",
+              "Scan a Solana address or a Solana Pay code.",
+            );
+            return;
+          }
+          haptics.confirm();
+          setAddress(result.address);
+          // SPL send is gated off (TokenPicker.isSendable allows SOL only),
+          // so ignore amount when an spl-token mint was specified.
+          if (result.amount && !result.splToken) {
+            pushToAmount(result.address, result.amount);
+          }
+        }}
       />
     </View>
   );
