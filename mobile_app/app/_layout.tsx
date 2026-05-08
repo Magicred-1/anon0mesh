@@ -12,6 +12,7 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as SystemUI from 'expo-system-ui';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -142,17 +143,19 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={R.gestureRoot}>
-      <ThemeProvider>
-        <LxmfProvider>
-          <WalletProvider autoInitialize>
-            <WalletBalanceProvider>
-            <HideBalanceProvider>
-              <AppShell />
-            </HideBalanceProvider>
-            </WalletBalanceProvider>
-          </WalletProvider>
-        </LxmfProvider>
-      </ThemeProvider>
+      <BottomSheetModalProvider>
+        <ThemeProvider>
+          <LxmfProvider>
+            <WalletProvider autoInitialize>
+              <WalletBalanceProvider>
+              <HideBalanceProvider>
+                <AppShell />
+              </HideBalanceProvider>
+              </WalletBalanceProvider>
+            </WalletProvider>
+          </LxmfProvider>
+        </ThemeProvider>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }
