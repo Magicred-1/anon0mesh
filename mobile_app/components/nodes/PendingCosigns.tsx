@@ -54,7 +54,7 @@ export const PendingCosigns = memo(function PendingCosigns({ items, onSign, onRe
   const isEmpty = items.length === 0;
 
   return (
-    <View style={[S.wrap, { paddingHorizontal: H_PAD }]}>
+    <View style={S.wrap}>
       {/* Section header */}
       <View style={S.labelRow}>
         <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>PENDING CO-SIGNS</Text>
