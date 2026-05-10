@@ -1,9 +1,9 @@
 import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  PanResponder,
+  Dimensions,
   Pressable,
   Share,
   StyleSheet,
@@ -11,8 +11,11 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  Easing,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -22,16 +25,26 @@ import Animated, {
 import { SafeAreaView } from "react-native-safe-area-context";
 import QRCodeSvg from "react-native-qrcode-svg";
 
-import { SegmentedControl, TokenLogo } from "@/components/primitives";
+import { BottomSheetHandleBar, SegmentedControl, TokenLogo } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
 import { buildSolanaPayUri } from "@/src/services/solanaPayUri";
 import { fontFamily as FF, useTheme } from "@/theme";
 
+// Use 'screen' (full device) not 'window' (excludes status bar) so the
+// translate-off animation pushes content fully past system UI on Android
+// (where the receive screen extends edge-to-edge under the gesture nav).
+// A leftover sliver here = the "little black box at bottom that waits"
+// the user reported.
+const SCREEN_HEIGHT = Dimensions.get("screen").height;
 const DISMISS_DISTANCE = 120;
-const DISMISS_VELOCITY = 0.8;
+const DISMISS_VELOCITY = 800;
 const GAP = 10;
+// Match AppBottomSheet primitive: ease-out cubic for entry, ease-in for
+// exit, ~320ms / 220ms. Same feel as Apple's modal-sheet curve.
+const TIMING_OPEN = { duration: 320, easing: Easing.out(Easing.cubic) } as const;
+const TIMING_CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) } as const;
 
 const ADDRESS_MODES = [
   { id: "standard", label: "Standard" },
@@ -58,37 +71,59 @@ export default function ReceiveScreen() {
   const [copied, setCopied] = useState(false);
   const [requestAmount, setRequestAmount] = useState("");
   const copyPulse = useSharedValue(0);
-  const dragY = useSharedValue(0);
+  // dragY drives translateY on the outer Animated.View. Starts off-screen
+  // (SCREEN_HEIGHT) and animates to 0 on mount — receive owns its OWN
+  // entry animation now, not the native Stack-modal slide. Combined with
+  // animation:'none' + presentation:'transparentModal' on the route
+  // (set in app/_layout.tsx), there are no native enter/exit animations
+  // to compete with this one — single source of truth, no jitter, no
+  // lingering empty-container black flash on dismiss.
+  const dragY = useSharedValue(SCREEN_HEIGHT);
+
+  // Mount: slide up from off-screen to rest position.
+  useEffect(() => {
+    dragY.value = withTiming(0, TIMING_OPEN);
+  }, [dragY]);
 
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: dragY.value }],
   }));
 
-  const panResponder = useMemo(
+  // Final unmount step. Route is animation:'none' so router.back() is
+  // instant — by the time it fires the slide-down has already pushed the
+  // content off-screen, so the user sees the wallet screen exactly as our
+  // off-screen frame ended.
+  const dismissRoute = React.useCallback(() => {
+    haptics.tap();
+    router.back();
+  }, [router]);
+
+  // Single dismiss path. Every non-gesture exit (header X, hardware back if
+  // we add it, etc.) MUST go through here so it plays the same slide-down
+  // before unmount. Calling router.back() directly skips the animation and
+  // shows a black-flash since the route is animation:'none'.
+  const animateAndDismiss = React.useCallback(() => {
+    dragY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE, (finished) => {
+      if (finished) runOnJS(dismissRoute)();
+    });
+  }, [dragY, dismissRoute]);
+
+  const panGesture = useMemo(
     () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: (_, g) =>
-          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
-        onMoveShouldSetPanResponderCapture: (_, g) =>
-          g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderMove: (_, g) => {
-          dragY.value = Math.max(0, g.dy);
-        },
-        onPanResponderRelease: (_, g) => {
-          if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) {
-            haptics.tap();
-            router.back();
+      Gesture.Pan()
+        .activeOffsetY(8)
+        .failOffsetY(-10)
+        .onUpdate((e) => {
+          dragY.value = Math.max(0, e.translationY);
+        })
+        .onEnd((e) => {
+          if (e.translationY > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY) {
+            runOnJS(animateAndDismiss)();
           } else {
             dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
           }
-        },
-        onPanResponderTerminate: () => {
-          dragY.value = withSpring(0, { damping: 22, stiffness: 320 });
-        },
-      }),
-    [dragY, router],
+        }),
+    [dragY, animateAndDismiss],
   );
 
   const walletAddress = publicKey?.toBase58() ?? "";
@@ -135,10 +170,14 @@ export default function ReceiveScreen() {
 
   if (!activeAddress) {
     return (
-      <View style={[S.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-        <Animated.View style={[S.fill, contentStyle]}>
+      <GestureDetector gesture={panGesture}>
+        <Animated.View
+          collapsable={false}
+          renderToHardwareTextureAndroid
+          style={[S.root, contentStyle, { backgroundColor: colors.background }]}
+        >
           <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
-            <GrabHandle color={colors.textTertiary} />
+            <BottomSheetHandleBar />
             <View style={[S.grid, { flex: 1, justifyContent: "center", alignItems: "center" }]}>
               <Text style={[S.noWalletTitle, { color: colors.textPrimary }]}>Connect wallet to receive</Text>
               <Text style={[S.noWalletSub, { color: colors.textSecondary }]}>
@@ -147,16 +186,16 @@ export default function ReceiveScreen() {
             </View>
           </SafeAreaView>
         </Animated.View>
-      </View>
+      </GestureDetector>
     );
   }
 
   return (
-    <View style={[S.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      <Animated.View style={[S.fill, contentStyle]}>
+    <GestureDetector gesture={panGesture}>
+      <Animated.View style={[S.root, contentStyle, { backgroundColor: colors.background }]}>
         <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
 
-          <GrabHandle color={colors.textTertiary} />
+          <BottomSheetHandleBar />
 
           {/* ── header ── */}
           <View style={S.header}>
@@ -165,7 +204,7 @@ export default function ReceiveScreen() {
               <Text style={[S.screenTitle, { color: colors.textPrimary }]}>receive</Text>
             </View>
             <Pressable
-              onPress={() => router.back()}
+              onPress={animateAndDismiss}
               hitSlop={10}
               style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
             >
@@ -293,15 +332,7 @@ export default function ReceiveScreen() {
           </View>
         </SafeAreaView>
       </Animated.View>
-    </View>
-  );
-}
-
-function GrabHandle({ color }: { readonly color: string }) {
-  return (
-    <View style={S.grabHandle}>
-      <View style={[S.grabPill, { backgroundColor: color }]} />
-    </View>
+    </GestureDetector>
   );
 }
 
@@ -309,9 +340,6 @@ const S = StyleSheet.create({
   root:         { flex: 1 },
   fill:         { flex: 1 },
   grid:         { paddingHorizontal: 16, gap: GAP, paddingBottom: 16 },
-
-  grabHandle:   { alignItems: "center", paddingVertical: 10 },
-  grabPill:     { width: 44, height: 4, borderRadius: 2, opacity: 0.4 },
 
   header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
   kicker:       { fontFamily: FF.sansMd, fontSize: 10, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },

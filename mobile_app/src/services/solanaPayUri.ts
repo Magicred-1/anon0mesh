@@ -6,10 +6,25 @@ export interface SolanaPayUriParams {
   memo?: string;
 }
 
+export interface ParsedSolanaPay {
+  recipient: string;
+  amount?: string;
+  splToken?: string;
+  label?: string;
+  message?: string;
+  memo?: string;
+  reference?: string[];
+}
+
 const AMOUNT_RE = /^\d+(\.\d{1,9})?$/;
+const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 function normalizeAmount(amount: string | undefined): string | null {
-  const trimmed = amount?.trim();
+  // Solana Pay spec mandates "." as decimal separator. Locales that surface
+  // a comma decimal-pad (de-DE, fr-FR, pt-BR, es-ES, …) deliver "0,5" from
+  // the receive amount field; without this swap the URI omits amount=
+  // entirely and the QR receiver sees "no amount requested".
+  const trimmed = amount?.trim().replace(",", ".");
   if (!trimmed || !AMOUNT_RE.test(trimmed)) return null;
   const numeric = Number(trimmed);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;
@@ -37,4 +52,45 @@ export function buildSolanaPayUri({
 
   const query = params.toString();
   return `solana:${trimmedRecipient}${query ? `?${query}` : ""}`;
+}
+
+export function parseSolanaPayUri(input: string): ParsedSolanaPay | null {
+  const s = input?.trim();
+  if (!s) return null;
+
+  if (BASE58_RE.test(s)) {
+    return { recipient: s };
+  }
+
+  if (!s.toLowerCase().startsWith("solana:")) return null;
+
+  const rest = s.slice("solana:".length);
+  const qIdx = rest.indexOf("?");
+  const recipient = (qIdx === -1 ? rest : rest.slice(0, qIdx)).trim();
+  if (!BASE58_RE.test(recipient)) return null;
+
+  const out: ParsedSolanaPay = { recipient };
+  if (qIdx === -1) return out;
+
+  const params = new URLSearchParams(rest.slice(qIdx + 1));
+
+  const amount = normalizeAmount(params.get("amount") ?? undefined);
+  if (amount) out.amount = amount;
+
+  const splToken = params.get("spl-token");
+  if (splToken && BASE58_RE.test(splToken)) out.splToken = splToken;
+
+  const label = params.get("label");
+  if (label) out.label = label;
+
+  const message = params.get("message");
+  if (message) out.message = message;
+
+  const memo = params.get("memo");
+  if (memo) out.memo = memo;
+
+  const refs = params.getAll("reference").filter((r) => BASE58_RE.test(r));
+  if (refs.length > 0) out.reference = refs;
+
+  return out;
 }

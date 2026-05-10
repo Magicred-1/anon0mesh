@@ -12,6 +12,9 @@ export type {
   IconButtonTone,
 } from "./IconButton";
 
+export { AppBottomSheet, BottomSheetHandleBar } from "./BottomSheet";
+export type { AppBottomSheetProps } from "./BottomSheet";
+
 export { default as NumericKeypad } from "./NumericKeypad";
 
 export { Pill } from "./Pill";

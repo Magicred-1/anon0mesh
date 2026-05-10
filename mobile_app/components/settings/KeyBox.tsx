@@ -10,7 +10,9 @@ export interface KeyBoxProps {
   revealed: boolean;
   copied: boolean;
   failed: boolean;
+  failMessage?: string | null;
   masked: string;
+  captureReady?: boolean;
   onAuthenticate: () => void;
   onRevealIn: () => void;
   onRevealOut: () => void;
@@ -18,7 +20,8 @@ export interface KeyBoxProps {
 }
 
 export function KeyBox({
-  loading, secretKey, revealed, copied, failed, masked,
+  loading, secretKey, revealed, copied, failed, failMessage, masked,
+  captureReady = true,
   onAuthenticate, onRevealIn, onRevealOut, onCopy,
 }: Readonly<KeyBoxProps>) {
   const { colors } = useTheme();
@@ -27,6 +30,17 @@ export function KeyBox({
     return (
       <View style={[S.box, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
         <Text style={[S.hint, { color: colors.textTertiary }]}>AUTHENTICATING…</Text>
+      </View>
+    );
+  }
+
+  if (!captureReady) {
+    // Belt-and-suspenders: even if a stale secret prop survives a render
+    // during the AppState resume reapply window, never render it until the
+    // parent confirms screen-capture prevention is back in place.
+    return (
+      <View style={[S.box, { backgroundColor: colors.surface0, borderColor: colors.border }]}>
+        <Text style={[S.hint, { color: colors.textTertiary }]}>PREPARING SECURE WINDOW…</Text>
       </View>
     );
   }
@@ -51,11 +65,22 @@ export function KeyBox({
 
   if (failed) {
     return (
-      <View style={[S.box, { backgroundColor: colors.error + '0D', borderColor: colors.error + '38' }]}>
-        <Text style={[S.hint, { color: colors.error, textAlign: 'center', lineHeight: 18 }]}>
-          KEY UNAVAILABLE{'\n'}Try again when ready
+      <Pressable
+        onPress={onAuthenticate}
+        style={[S.box, { backgroundColor: colors.error + '0D', borderColor: colors.error + '38' }]}
+      >
+        <Text style={[S.hint, { color: colors.error, textAlign: 'center', letterSpacing: 1 }]}>
+          KEY UNAVAILABLE
         </Text>
-      </View>
+        {failMessage ? (
+          <Text style={[S.detail, { color: colors.error, textAlign: 'center' }]}>
+            {failMessage}
+          </Text>
+        ) : null}
+        <Text style={[S.hint, { color: colors.textTertiary, marginTop: 8 }]}>
+          TAP TO RETRY
+        </Text>
+      </Pressable>
     );
   }
 
@@ -71,5 +96,6 @@ const S = StyleSheet.create({
   box:     { padding: 14, borderRadius: 14, borderWidth: 0.5, alignItems: 'center' },
   key:     { fontFamily: fontFamily.mono, fontSize: 11, lineHeight: 20, textAlign: 'center' },
   hint:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
+  detail:  { fontFamily: fontFamily.sansMd, fontSize: 11, lineHeight: 16, marginTop: 6, paddingHorizontal: 4 },
   copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 0.5 },
 });

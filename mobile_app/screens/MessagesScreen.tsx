@@ -643,9 +643,9 @@ export default function MessagesScreen() {
                 {msgs.map(m => renderMsg(m, getSendState))}
                 <View style={{ height: 4 }} />
               </ScrollView>
-              <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
             </View>
           </GestureDetector>
+          <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
           <View style={{ height: kbShown ? 0 : insets.bottom, backgroundColor: colors.surface0 }} />
         </KeyboardAvoidingView>
       </Reanimated.View>

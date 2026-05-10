@@ -27,12 +27,14 @@ export function AmountKeypad() {
   const router = useRouter();
   const { colors } = useTheme();
   const {
+    amount: amountParam,
     decimals: decimalsParam,
     mint,
     programId: programIdParam,
     symbol: symbolParam,
     to,
   } = useLocalSearchParams<{
+    amount?: string;
     decimals?: string;
     mint?: string;
     programId?: string;
@@ -47,7 +49,9 @@ export function AmountKeypad() {
     typeof decimalsParam === "string" && decimalsParam.length > 0
       ? Number.parseInt(decimalsParam, 10)
       : token.maxDecimals;
-  const [amount, setAmount] = useState("0");
+  const initialAmount =
+    typeof amountParam === "string" && amountParam.length > 0 ? amountParam : "0";
+  const [amount, setAmount] = useState(initialAmount);
 
   const recipient = typeof to === "string" ? to : "";
 
@@ -80,7 +84,7 @@ export function AmountKeypad() {
     <SendScaffold
       onBack={() => router.back()}
       step={2}
-      title="Set amount"
+      title="set amount"
       footer={
         <DepthButton
           disabled={!isValid}

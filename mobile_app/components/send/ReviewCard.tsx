@@ -269,7 +269,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     <SendScaffold
       onBack={() => router.back()}
       step={3}
-      title="Review"
+      title="review"
       footer={
         isConfirming ? (
           <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
