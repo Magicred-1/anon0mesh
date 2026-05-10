@@ -1,20 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { AppState, Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
+import { parseSolanaPayUri } from '@/src/services/solanaPayUri';
 
 export type ScannedAddress =
   | { type: 'lxmf';       hash:    string }
   | { type: 'lxmf-group'; addrHex: string; keyHex: string; name?: string }
-  | { type: 'solana';     address: string }
+  | {
+      type:      'solana';
+      address:   string;
+      amount?:   string;
+      splToken?: string;
+      label?:    string;
+      message?:  string;
+      memo?:     string;
+      reference?: string[];
+    }
   | { type: 'unknown';    raw:     string };
 
 // 32-byte LXMF/Reticulum address = 64 hex chars (raw) or 32 (short hash shown in UI)
 const LXMF_RE   = /^[0-9a-f]{32}([0-9a-f]{32})?$/i;
 const HEX32_RE  = /^[0-9a-fA-F]{32}$/;
-// Solana pubkey: base58, 32–44 chars (excludes 0, O, I, l)
-const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 function parse(raw: string): ScannedAddress {
   const s = raw.trim();
@@ -38,13 +46,22 @@ function parse(raw: string): ScannedAddress {
     if (LXMF_RE.test(hash)) return { type: 'lxmf', hash };
   }
 
-  if (s.startsWith('solana:')) {
-    const addr = s.replace('solana:', '').split('?')[0];
-    if (SOLANA_RE.test(addr)) return { type: 'solana', address: addr };
-  }
+  if (LXMF_RE.test(s)) return { type: 'lxmf', hash: s.toLowerCase() };
 
-  if (LXMF_RE.test(s))   return { type: 'lxmf',   hash:    s.toLowerCase() };
-  if (SOLANA_RE.test(s)) return { type: 'solana',  address: s };
+  // Solana Pay URI or bare base58 — single source of truth in solanaPayUri.ts.
+  const pay = parseSolanaPayUri(s);
+  if (pay) {
+    return {
+      type:      'solana',
+      address:   pay.recipient,
+      amount:    pay.amount,
+      splToken:  pay.splToken,
+      label:     pay.label,
+      message:   pay.message,
+      memo:      pay.memo,
+      reference: pay.reference,
+    };
+  }
 
   return { type: 'unknown', raw: s };
 }
@@ -57,7 +74,7 @@ interface Props {
 
 export function QRScannerModal({ visible, onResult, onClose }: Props) {
   const { colors } = useTheme();
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   const scannedRef = useRef(false);
   const [label, setLabel] = useState<string | null>(null);
 
@@ -70,6 +87,18 @@ export function QRScannerModal({ visible, onResult, onClose }: Props) {
       requestPermission();
     }
   }, [visible, permission, requestPermission]);
+
+  // Refresh permission state when the app returns to foreground while the
+  // scanner is open — covers the "deny → open Settings → grant → return"
+  // flow. getPermission reads OS state silently (no prompt), so this is a
+  // no-op when nothing changed and grants live without a re-mount.
+  useEffect(() => {
+    if (!visible) return;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') getPermission();
+    });
+    return () => sub.remove();
+  }, [visible, getPermission]);
 
   const onBarcodeScanned = useCallback(({ data }: { data: string }) => {
     if (scannedRef.current) return;
