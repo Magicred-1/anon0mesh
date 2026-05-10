@@ -34,8 +34,8 @@ function normalizeAmount(amount: string | undefined): string | null {
 export function buildSolanaPayUri({
   recipient,
   amount,
-  label = "AnonMesh",
-  message = "AnonMesh receive",
+  label = "anonmesh",
+  message = "anonmesh receive",
   memo,
 }: SolanaPayUriParams): string {
   const trimmedRecipient = recipient.trim();

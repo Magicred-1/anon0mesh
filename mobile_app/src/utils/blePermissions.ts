@@ -2,7 +2,7 @@
 // iOS handles BLE permissions via info.plist at install time — nothing to request at runtime.
 import { PermissionsAndroid, Platform } from "react-native";
 
-// BLUETOOTH_ADVERTISE is critical for AnonMesh since peers both scan and advertise.
+// BLUETOOTH_ADVERTISE is critical for anonmesh since peers both scan and advertise.
 // Android 12+ (API 31+): new nearby-devices runtime permissions.
 // Android < 12: ACCESS_FINE_LOCATION is required for scan results to include peers.
 export type BLEPermissionStatus =

@@ -17,7 +17,6 @@ import {
   sendSolTransfer,
   TransactionNotApprovedError,
 } from "@/src/services/sendTransaction";
-import { DEMO_MODE } from "@/src/utils/demoMode";
 import { summarizeError } from "@/src/utils/errors";
 import { fontFamily as FF, useTheme } from "@/theme";
 
@@ -339,15 +338,6 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
           />
         </View>
 
-        {DEMO_MODE ? (
-          <View style={[S.demoNote, { backgroundColor: colors.accentSubtle, borderColor: colors.border }]}>
-            <Feather name="info" size={13} color={colors.accent} />
-            <Text style={[S.demoNoteText, { color: colors.accent }]}>
-              Demo mode: devnet SOL only.
-            </Text>
-          </View>
-        ) : null}
-
         {/* Stealth preview tile */}
         <Pressable
           accessibilityLabel="Stealth transfer preview is not active"
@@ -552,19 +542,5 @@ const S = StyleSheet.create({
   retryText: {
     fontFamily: FF.sansSb,
     fontSize: 15,
-  },
-  demoNote: {
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 0.5,
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  demoNoteText: {
-    flex: 1,
-    fontFamily: FF.sansMd,
-    fontSize: 12,
   },
 });
