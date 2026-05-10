@@ -64,6 +64,52 @@ function testSolanaPayUri() {
     amount: "abc",
   });
   assert.ok(!nanAmount.includes("amount="), "non-numeric amount should be dropped");
+
+  // Locale-comma decimal handling. Spec mandates "." but locales that
+  // render decimal-pad with comma (de-DE, fr-FR, …) deliver "0,5".
+  assert.equal(
+    buildSolanaPayUri({
+      recipient: "11111111111111111111111111111111",
+      amount: "0,5",
+    }),
+    "solana:11111111111111111111111111111111?amount=0.5&label=AnonMesh&message=AnonMesh+receive",
+    "comma decimal in amount must normalize to dot",
+  );
+  assert.equal(
+    buildSolanaPayUri({
+      recipient: "11111111111111111111111111111111",
+      amount: "1,234500",
+    }),
+    "solana:11111111111111111111111111111111?amount=1.234500&label=AnonMesh&message=AnonMesh+receive",
+    "comma decimal with trailing zeros preserved in URI",
+  );
+  // Whitespace plus comma is the case that locales actually emit.
+  assert.equal(
+    buildSolanaPayUri({
+      recipient: "11111111111111111111111111111111",
+      amount: " 0,001 ",
+    }),
+    "solana:11111111111111111111111111111111?amount=0.001&label=AnonMesh&message=AnonMesh+receive",
+    "padded comma decimal must trim and normalize",
+  );
+  // Receive screen feeds a plain decimal string, not a locale-grouped number
+  // (e.g. de-DE "1.234,56"). Normalizer rewrites only the first comma; any
+  // surviving separator fails AMOUNT_RE, so the URI must omit amount= rather
+  // than encode garbage.
+  const multiComma = buildSolanaPayUri({
+    recipient: "11111111111111111111111111111111",
+    amount: "1,2,3",
+  });
+  assert.ok(!multiComma.includes("amount="), "multi-comma input must be rejected, not normalized");
+
+  // amount is optional in SolanaPayUriParams. Optional chaining short-circuits
+  // the entire trim().replace() chain, so the URI must build cleanly with no
+  // amount= rather than crashing on undefined.
+  assert.equal(
+    buildSolanaPayUri({ recipient: "11111111111111111111111111111111" }),
+    "solana:11111111111111111111111111111111?label=AnonMesh&message=AnonMesh+receive",
+    "missing amount must produce a recipient-only URI",
+  );
 }
 
 function testAddressBookCore() {
