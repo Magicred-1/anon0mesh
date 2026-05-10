@@ -9,13 +9,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ReceivePanel } from '@/components/wallet/ReceivePanel';
+import { TxDetailModal } from '@/components/wallet/TxDetailModal';
 import { PendingCosigns, type PendingCosign } from '@/components/nodes/PendingCosigns';
 import { useLxmfContext }   from '@/context/LxmfContext';
 import { useWallet }        from '@/context/WalletContext';
 import { useHideBalance }   from '@/src/hooks/useHideBalance';
 import { useWalletBalance } from '@/src/hooks/useWalletBalance';
 import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
-import type { TokenBalance } from '@/src/services/walletData';
+import type { ActivityEntry, TokenBalance } from '@/src/services/walletData';
 import { fontFamily, useTheme } from '@/theme';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -158,6 +159,7 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
   const { colors } = useTheme();
   const { hidden } = useHideBalance();
   const { activity, activityLoading, activityError, lastFetched } = useWalletBalance();
+  const [selectedTx, setSelectedTx] = useState<ActivityEntry | null>(null);
   const initialLoad = activityLoading && lastFetched === null;
 
   return (
@@ -194,15 +196,29 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
           const out    = tx.direction === 'send';
           const color  = out ? '#FF6B6B' : '#14F195';
           const sign   = out ? '−' : '+';
-          const amount = hidden ? '•••' : `${sign}${tx.amountSol.toFixed(4)}`;
+          const amount = hidden ? '•••' : `${sign}${fmtAmount(tx.amountSol, tx.decimals)}`;
           const fallback = out ? 'Sent' : 'Received';
           const label  = tx.counterparty
             ? `${tx.counterparty.slice(0, 4)}…${tx.counterparty.slice(-4)}`
             : fallback;
           return (
-            <View
+            <Pressable
               key={tx.signature}
-              style={[S.activityRow, i < activity.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                setSelectedTx(tx);
+              }}
+              style={({ pressed }) => [
+                S.activityRow,
+                i < activity.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: colors.borderSubtle },
+                pressed && { opacity: 0.6 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                hidden
+                  ? `${out ? 'Sent' : 'Received'} transaction, amount hidden. Tap for transaction details.`
+                  : `${out ? 'Sent' : 'Received'} ${fmtAmount(tx.amountSol, tx.decimals)} ${tx.symbol}. Tap for transaction details.`
+              }
             >
               <View style={[S.activityIconWrap, { backgroundColor: color + '18' }]}>
                 <Feather name={out ? 'arrow-up-right' : 'arrow-down-left'} size={14} color={color} />
@@ -213,12 +229,17 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={[S.activityAmount, { color }]}>{amount}</Text>
-                <Text style={[S.activityTime, { color: colors.textTertiary }]}>SOL</Text>
+                <Text style={[S.activityTime, { color: colors.textTertiary }]}>{tx.symbol}</Text>
               </View>
-            </View>
+            </Pressable>
           );
         })}
       </ScrollView>
+      <TxDetailModal
+        tx={selectedTx}
+        visible={selectedTx !== null}
+        onClose={() => setSelectedTx(null)}
+      />
     </View>
   );
 }

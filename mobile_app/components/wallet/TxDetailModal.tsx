@@ -1,14 +1,15 @@
 import * as Clipboard from "expo-clipboard";
-import * as WebBrowser from "expo-web-browser";
-import React from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { DepthButton, Icon, Pill } from "@/components/primitives";
+import { Icon, Pill } from "@/components/primitives";
 import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { fontFamily as FF, useTheme } from "@/theme";
+
+const COPY_FEEDBACK_MS = 1400;
 
 interface TxDetailModalProps {
   readonly tx: ActivityEntry | null;
@@ -45,12 +46,33 @@ function DetailRow({
   readonly copyValue?: string;
 }) {
   const { colors } = useTheme();
+  const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+  }, []);
 
   async function handleCopy() {
     if (!copyValue) return;
     haptics.tap();
-    await Clipboard.setStringAsync(copyValue);
+    try {
+      await Clipboard.setStringAsync(copyValue);
+      setCopied(true);
+      // Clear any in-flight reset before scheduling the next one. Without this,
+      // rapid re-taps stack timers and an earlier one can flip `copied` back to
+      // false before the latest tap's window finishes.
+      if (resetTimer.current !== null) clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => {
+        resetTimer.current = null;
+        setCopied(false);
+      }, COPY_FEEDBACK_MS);
+    } catch {
+      setCopied(false);
+    }
   }
+
+  const iconColor = copied ? colors.primary : colors.textTertiary;
 
   return (
     <Pressable
@@ -62,10 +84,10 @@ function DetailRow({
     >
       <Text style={[S.detailLabel, { color: colors.textTertiary }]}>{label}</Text>
       <View style={S.detailValueWrap}>
-        <Text numberOfLines={2} style={[S.detailValue, { color: colors.textPrimary }]}>
+        <Text numberOfLines={2} style={[S.detailValue, { color: copied ? colors.primary : colors.textPrimary }]}>
           {value}
         </Text>
-        {copyValue ? <Icon name="copy" size={13} color={colors.textTertiary} /> : null}
+        {copyValue ? <Icon name={copied ? "check" : "copy"} size={13} color={iconColor} /> : null}
       </View>
     </Pressable>
   );
@@ -76,16 +98,28 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
   if (!tx) return null;
   const activeTx = tx;
 
-  async function handleExplorer() {
+  function handleExplorer() {
     haptics.tap();
-    await WebBrowser.openBrowserAsync(buildDevnetExplorerTxUrl(activeTx.signature));
+    Linking.openURL(buildDevnetExplorerTxUrl(activeTx.signature)).catch(() => undefined);
   }
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={S.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <SafeAreaView edges={["bottom"]} style={[S.sheet, { backgroundColor: colors.surface0, borderColor: colors.borderStrong }]}>
+      {/* Bottom-sheet split pattern: dismissArea is a flex:1 Pressable that
+          fills only the space above the sheet (column flex with
+          justifyContent:flex-end). Sheet has no parent Pressable so nested
+          action buttons receive presses without responder competition. */}
+      <View style={S.root}>
+        <Pressable
+          accessible={false}
+          importantForAccessibility="no"
+          style={S.dismissArea}
+          onPress={onClose}
+        />
+        <SafeAreaView
+          edges={["bottom"]}
+          style={[S.sheet, { backgroundColor: colors.surface0, borderColor: colors.borderStrong }]}
+        >
           <View style={S.handleWrap}>
             <View style={[S.handle, { backgroundColor: colors.textTertiary }]} />
           </View>
@@ -120,8 +154,31 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
             </View>
 
             <View style={S.actions}>
-              <DepthButton label="Explorer" onPress={handleExplorer} size="md" tone="cyan" variant="secondary" style={S.actionButton} />
-              <DepthButton label="Close" onPress={onClose} size="md" tone="cyan" variant="primary" style={S.actionButton} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open in Explorer"
+                onPress={handleExplorer}
+                style={({ pressed }) => [
+                  S.actionBtn,
+                  S.actionBtnSecondary,
+                  { borderColor: colors.border, backgroundColor: colors.surface1 },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={[S.actionBtnText, { color: colors.textPrimary }]}>Explorer</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={onClose}
+                style={({ pressed }) => [
+                  S.actionBtn,
+                  { backgroundColor: colors.primary },
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={[S.actionBtnText, { color: "#08080A" }]}>Close</Text>
+              </Pressable>
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -131,10 +188,13 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
 }
 
 const S = StyleSheet.create({
-  backdrop: {
+  root: {
     backgroundColor: "rgba(0,0,0,0.68)",
     flex: 1,
     justifyContent: "flex-end",
+  },
+  dismissArea: {
+    flex: 1,
   },
   sheet: {
     borderTopLeftRadius: 22,
@@ -222,7 +282,21 @@ const S = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-  actionButton: {
+  actionBtn: {
+    alignItems: "center",
+    borderRadius: 12,
     flex: 1,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  actionBtnSecondary: {
+    borderWidth: 1,
+  },
+  actionBtnText: {
+    fontFamily: FF.sansSb,
+    fontSize: 14,
+    letterSpacing: 0.3,
   },
 });
