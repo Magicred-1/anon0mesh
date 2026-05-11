@@ -105,7 +105,16 @@
       ],
       "@magicred-1/react-native-lxmf",
       "./plugins/withAndroidForegroundService",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 29
+          }
+        }
+      ],
+      "@qvac/sdk/expo-plugin"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -112,6 +112,7 @@ function AppShell() {
           <Stack.Screen name="send/amount" />
           <Stack.Screen name="send/review" />
           <Stack.Screen name="send/success" options={{ gestureEnabled: false }} />
+          <Stack.Screen name="qvac-smoke" />
         </Stack>
         <StatusBar style="light" />
       </NavThemeProvider>
