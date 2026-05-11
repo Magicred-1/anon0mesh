@@ -34,7 +34,7 @@ export function PigeonLoader({
       testID={testID}
     >
       <View
-        style={[S.backdrop, { backgroundColor: colors.background + 'EB' }]}
+        style={[S.backdrop, { backgroundColor: colors.background }]}
         accessible
         accessibilityRole="alert"
         accessibilityLabel={sublabel ? `${label}. ${sublabel}` : label}
@@ -105,8 +105,8 @@ const S = StyleSheet.create({
     paddingHorizontal: 24,
   },
   pigeon: {
-    width: 160,
-    height: 160,
+    width: 220,
+    height: 220,
   },
   label: {
     marginTop: 12,
