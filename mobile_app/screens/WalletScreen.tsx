@@ -183,13 +183,38 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
         )}
         {!initialLoad && activityError && (
           <View style={S.center}>
-            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>{activityError}</Text>
+            <Feather name="wifi-off" size={20} color={colors.textTertiary} style={{ marginBottom: 6 }} />
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+              Couldn&apos;t load activity
+            </Text>
+            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center', marginBottom: 12 }]} numberOfLines={2}>
+              {activityError}
+            </Text>
+            <Pressable
+              onPress={onRefresh}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading activity"
+              style={({ pressed }) => [
+                S.retryBtn,
+                { borderColor: colors.border, backgroundColor: colors.surface1 },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Feather name="refresh-cw" size={12} color={colors.textPrimary} />
+              <Text style={[S.activityTime, { color: colors.textPrimary, fontWeight: '600' }]}>Try again</Text>
+            </Pressable>
           </View>
         )}
         {!initialLoad && !activityError && activity.length === 0 && (
           <View style={S.center}>
             <MaterialCommunityIcons name="bird" size={26} color={colors.textTertiary} style={{ marginBottom: 6 }} />
-            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>NO ACTIVITY YET</Text>
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+              No transactions yet
+            </Text>
+            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center' }]}>
+              Tap Receive above to share your address.
+            </Text>
           </View>
         )}
         {!initialLoad && activity.map((tx, i) => {
@@ -400,6 +425,8 @@ const S = StyleSheet.create({
   activityTile:    { flex: 1 },
   activityScroll:  { flexGrow: 1 },
   center:          { paddingVertical: 24, alignItems: 'center', gap: 4 },
+  retryBtn:        { flexDirection: 'row', alignItems: 'center', gap: 6,
+                     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 0.5 },
   activityRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
   activityIconWrap:{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   activityLabel:   { fontFamily: fontFamily.sansMd, fontSize: 12, marginBottom: 2 },
