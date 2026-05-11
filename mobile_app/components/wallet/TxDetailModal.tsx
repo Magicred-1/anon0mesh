@@ -1,9 +1,8 @@
 import * as Clipboard from "expo-clipboard";
 import React, { useEffect, useRef, useState } from "react";
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Icon, Pill } from "@/components/primitives";
+import { AppBottomSheet, Icon, Pill } from "@/components/primitives";
 import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
@@ -104,118 +103,69 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
   }
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      {/* Bottom-sheet split pattern: dismissArea is a flex:1 Pressable that
-          fills only the space above the sheet (column flex with
-          justifyContent:flex-end). Sheet has no parent Pressable so nested
-          action buttons receive presses without responder competition. */}
-      <View style={S.root}>
-        <Pressable
-          accessible={false}
-          importantForAccessibility="no"
-          style={S.dismissArea}
-          onPress={onClose}
-        />
-        <SafeAreaView
-          edges={["bottom"]}
-          style={[S.sheet, { backgroundColor: colors.surface0, borderColor: colors.borderStrong }]}
-        >
-          <View style={S.handleWrap}>
-            <View style={[S.handle, { backgroundColor: colors.textTertiary }]} />
-          </View>
-
-          <ScrollView contentContainerStyle={S.content} showsVerticalScrollIndicator={false}>
-            <View style={S.header}>
-              <View style={[S.iconWrap, { backgroundColor: tx.direction === "send" ? colors.primarySubtle : colors.successSubtle }]}>
-                <Icon
-                  color={tx.direction === "send" ? colors.primary : colors.success}
-                  name={tx.direction === "send" ? "arrow-up-right" : "arrow-down-left"}
-                  size={20}
-                />
-              </View>
-              <View style={S.headerText}>
-                <Text style={[S.title, { color: colors.textPrimary }]}>{formatAmount(tx)}</Text>
-                <Text style={[S.subtitle, { color: colors.textSecondary }]}>
-                  {tx.direction === "send" ? "Sent to" : "Received from"} {shortAddress(tx.counterparty)}
-                </Text>
-              </View>
-              <Pill label={tx.status} tone={tx.status === "Settled" ? "green" : "red"} />
-            </View>
-
-            <View style={[S.details, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-              <DetailRow label="Signature" value={shortAddress(tx.signature)} copyValue={tx.signature} />
-              <DetailRow label="Counterparty" value={shortAddress(tx.counterparty)} copyValue={tx.counterparty} />
-              <DetailRow label="Slot" value={tx.slot === null ? "Unavailable" : String(tx.slot)} />
-              <DetailRow label="Fee" value={formatFee(tx.feeLamports)} />
-              {tx.memo ? <DetailRow label="Memo" value={tx.memo} copyValue={tx.memo} /> : null}
-              {tx.mintAddress ? (
-                <DetailRow label="Mint" value={shortAddress(tx.mintAddress)} copyValue={tx.mintAddress} />
-              ) : null}
-            </View>
-
-            <View style={S.actions}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open in Explorer"
-                onPress={handleExplorer}
-                style={({ pressed }) => [
-                  S.actionBtn,
-                  S.actionBtnSecondary,
-                  { borderColor: colors.border, backgroundColor: colors.surface1 },
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Text style={[S.actionBtnText, { color: colors.textPrimary }]}>Explorer</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                onPress={onClose}
-                style={({ pressed }) => [
-                  S.actionBtn,
-                  { backgroundColor: colors.primary },
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <Text style={[S.actionBtnText, { color: "#08080A" }]}>Close</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
+    <AppBottomSheet visible={visible} onClose={onClose} contentStyle={S.content}>
+      <View style={S.header}>
+        <View style={[S.iconWrap, { backgroundColor: tx.direction === "send" ? colors.primarySubtle : colors.successSubtle }]}>
+          <Icon
+            color={tx.direction === "send" ? colors.primary : colors.success}
+            name={tx.direction === "send" ? "arrow-up-right" : "arrow-down-left"}
+            size={20}
+          />
+        </View>
+        <View style={S.headerText}>
+          <Text style={[S.title, { color: colors.textPrimary }]}>{formatAmount(tx)}</Text>
+          <Text style={[S.subtitle, { color: colors.textSecondary }]}>
+            {tx.direction === "send" ? "Sent to" : "Received from"} {shortAddress(tx.counterparty)}
+          </Text>
+        </View>
+        <Pill label={tx.status} tone={tx.status === "Settled" ? "green" : "red"} />
       </View>
-    </Modal>
+
+      <View style={[S.details, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+        <DetailRow label="Signature" value={shortAddress(tx.signature)} copyValue={tx.signature} />
+        <DetailRow label="Counterparty" value={shortAddress(tx.counterparty)} copyValue={tx.counterparty} />
+        <DetailRow label="Slot" value={tx.slot === null ? "Unavailable" : String(tx.slot)} />
+        <DetailRow label="Fee" value={formatFee(tx.feeLamports)} />
+        {tx.memo ? <DetailRow label="Memo" value={tx.memo} copyValue={tx.memo} /> : null}
+        {tx.mintAddress ? (
+          <DetailRow label="Mint" value={shortAddress(tx.mintAddress)} copyValue={tx.mintAddress} />
+        ) : null}
+      </View>
+
+      <View style={S.actions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open in Explorer"
+          onPress={handleExplorer}
+          style={({ pressed }) => [
+            S.actionBtn,
+            S.actionBtnSecondary,
+            { borderColor: colors.border, backgroundColor: colors.surface1 },
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <Text style={[S.actionBtnText, { color: colors.textPrimary }]}>Explorer</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={onClose}
+          style={({ pressed }) => [
+            S.actionBtn,
+            { backgroundColor: colors.primary },
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <Text style={[S.actionBtnText, { color: "#08080A" }]}>Close</Text>
+        </Pressable>
+      </View>
+    </AppBottomSheet>
   );
 }
 
 const S = StyleSheet.create({
-  root: {
-    backgroundColor: "rgba(0,0,0,0.68)",
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  dismissArea: {
-    flex: 1,
-  },
-  sheet: {
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    borderWidth: 1,
-    maxHeight: "86%",
-    overflow: "hidden",
-  },
-  handleWrap: {
-    alignItems: "center",
-    paddingTop: 10,
-  },
-  handle: {
-    borderRadius: 2,
-    height: 4,
-    opacity: 0.5,
-    width: 42,
-  },
   content: {
     gap: 16,
-    padding: 16,
     paddingBottom: 24,
   },
   header: {
