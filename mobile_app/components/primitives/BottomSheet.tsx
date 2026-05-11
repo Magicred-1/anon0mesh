@@ -16,7 +16,6 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -44,8 +43,9 @@ import { useTheme } from "@/theme";
 //   backdrop cross-fading with the slide reads as "dim rises with the
 //   sheet" rather than as a separate scrim.
 // - Close: backdrop + sheet animate in lockstep over 220ms (ease-in cubic).
-// - Snap-back after partial drag uses a real spring (damping 22, stiffness
-//   320) — short distance, no overshoot risk, feels natural after gesture.
+// - Snap-back after partial drag uses timing (260ms ease-out exponential)
+//   — deterministic, no overshoot. A spring here oscillates visibly on
+//   settle after short drags where there's no perceptual cover for wobble.
 // - During drag, backdrop opacity mirrors sheet translateY so the dim
 //   fades as the sheet leaves. Decoupled on open, coupled on drag/close.
 // - Internal mounted state lags `visible` prop on close so the slide-down
@@ -85,9 +85,14 @@ const TIMING_CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) } as const
 // opacity tied to a single translateY value reads as "dim rises with the
 // sheet" rather than the iOS-standard "sheet rises onto already-dim canvas".
 const TIMING_BACKDROP_OPEN = { duration: 200, easing: Easing.out(Easing.cubic) } as const;
-// Snap-back after partial drag uses a real spring — short distance, no
-// overshoot risk, feels natural after interactive gesture.
-const SPRING_BACK = { damping: 22, stiffness: 320 } as const;
+// Snap-back after partial drag. Previously used a spring (damping 22,
+// stiffness 320) which is mathematically underdamped — the system overshot
+// the rest position and oscillated visibly on settle, especially after
+// short drags where there's no perceptual cover for the wobble. Production
+// sheet libraries (gorhom/bottom-sheet, etc.) use a deterministic timing
+// curve here for exactly this reason: no overshoot, predictable duration,
+// no visible jitter on settle.
+const TIMING_SNAP_BACK = { duration: 260, easing: Easing.out(Easing.exp) } as const;
 // Pan activation thresholds. Lowered from 12 → 5 because with Pressable
 // children inside the sheet, RN's responder system may hold the touch
 // through the first ~10pt of motion before Pressable cancels — by which
@@ -191,8 +196,8 @@ export function AppBottomSheet({
         backdropOpacity.value = withTiming(0, TIMING_CLOSE);
         runOnJS(onClose)();
       } else {
-        translateY.value = withSpring(0, SPRING_BACK);
-        backdropOpacity.value = withSpring(1, SPRING_BACK);
+        translateY.value = withTiming(0, TIMING_SNAP_BACK);
+        backdropOpacity.value = withTiming(1, TIMING_SNAP_BACK);
       }
     });
 
