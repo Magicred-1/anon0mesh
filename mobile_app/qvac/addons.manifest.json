@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "bundleId": "a3b730ff1be6d06107d277990ae9e89de687b39157b14ab055d623a506ce6521",
+  "addons": [
+    "@qvac/llm-llamacpp",
+    "bare-abort",
+    "bare-buffer",
+    "bare-crypto",
+    "bare-dns",
+    "bare-fs",
+    "bare-hrtime",
+    "bare-inspect",
+    "bare-os",
+    "bare-pipe",
+    "bare-signals",
+    "bare-stdio",
+    "bare-tcp",
+    "bare-tls",
+    "bare-tty",
+    "bare-type",
+    "bare-url",
+    "bare-zlib",
+    "fs-native-extensions",
+    "quickbit-native",
+    "rabin-native",
+    "rocksdb-native",
+    "simdle-native",
+    "sodium-native",
+    "udx-native"
+  ]
+}

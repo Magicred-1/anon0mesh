@@ -1,0 +1,8 @@
+{
+  "plugins": ["@qvac/sdk/llamacpp-completion/plugin"],
+  "loggerConsoleOutput": true,
+  "loggerLevel": "warn",
+  "httpDownloadConcurrency": 2,
+  "registryDownloadMaxRetries": 3,
+  "registryStreamTimeoutMs": 90000
+}
