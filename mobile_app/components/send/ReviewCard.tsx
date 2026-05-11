@@ -72,6 +72,7 @@ interface ReviewCardProps {
   readonly mintAddress?: string | string[];
   readonly decimals?: string | string[];
   readonly programId?: string | string[];
+  readonly memo?: string | string[];
 }
 
 // ── DetailRow ─────────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ function DetailRow({ icon, label, secondary, value, valueComponent, colors }: De
 
 // ── ReviewCard ────────────────────────────────────────────────────────────────
 
-export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programId }: ReviewCardProps) {
+export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programId, memo }: ReviewCardProps) {
   const router = useRouter();
   const { colors } = useTheme();
   const { wallet } = useWallet();
@@ -122,6 +123,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   const [sliderResetKey, setSliderResetKey] = useState(0);
   const normalizedMint = typeof mintAddress === "string" ? mintAddress : "";
   const normalizedProgramId = typeof programId === "string" ? programId : "";
+  const normalizedMemo = typeof memo === "string" ? memo.trim().slice(0, 80) : "";
   const tokenDecimals =
     typeof decimals === "string" && decimals.length > 0 ? Number.parseInt(decimals, 10) : 6;
   const isToken2022 = normalizedProgramId === "spl-token-2022";
@@ -144,6 +146,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
                   walletAdapter: wallet,
                   recipientAddress: to,
                   amountSOL: amount,
+                  memo: normalizedMemo || undefined,
                 }),
                 FEE_ESTIMATE_TIMEOUT_MS,
               )
@@ -168,7 +171,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     return () => {
       cancelled = true;
     };
-  }, [amount, normalizedMint, normalizedProgramId, symbol, to, tokenDecimals, wallet]);
+  }, [amount, normalizedMemo, normalizedMint, normalizedProgramId, symbol, to, tokenDecimals, wallet]);
 
   async function handleConfirm() {
     if (isConfirming) return;
@@ -217,6 +220,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
               rpcAdapter,
               recipientAddress: to,
               amountSOL: amount,
+              memo: normalizedMemo || undefined,
             })
           : await sendSplTransfer({
               walletAdapter: wallet,
@@ -329,6 +333,14 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             label="Route"
             valueComponent={<Pill label={routeLabel(networkMode)} tone={routeTone(networkMode)} />}
           />
+          {normalizedMemo ? (
+            <DetailRow
+              colors={colors}
+              icon="message-square"
+              label="Memo"
+              value={normalizedMemo}
+            />
+          ) : null}
           <DetailRow
             colors={colors}
             icon="zap"

@@ -17,11 +17,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { QRScannerModal } from "@/components/messages/QRScannerModal";
 import { DepthButton, TokenLogo } from "@/components/primitives";
+import { NlComposeSheet } from "@/components/send/NlComposeSheet";
 import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import { useAddressBook } from "@/src/services/addressBook";
+import { isQvacEnabled } from "@/src/services/qvac";
+import { formatTransferAmountForRoute } from "@/src/services/qvac/amount";
+import type { TransferIntent } from "@/src/services/qvac/intent";
+import { resolveRecipientLabel } from "@/src/services/qvac/recipients";
+import { resolveSendToken } from "@/src/services/qvac/tokens";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -87,11 +93,13 @@ export function RecipientPicker() {
   const params = useLocalSearchParams<{ to?: string }>();
   const [address, setAddress] = useState(typeof params.to === "string" ? params.to : "");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
+  const [aiOpen, setAiOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const { tokens } = useWalletBalance();
   const { entries: addressBook } = useAddressBook();
   const token: TokenOption = tokenByName(selectedSymbol, tokens);
+  const qvacEnabled = isQvacEnabled();
 
   const trimmedAddress = address.trim();
   const isValid = isValidSolanaAddress(trimmedAddress);
@@ -141,6 +149,69 @@ export function RecipientPicker() {
     setAddress(pubkey);
   }
 
+  function handleAiIntent(intent: TransferIntent) {
+    const tokenResolution = resolveSendToken(intent.token, tokens);
+    if (tokenResolution.kind !== "unique") {
+      Alert.alert(
+        "Token not sendable yet",
+        `${tokenResolution.symbol} was understood, but this build only routes verified SOL sends through the review flow.`,
+      );
+      return;
+    }
+
+    const resolvedToken = tokenByName(tokenResolution.symbol, tokens);
+    const recipientResolution = resolveRecipientLabel(intent.recipient, addressBook);
+    if (recipientResolution.kind === "ambiguous") {
+      Alert.alert(
+        "Choose a recipient",
+        `QVAC found more than one saved recipient matching "${intent.recipient}". Pick the exact recipient from Recents.`,
+      );
+      return;
+    }
+    if (recipientResolution.kind === "unknown") {
+      setAddress(intent.recipient);
+      Alert.alert(
+        "Recipient not found",
+        `QVAC understood "${intent.recipient}", but it is not an exact saved contact or Solana address.`,
+      );
+      return;
+    }
+
+    const amount = formatTransferAmountForRoute(intent.amount, resolvedToken.maxDecimals);
+    if (!amount) {
+      Alert.alert(
+        "Amount not sendable",
+        `QVAC parsed ${intent.amount}, but that amount cannot be routed as ${resolvedToken.symbol}.`,
+      );
+      return;
+    }
+
+    if (Number(intent.amount) > resolvedToken.uiAmount) {
+      Alert.alert(
+        "Insufficient balance",
+        `QVAC parsed ${amount} ${resolvedToken.symbol}, but your available balance is ${formatBalance(resolvedToken.uiAmount, resolvedToken.maxDecimals)} ${resolvedToken.symbol}.`,
+      );
+      return;
+    }
+
+    setSelectedSymbol(resolvedToken.symbol);
+    setAddress(recipientResolution.pubkey);
+    setAiOpen(false);
+    haptics.confirm();
+    router.push({
+      pathname: "/send/review",
+      params: {
+        amount,
+        decimals: String(resolvedToken.maxDecimals),
+        memo: intent.memo ?? "",
+        mint: resolvedToken.mintAddress ?? "",
+        programId: resolvedToken.programId ?? "",
+        symbol: resolvedToken.symbol,
+        to: recipientResolution.pubkey,
+      },
+    });
+  }
+
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView edges={["top", "bottom"]} style={S.flex}>
@@ -150,15 +221,17 @@ export function RecipientPicker() {
             <Text style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
             <Text style={[S.screenTitle, { color: colors.textPrimary }]}>send</Text>
           </View>
-          <Pressable
-            accessibilityLabel="Close send"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => router.back()}
-            style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-          >
-            <Feather name="x" size={18} color={colors.textPrimary} />
-          </Pressable>
+          <View style={S.headerActions}>
+            <Pressable
+              accessibilityLabel="Close send"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => router.back()}
+              style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+            >
+              <Feather name="x" size={18} color={colors.textPrimary} />
+            </Pressable>
+          </View>
         </View>
 
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={S.flex}>
@@ -167,6 +240,36 @@ export function RecipientPicker() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {qvacEnabled ? (
+              <Pressable
+                accessibilityLabel="Compose transfer privately with QVAC"
+                accessibilityRole="button"
+                onPress={() => {
+                  haptics.tap();
+                  setAiOpen(true);
+                }}
+                style={[
+                  S.aiTile,
+                  {
+                    backgroundColor: colors.primarySubtle,
+                    borderColor: "rgba(0,229,255,0.32)",
+                  },
+                ]}
+              >
+                <View style={[S.aiTileIcon, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Feather name="cpu" size={18} color={colors.primary} />
+                </View>
+                <View style={S.aiTileCopy}>
+                  <Text style={[S.tileLabel, S.aiTileLabel, { color: colors.textTertiary }]}>QVAC</Text>
+                  <Text style={[S.aiTileTitle, { color: colors.textPrimary }]}>Private compose</Text>
+                  <Text numberOfLines={1} style={[S.aiTilePrompt, { color: colors.textSecondary }]}>
+                    pay djason 0.05 SOL for coffee
+                  </Text>
+                </View>
+                <Feather name="arrow-right" size={18} color={colors.primary} />
+              </Pressable>
+            ) : null}
+
             {/* ── Token tile ── */}
             <Pressable
               accessibilityLabel={`Sending ${token.symbol}. Tap to choose a different token.`}
@@ -308,6 +411,12 @@ export function RecipientPicker() {
         onClose={() => setPickerOpen(false)}
       />
 
+      <NlComposeSheet
+        visible={aiOpen}
+        onClose={() => setAiOpen(false)}
+        onIntent={handleAiIntent}
+      />
+
       <QRScannerModal
         visible={scannerOpen}
         onClose={() => setScannerOpen(false)}
@@ -365,6 +474,11 @@ const S = StyleSheet.create({
     justifyContent: "center",
     width: 36,
   },
+  headerActions: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
 
   // scroll
   scrollContent: {
@@ -384,6 +498,39 @@ const S = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 10,
     textTransform: "uppercase",
+  },
+  aiTile: {
+    alignItems: "center",
+    borderRadius: 20,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 86,
+    padding: 16,
+  },
+  aiTileCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  aiTileIcon: {
+    alignItems: "center",
+    borderRadius: 16,
+    borderWidth: 0.5,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  aiTileLabel: {
+    marginBottom: 2,
+  },
+  aiTilePrompt: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+  },
+  aiTileTitle: {
+    fontFamily: FF.sansSb,
+    fontSize: 16,
   },
 
   // token tile

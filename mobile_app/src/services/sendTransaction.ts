@@ -6,6 +6,7 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
 } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
@@ -38,6 +39,7 @@ const APP_IDENTITY = {
 // endpoint when unset so cloning the repo "just works".
 const DEFAULT_DEVNET_RPC = "https://api.devnet.solana.com";
 const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || DEFAULT_DEVNET_RPC;
+const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 export const solanaConnection = new Connection(RPC_URL, "confirmed");
 
@@ -46,6 +48,7 @@ export interface SendSolParams {
   rpcAdapter: IRpcAdapter;
   recipientAddress: string;
   amountSOL: string;
+  memo?: string;
 }
 
 export interface SendSplParams {
@@ -62,6 +65,7 @@ export interface EstimateSolTransferFeeParams {
   walletAdapter: IWalletAdapter;
   recipientAddress: string;
   amountSOL: string;
+  memo?: string;
 }
 
 export interface EstimateSplTransferFeeParams {
@@ -116,10 +120,12 @@ function buildSolTransferTransaction({
   fromPubkey,
   recipientAddress,
   amountSOL,
+  memo,
 }: {
   fromPubkey: PublicKey;
   recipientAddress: string;
   amountSOL: string;
+  memo?: string;
 }): Transaction {
   let toPubkey: PublicKey;
   try {
@@ -129,9 +135,18 @@ function buildSolTransferTransaction({
   }
 
   const lamports = parseBaseUnits(amountSOL, 9);
-  return new Transaction().add(
-    SystemProgram.transfer({ fromPubkey, toPubkey, lamports }),
-  );
+  const tx = new Transaction().add(SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
+  const normalizedMemo = memo?.trim().slice(0, 80);
+  if (normalizedMemo) {
+    tx.add(
+      new TransactionInstruction({
+        keys: [],
+        programId: MEMO_PROGRAM_ID,
+        data: Buffer.from(normalizedMemo, "utf8"),
+      }),
+    );
+  }
+  return tx;
 }
 
 async function buildSplTransferTransaction({
@@ -261,13 +276,14 @@ export async function estimateSolTransferFeeLamports({
   walletAdapter,
   recipientAddress,
   amountSOL,
+  memo,
 }: EstimateSolTransferFeeParams): Promise<number> {
   const fromPubkey = walletAdapter.getPublicKey();
   if (!fromPubkey) {
     throw new Error("Wallet not connected");
   }
 
-  const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL });
+  const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL, memo });
   const { blockhash } = await solanaConnection.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
@@ -330,13 +346,14 @@ export async function sendSolTransfer({
   rpcAdapter,
   recipientAddress,
   amountSOL,
+  memo,
 }: SendSolParams): Promise<SendResult> {
   const fromPubkey = walletAdapter.getPublicKey();
   if (!fromPubkey) {
     throw new Error("Wallet not connected");
   }
 
-  const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL });
+  const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL, memo });
   return signAndSubmitTransaction({ walletAdapter, rpcAdapter, tx, expectedPubkey: fromPubkey });
 }
 
