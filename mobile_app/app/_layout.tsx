@@ -21,6 +21,7 @@ import { Feather } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider, useLxmfContext } from '@/context/LxmfContext';
+import { BeaconProvider } from '@/context/BeaconContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
@@ -160,7 +161,9 @@ export default function RootLayout() {
           <WalletProvider autoInitialize>
             <WalletBalanceProvider>
             <HideBalanceProvider>
-              <AppShell />
+              <BeaconProvider>
+                <AppShell />
+              </BeaconProvider>
             </HideBalanceProvider>
             </WalletBalanceProvider>
           </WalletProvider>

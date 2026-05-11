@@ -10,6 +10,7 @@ import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
+import { BeaconStatus }    from '@/components/nodes/BeaconStatus';
 import { PendingCosigns, type PendingCosign } from '@/components/nodes/PendingCosigns';
 import { PulseDot }        from '@/components/ui/PulseDot';
 import { NODES, FILTERS }  from '@/components/nodes/constants';
@@ -164,6 +165,7 @@ export default function NodesScreen() {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.bottomScroll}>
           <BeaconRegistry />
+          <BeaconStatus />
         </ScrollView>
 
       </SafeAreaView>
