@@ -4,14 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 
-import { PigeonLoader } from '@/components/ui/PigeonLoader';
+import { PigeonLoader, type PigeonLoaderStatus } from '@/components/ui/PigeonLoader';
 import { fontFamily, fontSize, useTheme } from '@/theme';
 
 const LABELS = ['Sending', 'Refreshing', 'Connecting', 'Confirming'] as const;
 type Label = typeof LABELS[number];
 
 const SUBLABELS: Record<Label, string> = {
-  Sending: 'Routing through mesh network',
+  Sending: 'Routing through mesh',
   Refreshing: 'Fetching latest balance',
   Connecting: 'Finding nearby peers',
   Confirming: 'Waiting for confirmation',
@@ -21,19 +21,41 @@ export default function PigeonLoaderDevScreen() {
   const { colors, spacing } = useTheme();
 
   const [visible, setVisible] = useState(false);
+  const [status, setStatus] = useState<PigeonLoaderStatus>('loading');
   const [labelIdx, setLabelIdx] = useState(0);
-  const [withSublabel, setWithSublabel] = useState(true);
+  const [withSublabel, setWithSublabel] = useState(false);
   const [withCancel, setWithCancel] = useState(false);
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-
-  const playFor = useCallback((ms: number) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setVisible(true);
-    timerRef.current = setTimeout(() => setVisible(false), ms);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const clearTimers = useCallback(() => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
   }, []);
+  useEffect(() => clearTimers, [clearTimers]);
+
+  const dismiss = useCallback(() => {
+    clearTimers();
+    setVisible(false);
+    setStatus('loading');
+  }, [clearTimers]);
+
+  const playLoading = useCallback((ms: number) => {
+    clearTimers();
+    setStatus('loading');
+    setVisible(true);
+    timers.current.push(setTimeout(() => setVisible(false), ms));
+  }, [clearTimers]);
+
+  const playFullLifecycle = useCallback((loadingMs: number) => {
+    clearTimers();
+    setStatus('loading');
+    setVisible(true);
+    timers.current.push(setTimeout(() => setStatus('success'), loadingMs));
+    timers.current.push(setTimeout(() => {
+      setVisible(false);
+      setStatus('loading');
+    }, loadingMs + 1300));
+  }, [clearTimers]);
 
   const label = LABELS[labelIdx];
   const sublabel = withSublabel ? SUBLABELS[label] : undefined;
@@ -61,54 +83,34 @@ export default function PigeonLoaderDevScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: spacing[5], gap: spacing[5] }}
         >
-          <Section title="Quick play">
-            <RowButton
-              label="Show for 2.5s (typical send)"
-              onPress={() => playFor(2500)}
-              colors={colors}
-            />
-            <RowButton
-              label="Show for 300ms (instant)"
-              onPress={() => playFor(300)}
-              colors={colors}
-            />
-            <RowButton
-              label="Show for 8s (slow / mesh)"
-              onPress={() => playFor(8000)}
-              colors={colors}
-            />
-            <RowButton
-              label="Show forever (tap loader area to test cancel)"
-              onPress={() => setVisible(true)}
-              colors={colors}
-            />
+          <Section title="Full lifecycle (sending → sent → dismiss)">
+            <RowButton label="Typical send (2.5s → success)" onPress={() => playFullLifecycle(2500)} colors={colors} />
+            <RowButton label="Quick send (800ms → success)"   onPress={() => playFullLifecycle(800)}  colors={colors} />
+            <RowButton label="Slow mesh send (6s → success)"  onPress={() => playFullLifecycle(6000)} colors={colors} />
+          </Section>
+
+          <Section title="Loading only (no success transition)">
+            <RowButton label="Show 2.5s loading"    onPress={() => playLoading(2500)}    colors={colors} />
+            <RowButton label="Show 300ms (flash)"   onPress={() => playLoading(300)}     colors={colors} />
+            <RowButton label="Show until dismissed" onPress={() => { clearTimers(); setStatus('loading'); setVisible(true); }} colors={colors} />
+            <RowButton label="Dismiss"              onPress={dismiss} colors={colors} />
           </Section>
 
           <Section title="Variants">
-            <RowToggle
-              label="Show sublabel"
-              value={withSublabel}
-              onChange={setWithSublabel}
-              colors={colors}
-            />
-            <RowToggle
-              label="Show cancel button"
-              value={withCancel}
-              onChange={setWithCancel}
-              colors={colors}
-            />
-            <RowButton
-              label={`Cycle label — ${label}`}
-              onPress={() => setLabelIdx((i) => (i + 1) % LABELS.length)}
-              colors={colors}
-            />
+            <RowToggle label="Sublabel"        value={withSublabel} onChange={setWithSublabel} colors={colors} />
+            <RowToggle label="Cancel button"   value={withCancel}   onChange={setWithCancel}   colors={colors} />
+            <RowButton label={`Label — ${label}`} onPress={() => setLabelIdx((i) => (i + 1) % LABELS.length)} colors={colors} />
+          </Section>
+
+          <Section title="State (manual)">
+            <RowButton label={`status: ${status}`} onPress={() => setStatus(s => s === 'loading' ? 'success' : 'loading')} colors={colors} />
           </Section>
 
           <Section title="Notes">
             <Text style={[S.note, { color: colors.textSecondary, fontFamily: fontFamily.sans }]}>
               {`Deep link: anonmesh://dev/pigeon-loader\n`}
-              {`Asset: assets/animations/sending.webp (240×240 WebP, ~350KB)\n`}
-              {`Renderer: expo-image (no extra deps)`}
+              {`Asset: assets/animations/sending.webp (320×320 WebP, alpha, ~614KB)\n`}
+              {`Renderer: expo-image · Mesh BG: react-native-svg + Reanimated`}
             </Text>
           </Section>
         </ScrollView>
@@ -116,9 +118,10 @@ export default function PigeonLoaderDevScreen() {
 
       <PigeonLoader
         visible={visible}
+        status={status}
         label={label}
         sublabel={sublabel}
-        onCancel={withCancel ? () => setVisible(false) : undefined}
+        onCancel={withCancel ? dismiss : undefined}
         testID="dev-pigeon-loader"
       />
     </View>
