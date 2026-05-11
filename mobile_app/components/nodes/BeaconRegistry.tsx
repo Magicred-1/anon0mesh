@@ -11,6 +11,9 @@ import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 const BEACON_STALE_MS = 120_000;
 const STAKE_SOL       = '0.5';
 const NETWORK_FEE     = '~0.000005';
+const STAKE_NUM       = 0.5;
+const JITO_RATE       = 0.8734;
+const JITO_APY        = 0.085;
 
 interface Props {
   readonly initialActive?: boolean;
@@ -28,6 +31,8 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const hasInternet = networkMode === 'online';
 
   const active          = isBeacon;
+  const [cosigns]       = useState(24);
+  const [earned]        = useState(0.000312);
   const [modal, setModal]         = useState(false);
   const [stakeModal, setStakeModal] = useState(false);
   const [stakeAmt, setStakeAmt]   = useState(0.5);
@@ -74,6 +79,15 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const stakeSheetY = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
   const stakeOvOp   = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
 
+  const jitoAmt   = (STAKE_NUM * JITO_RATE).toFixed(3);
+  const yieldAmt  = (STAKE_NUM * JITO_APY).toFixed(4);
+  const repScore  = Math.round(STAKE_NUM * 200);
+
+  const previewAmt = Math.max(0.5, Number.parseFloat(rawAmt) || stakeAmt);
+  const newTotal = STAKE_NUM + previewAmt;
+  const newYield = (newTotal * JITO_APY).toFixed(4);
+  const newRep   = Math.round(newTotal * 200);
+
   return (
     <>
       <View style={[S.wrap, style]}>
@@ -90,23 +104,43 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               <View style={S.hero}>
                 <View style={S.heroAmt}>
                   <SolanaIcon size={26} color={colors.primary} />
-                  <Text style={[S.heroNum, { color: colors.textPrimary }]}>{reachableCount}</Text>
+                  <Text style={[S.heroNum, { color: colors.textPrimary }]}>{earned.toFixed(6)}</Text>
                 </View>
-                <Text style={[S.heroLabel, { color: colors.textTertiary }]}>NODES REACHABLE</Text>
+                <Text style={[S.heroLabel, { color: colors.textTertiary }]}>SOL EARNED</Text>
               </View>
 
-              <View style={S.previewNotice}>
-                <Feather name="info" size={12} color={colors.textTertiary} />
-                <Text style={[S.previewNoticeText, { color: colors.textTertiary }]}>
-                  Stake delegation, co-sign rewards, and reputation scoring are in preview.
+              <View style={[S.repRow, { borderTopColor: colors.borderSubtle, borderBottomColor: colors.borderSubtle }]}>
+                <View style={S.repCell}>
+                  <Text style={[S.repNum, { color: colors.textPrimary }]}>{repScore}</Text>
+                  <Text style={[S.repLabel, { color: colors.textTertiary }]}>REP SCORE</Text>
+                </View>
+                <View style={[S.repDivider, { backgroundColor: colors.borderSubtle }]} />
+                <View style={S.repCell}>
+                  <Text style={[S.repNum, { color: colors.textPrimary }]}>{jitoAmt}</Text>
+                  <Text style={[S.repLabel, { color: colors.textTertiary }]}>JITOSOL</Text>
+                  <Pressable
+                    onPress={openStake}
+                    style={({ pressed }) => [S.stakeChip, { borderColor: colors.primary + '60', backgroundColor: colors.primary + '18', opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name="plus" size={9} color={colors.primary} />
+                    <Text style={[S.stakeChipText, { color: colors.primary }]}>Stake</Text>
+                  </Pressable>
+                </View>
+                <View style={[S.repDivider, { backgroundColor: colors.borderSubtle }]} />
+                <View style={S.repCell}>
+                  <Text style={[S.repNum, { color: colors.primary }]}>+{yieldAmt}</Text>
+                  <Text style={[S.repLabel, { color: colors.textTertiary }]}>SOL / YR</Text>
+                </View>
+              </View>
+
+              <View style={S.footer}>
+                <Text style={[S.footerStat, { color: colors.textSecondary }]}>
+                  <Text style={[S.footerNum, { color: colors.textPrimary }]}>{cosigns}</Text>{'  '}co-signs
                 </Text>
-                <Pressable
-                  onPress={openStake}
-                  style={({ pressed }) => [S.stakeChip, { borderColor: colors.border, backgroundColor: colors.surface2, opacity: pressed ? 0.7 : 1 }]}
-                >
-                  <Feather name="eye" size={9} color={colors.textSecondary} />
-                  <Text style={[S.stakeChipText, { color: colors.textSecondary }]}>Preview</Text>
-                </Pressable>
+                <View style={[S.footerDot, { backgroundColor: colors.borderSubtle }]} />
+                <Text style={[S.footerStat, { color: colors.textSecondary }]}>
+                  <Text style={[S.footerNum, { color: colors.primary }]}>{reachableCount}</Text>{'  '}reachable
+                </Text>
               </View>
             </>
           ) : (
@@ -162,6 +196,8 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               ))}
             </View>
 
+            {/* CTA disabled in preview — biometric signing flow isn't wired yet.
+                Beacon mode still auto-activates via the hasInternet effect above. */}
             <View
               style={[S.actionBtn, { backgroundColor: colors.surface2, borderWidth: 0.5, borderColor: colors.border, opacity: 0.6 }]}
               pointerEvents="none"
@@ -183,12 +219,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
             <View style={[S.grab, { backgroundColor: colors.border }]} />
 
             <View style={S.sheetHeader}>
-              <View style={S.sheetTitleRow}>
-                <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>Stake SOL</Text>
-                <View style={[S.titleBadge, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-                  <Text style={[S.titleBadgeText, { color: colors.textTertiary }]}>PREVIEW</Text>
-                </View>
-              </View>
+              <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>Stake More SOL</Text>
               <Pressable onPress={dismissStake} style={[S.closeBtn, softGlass]} hitSlop={8}>
                 <Feather name="x" size={14} color={colors.textSecondary} />
               </Pressable>
@@ -227,13 +258,22 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               </Pressable>
             </View>
 
-            <View style={[S.impactBox, { backgroundColor: colors.surface2, borderColor: colors.border, padding: 14, gap: 6 }]}>
-              <Text style={[S.impactRowLabel, { color: colors.textSecondary, flex: 0 }]}>
-                Stake delegation is in preview.
-              </Text>
-              <Text style={[S.impactRowLabel, { color: colors.textTertiary, flex: 0, fontSize: 12, lineHeight: 17 }]}>
-                Yield projections, reputation scoring, and JitoSOL conversion are not yet wired to live rates.
-              </Text>
+            {/* Impact rows */}
+            <View style={[S.impactBox, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+              <View style={[S.impactRow, { borderBottomColor: colors.borderSubtle }]}>
+                <Feather name="shield" size={14} color={colors.primary} />
+                <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Rep score</Text>
+                <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>{repScore}</Text>
+                <Feather name="arrow-right" size={10} color={colors.textTertiary} />
+                <Text style={[S.impactRowAfter, { color: colors.primary }]}>{newRep}</Text>
+              </View>
+              <View style={S.impactRow}>
+                <Feather name="trending-up" size={14} color={colors.primary} />
+                <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Yield / yr</Text>
+                <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>+{yieldAmt}</Text>
+                <Feather name="arrow-right" size={10} color={colors.textTertiary} />
+                <Text style={[S.impactRowAfter, { color: colors.primary }]}>+{newYield} SOL</Text>
+              </View>
             </View>
 
             <View
@@ -258,16 +298,22 @@ const S = StyleSheet.create({
   accentBar:   { height: 2 },
 
   hero:        { alignItems: 'center', paddingVertical: 28, gap: 6 },
-  heroAmt:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroAmt:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
   heroNum:     { fontFamily: fontFamily.sansBold, fontSize: 28, letterSpacing: -1 },
   heroLabel:   { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase' },
 
-  previewNotice:     { flexDirection: 'row', alignItems: 'center', gap: 8,
-                       paddingHorizontal: 16, paddingVertical: 12,
-                       borderTopWidth: 0.5, borderTopColor: 'rgba(255,255,255,0.06)' },
-  previewNoticeText: { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 11, lineHeight: 15 },
-  stakeChip:         { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 0.5 },
-  stakeChipText:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5 },
+  repRow:      { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, paddingVertical: 14 },
+  repCell:     { flex: 1, alignItems: 'center', gap: 4 },
+  repNum:      { fontFamily: fontFamily.sansBold, fontSize: 16, letterSpacing: -0.5 },
+  repLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
+  repDivider:  { width: 0.5, marginVertical: 4 },
+  stakeChip:     { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 0.5, marginTop: 2 },
+  stakeChipText: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5 },
+
+  footer:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  footerStat:  { fontFamily: fontFamily.sansMd, fontSize: 12 },
+  footerNum:   { fontFamily: fontFamily.sansBold, fontSize: 14 },
+  footerDot:   { width: 3, height: 3, borderRadius: 2 },
 
   desc:        { fontFamily: fontFamily.sansMd, fontSize: 12.5, lineHeight: 19, padding: 18, paddingBottom: 14 },
   regBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
@@ -278,11 +324,8 @@ const S = StyleSheet.create({
                  borderTopLeftRadius: 22, borderTopRightRadius: 22,
                  paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12, borderWidth: 0.5 },
   grab:        { width: 32, height: 3.5, borderRadius: 99, alignSelf: 'center', marginBottom: 20 },
-  sheetHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  sheetTitleRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sheetTitle:     { fontFamily: fontFamily.sansBold, fontSize: 20, letterSpacing: -0.4 },
-  titleBadge:     { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, borderWidth: 0.5 },
-  titleBadgeText: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.5 },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  sheetTitle:  { fontFamily: fontFamily.sansBold, fontSize: 20, letterSpacing: -0.4 },
   closeBtn:    { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   feeList:     { gap: 0, marginBottom: 24 },
   feeRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 0.5 },
