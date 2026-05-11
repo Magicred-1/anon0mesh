@@ -34,6 +34,10 @@ export function isQvacEnabled(): boolean {
   return QVAC_ENABLED;
 }
 
+export function isQvacReady(): boolean {
+  return QVAC_ENABLED && activeModelId !== null;
+}
+
 export async function initQvac(
   onProgress?: (progress: QvacProgress) => void,
 ): Promise<QvacSession> {

@@ -4,8 +4,10 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Icon, Pill, PressSurface } from "@/components/primitives";
 import type { PillTone } from "@/components/primitives";
 import { TxDetailModal } from "@/components/wallet/TxDetailModal";
+import { useActivitySummary } from "@/src/hooks/useActivitySummary";
 import { useHideBalance } from "@/src/hooks/useHideBalance";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
+import { useAddressBook, type AddressBookEntry } from "@/src/services/addressBook";
 import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
 import { useTheme } from "@/theme";
@@ -45,6 +47,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
   const { hidden } = useHideBalance();
   const { activity, activityLoading, activityError, lastFetched } = useWalletBalance();
+  const { entries: addressBook } = useAddressBook();
   const [selectedTx, setSelectedTx] = useState<ActivityEntry | null>(null);
 
   const initialLoad = activityLoading && lastFetched === null;
@@ -110,6 +113,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
             key={tx.id}
             hidden={hidden}
             tx={tx}
+            addressBook={addressBook}
             colors={colors}
             radii={radii}
             spacing={spacing}
@@ -131,6 +135,7 @@ export function RecentActivity({ limit = DEFAULT_LIMIT }: RecentActivityProps) {
 function ActivityRow({
   hidden,
   tx,
+  addressBook,
   colors,
   radii,
   spacing,
@@ -140,6 +145,7 @@ function ActivityRow({
 }: {
   hidden: boolean;
   tx: ActivityEntry;
+  addressBook: readonly AddressBookEntry[];
   colors: ReturnType<typeof useTheme>["colors"];
   radii: ReturnType<typeof useTheme>["radii"];
   spacing: ReturnType<typeof useTheme>["spacing"];
@@ -152,6 +158,24 @@ function ActivityRow({
   const amountColor = tx.status === "Failed" ? colors.error : isSend ? colors.textPrimary : colors.success;
   const badgeBg = isSend ? colors.primarySubtle : colors.successSubtle;
   const badgeIcon = isSend ? colors.primary : colors.success;
+  const counterpartyLabel =
+    addressBook.find((entry) => entry.pubkey === tx.counterparty)?.label ?? null;
+  const shortCounterparty = shortAddress(tx.counterparty);
+  const aiSummary = useActivitySummary(
+    hidden
+      ? null
+      : {
+          signature: tx.signature,
+          direction: tx.direction,
+          amountStr: formatAmount(tx.amountSol),
+          symbol: tx.symbol,
+          counterpartyLabel,
+          counterpartyShortAddress: shortCounterparty,
+          memo: tx.memo,
+        },
+  );
+  const deterministicTitle = `${isSend ? "Sent to" : "Received from"} ${counterpartyLabel ?? shortCounterparty}`;
+  const primaryLine = aiSummary ?? deterministicTitle;
 
   function handlePress() {
     haptics.tap();
@@ -205,7 +229,7 @@ function ActivityRow({
               fontSize: fontSize.md,
             }}
           >
-            {isSend ? "Sent to" : "Received from"} {shortAddress(tx.counterparty)}
+            {primaryLine}
           </Text>
           <Text
             style={{

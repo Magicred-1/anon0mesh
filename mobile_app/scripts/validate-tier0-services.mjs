@@ -20,6 +20,9 @@ const { formatTransferAmountForRoute } = await import("../src/services/qvac/amou
 const { prepareTransferTool } = await import("../src/services/qvac/intent.ts");
 const { resolveRecipientLabel } = await import("../src/services/qvac/recipients.ts");
 const { resolveSendToken } = await import("../src/services/qvac/tokens.ts");
+const { buildSummaryUserMessage, summaryCounterpartyToken, validateSummary } = await import(
+  "../src/services/qvac/summarize.ts"
+);
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -452,6 +455,58 @@ function testQvacTransferResolvers() {
   assert.equal(formatTransferAmountForRoute(Number.NaN, 9), null);
 }
 
+function testQvacSummaryValidator() {
+  const labelledInput = {
+    signature: "sig-1",
+    direction: "send",
+    amountStr: "0.05",
+    symbol: "SOL",
+    counterpartyLabel: "djason",
+    counterpartyShortAddress: "8DK4…B2FH",
+    memo: "coffee",
+  };
+
+  assert.equal(summaryCounterpartyToken(labelledInput), "djason");
+  assert.match(
+    buildSummaryUserMessage(labelledInput),
+    /direction: outgoing[\s\S]*amount: 0\.05[\s\S]*token: SOL[\s\S]*counterparty: djason[\s\S]*memo: coffee/,
+  );
+
+  assert.equal(validateSummary("Sent 0.05 SOL to djason for coffee.", labelledInput), true);
+  assert.equal(
+    validateSummary("Sent half a SOL to djason for coffee.", labelledInput),
+    false,
+    "summary missing exact amount must fail validator",
+  );
+  assert.equal(
+    validateSummary("Sent 0.05 lamports to djason for coffee.", labelledInput),
+    false,
+    "summary missing token symbol must fail validator",
+  );
+  assert.equal(
+    validateSummary("Sent 0.05 SOL to friend for coffee.", labelledInput),
+    false,
+    "summary missing counterparty label must fail validator",
+  );
+  assert.equal(
+    validateSummary("Sent 0.05 SOL to djason. ".repeat(10), labelledInput),
+    false,
+    "summary over 80 chars must fail validator",
+  );
+
+  const addressOnlyInput = {
+    ...labelledInput,
+    counterpartyLabel: null,
+    memo: null,
+  };
+  assert.equal(summaryCounterpartyToken(addressOnlyInput), "8DK4…B2FH");
+  assert.equal(
+    validateSummary("Sent 0.05 SOL to 8DK4…B2FH.", addressOnlyInput),
+    true,
+    "summary using short address must pass when no label is available",
+  );
+}
+
 async function testQvacTransferToolSchema() {
   assert.deepEqual(
     await prepareTransferTool.handler({ recipient: "djason", amount: 0.05, memo: "coffee" }),
@@ -483,4 +538,5 @@ testWalletDenialPatterns();
 testSplProgramGuard();
 testQvacTransferResolvers();
 await testQvacTransferToolSchema();
+testQvacSummaryValidator();
 console.log("Tier 0 service checks passed");
