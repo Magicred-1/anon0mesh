@@ -14,6 +14,7 @@
     "validate:tier0": "bash ./scripts/validate-tier0.sh",
     "qvac:bundle": "qvac bundle sdk --config qvac.config.json --host android-arm64 --host ios-arm64 --host ios-arm64-simulator --host ios-x64-simulator --defer expo-file-system --defer react-native-bare-kit --defer @qvac/sdk/worker.mobile.bundle --quiet && cp qvac/worker.bundle.js node_modules/@qvac/sdk/dist/worker.mobile.bundle.js",
     "qvac:smoke:android": "adb shell am start -W -a android.intent.action.VIEW -d 'anonmesh:///qvac-smoke' magicred1.anonmesh.app",
+    "qvac:audit:android": "bash ./scripts/qvac-audit-android.sh",
     "replay:tutorial:android": "adb shell am start -W -a android.intent.action.VIEW -d 'anonmesh://tutorial' magicred1.anonmesh.app",
     "replay:tutorial:ios": "xcrun simctl openurl booted 'anonmesh://tutorial'",
     "demo:prefill-send:android": "adb shell am start -W -a android.intent.action.VIEW -d 'anonmesh://send/recipient?to=9A8uBzYXR2Dy5mJqZ6wmKdP9rKfChS7mZXAZWV7kP8fH' magicred1.anonmesh.app",
