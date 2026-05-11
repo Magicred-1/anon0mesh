@@ -16,6 +16,10 @@ const { summarizeError } = await import("../src/utils/errors.ts");
 const { buildDevnetExplorerTxUrl } = await import("../src/services/explorer.ts");
 const { isWalletDenial } = await import("../src/utils/walletDenial.ts");
 const { assertSendableSplProgram, UnsupportedTokenProgramError } = await import("../src/services/walletData.ts");
+const { formatTransferAmountForRoute } = await import("../src/services/qvac/amount.ts");
+const { prepareTransferTool } = await import("../src/services/qvac/intent.ts");
+const { resolveRecipientLabel } = await import("../src/services/qvac/recipients.ts");
+const { resolveSendToken } = await import("../src/services/qvac/tokens.ts");
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -72,7 +76,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: "0,5",
     }),
-    "solana:11111111111111111111111111111111?amount=0.5&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=0.5&label=anonmesh&message=anonmesh+receive",
     "comma decimal in amount must normalize to dot",
   );
   assert.equal(
@@ -80,7 +84,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: "1,234500",
     }),
-    "solana:11111111111111111111111111111111?amount=1.234500&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=1.234500&label=anonmesh&message=anonmesh+receive",
     "comma decimal with trailing zeros preserved in URI",
   );
   // Whitespace plus comma is the case that locales actually emit.
@@ -89,7 +93,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: " 0,001 ",
     }),
-    "solana:11111111111111111111111111111111?amount=0.001&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=0.001&label=anonmesh&message=anonmesh+receive",
     "padded comma decimal must trim and normalize",
   );
   // Receive screen feeds a plain decimal string, not a locale-grouped number
@@ -107,7 +111,7 @@ function testSolanaPayUri() {
   // amount= rather than crashing on undefined.
   assert.equal(
     buildSolanaPayUri({ recipient: "11111111111111111111111111111111" }),
-    "solana:11111111111111111111111111111111?label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?label=anonmesh&message=anonmesh+receive",
     "missing amount must produce a recipient-only URI",
   );
 }
@@ -406,6 +410,68 @@ function testSplProgramGuard() {
   );
 }
 
+function testQvacTransferResolvers() {
+  const alice = key(9);
+  const alicia = key(10);
+  const djason = key(11);
+  const addressBook = [
+    { pubkey: alice, label: "Alice", lastUsed: 3000, count: 2 },
+    { pubkey: alicia, label: "Alicia", lastUsed: 2000, count: 1 },
+    { pubkey: djason, label: "djason", lastUsed: 1000, count: 7 },
+  ];
+
+  assert.deepEqual(
+    resolveRecipientLabel(` ${djason} `, addressBook),
+    { kind: "unique", pubkey: djason, label: "Wallet address" },
+  );
+  assert.deepEqual(
+    resolveRecipientLabel("DJASON", addressBook),
+    { kind: "unique", pubkey: djason, label: "djason" },
+  );
+  assert.deepEqual(
+    resolveRecipientLabel("dja", addressBook),
+    { kind: "unique", pubkey: djason, label: "djason" },
+  );
+  assert.equal(resolveRecipientLabel("ali", addressBook).kind, "ambiguous");
+  assert.deepEqual(
+    resolveRecipientLabel("unknown", addressBook),
+    { kind: "unknown", label: "unknown" },
+  );
+
+  const tokens = [
+    { symbol: "SOL", name: "Solana", uiAmount: 1, maxDecimals: 9 },
+    { symbol: "USDC", name: "USD Coin", uiAmount: 5, maxDecimals: 6, programId: "spl-token" },
+  ];
+  assert.deepEqual(resolveSendToken("", tokens), { kind: "unique", symbol: "SOL" });
+  assert.deepEqual(resolveSendToken("solana", tokens), { kind: "unique", symbol: "SOL" });
+  assert.deepEqual(resolveSendToken("usdc", tokens), { kind: "unsupported", symbol: "USDC" });
+
+  assert.equal(formatTransferAmountForRoute(0.05, 9), "0.05");
+  assert.equal(formatTransferAmountForRoute(1e-9, 9), "0.000000001");
+  assert.equal(formatTransferAmountForRoute(1e-10, 9), null);
+  assert.equal(formatTransferAmountForRoute(Number.NaN, 9), null);
+}
+
+async function testQvacTransferToolSchema() {
+  assert.deepEqual(
+    await prepareTransferTool.handler({ recipient: "djason", amount: 0.05, memo: "coffee" }),
+    { recipient: "djason", amount: 0.05, token: "SOL", memo: "coffee" },
+  );
+  await assert.rejects(
+    prepareTransferTool.handler({ recipient: "djason", amount: -1, token: "SOL" }),
+    /Too small|positive/,
+  );
+  await assert.rejects(
+    prepareTransferTool.handler({
+      recipient: "djason",
+      amount: 0.05,
+      token: "SOL",
+      memo: "x".repeat(81),
+    }),
+    /Too big|maximum/,
+  );
+}
+
 testSolanaPayUri();
 testParseSolanaPayUri();
 testAddressBookCore();
@@ -415,4 +481,6 @@ testExplorerUrls();
 testErrorSummaries();
 testWalletDenialPatterns();
 testSplProgramGuard();
+testQvacTransferResolvers();
+await testQvacTransferToolSchema();
 console.log("Tier 0 service checks passed");
