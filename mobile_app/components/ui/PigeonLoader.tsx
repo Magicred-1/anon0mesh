@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import Svg, { Circle } from 'react-native-svg';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -23,6 +24,9 @@ const PIGEON_SRC = require('@/assets/animations/sending.webp');
 
 const SPRITE = 280;
 const CHECK_SIZE = 96;
+const HALO_PAD = 28;
+const RING_BOX = CHECK_SIZE + HALO_PAD * 2;
+const RING_CENTER = RING_BOX / 2;
 
 export type PigeonLoaderStatus = 'loading' | 'success';
 
@@ -139,19 +143,38 @@ export function PigeonLoader({
               />
             </Animated.View>
             <Animated.View
-              style={[S.sprite, S.checkLayer, checkStyle]}
+              style={[S.sprite, checkStyle]}
               pointerEvents="none"
             >
-              <View
-                style={[
-                  S.checkRing,
-                  {
-                    borderColor: colors.success + '55',
-                    shadowColor: colors.success,
-                  },
-                ]}
-              >
-                <Feather name="check" size={CHECK_SIZE * 0.58} color={colors.success} />
+              <View style={S.checkRingWrap}>
+                <Svg width={RING_BOX} height={RING_BOX}>
+                  <Circle
+                    cx={RING_CENTER}
+                    cy={RING_CENTER}
+                    r={RING_CENTER - 2}
+                    fill={colors.success}
+                    fillOpacity={0.08}
+                  />
+                  <Circle
+                    cx={RING_CENTER}
+                    cy={RING_CENTER}
+                    r={CHECK_SIZE / 2 + 8}
+                    fill={colors.success}
+                    fillOpacity={0.14}
+                  />
+                  <Circle
+                    cx={RING_CENTER}
+                    cy={RING_CENTER}
+                    r={CHECK_SIZE / 2}
+                    stroke={colors.success}
+                    strokeOpacity={0.85}
+                    strokeWidth={2.5}
+                    fill="none"
+                  />
+                </Svg>
+                <View style={S.checkIconLayer}>
+                  <Feather name="check" size={CHECK_SIZE * 0.58} color={colors.success} />
+                </View>
               </View>
             </Animated.View>
           </View>
@@ -229,18 +252,16 @@ const S = StyleSheet.create({
     width: SPRITE,
     height: SPRITE,
   },
-  checkLayer: {},
-  checkRing: {
-    width: CHECK_SIZE,
-    height: CHECK_SIZE,
-    borderRadius: CHECK_SIZE / 2,
-    borderWidth: 2.5,
+  checkRingWrap: {
+    width: RING_BOX,
+    height: RING_BOX,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 18,
-    elevation: 10,
+  },
+  checkIconLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   label: {
     marginTop: 18,

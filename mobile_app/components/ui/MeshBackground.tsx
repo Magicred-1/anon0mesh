@@ -14,88 +14,77 @@ import Animated, {
 import { useTheme } from '@/theme';
 
 const ACircle = Animated.createAnimatedComponent(Circle);
-const ALine = Animated.createAnimatedComponent(Line);
 
-const ANCHORS: readonly (readonly [number, number])[] = [
-  [0.12, 0.16], [0.46, 0.10], [0.82, 0.18],
-  [0.22, 0.34], [0.58, 0.30], [0.90, 0.42],
-  [0.08, 0.56], [0.42, 0.54], [0.74, 0.62],
-  [0.18, 0.78], [0.54, 0.86], [0.86, 0.80],
+// Logo topology, extracted from assets/icons/anonmesh_white_icon.png.
+// Coordinates are normalized to [0,1] over the LOGO bounding box, not the
+// screen. SCALE blows the logo up to fill the screen while staying centered.
+type Pt = readonly [number, number];
+
+const LOGO_NODES: readonly Pt[] = [
+  [0.351, 0.232],  // 0  top-left
+  [0.596, 0.417],  // 1  center
+  [0.894, 0.318],  // 2  top-right
+  [0.179, 0.484],  // 3  mid-left
+  [0.453, 0.753],  // 4  bottom-left
+  [0.847, 0.752],  // 5  bottom-right
 ];
 
-const EDGES: readonly (readonly [number, number])[] = [
-  [0, 1], [1, 2], [0, 3], [1, 4], [2, 5],
-  [3, 4], [4, 5], [3, 6], [4, 7], [5, 8],
-  [6, 7], [7, 8], [6, 9], [7, 10], [8, 11],
-  [9, 10], [10, 11], [4, 8], [0, 4],
+const LOGO_EDGES: readonly (readonly [number, number])[] = [
+  [0, 1], [0, 2], [0, 3],
+  [1, 2], [1, 3], [1, 4], [1, 5],
+  [2, 5],
+  [3, 4],
+  [4, 5],
 ];
 
-const DRIFT_RADIUS = 14;
-const DOT_RADIUS = 2.4;
-const PHASE_OFFSET = 1 / ANCHORS.length;
+// How big the mesh appears on screen — 1.0 = exactly the screen width,
+// 1.15 lets the outer nodes sit just past the edges (more "enlarged" feel).
+const SCALE = 1.15;
 
-interface DotProps {
+// Visual tuning
+const NODE_RADIUS = 7;
+const NODE_OPACITY = 0.20;
+const EDGE_WIDTH = 1.4;
+const EDGE_OPACITY = 0.15;
+const MSG_RADIUS = 3.2;
+const MSG_OPACITY = 0.85;
+
+// One traveling "message" per edge, all sharing a single phase so we don't
+// allocate per-message timers. Stagger via phase offsets.
+const TRAVEL_SECONDS = 11;        // full loop period across all messages
+const PHASE_PER_MSG = 1 / LOGO_EDGES.length;
+
+interface MessageProps {
   readonly t: SharedValue<number>;
-  readonly index: number;
-  readonly anchor: readonly [number, number];
-  readonly screenW: number;
-  readonly screenH: number;
+  readonly fromX: number;
+  readonly fromY: number;
+  readonly toX: number;
+  readonly toY: number;
+  readonly phase: number;
   readonly color: string;
 }
 
-function Dot({ t, index, anchor, screenW, screenH, color }: DotProps) {
+function Message({ t, fromX, fromY, toX, toY, phase, color }: MessageProps) {
   const props = useAnimatedProps(() => {
     'worklet';
-    const phase = (t.value + index * PHASE_OFFSET) % 1;
-    const angle = phase * Math.PI * 2;
+    // raw goes 0 → 1 over the loop; with offset it wraps cleanly.
+    const raw = (t.value + phase) % 1;
+    // Spend half the cycle traveling, half "hidden" (between trips). The
+    // visible window is [0, 0.5] mapped to the edge; outside it, opacity 0.
+    const visible = raw < 0.5;
+    const u = visible ? raw * 2 : 0;
     return {
-      cx: anchor[0] * screenW + Math.cos(angle) * DRIFT_RADIUS,
-      cy: anchor[1] * screenH + Math.sin(angle * 1.3) * DRIFT_RADIUS,
+      cx: fromX + (toX - fromX) * u,
+      cy: fromY + (toY - fromY) * u,
+      fillOpacity: visible ? MSG_OPACITY : 0,
     };
   });
 
   return (
     <ACircle
       animatedProps={props}
-      r={DOT_RADIUS}
+      r={MSG_RADIUS}
       fill={color}
-      fillOpacity={0.55}
-    />
-  );
-}
-
-interface EdgeProps {
-  readonly t: SharedValue<number>;
-  readonly fromIdx: number;
-  readonly toIdx: number;
-  readonly fromAnchor: readonly [number, number];
-  readonly toAnchor: readonly [number, number];
-  readonly screenW: number;
-  readonly screenH: number;
-  readonly color: string;
-}
-
-function Edge({ t, fromIdx, toIdx, fromAnchor, toAnchor, screenW, screenH, color }: EdgeProps) {
-  const props = useAnimatedProps(() => {
-    'worklet';
-    const phaseFrom = (t.value + fromIdx * PHASE_OFFSET) % 1;
-    const phaseTo = (t.value + toIdx * PHASE_OFFSET) % 1;
-    const angleFrom = phaseFrom * Math.PI * 2;
-    const angleTo = phaseTo * Math.PI * 2;
-    return {
-      x1: fromAnchor[0] * screenW + Math.cos(angleFrom) * DRIFT_RADIUS,
-      y1: fromAnchor[1] * screenH + Math.sin(angleFrom * 1.3) * DRIFT_RADIUS,
-      x2: toAnchor[0] * screenW + Math.cos(angleTo) * DRIFT_RADIUS,
-      y2: toAnchor[1] * screenH + Math.sin(angleTo * 1.3) * DRIFT_RADIUS,
-    };
-  });
-
-  return (
-    <ALine
-      animatedProps={props}
-      stroke={color}
-      strokeOpacity={0.18}
-      strokeWidth={0.8}
     />
   );
 }
@@ -103,51 +92,77 @@ function Edge({ t, fromIdx, toIdx, fromAnchor, toAnchor, screenW, screenH, color
 export function MeshBackground() {
   const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
-  const t = useSharedValue(0);
 
+  // Map logo coords [0,1] over the SHORTER screen dimension, centered.
+  // Using width keeps the logo aspect-correct and pushes the outer nodes
+  // past the left/right edges for the "blown up" feel.
+  const dim = Math.min(width, height);
+  const meshSize = dim * SCALE;
+  const offX = (width - meshSize) / 2;
+  const offY = (height - meshSize) / 2;
+
+  const nodes = useMemo(
+    () => LOGO_NODES.map(([nx, ny]) => ({
+      x: offX + nx * meshSize,
+      y: offY + ny * meshSize,
+    })),
+    [offX, offY, meshSize],
+  );
+
+  const edges = useMemo(
+    () => LOGO_EDGES.map(([a, b], i) => ({
+      from: nodes[a],
+      to: nodes[b],
+      phase: i * PHASE_PER_MSG,
+    })),
+    [nodes],
+  );
+
+  const t = useSharedValue(0);
   useEffect(() => {
     t.value = withRepeat(
-      withTiming(1, { duration: 9000, easing: Easing.linear }),
+      withTiming(1, { duration: TRAVEL_SECONDS * 1000, easing: Easing.linear }),
       -1,
       false,
     );
     return () => cancelAnimation(t);
   }, [t]);
 
-  const edges = useMemo(
-    () => EDGES.map(([from, to]) => ({
-      fromIdx: from,
-      toIdx: to,
-      fromAnchor: ANCHORS[from],
-      toAnchor: ANCHORS[to],
-    })),
-    [],
-  );
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
         {edges.map((e, i) => (
-          <Edge
-            key={`e${i}`}
-            t={t}
-            fromIdx={e.fromIdx}
-            toIdx={e.toIdx}
-            fromAnchor={e.fromAnchor}
-            toAnchor={e.toAnchor}
-            screenW={width}
-            screenH={height}
-            color={colors.primary}
+          <Line
+            key={`edge-${i}`}
+            x1={e.from.x}
+            y1={e.from.y}
+            x2={e.to.x}
+            y2={e.to.y}
+            stroke={colors.primary}
+            strokeOpacity={EDGE_OPACITY}
+            strokeWidth={EDGE_WIDTH}
+            strokeLinecap="round"
           />
         ))}
-        {ANCHORS.map((a, i) => (
-          <Dot
-            key={`d${i}`}
+        {nodes.map((n, i) => (
+          <Circle
+            key={`node-${i}`}
+            cx={n.x}
+            cy={n.y}
+            r={NODE_RADIUS}
+            fill={colors.primary}
+            fillOpacity={NODE_OPACITY}
+          />
+        ))}
+        {edges.map((e, i) => (
+          <Message
+            key={`msg-${i}`}
             t={t}
-            index={i}
-            anchor={a}
-            screenW={width}
-            screenH={height}
+            fromX={e.from.x}
+            fromY={e.from.y}
+            toX={e.to.x}
+            toY={e.to.y}
+            phase={e.phase}
             color={colors.primary}
           />
         ))}
