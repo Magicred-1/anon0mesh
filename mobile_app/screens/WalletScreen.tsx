@@ -72,11 +72,25 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
         <Text style={[S.tileLabel, { color: colors.textTertiary }]}>TOTAL BALANCE</Text>
         <View style={S.tileHeaderRight}>
           {loading && !initialLoad && <ActivityIndicator size="small" color={colors.textTertiary} />}
-          <Pressable onPress={toggle} hitSlop={8}>
-            <Feather name={hidden ? 'eye-off' : 'eye'} size={14} color={colors.textTertiary} />
+          <Pressable
+            onPress={toggle}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
+            accessibilityState={{ checked: hidden }}
+            style={({ pressed }) => [S.headerIconBtn, pressed && { opacity: 0.55 }]}
+          >
+            <Feather name={hidden ? 'eye-off' : 'eye'} size={18} color={colors.textSecondary} />
           </Pressable>
-          <Pressable onPress={refetch} hitSlop={8}>
-            <Feather name="refresh-cw" size={13} color={colors.textTertiary} />
+          <Pressable
+            onPress={refetch}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh balance"
+            disabled={loading}
+            style={({ pressed }) => [S.headerIconBtn, (pressed || loading) && { opacity: 0.55 }]}
+          >
+            <Feather name="refresh-cw" size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
       </View>
@@ -183,13 +197,38 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
         )}
         {!initialLoad && activityError && (
           <View style={S.center}>
-            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>{activityError}</Text>
+            <Feather name="wifi-off" size={20} color={colors.textTertiary} style={{ marginBottom: 6 }} />
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+              Couldn&apos;t load activity
+            </Text>
+            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center', marginBottom: 12 }]} numberOfLines={2}>
+              {activityError}
+            </Text>
+            <Pressable
+              onPress={onRefresh}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading activity"
+              style={({ pressed }) => [
+                S.retryBtn,
+                { borderColor: colors.border, backgroundColor: colors.surface1 },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Feather name="refresh-cw" size={12} color={colors.textPrimary} />
+              <Text style={[S.activityTime, { color: colors.textPrimary, fontWeight: '600' }]}>Try again</Text>
+            </Pressable>
           </View>
         )}
         {!initialLoad && !activityError && activity.length === 0 && (
           <View style={S.center}>
             <MaterialCommunityIcons name="bird" size={26} color={colors.textTertiary} style={{ marginBottom: 6 }} />
-            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>NO ACTIVITY YET</Text>
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+              No transactions yet
+            </Text>
+            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center' }]}>
+              Tap Receive above to share your address.
+            </Text>
           </View>
         )}
         {!initialLoad && activity.map((tx, i) => {
@@ -255,13 +294,13 @@ export default function WalletScreen() {
   const { mode }           = useNetworkMode();
   const [refreshing, setRefreshing] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
-  const [pendingCosigns, setPendingCosigns] = useState<PendingCosign[]>([
+  // Multisig co-sign UI is in preview — items are visual placeholders only,
+  // signing flow is not yet wired (see PendingCosigns: pointerEvents disabled).
+  const pendingCosigns: PendingCosign[] = [
     { id: '1', txHash: 'A3f9c2e8b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3',  amountSol: 0.25,  feeSol: 0.000312, fromHash: 'B7d2a1f4c9e8b3a7d2a1f4c9e8b3a7d2', requestedAt: Date.now() - 90_000 },
     { id: '2', txHash: 'C5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1', amountSol: 1.05,  feeSol: 0.000287, fromHash: 'D4b9c3e2a1f8d4b9c3e2a1f8d4b9c3e2', requestedAt: Date.now() - 240_000 },
     { id: '3', txHash: 'E8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0', amountSol: 0.005, feeSol: 0.000198, fromHash: 'F2c8a7e4b1d0f2c8a7e4b1d0f2c8a7e4', requestedAt: Date.now() - 15_000 },
-  ]);
-  const handleSign   = useCallback((id: string) => setPendingCosigns(p => p.filter(x => x.id !== id)), []);
-  const handleReject = useCallback((id: string) => setPendingCosigns(p => p.filter(x => x.id !== id)), []);
+  ];
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -327,7 +366,7 @@ export default function WalletScreen() {
 
           <BalanceTile hidden={hidden} toggle={toggle} />
           <ActionTiles />
-          <PendingCosigns items={pendingCosigns} onSign={handleSign} onReject={handleReject} />
+          <PendingCosigns items={pendingCosigns} />
           <ActivityTile refreshing={refreshing} onRefresh={handleRefresh} />
 
         </View>
@@ -378,7 +417,8 @@ const S = StyleSheet.create({
   // balance
   balanceTile:     { gap: 10 },
   tileHeaderRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  headerIconBtn:   { padding: 4, alignItems: 'center', justifyContent: 'center' },
   tileLabel:       { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   amountRow:       { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   bigNum:          { fontFamily: fontFamily.sansBold, fontSize: 52, letterSpacing: -2, lineHeight: 56, flex: 1 },
@@ -400,6 +440,8 @@ const S = StyleSheet.create({
   activityTile:    { flex: 1 },
   activityScroll:  { flexGrow: 1 },
   center:          { paddingVertical: 24, alignItems: 'center', gap: 4 },
+  retryBtn:        { flexDirection: 'row', alignItems: 'center', gap: 6,
+                     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 0.5 },
   activityRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
   activityIconWrap:{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   activityLabel:   { fontFamily: fontFamily.sansMd, fontSize: 12, marginBottom: 2 },

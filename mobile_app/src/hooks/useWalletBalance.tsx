@@ -107,7 +107,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       setError(allFailed ? "Couldn't reach devnet" : null);
       setLastFetched(Date.now());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch balance");
+      setError(err instanceof Error ? err.message : "Couldn't refresh balance — pull to retry");
     } finally {
       setLoading(false);
       setActivityLoading(false);

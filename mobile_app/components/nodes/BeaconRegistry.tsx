@@ -196,13 +196,14 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               ))}
             </View>
 
-            <Pressable
-              onPress={() => { setBeaconMode(true); dismiss(); }}
-              style={({ pressed }) => [S.actionBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+            {/* CTA disabled in preview — biometric signing flow isn't wired yet.
+                Beacon mode still auto-activates via the hasInternet effect above. */}
+            <View
+              style={[S.actionBtn, { backgroundColor: colors.surface2, borderWidth: 0.5, borderColor: colors.border, opacity: 0.6 }]}
+              pointerEvents="none"
             >
-              <Feather name="lock" size={14} color={colors.textInverse} />
-              <Text style={[S.actionText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
-            </Pressable>
+              <Text style={[S.actionText, { color: colors.textTertiary }]}>Preview — not yet active</Text>
+            </View>
           </Animated.View>
         </View>
       </Modal>
@@ -275,13 +276,12 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               </View>
             </View>
 
-            <Pressable
-              onPress={dismissStake}
-              style={({ pressed }) => [S.actionBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+            <View
+              style={[S.actionBtn, { backgroundColor: colors.surface2, borderWidth: 0.5, borderColor: colors.border, opacity: 0.6 }]}
+              pointerEvents="none"
             >
-              <Feather name="lock" size={14} color={colors.textInverse} />
-              <Text style={[S.actionText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
-            </Pressable>
+              <Text style={[S.actionText, { color: colors.textTertiary }]}>Preview — not yet active</Text>
+            </View>
           </Animated.View>
         </KeyboardAvoidingView>
       </Modal>
