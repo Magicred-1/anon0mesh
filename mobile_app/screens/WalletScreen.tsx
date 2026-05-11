@@ -72,11 +72,25 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
         <Text style={[S.tileLabel, { color: colors.textTertiary }]}>TOTAL BALANCE</Text>
         <View style={S.tileHeaderRight}>
           {loading && !initialLoad && <ActivityIndicator size="small" color={colors.textTertiary} />}
-          <Pressable onPress={toggle} hitSlop={8}>
-            <Feather name={hidden ? 'eye-off' : 'eye'} size={14} color={colors.textTertiary} />
+          <Pressable
+            onPress={toggle}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
+            accessibilityState={{ checked: hidden }}
+            style={({ pressed }) => [S.headerIconBtn, pressed && { opacity: 0.55 }]}
+          >
+            <Feather name={hidden ? 'eye-off' : 'eye'} size={18} color={colors.textSecondary} />
           </Pressable>
-          <Pressable onPress={refetch} hitSlop={8}>
-            <Feather name="refresh-cw" size={13} color={colors.textTertiary} />
+          <Pressable
+            onPress={refetch}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh balance"
+            disabled={loading}
+            style={({ pressed }) => [S.headerIconBtn, (pressed || loading) && { opacity: 0.55 }]}
+          >
+            <Feather name="refresh-cw" size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
       </View>
@@ -378,7 +392,8 @@ const S = StyleSheet.create({
   // balance
   balanceTile:     { gap: 10 },
   tileHeaderRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  headerIconBtn:   { padding: 4, alignItems: 'center', justifyContent: 'center' },
   tileLabel:       { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   amountRow:       { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   bigNum:          { fontFamily: fontFamily.sansBold, fontSize: 52, letterSpacing: -2, lineHeight: 56, flex: 1 },
