@@ -18,7 +18,6 @@ import Animated, {
 
 import { fontFamily, fontSize, useTheme } from '@/theme';
 import * as haptics from '@/src/design-system/haptics';
-import { MeshBackground } from './MeshBackground';
 
 const PIGEON_SRC = require('@/assets/animations/sending.webp');
 
@@ -129,8 +128,6 @@ export function PigeonLoader({
         accessibilityLabel={sublabel ? `${resolvedLabel}. ${sublabel}` : resolvedLabel}
         accessibilityLiveRegion="polite"
       >
-        <MeshBackground />
-
         <View style={S.content}>
           <View style={S.spriteWrap}>
             <Animated.View style={[S.sprite, pigeonStyle]}>
