@@ -11,7 +11,11 @@ export default function FailureScreen() {
     subtitle?: string;
     pillLabel?: string;
     rawError?: string;
+    reason?: string;
   }>();
+
+  const reason = asString(params.reason);
+  const isTimeout = reason === "timeout";
 
   return (
     <>
@@ -23,6 +27,7 @@ export default function FailureScreen() {
         subtitle={asString(params.subtitle, "Transaction failed.")}
         pillLabel={asString(params.pillLabel, "Failed")}
         rawError={asString(params.rawError)}
+        isTimeout={isTimeout}
       />
     </>
   );

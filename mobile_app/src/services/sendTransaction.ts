@@ -180,11 +180,17 @@ export async function confirmTransaction(
     }
 
     // Sleep before next poll. Resolve early if the signal aborts so we don't
-    // wait out a full pollInterval after unmount.
+    // wait out a full pollInterval after unmount. Listener teardown is
+    // explicit so we don't accumulate one dead listener per poll cycle
+    // (60-120 of them per send before the budget elapses).
     await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, pollIntervalMs);
+      let onAbort: (() => void) | null = null;
+      const timer = setTimeout(() => {
+        if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, pollIntervalMs);
       if (signal) {
-        const onAbort = () => {
+        onAbort = () => {
           clearTimeout(timer);
           resolve();
         };

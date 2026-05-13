@@ -51,6 +51,12 @@ interface FailureCardProps {
   readonly txId: string;
   readonly amount: string;
   readonly symbol: string;
+  /**
+   * When true (polling exceeded the budget), the tx may still confirm
+   * later. Hide "Try again" to prevent double-send, surface Explorer
+   * as primary action instead.
+   */
+  readonly isTimeout?: boolean;
 }
 
 export function FailureCard({
@@ -60,6 +66,7 @@ export function FailureCard({
   txId,
   amount,
   symbol,
+  isTimeout = false,
 }: FailureCardProps) {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
@@ -137,24 +144,36 @@ export function FailureCard({
       title="couldn't send"
       subtitle={subtitle}
       footer={
-        <View style={{ flexDirection: "row", gap: spacing[3] }}>
+        isTimeout ? (
+          // Timeout case — the tx may still confirm. Hide "Try again" to
+          // prevent a double-send. User should check explorer instead.
           <DepthButton
             label="Done"
             onPress={handleDone}
             size="lg"
             tone="cyan"
-            variant="secondary"
-            style={{ flex: 1 }}
-          />
-          <DepthButton
-            label="Try again"
-            onPress={handleTryAgain}
-            size="lg"
-            tone="cyan"
             variant="primary"
-            style={{ flex: 1 }}
           />
-        </View>
+        ) : (
+          <View style={{ flexDirection: "row", gap: spacing[3] }}>
+            <DepthButton
+              label="Done"
+              onPress={handleDone}
+              size="lg"
+              tone="cyan"
+              variant="secondary"
+              style={{ flex: 1 }}
+            />
+            <DepthButton
+              label="Try again"
+              onPress={handleTryAgain}
+              size="lg"
+              tone="cyan"
+              variant="primary"
+              style={{ flex: 1 }}
+            />
+          </View>
+        )
       }
     >
       <View style={{ flex: 1, gap: spacing[5], paddingHorizontal: spacing[5] }}>
@@ -328,7 +347,7 @@ export function FailureCard({
             onPress={handleExplorer}
             size="md"
             tone="cyan"
-            variant="secondary"
+            variant={isTimeout ? "primary" : "secondary"}
           />
         ) : null}
       </View>

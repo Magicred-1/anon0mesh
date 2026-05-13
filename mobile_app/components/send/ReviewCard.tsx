@@ -279,7 +279,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         signature: conf.signature,
         rawError,
       });
-      router.replace({
+      // Use push (not replace) so the failure screen sits ON TOP of Review
+      // in the stack. "Try again" on FailureCard does router.back() and the
+      // user lands back on Review with form state preserved.
+      router.push({
         pathname: "/send/failure",
         params: {
           amount,
@@ -288,6 +291,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
           subtitle,
           pillLabel,
           rawError,
+          reason: conf.reason,
         },
       });
       return;
