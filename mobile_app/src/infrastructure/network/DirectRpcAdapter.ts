@@ -1,4 +1,4 @@
-import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { Connection, LAMPORTS_PER_SOL, PublicKey, type SignatureStatus } from '@solana/web3.js';
 import type { IRpcAdapter } from './types';
 
 export class DirectRpcAdapter implements IRpcAdapter {
@@ -18,5 +18,12 @@ export class DirectRpcAdapter implements IRpcAdapter {
 
   async sendRawTransaction(rawTx: Uint8Array): Promise<string> {
     return this.connection.sendRawTransaction(rawTx);
+  }
+
+  async getSignatureStatus(signature: string): Promise<SignatureStatus | null> {
+    const resp = await this.connection.getSignatureStatus(signature, {
+      searchTransactionHistory: false,
+    });
+    return resp.value;
   }
 }

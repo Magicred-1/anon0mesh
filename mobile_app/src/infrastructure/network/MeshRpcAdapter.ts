@@ -1,6 +1,6 @@
 import "@/polyfills";
 
-import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey, type SignatureStatus } from '@solana/web3.js';
 import { Buffer } from 'buffer';
 import type { IRpcAdapter, MeshRpcRequest, MeshRpcResponse } from './types';
 
@@ -97,5 +97,13 @@ export class MeshRpcAdapter implements IRpcAdapter {
     const encoded = Buffer.from(rawTx).toString('base64');
     const result = await this.rpc('sendTransaction', [encoded, { encoding: 'base64', preflightCommitment: 'confirmed' }]);
     return result as string;
+  }
+
+  async getSignatureStatus(signature: string): Promise<SignatureStatus | null> {
+    const result = await this.rpc('getSignatureStatuses', [[signature], { searchTransactionHistory: false }]);
+    // getSignatureStatuses returns { value: (SignatureStatus | null)[] }; we
+    // pass a single signature so the array always has length 1.
+    const value = (result as { value: (SignatureStatus | null)[] }).value;
+    return value?.[0] ?? null;
   }
 }
