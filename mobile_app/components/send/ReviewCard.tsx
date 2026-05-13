@@ -6,7 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Pill, SlideToConfirm } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
-import { PigeonLoader, type PigeonLoaderStatus } from "@/components/ui/PigeonLoader";
+import { PigeonLoader } from "@/components/ui/PigeonLoader";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
@@ -120,7 +120,6 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
   const [isConfirming, setIsConfirming] = useState(false);
-  const [txStatus, setTxStatus] = useState<PigeonLoaderStatus>("loading");
   const [sliderResetKey, setSliderResetKey] = useState(0);
   const normalizedMint = typeof mintAddress === "string" ? mintAddress : "";
   const normalizedProgramId = typeof programId === "string" ? programId : "";
@@ -209,7 +208,6 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     }
 
     setError(null);
-    setTxStatus("loading");
     setIsConfirming(true);
 
     try {
@@ -233,17 +231,12 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
 
       await saveAddressBookRecipient(to);
 
-      // Loader flips to its success state — pigeon out, check ring + shockwave
-      // in, success haptic. Hold for the success beat, then navigate. ReviewCard
-      // unmounts on navigation, taking the loader Modal with it; the Success
-      // screen renders the explorer link.
-      setTxStatus("success");
-      setTimeout(() => {
-        router.replace({
-          pathname: "/send/success",
-          params: { amount, symbol, txId: result.signature },
-        });
-      }, 1200);
+      // Loader stays as "Sending" through navigation; SuccessCard owns the
+      // success moment (check spring + shockwave + confirm haptic on mount).
+      router.replace({
+        pathname: "/send/success",
+        params: { amount, symbol, txId: result.signature },
+      });
       return;
     } catch (err: unknown) {
       const summary = summarizeError(err, "Transaction failed before the wallet returned a reason");
@@ -266,7 +259,6 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
           : { kind: "send", message: summary.message },
       );
       setSliderResetKey((k) => k + 1);
-      setTxStatus("loading");
       setIsConfirming(false);
     }
   }
@@ -404,7 +396,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         ) : null}
       </ScrollView>
     </SendScaffold>
-    <PigeonLoader visible={isConfirming} status={txStatus} />
+    <PigeonLoader visible={isConfirming} />
     </>
   );
 }
