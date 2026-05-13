@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Pill, SlideToConfirm } from "@/components/primitives";
@@ -11,7 +11,9 @@ import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
 import { saveAddressBookRecipient } from "@/src/services/addressBook";
+import { describeSendFailure, formatRawError } from "@/src/services/sendErrorMessages";
 import {
+  confirmTransaction,
   estimateSplTransferFeeLamports,
   estimateSolTransferFeeLamports,
   sendSplTransfer,
@@ -20,6 +22,8 @@ import {
 } from "@/src/services/sendTransaction";
 import { summarizeError } from "@/src/utils/errors";
 import { fontFamily as FF, useTheme } from "@/theme";
+
+type TxPhase = "submitting" | "confirming" | null;
 
 function shortAddress(addr: string): string {
   if (!addr || addr.length <= 14) return addr;
@@ -120,7 +124,18 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
   const [isConfirming, setIsConfirming] = useState(false);
+  const [txPhase, setTxPhase] = useState<TxPhase>(null);
   const [sliderResetKey, setSliderResetKey] = useState(0);
+  const confirmAbortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight confirmation poll when ReviewCard unmounts (user
+  // navigated away mid-send). Prevents stale router.replace on an unmounted
+  // tree and stops a polling loop that nobody is listening to.
+  useEffect(() => {
+    return () => {
+      confirmAbortRef.current?.abort();
+    };
+  }, []);
   const normalizedMint = typeof mintAddress === "string" ? mintAddress : "";
   const normalizedProgramId = typeof programId === "string" ? programId : "";
   const tokenDecimals =
@@ -208,6 +223,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     }
 
     setError(null);
+    setTxPhase("submitting");
     setIsConfirming(true);
 
     try {
@@ -231,11 +247,48 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
 
       await saveAddressBookRecipient(to);
 
-      // Loader stays as "Sending" through navigation; SuccessCard owns the
-      // success moment (check spring + shockwave + confirm haptic on mount).
+      // Phase 2: poll the chain for real confirmation. Loader stays visible
+      // with sublabel updated to "Confirming on devnet". Cancellable via the
+      // unmount cleanup above.
+      setTxPhase("confirming");
+      const controller = new AbortController();
+      confirmAbortRef.current = controller;
+      const conf = await confirmTransaction(rpcAdapter, result.signature, {
+        signal: controller.signal,
+      });
+      confirmAbortRef.current = null;
+
+      if (conf.kind === "cancelled") {
+        // Caller already unmounted; nothing to do here.
+        return;
+      }
+
+      if (conf.kind === "confirmed") {
+        router.replace({
+          pathname: "/send/success",
+          params: { amount, symbol, txId: result.signature },
+        });
+        return;
+      }
+
+      // conf.kind === "failed"
+      const { subtitle, pillLabel } = describeSendFailure(conf, rpcAdapter.mode);
+      const rawError = formatRawError(conf.err);
+      console.error("[send/ReviewCard] confirmation failed", {
+        reason: conf.reason,
+        signature: conf.signature,
+        rawError,
+      });
       router.replace({
-        pathname: "/send/success",
-        params: { amount, symbol, txId: result.signature },
+        pathname: "/send/failure",
+        params: {
+          amount,
+          symbol,
+          txId: result.signature,
+          subtitle,
+          pillLabel,
+          rawError,
+        },
       });
       return;
     } catch (err: unknown) {
@@ -260,6 +313,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       );
       setSliderResetKey((k) => k + 1);
       setIsConfirming(false);
+      setTxPhase(null);
     }
   }
 
@@ -396,7 +450,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         ) : null}
       </ScrollView>
     </SendScaffold>
-    <PigeonLoader visible={isConfirming} />
+    <PigeonLoader
+      visible={isConfirming}
+      sublabel={txPhase === "confirming" ? "Confirming on devnet" : txPhase === "submitting" ? "Submitting" : undefined}
+    />
     </>
   );
 }
