@@ -7,6 +7,7 @@ const DENIAL_FRAGMENTS = [
   "auth request failed",
   "cancelled",
   "canceled",
+  "cancellation",
   "declined",
   "denied",
   "rejected",
