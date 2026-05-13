@@ -297,7 +297,9 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       return;
     } catch (err: unknown) {
       const summary = summarizeError(err, "Transaction failed before the wallet returned a reason");
-      console.error("[send/ReviewCard] transfer failed", {
+      const isUserCancel = err instanceof TransactionNotApprovedError;
+      const logFn = isUserCancel ? console.warn : console.error;
+      logFn("[send/ReviewCard] transfer failed", {
         message: summary.message,
         name: summary.name ?? null,
         code: summary.code ?? null,
@@ -306,9 +308,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         symbol,
         mintAddress: normalizedMint || null,
         networkMode: rpcAdapter.mode,
+        userCancel: isUserCancel,
       });
       setError(
-        err instanceof TransactionNotApprovedError
+        isUserCancel
           ? {
               kind: "approval",
               message: "Approve the transaction in your wallet to submit it.",
