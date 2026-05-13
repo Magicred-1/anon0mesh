@@ -237,13 +237,7 @@ export function PigeonLoader({
       onRequestClose={() => { if (onCancel) onCancel(); }}
       testID={testID}
     >
-      <View
-        style={[S.backdrop, { backgroundColor: colors.background }]}
-        accessible
-        accessibilityRole="alert"
-        accessibilityLabel={sublabel ? `${resolvedLabel}. ${sublabel}` : resolvedLabel}
-        accessibilityLiveRegion="polite"
-      >
+      <View style={[S.backdrop, { backgroundColor: colors.background }]}>
         <Spotlight />
 
         <Animated.View
@@ -255,7 +249,13 @@ export function PigeonLoader({
           ]}
         />
 
-        <View style={S.content}>
+        <View
+          style={S.content}
+          accessible
+          accessibilityRole="alert"
+          accessibilityLabel={sublabel ? `${resolvedLabel}. ${sublabel}` : resolvedLabel}
+          accessibilityLiveRegion="polite"
+        >
           <View style={S.spriteWrap}>
             <Animated.View style={[S.sprite, pigeonStyle]}>
               <Image
