@@ -202,7 +202,7 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
             <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
               Status
             </Text>
-            <Pill label="Submitted to devnet" tone="cyan" />
+            <Pill label="Awaiting confirmation" tone="cyan" />
           </View>
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
