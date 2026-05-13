@@ -1,4 +1,4 @@
-import type { PublicKey } from '@solana/web3.js';
+import type { PublicKey, SignatureStatus } from '@solana/web3.js';
 import type { IRpcAdapter } from './types';
 
 export class IsolatedRpcAdapter implements IRpcAdapter {
@@ -14,6 +14,10 @@ export class IsolatedRpcAdapter implements IRpcAdapter {
   }
 
   async sendRawTransaction(_rawTx: Uint8Array): Promise<string> {
+    throw new Error('No Solana route available');
+  }
+
+  async getSignatureStatus(_signature: string): Promise<SignatureStatus | null> {
     throw new Error('No Solana route available');
   }
 }
