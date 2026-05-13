@@ -119,7 +119,7 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
       showBack={false}
       eyebrow="Transfer receipt"
       title="sent"
-      subtitle="Receipt below. Explorer state can lag behind settlement for a few seconds."
+      subtitle="Settlement confirmed on devnet."
       footer={
         <DepthButton label="Done" onPress={handleDone} size="lg" tone="cyan" variant="primary" />
       }
@@ -202,7 +202,7 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
             <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
               Status
             </Text>
-            <Pill label="Awaiting confirmation" tone="cyan" />
+            <Pill label="Confirmed" tone="green" />
           </View>
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
             <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm }}>
