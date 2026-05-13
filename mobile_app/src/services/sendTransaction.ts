@@ -112,6 +112,95 @@ async function submitSignedTransaction(
   }
 }
 
+// ── Confirmation polling ─────────────────────────────────────────────────────
+
+/**
+ * Outcome of polling getSignatureStatus until a terminal state.
+ * - 'confirmed':  on-chain confirmed (or finalized) at `slot`
+ * - 'failed':     either the tx errored on chain (`reason: 'on-chain'`) or
+ *                 the overall polling budget expired (`reason: 'timeout'`)
+ * - 'cancelled':  caller aborted via AbortSignal — caller should bail without
+ *                 routing the user anywhere (typical on screen unmount)
+ */
+export type ConfirmResult =
+  | { kind: 'confirmed'; signature: string; slot: number }
+  | { kind: 'failed'; signature: string; err: unknown; reason: 'on-chain' | 'timeout' }
+  | { kind: 'cancelled'; signature: string };
+
+interface ConfirmOptions {
+  signal?: AbortSignal;
+}
+
+const ONLINE_POLL_INTERVAL_MS = 500;
+const MESH_POLL_INTERVAL_MS = 1000;
+const ONLINE_CONFIRM_BUDGET_MS = 60_000;
+// Mesh budget is generous because MeshRpcAdapter's per-call timeout is 30s.
+// At 1000ms poll cadence we need ≥3 attempts of headroom for a stuck relay
+// round-trip without aborting the whole confirmation.
+const MESH_CONFIRM_BUDGET_MS = 120_000;
+
+/**
+ * Polls the adapter for the on-chain status of `signature` until it confirms,
+ * fails, or the overall budget expires. Per-call rejections are swallowed and
+ * logged — one hung getSignatureStatus shouldn't abort confirmation.
+ *
+ * Cadence and budget are mode-aware (online vs mesh). Pass an AbortSignal
+ * (typically from a useEffect cleanup) to cancel in-flight polling when the
+ * caller unmounts.
+ */
+export async function confirmTransaction(
+  rpcAdapter: IRpcAdapter,
+  signature: string,
+  options?: ConfirmOptions,
+): Promise<ConfirmResult> {
+  const isMesh = rpcAdapter.mode === 'mesh';
+  const pollIntervalMs = isMesh ? MESH_POLL_INTERVAL_MS : ONLINE_POLL_INTERVAL_MS;
+  const budgetMs = isMesh ? MESH_CONFIRM_BUDGET_MS : ONLINE_CONFIRM_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
+  const signal = options?.signal;
+
+  while (Date.now() < deadline) {
+    if (signal?.aborted) {
+      return { kind: 'cancelled', signature };
+    }
+
+    try {
+      const status = await rpcAdapter.getSignatureStatus(signature);
+      if (status) {
+        if (status.err !== null && status.err !== undefined) {
+          return { kind: 'failed', signature, err: status.err, reason: 'on-chain' };
+        }
+        const cs = status.confirmationStatus;
+        if (cs === 'confirmed' || cs === 'finalized') {
+          return { kind: 'confirmed', signature, slot: status.slot };
+        }
+      }
+    } catch (err: unknown) {
+      console.warn('[confirmTransaction] getSignatureStatus failed (continuing)', err);
+    }
+
+    // Sleep before next poll. Resolve early if the signal aborts so we don't
+    // wait out a full pollInterval after unmount.
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, pollIntervalMs);
+      if (signal) {
+        const onAbort = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
+  return {
+    kind: 'failed',
+    signature,
+    err: new Error(`Confirmation timed out after ${Math.round(budgetMs / 1000)}s`),
+    reason: 'timeout',
+  };
+}
+
 function buildSolTransferTransaction({
   fromPubkey,
   recipientAddress,
