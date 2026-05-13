@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Pill, SlideToConfirm } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
+import { PigeonLoader } from "@/components/ui/PigeonLoader";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
@@ -230,10 +231,13 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
 
       await saveAddressBookRecipient(to);
 
-      router.push({
+      // Loader stays as "Sending" through navigation; SuccessCard owns the
+      // success moment (check spring + shockwave + confirm haptic on mount).
+      router.replace({
         pathname: "/send/success",
         params: { amount, symbol, txId: result.signature },
       });
+      return;
     } catch (err: unknown) {
       const summary = summarizeError(err, "Transaction failed before the wallet returned a reason");
       console.error("[send/ReviewCard] transfer failed", {
@@ -255,7 +259,6 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
           : { kind: "send", message: summary.message },
       );
       setSliderResetKey((k) => k + 1);
-    } finally {
       setIsConfirming(false);
     }
   }
@@ -266,6 +269,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   }
 
   return (
+    <>
     <SendScaffold
       onBack={() => router.back()}
       step={3}
@@ -392,6 +396,8 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         ) : null}
       </ScrollView>
     </SendScaffold>
+    <PigeonLoader visible={isConfirming} />
+    </>
   );
 }
 
