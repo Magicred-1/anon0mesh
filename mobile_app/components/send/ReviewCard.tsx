@@ -310,14 +310,12 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         networkMode: rpcAdapter.mode,
         userCancel: isUserCancel,
       });
-      setError(
-        isUserCancel
-          ? {
-              kind: "approval",
-              message: "Approve the transaction in your wallet to submit it.",
-            }
-          : { kind: "send", message: summary.message },
-      );
+      // User-cancel returns silently per Solana Mobile guidance (LESSON
+      // 2026-05-13) — the wallet popup is the consent surface, an inline banner
+      // double-prompts and reads like an error.
+      if (!isUserCancel) {
+        setError({ kind: "send", message: summary.message });
+      }
       setSliderResetKey((k) => k + 1);
       setIsConfirming(false);
       setTxPhase(null);
