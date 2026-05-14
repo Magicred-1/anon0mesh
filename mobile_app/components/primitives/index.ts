@@ -22,6 +22,8 @@ export type { PillTone } from "./Pill";
 
 export { PreviewBadge } from "./PreviewBadge";
 
+export { PreviewedActions } from "./PreviewedActions";
+
 export { PressSurface } from "./PressSurface";
 export type {
   PressSurfaceProps,
