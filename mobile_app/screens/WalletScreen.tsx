@@ -17,6 +17,7 @@ import { useHideBalance }   from '@/src/hooks/useHideBalance';
 import { useWalletBalance } from '@/src/hooks/useWalletBalance';
 import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
 import type { ActivityEntry, TokenBalance } from '@/src/services/walletData';
+import { relTime } from '@/src/utils/relTime';
 import { fontFamily, useTheme } from '@/theme';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -40,14 +41,6 @@ const TOKEN_COLOR: Record<string, string> = {
   SOL: '#14F195', USDC: '#2775CA', USDT: '#26A17B',
   JUP: '#C7F284', BONK: '#FFB020',
 };
-
-function relTime(ms: number) {
-  const d = Date.now() - ms;
-  if (d < 60_000)     return 'just now';
-  if (d < 3_600_000)  return `${Math.floor(d / 60_000)}m ago`;
-  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h ago`;
-  return `${Math.floor(d / 86_400_000)}d ago`;
-}
 
 // ── tiles ─────────────────────────────────────────────────────────────────────
 
