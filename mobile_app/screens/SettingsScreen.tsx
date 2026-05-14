@@ -197,7 +197,8 @@ export default function SettingsScreen() {
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                       <Pill label="CONNECTED" variant="primary" dot />
                       <Pill label="LoRa"      variant="default" />
-                      <Pill label="78% BATT"  variant="default" />
+                      {/* 78% BATT pill removed per AUDIT T11 / ROADMAP § 0.B.5
+                          — no battery telemetry from the pairing API today. */}
                     </View>
                   </View>
                 </View>
