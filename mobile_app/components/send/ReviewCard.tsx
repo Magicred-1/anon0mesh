@@ -335,11 +335,27 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       title="review"
       footer={
         isConfirming ? (
-          <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-            <Feather name="smartphone" size={16} color={colors.primary} />
-            <Text style={[S.waitingFooterText, { color: colors.textPrimary }]}>
-              Approve in wallet
-            </Text>
+          <View style={S.waitingFooterStack}>
+            <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+              <Feather name="smartphone" size={16} color={colors.primary} />
+              <Text style={[S.waitingFooterText, { color: colors.textPrimary }]}>
+                Approve in wallet
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel approval"
+              hitSlop={10}
+              onPress={() => {
+                haptics.tap();
+                setIsConfirming(false);
+                setTxPhase(null);
+                setSliderResetKey((k) => k + 1);
+              }}
+              style={S.waitingCancelBtn}
+            >
+              <Text style={[S.waitingCancelText, { color: colors.textTertiary }]}>Cancel</Text>
+            </Pressable>
           </View>
         ) : (
           <SlideToConfirm
@@ -571,6 +587,20 @@ const S = StyleSheet.create({
   waitingFooterText: {
     fontFamily: FF.sansMd,
     fontSize: 16,
+  },
+  waitingFooterStack: {
+    alignItems: "center",
+    gap: 6,
+  },
+  waitingCancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  waitingCancelText: {
+    fontFamily: FF.sansMd,
+    fontSize: 13,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
 
   // error
