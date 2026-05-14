@@ -3,7 +3,7 @@ import "@/polyfills";
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLxmfContext } from '@/context/LxmfContext';
-import { solanaConnection } from '@/src/services/sendTransaction';
+import { solanaConnection } from '@/src/infrastructure/network/connection';
 import { DirectRpcAdapter } from '../infrastructure/network/DirectRpcAdapter';
 import { IsolatedRpcAdapter } from '../infrastructure/network/IsolatedRpcAdapter';
 import { MeshRpcAdapter } from '../infrastructure/network/MeshRpcAdapter';
