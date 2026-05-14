@@ -20,6 +20,8 @@ export { default as NumericKeypad } from "./NumericKeypad";
 export { Pill } from "./Pill";
 export type { PillTone } from "./Pill";
 
+export { PreviewBadge } from "./PreviewBadge";
+
 export { PressSurface } from "./PressSurface";
 export type {
   PressSurfaceProps,
