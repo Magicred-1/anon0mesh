@@ -1,3 +1,6 @@
+// FUTURE: roadmap preview. Not exported from `components/wallet/index.ts` —
+// re-add the export only after wiring real behavior and wrapping CTAs in
+// <PreviewedActions>. Per AUDIT A6 / ROADMAP § 0.A.8.
 import React, { memo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { fontFamily, useTheme } from '@/theme';
