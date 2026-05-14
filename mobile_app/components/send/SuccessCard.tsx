@@ -119,7 +119,7 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
       showBack={false}
       eyebrow="Transfer receipt"
       title="sent"
-      subtitle="Settlement confirmed on devnet."
+      subtitle="Settlement confirmed on-chain."
       footer={
         <DepthButton label="Done" onPress={handleDone} size="lg" tone="cyan" variant="primary" />
       }

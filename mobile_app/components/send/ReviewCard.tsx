@@ -398,7 +398,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             colors={colors}
             icon="zap"
             label="Fee"
-            secondary="Estimated from devnet RPC"
+            secondary="Estimated from network RPC"
             value={feeLabel}
           />
         </View>
