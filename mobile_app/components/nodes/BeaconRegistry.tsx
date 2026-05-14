@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef, useCallback, useEffect } from 'react';
+import React, { memo, useState, useRef, useCallback } from 'react';
 import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
@@ -38,15 +38,15 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const [stakeAmt, setStakeAmt]   = useState(0.5);
   const [rawAmt, setRawAmt]       = useState('0.5');
   const amtInputRef = useRef<TextInput>(null);
-  const autoActivatedRef  = useRef(false);
   const sheetAnim         = useRef(new Animated.Value(0)).current;
   const stakeAnim         = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (!hasInternet || active || autoActivatedRef.current) return;
-    autoActivatedRef.current = true;
-    setBeaconMode(true);
-  }, [hasInternet, active, setBeaconMode]);
+  // Auto-activate on first internet was removed per AUDIT T10 / ROADMAP § 0.B.3:
+  // beacon mode carries trust implications (relaying others' traffic) so the
+  // user has to opt in via the Register-as-Beacon control. hasInternet is still
+  // consumed for UI affordances.
+  void hasInternet;
+  void setBeaconMode;
 
   const openModal = useCallback(() => {
     setModal(true);
