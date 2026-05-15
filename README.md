@@ -66,8 +66,8 @@ Non-custodial. Keys never leave the device.
 **On everything else:** keypair generated and encrypted locally on first launch. Exportable. Never transmitted.
 
 - SOL balance with live USD value
-- All SPL token accounts, at a glance
-- Send SOL or SPL tokens to any address or mesh peer handle
+- All SPL token accounts, at a glance (Token program; Token-2022 not yet supported)
+- Send SOL or SPL tokens to any Solana address; sending to a mesh peer handle is a roadmap item
 - Receive via QR
 - On-chain activity history
 - Swap, yield, and confidential offline transfers (coming soon — roadmap previews are labeled in-app)
@@ -78,10 +78,10 @@ No analytics. No telemetry. RPC calls are limited to reading the chain and submi
 
 ## Identity & Privacy
 
-- Keypair generated locally on first launch. Stored in the secure enclave. Never uploaded anywhere.
+- Keypair generated locally on first launch. Stored in the platform's hardware-backed keystore where available (iOS Keychain / Android Keystore with StrongBox or TEE); on older Android devices, expo-secure-store falls back to EncryptedSharedPreferences. Never uploaded anywhere.
 - No sign-up flow. No email. No phone number. No verification.
-- Display name exists only on your device unless you explicitly announce it.
-- The network sees ciphertext and routing hashes. Nothing else.
+- Display name exists only on your device — but if you choose to announce, your display name and (optional) beacon-mode tag travel in plaintext in the announce's `appData`. Direct-message contents and group payloads stay encrypted.
+- Message contents are encrypted; routing metadata (the address hash, hop count, transport interface, and the appData above) is visible to nodes that forward your traffic.
 - Lose the device, restore from your key export. No account recovery email. No support ticket. Sovereign.
 
 ---
