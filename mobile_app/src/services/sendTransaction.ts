@@ -1,7 +1,6 @@
 import "@/polyfills";
 
 import {
-  Connection,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -16,6 +15,7 @@ import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
 import { Buffer } from "buffer";
 
 import type { IRpcAdapter } from "@/src/infrastructure/network";
+import { solanaConnection } from "@/src/infrastructure/network/connection";
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { assertSendableSplProgram } from "@/src/services/walletData";
@@ -29,17 +29,10 @@ const APP_IDENTITY = {
   icon: "/favicon.ico",
 };
 
-// Devnet-only for safety. Mainnet wiring is a deliberate future
-// decision — we don't want mainnet funds going out via a dev build.
-//
-// EXPO_PUBLIC_SOLANA_RPC lets teams point at a dedicated devnet
-// endpoint (Helius / QuickNode / Triton free tier) to avoid the
-// public endpoint's 429 rate-limits. Falls back to the public
-// endpoint when unset so cloning the repo "just works".
-const DEFAULT_DEVNET_RPC = "https://api.devnet.solana.com";
-const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || DEFAULT_DEVNET_RPC;
-
-export const solanaConnection = new Connection(RPC_URL, "confirmed");
+// Re-export so existing consumers (`@/src/services/sendTransaction`) keep
+// working without import churn. The singleton lives in
+// `src/infrastructure/network/connection.ts`.
+export { solanaConnection };
 
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;

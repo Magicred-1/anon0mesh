@@ -60,6 +60,7 @@ function decodeBody(raw: string): string {
 }
 
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
+import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 
 let _msgId = Date.now();
 const nextId = () => ++_msgId;
@@ -75,18 +76,6 @@ function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
   if (m.kind === 'media')           return <MediaBubble          key={m.id} m={m} />;
   const chat: ChatMsg = m;
   return <MessageBubble key={m.id} m={chat} sendState={getSendState(m.id)} />;
-}
-
-function sliceNewEvents(
-  events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
-): LxmfEvent[] {
-  if (events.length > prevCount) return events.slice(0, events.length - prevCount);
-  const first = events[0] ?? null;
-  if (prevFirst !== null && first !== prevFirst) {
-    const oldIdx = events.indexOf(prevFirst);
-    return oldIdx > 0 ? events.slice(0, oldIdx) : [];
-  }
-  return [];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
