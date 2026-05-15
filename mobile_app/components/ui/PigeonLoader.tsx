@@ -22,6 +22,7 @@ import Animated, {
   cancelAnimation,
   Easing,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -143,6 +144,7 @@ export function PigeonLoader({
 }: Props) {
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
 
   const pulse = useSharedValue(1);
   const pigeonOpacity = useSharedValue(1);
@@ -195,7 +197,10 @@ export function PigeonLoader({
   }, [status, visible, pigeonOpacity, checkOpacity, checkScale, shockScale, shockOpacity]);
 
   useEffect(() => {
-    if (visible && status === 'loading') {
+    // a11y: skip the infinite breathing pulse under "reduce motion". The
+    // pigeon sprite, label, and (on success) the check ring + shockwave
+    // already communicate progress.
+    if (visible && status === 'loading' && !reduceMotion) {
       pulse.value = withRepeat(
         withSequence(
           withTiming(1.03, { duration: 900, easing: Easing.inOut(Easing.sin) }),
@@ -209,7 +214,7 @@ export function PigeonLoader({
       pulse.value = withTiming(1, { duration: 240 });
     }
     return () => cancelAnimation(pulse);
-  }, [visible, status, pulse]);
+  }, [visible, status, pulse, reduceMotion]);
 
   const pigeonStyle = useAnimatedStyle(() => ({
     opacity: pigeonOpacity.value,

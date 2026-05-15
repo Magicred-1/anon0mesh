@@ -1,5 +1,6 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { fontFamily } from '@/theme';
 import { CYAN, BG } from './constants';
 
@@ -19,7 +20,15 @@ interface Props {
 
 function LoadingDots() {
   const dots = [useRef(new Animated.Value(0.15)).current, useRef(new Animated.Value(0.15)).current, useRef(new Animated.Value(0.15)).current];
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
+    // a11y: under "reduce motion" hold dots at mid-opacity. The "AWAITING
+    // WALLET APPROVAL / GENERATING SECURE KEYPAIR" label already conveys
+    // progress for screen-reader and motion-sensitive users.
+    if (reduceMotion) {
+      dots.forEach(d => d.setValue(0.55));
+      return;
+    }
     const anim = Animated.loop(Animated.stagger(100, dots.map(d =>
       Animated.sequence([
         Animated.timing(d, { toValue: 1,    duration: 160, useNativeDriver: true }),
@@ -29,7 +38,7 @@ function LoadingDots() {
     anim.start();
     return () => anim.stop();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reduceMotion]);
   return (
     <View style={S.dotsRow}>
       {(['d0', 'd1', 'd2'] as const).map((k, i) => <Animated.View key={k} style={[S.dot, { opacity: dots[i] }]} />)}
@@ -44,6 +53,7 @@ export const LoadingOverlay = memo(function LoadingOverlay({
   const cursor   = useRef(new Animated.Value(1)).current;
   const bgOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   // bg fade in/out — independent of parent element animations
   useEffect(() => {
@@ -58,13 +68,19 @@ export const LoadingOverlay = memo(function LoadingOverlay({
   }, [isLoading, bgOpacity]);
 
   useEffect(() => {
+    // a11y: skip the terminal cursor blink under "reduce motion" — keep the
+    // underscore visible so the "@nickname_" handle still reads correctly.
+    if (reduceMotion) {
+      cursor.setValue(isLoading ? 1 : 0);
+      return;
+    }
     const blink = Animated.loop(Animated.sequence([
       Animated.timing(cursor, { toValue: 0, duration: 260, useNativeDriver: true }),
       Animated.timing(cursor, { toValue: 1, duration: 260, useNativeDriver: true }),
     ]));
     if (isLoading) blink.start(); else cursor.setValue(0);
     return () => blink.stop();
-  }, [isLoading, cursor]);
+  }, [isLoading, cursor, reduceMotion]);
 
   if (!mounted) return null;
 
