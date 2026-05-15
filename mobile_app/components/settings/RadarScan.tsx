@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import Reanimated, {
+  useReducedMotion,
   useSharedValue, useAnimatedStyle,
   withRepeat, withTiming, withSequence, Easing,
 } from 'react-native-reanimated';
@@ -10,8 +11,18 @@ export function RadarScan() {
   const { colors } = useTheme();
   const rotation   = useSharedValue(0);
   const pulseScale = useSharedValue(1);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    // a11y: honor "reduce motion" — pin the sweep ring at 0deg and hold the
+    // center dot at resting scale. The static rings + glow still convey the
+    // "scanning" affordance via color, the surrounding screen label provides
+    // state. Pattern matches PulseDot/Skeleton/sonar (PR #52).
+    if (reduceMotion) {
+      rotation.value = 0;
+      pulseScale.value = 1;
+      return;
+    }
     rotation.value = withRepeat(withTiming(360, { duration: 2000, easing: Easing.linear }), -1, false);
     pulseScale.value = withRepeat(
       withSequence(
@@ -20,7 +31,7 @@ export function RadarScan() {
       ),
       -1, false,
     );
-  }, [rotation, pulseScale]);
+  }, [rotation, pulseScale, reduceMotion]);
 
   const rotStyle   = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
   const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulseScale.value }] }));
