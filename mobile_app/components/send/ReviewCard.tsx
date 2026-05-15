@@ -364,22 +364,48 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             </Pressable>
           </View>
         ) : networkMode === "isolated" ? (
-          <View
-            accessibilityLabel="Send is unavailable in isolated mode"
-            accessibilityRole="text"
-            style={[S.disabledFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-          >
-            <Feather name="wifi-off" size={16} color={colors.textTertiary} />
-            <Text style={[S.disabledFooterText, { color: colors.textSecondary }]}>
-              send unavailable — no peers or internet
+          // Render-time gate (AUDIT T20 + #50 bonus): the legacy check at
+          // handleConfirm time still surfaced a sliding affordance the user
+          // can't actually use, which read like a broken control. Disable the
+          // slider visually and explain why in copy under it. handleConfirm()
+          // retains its own guard as belt-and-braces against race conditions.
+          // PR #50 (address book) added a simpler one-View variant of this;
+          // this PR keeps the a11y-richer stack version (role=button, state).
+          <View style={S.disabledSliderStack}>
+            <View
+              accessibilityLabel="Send unavailable — no peers or internet to relay through"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: true }}
+              style={[
+                S.disabledSlider,
+                { backgroundColor: colors.surface1, borderColor: colors.border },
+              ]}
+            >
+              <Feather name="wifi-off" size={16} color={colors.textTertiary} />
+              <Text style={[S.disabledSliderText, { color: colors.textTertiary }]}>
+                Send unavailable
+              </Text>
+            </View>
+            <Text style={[S.disabledSliderHint, { color: colors.textTertiary }]}>
+              No peers or internet to relay through.
             </Text>
           </View>
         ) : (
-          <SlideToConfirm
-            key={sliderResetKey}
-            label={`Slide to send ${amount} ${symbol}`}
-            onComplete={handleConfirm}
-          />
+          <View style={S.sliderStack}>
+            {networkMode === "mesh" ? (
+              <View style={[S.meshChip, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+                <Feather name="radio" size={12} color={colors.textSecondary} />
+                <Text style={[S.meshChipText, { color: colors.textSecondary }]}>
+                  via mesh · this may take longer than online
+                </Text>
+              </View>
+            ) : null}
+            <SlideToConfirm
+              key={sliderResetKey}
+              label={`Slide to send ${amount} ${symbol}`}
+              onComplete={handleConfirm}
+            />
+          </View>
         )
       }
     >
@@ -664,6 +690,52 @@ const S = StyleSheet.create({
     gap: 10,
     height: 62,
     justifyContent: "center",
+  },
+
+  // Render-time gate footers (audit T20).
+  sliderStack: {
+    gap: 8,
+  },
+  meshChip: {
+    alignItems: "center",
+    alignSelf: "center",
+    borderRadius: 999,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  meshChipText: {
+    fontFamily: FF.sans,
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  disabledSliderStack: {
+    alignItems: "center",
+    gap: 8,
+  },
+  disabledSlider: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    borderRadius: 32,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 10,
+    height: 62,
+    justifyContent: "center",
+    opacity: 0.55,
+  },
+  disabledSliderText: {
+    fontFamily: FF.sansMd,
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+  disabledSliderHint: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+    paddingHorizontal: 12,
+    textAlign: "center",
   },
   waitingFooterText: {
     fontFamily: FF.sansMd,
