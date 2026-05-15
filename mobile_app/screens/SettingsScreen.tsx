@@ -15,6 +15,7 @@ import { useNotificationEnabled } from '@/hooks/useNotificationEnabled';
 import { useBiometricEnabled } from '@/hooks/useBiometricEnabled';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
 import { Icon } from '@/components/primitives/Icon';
+import { PreviewBadge, PreviewedActions } from '@/components/primitives';
 
 import {
   QRCode, Toggle, SectionLabel, SettingsRow,
@@ -45,7 +46,8 @@ export default function SettingsScreen() {
   const [notifications,  setNotifications]  = useNotificationEnabled();
   const [biometric,      setBiometric]      = useBiometricEnabled();
   const [disableBioOpen, setDisableBioOpen] = useState(false);
-  const [meshOnCell,     setMeshOnCell]     = useState(false);
+  // cellular-fallback toggle was a dead useState — no consumer wired routing
+  // logic to it. Now marked as PREVIEW per AUDIT T5 / ROADMAP § 0.A.8.
 
   const cardScrollRef = useRef<ScrollView>(null);
 
@@ -243,7 +245,17 @@ export default function SettingsScreen() {
           <SectionLabel>network</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
-              <SettingsRow icon="share-2"        label="cellular fallback"    sub="use 4g/5g when off-mesh or peers unreachable"  right={<Toggle on={meshOnCell}    onChange={setMeshOnCell}    />} />
+              {/* AUDIT T5: cellular fallback was a dead toggle (no consumer).
+                  Wrap as PREVIEW until useNetworkMode actually reads a
+                  persisted preference. */}
+              <PreviewedActions hint="cellular fallback not yet routed">
+                <SettingsRow
+                  icon="share-2"
+                  label="cellular fallback"
+                  sub="use 4g/5g when off-mesh or peers unreachable"
+                  right={<PreviewBadge label="coming soon" align="flex-end" />}
+                />
+              </PreviewedActions>
               <SettingsRow icon="message-circle" label="message notifications" sub="encrypted · mesh-delivered"             right={<Toggle on={notifications} onChange={setNotifications} />} last />
             </View>
           </View>
