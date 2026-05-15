@@ -19,8 +19,10 @@ import { Icon } from '@/components/primitives/Icon';
 import {
   QRCode, Toggle, SectionLabel, SettingsRow,
   QRModal, ExportWalletModal, RNodePairModal, RotateKeypairModal, DisableBiometricModal,
+  NetworkSwitcherSheet,
   type PairedDevice,
 } from '@/components/settings';
+import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 
 const SCREEN_W    = Dimensions.get('window').width;
 const CARD_OUTER  = 32; // 16px padding each side
@@ -46,6 +48,12 @@ export default function SettingsScreen() {
   const [biometric,      setBiometric]      = useBiometricEnabled();
   const [disableBioOpen, setDisableBioOpen] = useState(false);
   const [meshOnCell,     setMeshOnCell]     = useState(false);
+  const [networkOpen,    setNetworkOpen]    = useState(false);
+
+  // Cluster label for the network row — sourced from runtime pref + env
+  // through NetworkModeContext so it stays in sync with the active RPC.
+  const { cluster } = useNetworkMode();
+  const clusterLabel = cluster === 'mainnet' ? 'mainnet beta' : cluster;
 
   const cardScrollRef = useRef<ScrollView>(null);
 
@@ -243,6 +251,13 @@ export default function SettingsScreen() {
           <SectionLabel>network</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
+              <SettingsRow
+                icon="globe"
+                label="solana cluster"
+                sub={`network · ${clusterLabel}`}
+                right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />}
+                onPress={() => setNetworkOpen(true)}
+              />
               <SettingsRow icon="share-2"        label="cellular fallback"    sub="use 4g/5g when off-mesh or peers unreachable"  right={<Toggle on={meshOnCell}    onChange={setMeshOnCell}    />} />
               <SettingsRow icon="message-circle" label="message notifications" sub="encrypted · mesh-delivered"             right={<Toggle on={notifications} onChange={setNotifications} />} last />
             </View>
@@ -274,6 +289,7 @@ export default function SettingsScreen() {
       {rotateOpen      && <RotateKeypairModal    onClose={() => setRotateOpen(false)}   />}
       {exportOpen      && <ExportWalletModal     onClose={() => setExportOpen(false)}   />}
       {disableBioOpen  && <DisableBiometricModal onClose={() => setDisableBioOpen(false)} onConfirm={() => setBiometric(false)} />}
+      <NetworkSwitcherSheet visible={networkOpen} onClose={() => setNetworkOpen(false)} />
     </View>
   );
 }

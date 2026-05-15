@@ -4,6 +4,7 @@ import NetInfo from "@react-native-community/netinfo";
 import React, {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -12,10 +13,20 @@ import React, {
 } from "react";
 
 import { useLxmfContext } from "@/context/LxmfContext";
-import { solanaConnection } from "@/src/infrastructure/network/connection";
+import { getActiveSolanaConnection } from "@/src/infrastructure/network/connection";
 import { DirectRpcAdapter } from "@/src/infrastructure/network/DirectRpcAdapter";
 import { IsolatedRpcAdapter } from "@/src/infrastructure/network/IsolatedRpcAdapter";
 import { MeshRpcAdapter } from "@/src/infrastructure/network/MeshRpcAdapter";
+import {
+  type Cluster,
+  type NetworkPref,
+  detectClusterFromUrl,
+  getCachedNetworkPref,
+  getEffectiveRpcUrlSync,
+  loadNetworkPref,
+  setNetworkPref as persistNetworkPref,
+  subscribeNetworkPref,
+} from "@/src/infrastructure/network/preference";
 import type { IRpcAdapter, NetworkMode } from "@/src/infrastructure/network/types";
 
 // Beacon must be active and recently announced to be considered a usable
@@ -55,6 +66,14 @@ export interface NetworkState {
   mode: NetworkMode;
   adapter: IRpcAdapter;
   relayHash: string | null;
+  /** Persisted user preference. Null when running on env/default fallback. */
+  pref: NetworkPref | null;
+  /** Active cluster — sourced from pref if set, otherwise detected from URL. */
+  cluster: Cluster;
+  /** Effective RPC URL after pref + env resolution. */
+  rpcUrl: string;
+  /** Persist a new preference. Null clears it (falls back to env/default). */
+  setPref: (pref: Omit<NetworkPref, "updatedAt"> | null) => Promise<void>;
 }
 
 const NetworkModeContext = createContext<NetworkState | undefined>(undefined);
@@ -62,6 +81,10 @@ const NetworkModeContext = createContext<NetworkState | undefined>(undefined);
 export function NetworkModeProvider({ children }: { children: ReactNode }) {
   const { beacons, send, events, status } = useLxmfContext();
   const [internet, setInternet] = useState(true);
+  // Track the stored pref reactively. Initialised from the sync cache (may
+  // be null during the first AsyncStorage read), then re-set when load
+  // resolves and on every subscribed change.
+  const [pref, setPrefState] = useState<NetworkPref | null>(() => getCachedNetworkPref());
 
   // Subscribe to OS-level connectivity — no polling, no HTTP spam.
   useEffect(() => {
@@ -72,6 +95,20 @@ export function NetworkModeProvider({ children }: { children: ReactNode }) {
       setInternet(hasInternetRoute(state));
     });
     return unsub;
+  }, []);
+
+  // Load pref on mount, then subscribe to any future change (from this
+  // component's setPref, or any other caller of preference.setNetworkPref).
+  useEffect(() => {
+    let cancelled = false;
+    void loadNetworkPref().then((loaded) => {
+      if (!cancelled) setPrefState(loaded);
+    });
+    const unsub = subscribeNetworkPref((p) => setPrefState(p));
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
   const relay = useMemo(
@@ -92,10 +129,16 @@ export function NetworkModeProvider({ children }: { children: ReactNode }) {
   // pending-request maps + rpcResponse routing don't fragment under
   // simultaneous mounts. Fixes T23.
   const meshAdapterRef = useRef<MeshRpcAdapter | null>(null);
+  // Adapter rebuilds when:
+  //   - mode flips (online/mesh/isolated)
+  //   - relay destination changes
+  //   - pref changes (DirectRpcAdapter wraps the live connection, which the
+  //     preference module already swaps; we rebuild the adapter so any
+  //     internally-captured reference is also refreshed)
   const adapter = useMemo<IRpcAdapter>(() => {
     if (mode === "online") {
       meshAdapterRef.current = null;
-      return new DirectRpcAdapter(solanaConnection);
+      return new DirectRpcAdapter(getActiveSolanaConnection());
     }
     if (mode === "mesh" && relay) {
       const a = new MeshRpcAdapter(relay.destHash, send);
@@ -105,7 +148,7 @@ export function NetworkModeProvider({ children }: { children: ReactNode }) {
     meshAdapterRef.current = null;
     return new IsolatedRpcAdapter();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, relay?.destHash]);
+  }, [mode, relay?.destHash, pref?.url]);
 
   // Route incoming LXMF messages + rpcResponse events to the active mesh adapter.
   useEffect(() => {
@@ -121,9 +164,27 @@ export function NetworkModeProvider({ children }: { children: ReactNode }) {
     }
   }, [events]);
 
+  const setPref = useCallback(
+    async (next: Omit<NetworkPref, "updatedAt"> | null) => {
+      await persistNetworkPref(next);
+    },
+    [],
+  );
+
+  const rpcUrl = pref?.url ?? getEffectiveRpcUrlSync();
+  const cluster: Cluster = pref?.cluster ?? detectClusterFromUrl(rpcUrl);
+
   const value = useMemo<NetworkState>(
-    () => ({ mode, adapter, relayHash: adapter.relayHash }),
-    [mode, adapter],
+    () => ({
+      mode,
+      adapter,
+      relayHash: adapter.relayHash,
+      pref,
+      cluster,
+      rpcUrl,
+      setPref,
+    }),
+    [mode, adapter, pref, cluster, rpcUrl, setPref],
   );
 
   return (

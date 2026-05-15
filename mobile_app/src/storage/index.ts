@@ -44,6 +44,12 @@ export const PrefKeys = {
   HIDE_BALANCE:      'anonmesh:hide-balance',
   NOTIF_ENABLED:     'anonmesh:notif-enabled',
   BEACON_MODE:       'anonmesh:beacon-mode',
+  // Solana cluster preference — user-selectable runtime override of
+  // EXPO_PUBLIC_SOLANA_RPC build-time default. Tier 3.1.
+  NETWORK_PREF:      'network_pref',
+  // Mainnet warning acknowledgement timestamp — once acknowledged, the
+  // "real funds, unaudited" confirmation alert no longer fires on switch.
+  MAINNET_ACK:       'anonmesh:mainnet-ack',
 } as const;
 
 // Legacy keys — kept only for one-time migration reads, then deleted
