@@ -1,4 +1,10 @@
-export type { IRpcAdapter, NetworkMode, MeshRpcRequest, MeshRpcResponse } from './types';
+export type {
+  IRpcAdapter,
+  NetworkMode,
+  MeshRpcRequest,
+  MeshRpcResponse,
+  ParsedTokenAccountsByOwner,
+} from './types';
 export { DirectRpcAdapter } from './DirectRpcAdapter';
 export { IsolatedRpcAdapter } from './IsolatedRpcAdapter';
 export { MeshRpcAdapter } from './MeshRpcAdapter';
