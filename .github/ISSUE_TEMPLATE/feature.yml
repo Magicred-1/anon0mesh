@@ -1,0 +1,40 @@
+name: Feature request
+description: A new capability or UX you'd like to see.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What real-world situation triggered this? Skip "it would be nice if" — describe the gap you actually hit.
+      placeholder: "Sending SPL tokens isn't supported, so I can't move USDC to a friend without bridging to SOL first."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Sketch the flow. Screens / states / inputs.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways to solve this you thought about, and why they didn't fit.
+    validations:
+      required: false
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Where it lives
+      options:
+        - Wallet (send / receive / tokens)
+        - Messages / channels
+        - Mesh / network / beacon
+        - Settings / identity / recovery
+        - Onboarding
+        - Other
+    validations:
+      required: true

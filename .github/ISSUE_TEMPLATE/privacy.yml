@@ -1,0 +1,39 @@
+name: Privacy / security concern
+description: Something in the app, README, or behavior that you think contradicts the privacy claims.
+title: "privacy: "
+labels: ["privacy", "security"]
+body:
+  - type: textarea
+    id: claim
+    attributes:
+      label: The claim
+      description: Which AnonMesh claim, doc line, or UI label looks wrong? Quote the exact wording.
+      placeholder: 'README says "routes through nothing" — but in mesh mode it routes through a beacon-relay.'
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What you observed
+      description: File line, screenshot, log line, or repro steps that point to the gap.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "Misleading copy / labeling (P1)"
+        - "Consent gap (P0)"
+        - "Information leak / metadata leak (P0)"
+        - "Crypto / auth bypass (P0)"
+        - "Not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: disclosure
+    attributes:
+      label: Responsible disclosure
+      description: For exploit-class issues, please email instead of filing here. Note your contact and we'll coordinate.
+    validations:
+      required: false

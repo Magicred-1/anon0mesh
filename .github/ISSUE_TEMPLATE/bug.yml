@@ -1,0 +1,69 @@
+name: Bug report
+description: Something the app does or shows is wrong.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: One or two sentences. What did you see, and what did you expect?
+      placeholder: "Tapped Send on devnet; spinner ran 60s then 'Couldn't reach devnet' even though Wi-Fi was up."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimum steps so someone else can hit the same state.
+      placeholder: |
+        1. Open Wallet
+        2. Tap Send
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      options:
+        - Solana Seeker
+        - Stock Android (Pixel / Samsung / OnePlus / other)
+        - iPhone
+        - Other (note OS in the description)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS version
+      placeholder: "Android 15 / iOS 18.2"
+    validations:
+      required: false
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network state at time of bug
+      options:
+        - Wi-Fi
+        - Cellular
+        - Mesh only (no internet)
+        - Airplane mode
+        - Mixed / transitioning
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: App build / version
+      description: From Settings → app version, or the APK filename.
+      placeholder: "1.0.2"
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots (optional)
+      description: Paste relevant logs or attach a screenshot. Redact addresses / seeds.
+    validations:
+      required: false
