@@ -320,9 +320,17 @@ export default function MessagesScreen() {
         if (s === seq) { msgIdForSeq = mid; break; }
       }
       if (msgIdForSeq !== null) {
-        setMsgs(prev => prev.map(m =>
-          m.id === msgIdForSeq && 'enc' in m ? { ...m, enc: true } : m,
-        ));
+        const mid = msgIdForSeq;
+        const flip = (m: AnyMsg): AnyMsg =>
+          m.id === mid && 'enc' in m ? { ...m, enc: true } : m;
+        // Update currently-rendered thread.
+        setMsgs(prev => prev.map(flip));
+        // Also update any cached non-active thread that holds the sent bubble,
+        // so reopening the conversation still shows the lock after delivery.
+        threadsRef.current.forEach((thread, peerHash) => {
+          if (!thread.some(m => m.id === mid)) return;
+          threadsRef.current.set(peerHash, thread.map(flip));
+        });
       }
     }
   }, []);
