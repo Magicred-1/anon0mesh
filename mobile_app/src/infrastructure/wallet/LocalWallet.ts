@@ -52,7 +52,7 @@ function aesDecrypt(aesKey: Uint8Array, payload: StoredPayload): Uint8Array {
 async function readAndDecrypt(): Promise<Keypair> {
   const auth = await LocalAuthentication.authenticateAsync({
     promptMessage: 'Authenticate to export your private key',
-    disableDeviceFallback: false,
+    disableDeviceFallback: true,
     cancelLabel: 'Cancel',
   });
   if (!auth.success) throw new Error('Authentication cancelled');
@@ -104,7 +104,7 @@ export class LocalWallet implements IWalletAdapter {
     if (needsBiometric) {
       const auth = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Unlock your anonmesh wallet',
-        disableDeviceFallback: false,
+        disableDeviceFallback: true,
         cancelLabel: 'Cancel',
       });
       if (!auth.success) throw new Error('Authentication cancelled');
@@ -141,7 +141,7 @@ export class LocalWallet implements IWalletAdapter {
   static async create(): Promise<LocalWallet> {
     const auth = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Authenticate to create your anonmesh wallet',
-      disableDeviceFallback: false,
+      disableDeviceFallback: true,
       cancelLabel: 'Cancel',
     });
     if (!auth.success) throw new Error('Authentication cancelled');

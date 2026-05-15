@@ -310,14 +310,12 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         networkMode: rpcAdapter.mode,
         userCancel: isUserCancel,
       });
-      setError(
-        isUserCancel
-          ? {
-              kind: "approval",
-              message: "Approve the transaction in your wallet to submit it.",
-            }
-          : { kind: "send", message: summary.message },
-      );
+      // User-cancel returns silently per Solana Mobile guidance (LESSON
+      // 2026-05-13) — the wallet popup is the consent surface, an inline banner
+      // double-prompts and reads like an error.
+      if (!isUserCancel) {
+        setError({ kind: "send", message: summary.message });
+      }
       setSliderResetKey((k) => k + 1);
       setIsConfirming(false);
       setTxPhase(null);
@@ -337,11 +335,27 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       title="review"
       footer={
         isConfirming ? (
-          <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-            <Feather name="smartphone" size={16} color={colors.primary} />
-            <Text style={[S.waitingFooterText, { color: colors.textPrimary }]}>
-              Approve in wallet
-            </Text>
+          <View style={S.waitingFooterStack}>
+            <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+              <Feather name="smartphone" size={16} color={colors.primary} />
+              <Text style={[S.waitingFooterText, { color: colors.textPrimary }]}>
+                Approve in wallet
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel approval"
+              hitSlop={10}
+              onPress={() => {
+                haptics.tap();
+                setIsConfirming(false);
+                setTxPhase(null);
+                setSliderResetKey((k) => k + 1);
+              }}
+              style={S.waitingCancelBtn}
+            >
+              <Text style={[S.waitingCancelText, { color: colors.textTertiary }]}>Cancel</Text>
+            </Pressable>
           </View>
         ) : (
           <SlideToConfirm
@@ -398,7 +412,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             colors={colors}
             icon="zap"
             label="Fee"
-            secondary="Estimated from devnet RPC"
+            secondary="Estimated from network RPC"
             value={feeLabel}
           />
         </View>
@@ -573,6 +587,20 @@ const S = StyleSheet.create({
   waitingFooterText: {
     fontFamily: FF.sansMd,
     fontSize: 16,
+  },
+  waitingFooterStack: {
+    alignItems: "center",
+    gap: 6,
+  },
+  waitingCancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  waitingCancelText: {
+    fontFamily: FF.sansMd,
+    fontSize: 13,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
 
   // error

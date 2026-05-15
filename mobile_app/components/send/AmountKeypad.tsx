@@ -62,8 +62,17 @@ export function AmountKeypad() {
   }, [recipient, router]);
 
   const balanceNum = token.uiAmount;
+  // Reserve enough headroom to cover: signature fee (~5k lamports), priority
+  // fees if added later, recipient-account rent-exempt minimum (~890k lamports)
+  // when sending to a brand-new wallet, and any rounding between the uiAmount
+  // display and the underlying lamport count. 0.001 SOL = 1M lamports — costs
+  // the user a tiny crumb on MAX but makes the send reliable.
+  // SPL transfers pay fees in SOL so their MAX is the full token balance.
+  const SOL_FEE_BUFFER = 0.001;
+  const isNativeSol = !mint || mint === "";
+  const maxSendable = isNativeSol ? Math.max(0, balanceNum - SOL_FEE_BUFFER) : balanceNum;
   const amountNum = Number.parseFloat(amount) || 0;
-  const isValid = amountNum > 0 && amountNum <= balanceNum && Boolean(recipient);
+  const isValid = amountNum > 0 && amountNum <= maxSendable && Boolean(recipient);
 
   function handleNext() {
     if (!isValid) return;
@@ -123,7 +132,7 @@ export function AmountKeypad() {
           <NumericKeypad
             currency={token.symbol}
             fiatLabel={`${formatBalance(token.uiAmount, token.maxDecimals)} ${token.symbol} available`}
-            maxAmount={balanceNum.toString()}
+            maxAmount={maxSendable.toString()}
             maxDecimals={token.maxDecimals}
             onChangeValue={setAmount}
             showMaxChip
@@ -132,7 +141,7 @@ export function AmountKeypad() {
         </View>
 
         {/* Overage warning */}
-        {amountNum > balanceNum ? (
+        {amountNum > maxSendable ? (
           <View style={S.errorRow}>
             <Feather name="alert-circle" size={14} color={colors.error} />
             <Text style={[S.errorText, { color: colors.error }]}>
