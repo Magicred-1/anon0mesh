@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, withSequence, withRepeat, withDelay, runOnJS,
+  useReducedMotion, useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, withSequence, withRepeat, withDelay, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, fontFamily } from '@/theme';
@@ -168,8 +168,17 @@ function NoPeersScreen({
   const ring1 = useSharedValue(0);
   const ring2 = useSharedValue(0);
   const ring3 = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    // a11y: skip the 3-ring sonar sweep under "reduce motion" — the static
+    // "SCANNING FOR PEERS" label + center icon still communicate state.
+    if (reduceMotion) {
+      ring1.value = 0;
+      ring2.value = 0;
+      ring3.value = 0;
+      return;
+    }
     const sonar = (sv: typeof ring1, delay: number) => {
       sv.value = withDelay(delay, withRepeat(
         withSequence(withTiming(1, { duration: 2200 }), withTiming(0, { duration: 0 })),
@@ -179,7 +188,7 @@ function NoPeersScreen({
     sonar(ring1, 0);
     sonar(ring2, 733);
     sonar(ring3, 1466);
-  }, [ring1, ring2, ring3]);
+  }, [ring1, ring2, ring3, reduceMotion]);
 
   const r1Style = useAnimatedStyle(() => ({
     opacity: Math.max(0, 1 - ring1.value) * 0.32,
