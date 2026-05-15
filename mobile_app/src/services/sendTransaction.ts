@@ -34,6 +34,49 @@ const APP_IDENTITY = {
 // `src/infrastructure/network/connection.ts`.
 export { solanaConnection };
 
+// ── Timeout primitive ────────────────────────────────────────────────────────
+// Direct solanaConnection.* calls bypass IRpcAdapter and inherit no per-call
+// budget. On a flaky cell / NAT-flap to mesh, the underlying fetch can hang
+// past the 60s confirmation budget, so the user sees a frozen review screen
+// with no recovery path. We wrap every direct RPC site in withTimeout(...) and
+// throw a typed TimeoutError so callers can render an inline "request timed
+// out — retry?" affordance instead of bubbling a generic error. See
+// OFFGRID_FALLBACK_AUDIT.md (13-site unbounded-await audit).
+
+export class TimeoutError extends Error {
+  constructor(label: string, ms: number) {
+    super(`${label} timed out after ${ms}ms`);
+    this.name = "TimeoutError";
+  }
+}
+
+export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new TimeoutError(label, ms));
+    }, ms);
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+const DIRECT_RPC_TIMEOUT_MS = 10_000;
+
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;
   rpcAdapter: IRpcAdapter;
@@ -265,7 +308,11 @@ async function buildSplTransferTransaction({
   // ATA existence is still a direct Solana RPC read because IRpcAdapter only
   // exposes balance/blockhash/submission. Submission itself uses the selected
   // network adapter, so mesh relay still carries the signed transaction.
-  const toAtaInfo = await solanaConnection.getAccountInfo(toAta, "confirmed");
+  const toAtaInfo = await withTimeout(
+    solanaConnection.getAccountInfo(toAta, "confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "ATA lookup",
+  );
   if (!toAtaInfo) {
     tx.add(createAssociatedTokenAccountInstruction(fromPubkey, toAta, toOwner, mint));
   }
@@ -356,12 +403,20 @@ export async function estimateSolTransferFeeLamports({
   }
 
   const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL });
-  const { blockhash } = await solanaConnection.getLatestBlockhash("confirmed");
+  const { blockhash } = await withTimeout(
+    solanaConnection.getLatestBlockhash("confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SOL fee blockhash",
+  );
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
 
   // Fee estimate stays direct-RPC until IRpcAdapter exposes getFeeForMessage.
-  const fee = await solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed");
+  const fee = await withTimeout(
+    solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SOL fee estimate",
+  );
   if (fee.value === null) {
     throw new Error("Fee unavailable");
   }
@@ -389,12 +444,20 @@ export async function estimateSplTransferFeeLamports({
     decimals,
     programId,
   });
-  const { blockhash } = await solanaConnection.getLatestBlockhash("confirmed");
+  const { blockhash } = await withTimeout(
+    solanaConnection.getLatestBlockhash("confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SPL fee blockhash",
+  );
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
 
   // Fee estimate stays direct-RPC until IRpcAdapter exposes getFeeForMessage.
-  const fee = await solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed");
+  const fee = await withTimeout(
+    solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SPL fee estimate",
+  );
   if (fee.value === null) {
     throw new Error("Fee unavailable");
   }

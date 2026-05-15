@@ -18,7 +18,9 @@ import {
   estimateSolTransferFeeLamports,
   sendSplTransfer,
   sendSolTransfer,
+  TimeoutError,
   TransactionNotApprovedError,
+  withTimeout,
 } from "@/src/services/sendTransaction";
 import { summarizeError } from "@/src/utils/errors";
 import { fontFamily as FF, useTheme } from "@/theme";
@@ -53,22 +55,6 @@ type ReviewError =
   | { kind: "unsupported"; message: string }
   | { kind: "route"; message: string }
   | { kind: "send"; message: string };
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Fee estimate timed out")), timeoutMs);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err: unknown) => {
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
-}
 
 interface ReviewCardProps {
   readonly to: string;
@@ -168,6 +154,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
                   amountSOL: amount,
                 }),
                 FEE_ESTIMATE_TIMEOUT_MS,
+                "SOL fee estimate",
               )
             : await withTimeout(
                 estimateSplTransferFeeLamports({
@@ -179,9 +166,19 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
                   programId: normalizedProgramId,
                 }),
                 FEE_ESTIMATE_TIMEOUT_MS,
+                "SPL fee estimate",
               );
         if (!cancelled) setFeeLabel(formatSolFee(lamports));
-      } catch {
+      } catch (err: unknown) {
+        // Fee estimate is best-effort; the review screen still renders. The
+        // failure-class distinction matters for logs (TimeoutError vs RPC
+        // reject) but the user-facing label is the same neutral fallback so
+        // we don't block the slide-to-send affordance on a fee read.
+        if (err instanceof TimeoutError) {
+          console.warn("[send/ReviewCard] fee estimate timed out", { label: err.message });
+        } else {
+          console.warn("[send/ReviewCard] fee estimate failed", err);
+        }
         if (!cancelled) setFeeLabel("Fee unavailable");
       }
     }
