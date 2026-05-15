@@ -6,6 +6,7 @@ import * as ScreenCapture from 'expo-screen-capture';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { useWallet } from '@/context/WalletContext';
+import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 import { KeyBox } from './KeyBox';
 
 type CaptureBlockState = 'pending' | 'blocked' | 'unavailable';
@@ -14,6 +15,11 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const { colors } = useTheme();
   const softGlass = useGlass('soft');
   const { walletMode, exportPrivateKey } = useWallet();
+  // Surface a mainnet-specific reminder on top of the existing
+  // recovery-key warning. T-WALLET-* threat-model family: a user who
+  // graduated their wallet onto mainnet via the network switcher needs an
+  // extra "these keys move real funds" prompt before they see the secret.
+  const { cluster } = useNetworkMode();
 
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [revealed,  setRevealed]  = useState(false);
@@ -155,6 +161,14 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
           </View>
         ) : (
           <View style={{ gap: 14 }}>
+            {cluster === 'mainnet' ? (
+              <View style={[S.warn, { backgroundColor: colors.warningSubtle, borderColor: colors.warning + '40' }]}>
+                <Feather name="alert-triangle" size={14} color={colors.warning} style={{ marginTop: 1 }} />
+                <Text style={[S.warnText, { color: colors.warning }]}>
+                  Mainnet keys are real. This recovery key controls real funds. Anyone with it can drain the wallet — store it offline only.
+                </Text>
+              </View>
+            ) : null}
             <View style={[S.warn, { backgroundColor: colors.error + '14', borderColor: colors.error + '38' }]}>
               <Feather name="alert-triangle" size={14} color={colors.error} style={{ marginTop: 1 }} />
               <Text style={[S.warnText, { color: colors.error }]}>
