@@ -287,7 +287,9 @@ export const PeersDrawer = memo(function PeersDrawer({
 
         {!syncing && filtered.length === 0 && (
           <Text style={[S.emptyNote, { color: colors.textTertiary }]}>
-            {input && !isHash ? 'No matches' : 'No conversations yet'}
+            {input && !isHash
+              ? 'No matches — paste an LXMF hash or scan a QR'
+              : 'Scan a contact QR to start your first conversation'}
           </Text>
         )}
       </ScrollView>

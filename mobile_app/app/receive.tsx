@@ -179,9 +179,9 @@ export default function ReceiveScreen() {
           <SafeAreaView edges={["top", "bottom"]} style={S.fill}>
             <BottomSheetHandleBar />
             <View style={[S.grid, { flex: 1, justifyContent: "center", alignItems: "center" }]}>
-              <Text style={[S.noWalletTitle, { color: colors.textPrimary }]}>Connect wallet to receive</Text>
+              <Text style={[S.noWalletTitle, { color: colors.textPrimary }]}>Set up your wallet to share an address</Text>
               <Text style={[S.noWalletSub, { color: colors.textSecondary }]}>
-                Connect a wallet before sharing or scanning a receive address.
+                Create or connect a wallet from the home tab — your receive QR shows up here once it's ready.
               </Text>
             </View>
           </SafeAreaView>
