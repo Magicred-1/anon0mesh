@@ -218,7 +218,7 @@ Per `PITCH.md` § 3 (claim reframes) and `AUDIT.md` § 1 (FALSE / MISLEADING cla
 
 - ❌ **"AES-256 mesh encryption"** — actual is AES-128 per Reticulum spec. Either omit specific cipher, or say "encrypted per the Reticulum spec (AES-128 + HMAC)".
 - ❌ **"No servers"** — community TCP relays are pre-configured. Qualify: "No centralized servers. Community-run TCP relays are pre-configured and removable in settings."
-- ❌ **"Confidential offline transactions"** (present tense) — not shipped. If we mention it, say "coming soon — Arcium MPC integration on roadmap."
+- ❌ **Confidential-offline-transfer claims in present tense** — not shipped. If we mention the roadmap, say "coming soon — multi-party-compute integration on roadmap."
 - ❌ **"Routes through nothing"** — mesh-mode RPC routes through one beacon-relay. The relay sees plaintext JSON-RPC + the LXMF→Solana pubkey binding (per `AUDIT.md` § 3 / `PRIVACY_LEGITIMACY.md` C2). Don't claim full privacy from the relay.
 - ❌ **"Payments that can't be turned off"** (PITCH § 3 Option C) — too strong; invites pedantry from curators. Reserve for B-roll.
 - ❌ **Anything implying audit by Trail of Bits / Halborn / Zellic** — no third-party audit exists.
@@ -258,7 +258,7 @@ This is the brand-claim hygiene that gates dApp Store curation in 2026 (PITCH §
 |---|---|---|
 | Submission silently rejected at upload | APK signed with debug or EAS keystore reused from another channel | Generate fresh dApp-Store-only keystore, rebuild, resubmit |
 | Review verdict: "icon does not meet design spec" | 500×500 icon, non-square edges, transparent background where it shouldn't be | Re-export at 512×512, opaque, square; follow Google Play icon design |
-| Review verdict: "misleading claims" | "AES-256" / "no servers" / present-tense Arcium MPC in description | Rewrite per § 6; resubmit |
+| Review verdict: "misleading claims" | AES-256 / no-servers / present-tense MPC-integration claim in description | Rewrite per § 6; resubmit |
 | Review verdict: "broken on Seeker hardware" | Native module crash (likely LXMF or Bluetooth permission denial on first launch) | Reproduce on Seeker; check FG service notification; check `aapt dump permissions` matches expectations |
 | Review verdict: "missing privacy policy" | Listing URL 404s | Host stable privacy policy at `anonmesh.sh/privacy` (or repo `/PRIVACY.md` — but a custom domain is more durable) |
 | Update bounces with "version mismatch" | `versionCode` not incremented, OR signed with different key | Bump `versionCode` in `app.json`; verify keystore is the one we registered |

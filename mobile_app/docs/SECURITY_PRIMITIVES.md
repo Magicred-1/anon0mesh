@@ -156,7 +156,7 @@ The transaction-signing path zeroes one `Uint8Array` copy of the secret key (`.f
 
 Per `LOCAL_NOTES/REVIEW-2026-05-13/PITCH.md` § 6 and `ROADMAP.md`. These are **future-tense** in all external comms:
 
-- ❌ **Confidential offline transactions** via Arcium MPC — preview UI exists (labeled `PREVIEW · ARCIUM MPC` per `AUDIT.md` § 2 Category A). Not shipped. Don't claim as live.
+- ❌ **Confidential-offline-transfers** via multi-party-compute roadmap integration — preview UI exists (labeled appropriately per `AUDIT.md` § 2 Category A). Not shipped. Don't claim as live.
 - ❌ **Multisig co-signs** — preview cards exist (`PendingCosigns`). Don't claim as live.
 - ❌ **JitoSOL beacon staking** — preview stats in `BeaconRegistry`. Don't claim as live.
 - ❌ **Confidential SPL transfers** — preview chips in `TokenPicker`. SPL send itself is gated; only SOL ships today.
