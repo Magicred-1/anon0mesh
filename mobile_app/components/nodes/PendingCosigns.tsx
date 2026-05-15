@@ -6,6 +6,7 @@ import {
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { relTime } from '@/src/utils/relTime';
 
 export interface PendingCosign {
   id:          string;
@@ -18,13 +19,6 @@ export interface PendingCosign {
 
 interface Props {
   items: PendingCosign[];
-}
-
-function relTime(ms: number) {
-  const d = Date.now() - ms;
-  if (d < 60_000)    return 'just now';
-  if (d < 3_600_000) return `${Math.floor(d / 60_000)}m ago`;
-  return `${Math.floor(d / 3_600_000)}h ago`;
 }
 
 function short(hash: string) {

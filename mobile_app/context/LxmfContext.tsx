@@ -18,6 +18,7 @@ import {
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
+import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import * as ExpoCrypto from 'expo-crypto';
 
 const IDENTITY_SCHEMA_VERSION = 1;
@@ -129,23 +130,6 @@ function applyAnnounceEvent(
 }
 
 const ANNOUNCE_LOG_RE = /announce from ([0-9a-f]{32}) \((\d+) hops\)/;
-
-// Events are prepended newest-first and capped at 200. Once capped, length
-// never grows, so we detect new prepended events by reference comparison.
-function sliceNewEvents(
-  events: LxmfEvent[],
-  prevCount: number,
-  prevFirst: LxmfEvent | null,
-): LxmfEvent[] {
-  if (events.length > prevCount) return events.slice(0, events.length - prevCount);
-  const first = events[0] ?? null;
-  if (prevFirst !== null && first !== prevFirst) {
-    const oldIdx = events.indexOf(prevFirst);
-    if (oldIdx === -1) return events;
-    return oldIdx > 0 ? events.slice(0, oldIdx) : [];
-  }
-  return [];
-}
 
 // Fallback: parse log events for announces (library compat across versions)
 function applyLogAnnounce(

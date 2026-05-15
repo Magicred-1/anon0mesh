@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 import { useLxmfContext } from '@/context/LxmfContext';
+import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import type { NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { activeConversationRef } from './activeConversation';
 import { messagesFocusedRef }    from './messagesFocused';
@@ -30,18 +31,6 @@ if (Platform.OS === 'android') {
   }).catch(() => {});
 }
 
-// Events are prepended newest-first and capped at 200 — use reference comparison when capped.
-function sliceNewEvents(
-  events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
-): LxmfEvent[] {
-  if (events.length > prevCount) return events.slice(0, events.length - prevCount);
-  const first = events[0] ?? null;
-  if (prevFirst !== null && first !== prevFirst) {
-    const oldIdx = events.indexOf(prevFirst);
-    return oldIdx > 0 ? events.slice(0, oldIdx) : [];
-  }
-  return [];
-}
 
 export function useMessageNotifications(
   onInApp: (n: NotificationPayload) => void,

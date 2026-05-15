@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 
 import { useWallet } from "@/context/WalletContext";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
-import { solanaConnection } from "@/src/services/sendTransaction";
+import { solanaConnection } from "@/src/infrastructure/network/connection";
 import {
   ActivityEntry,
   SOL_DECIMALS,
