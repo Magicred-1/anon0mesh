@@ -105,13 +105,23 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   const router = useRouter();
   const { colors } = useTheme();
   const { wallet } = useWallet();
-  const { adapter: rpcAdapter, mode: networkMode } = useNetworkMode();
+  const networkModeState = useNetworkMode();
+  const { adapter: rpcAdapter, mode: networkMode } = networkModeState;
   const { entries: addressBook } = useAddressBook();
 
-  // First-send guard: if the recipient has never been used before, surface a
-  // persistent advisory banner. Saved contacts skip this — they've already
-  // been verified at least once.
+  // First-send guard (#50): if the recipient has never been used before,
+  // surface a persistent advisory banner. Saved contacts skip this — they've
+  // already been verified at least once.
   const isFirstTimeRecipient = !addressBook.some((entry) => entry.pubkey === to);
+
+  // Stable ref (#53) so confirmTransaction can re-read the *current* adapter
+  // on each poll iteration without re-running the abort effect when context
+  // updates. See sendTransaction.ts § C-4 — log-only detection of mid-flight
+  // adapter swap (e.g. online→mesh during a 60s poll window).
+  const networkModeRef = useRef(networkModeState);
+  useEffect(() => {
+    networkModeRef.current = networkModeState;
+  }, [networkModeState]);
 
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
@@ -261,6 +271,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       confirmAbortRef.current = controller;
       const conf = await confirmTransaction(rpcAdapter, result.signature, {
         signal: controller.signal,
+        getCurrentAdapter: () => networkModeRef.current.adapter,
       });
       confirmAbortRef.current = null;
 

@@ -165,6 +165,19 @@ export type ConfirmResult =
 
 interface ConfirmOptions {
   signal?: AbortSignal;
+  /**
+   * Optional callback returning the *current* RPC adapter. When the user
+   * transitions online ↔ mesh mid-flight, the captured `rpcAdapter` argument
+   * goes stale and continues polling a dead transport for the rest of the
+   * budget. We re-read on each iteration and emit a one-shot console.warn so
+   * the failure mode shows up in logs. Full hot-swap (cancel current poll,
+   * restart on the new adapter with the same signature) is the next step —
+   * see OFFGRID_FALLBACK_AUDIT.md § C-4.
+   *
+   * Log-only here so we never introduce a regression in the happy path while
+   * the safer full hot-swap is being designed.
+   */
+  getCurrentAdapter?: () => IRpcAdapter;
 }
 
 const ONLINE_POLL_INTERVAL_MS = 500;
@@ -194,10 +207,34 @@ export async function confirmTransaction(
   const budgetMs = isMesh ? MESH_CONFIRM_BUDGET_MS : ONLINE_CONFIRM_BUDGET_MS;
   const deadline = Date.now() + budgetMs;
   const signal = options?.signal;
+  const getCurrentAdapter = options?.getCurrentAdapter;
+  const initialMode = rpcAdapter.mode;
+  let adapterMismatchLogged = false;
 
   while (Date.now() < deadline) {
     if (signal?.aborted) {
       return { kind: 'cancelled', signature };
+    }
+
+    // C-4: detect (but do not yet act on) an online↔mesh transition that
+    // happened after this poll loop started. The captured `rpcAdapter` keeps
+    // polling its original transport; if the user dropped to mesh mid-send,
+    // we'd silently burn the whole budget waiting on a dead direct RPC. Log
+    // once so the case is visible in field reports.
+    if (getCurrentAdapter && !adapterMismatchLogged) {
+      try {
+        const current = getCurrentAdapter();
+        if (current.mode !== initialMode) {
+          console.warn('[confirmTransaction] adapter mode changed mid-flight; still polling original transport', {
+            signature,
+            initialMode,
+            currentMode: current.mode,
+          });
+          adapterMismatchLogged = true;
+        }
+      } catch {
+        // getCurrentAdapter must never break confirmation polling.
+      }
     }
 
     try {
