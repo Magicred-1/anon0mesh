@@ -66,7 +66,10 @@ function DetailRow({
         resetTimer.current = null;
         setCopied(false);
       }, COPY_FEEDBACK_MS);
-    } catch {
+    } catch (err) {
+      // Clipboard write failed — surface to console for diagnostics, otherwise
+      // the user just sees the icon not flip. Per AUDIT § 3 S-2.
+      console.warn('[TxDetailModal] clipboard copy failed', err);
       setCopied(false);
     }
   }
