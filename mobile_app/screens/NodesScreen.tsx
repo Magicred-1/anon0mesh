@@ -11,7 +11,7 @@ import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { PulseDot }        from '@/components/ui/PulseDot';
-import { NODES, FILTERS }  from '@/components/nodes/constants';
+import { FILTERS }         from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
@@ -75,10 +75,18 @@ export default function NodesScreen() {
 
   // Stable node identity: only re-creates when peers change, not on timer ticks.
   // MeshMap receives this — topology layout only runs when peer set actually changes.
+  //
+  // Pre-AUDIT T7: when !isRunning we returned a 7-item fixture so the radar
+  // wouldn't look empty. That was a present-tense lie about the live mesh.
+  // Now we return [] and let the empty-state below speak for itself.
   const meshNodes = useMemo<NodeData[]>(
-    () => isRunning ? peers.map(peerToMapNode) : NODES,
+    () => isRunning ? peers.map(peerToMapNode) : [],
     [peers, isRunning],
   );
+
+  const emptyStateCopy = isNativeAvailable
+    ? 'Starting mesh…'
+    : 'Mesh unavailable on this device';
 
   // Fast lookup by destHash for latency enrichment
   const peerMap = useMemo(
@@ -121,6 +129,13 @@ export default function NodesScreen() {
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
           <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} onExpandChange={setMapExpanded} onDirectMessage={handleDirectMessage} />
+          {meshNodes.length === 0 && (
+            <View pointerEvents="none" style={S.emptyState}>
+              <Text style={[S.emptyStateText, { color: colors.textTertiary }]}>
+                {emptyStateCopy}
+              </Text>
+            </View>
+          )}
           {mapExpanded && <View style={S.filterOverlay}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterRow}>
               {FILTERS.map(f => {
@@ -173,4 +188,6 @@ const S = StyleSheet.create({
   chipText:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
   chipCount:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, opacity: 0.8 },
   bottomScroll:  { paddingBottom: 24 },
+  emptyState:    { position: 'absolute', left: 0, right: 0, top: 60, alignItems: 'center' },
+  emptyStateText:{ fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' },
 });

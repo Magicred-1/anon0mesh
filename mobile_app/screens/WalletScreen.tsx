@@ -124,40 +124,54 @@ const ACTIONS = [
 function ActionTiles() {
   const { colors } = useTheme();
   const router = useRouter();
+  // Gate the Send tile at render-time so isolated-mode users can't walk three
+  // screens deep before the confirm-step error tells them no RPC route exists.
+  // ROADMAP § 2.4 / 02-UX P0 #6.
+  const { mode } = useNetworkMode();
+  const isolated = mode === 'isolated';
 
   return (
     <View style={S.actionRow}>
-      {ACTIONS.map(a => (
-        <Pressable
-          key={a.id}
-          disabled={'soon' in a && a.soon}
-          onPress={() => {
-            if (!('route' in a)) return;
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            router.push(a.route as never);
-          }}
-          style={({ pressed }) => {
-            const soon = 'soon' in a && a.soon;
-            const pressedOpacity = pressed ? 0.7 : 1;
-            const opacity = soon ? 0.4 : pressedOpacity;
-            return [S.tile, S.actionTile, {
-              backgroundColor: a.primary ? colors.primary : colors.surface2,
-              borderColor:     a.primary ? colors.primary : colors.border,
-              opacity,
-            }];
-          }}
-        >
-          <View style={[S.actionIconWrap, { backgroundColor: a.primary ? 'rgba(0,0,0,0.15)' : colors.primarySubtle }]}>
-            <Feather name={a.icon} size={18} color={a.primary ? '#08080A' : colors.primary} />
-          </View>
-          <Text style={[S.actionLabel, { color: a.primary ? '#08080A' : colors.textSecondary }]}>
-            {a.label}
-          </Text>
-          {'soon' in a && a.soon && (
-            <Text style={[S.soonBadge, { color: colors.textTertiary }]}>SOON</Text>
-          )}
-        </Pressable>
-      ))}
+      {ACTIONS.map(a => {
+        const soon = 'soon' in a && a.soon;
+        const sendDisabled = a.id === 'send' && isolated;
+        const disabled = soon || sendDisabled;
+        return (
+          <Pressable
+            key={a.id}
+            disabled={disabled}
+            onPress={() => {
+              if (!('route' in a)) return;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push(a.route as never);
+            }}
+            style={({ pressed }) => {
+              const pressedOpacity = pressed ? 0.7 : 1;
+              const opacity = disabled ? 0.4 : pressedOpacity;
+              return [S.tile, S.actionTile, {
+                backgroundColor: a.primary ? colors.primary : colors.surface2,
+                borderColor:     a.primary ? colors.primary : colors.border,
+                opacity,
+              }];
+            }}
+          >
+            <View style={[S.actionIconWrap, { backgroundColor: a.primary ? 'rgba(0,0,0,0.15)' : colors.primarySubtle }]}>
+              <Feather name={a.icon} size={18} color={a.primary ? '#08080A' : colors.primary} />
+            </View>
+            <Text style={[S.actionLabel, { color: a.primary ? '#08080A' : colors.textSecondary }]}>
+              {a.label}
+            </Text>
+            {soon && (
+              <Text style={[S.soonBadge, { color: colors.textTertiary }]}>SOON</Text>
+            )}
+            {sendDisabled && (
+              <Text style={[S.soonBadge, { color: a.primary ? '#08080A' : colors.textTertiary }]}>
+                NO ROUTE
+              </Text>
+            )}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

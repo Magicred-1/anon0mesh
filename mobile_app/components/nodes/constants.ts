@@ -1,14 +1,7 @@
-type Iface = 'TCP' | 'BLE' | 'RNode';
-
-export const NODES: { handle: string; hops: number; iface: Iface; signal: number; latency: string; beacon?: boolean; online?: boolean; weak?: boolean }[] = [
-  { handle: '@beacon_prime', hops: 0, iface: 'TCP',   signal: 4, beacon: true,  latency: '12ms'  },
-  { handle: '@node_a1b2',    hops: 1, iface: 'TCP',   signal: 4,                latency: '48ms'  },
-  { handle: '@node_7f3a',    hops: 3, iface: 'RNode', signal: 3, online: true,  latency: '112ms' },
-  { handle: '@node_c91d',    hops: 2, iface: 'BLE',   signal: 3,                latency: '89ms'  },
-  { handle: '@relay_e2f0',   hops: 4, iface: 'RNode', signal: 2,                latency: '340ms' },
-  { handle: '@node_44ab',    hops: 2, iface: 'BLE',   signal: 3,                latency: '76ms'  },
-  { handle: '@sensor_9812',  hops: 5, iface: 'RNode', signal: 1, weak: true,   latency: '612ms' },
-];
+// NODES fixture removed per AUDIT T7 / ROADMAP § 0.4. The radar populates from
+// real peers; when the mesh isn't running NodesScreen renders an honest empty
+// state instead of a 7-item fake-peer list. MAP_NODES / MAP_EDGES below are
+// unrelated topology layout fixtures (currently unused).
 
 export const MAP_W = 320;
 export const MAP_H = 270;
