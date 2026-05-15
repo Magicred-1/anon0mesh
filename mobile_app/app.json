@@ -3,6 +3,9 @@
     "name": "anonmesh",
     "slug": "anonmesh",
     "version": "1.0.2",
+    "description": "Encrypted messenger and non-custodial Solana wallet that works over Bluetooth and LoRa radio. Built on Reticulum + LXMF. Zero analytics, on-device keys.",
+    "primaryColor": "#00E5FF",
+    "privacy": "public",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "anonmesh",
@@ -31,6 +34,7 @@
     },
     "android": {
       "package": "magicred1.anonmesh.app",
+      "versionCode": 2,
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
