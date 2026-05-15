@@ -30,6 +30,9 @@ export type {
   PressSurfaceVariant,
 } from "./PressSurface";
 
+export { ScreenCloseButton } from "./ScreenCloseButton";
+export type { ScreenCloseButtonProps } from "./ScreenCloseButton";
+
 export { SegmentedControl } from "./SegmentedControl";
 export type { SegmentedControlTone } from "./SegmentedControl";
 

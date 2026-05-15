@@ -25,7 +25,7 @@ import Animated, {
 import { SafeAreaView } from "react-native-safe-area-context";
 import QRCodeSvg from "react-native-qrcode-svg";
 
-import { BottomSheetHandleBar, SegmentedControl, TokenLogo } from "@/components/primitives";
+import { BottomSheetHandleBar, ScreenCloseButton, SegmentedControl, TokenLogo } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
@@ -203,13 +203,7 @@ export default function ReceiveScreen() {
               <Text style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
               <Text style={[S.screenTitle, { color: colors.textPrimary }]}>receive</Text>
             </View>
-            <Pressable
-              onPress={animateAndDismiss}
-              hitSlop={10}
-              style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-            >
-              <Feather name="x" size={16} color={colors.textSecondary} />
-            </Pressable>
+            <ScreenCloseButton onPress={animateAndDismiss} icon="x" />
           </View>
 
           <View style={S.grid}>
@@ -344,7 +338,6 @@ const S = StyleSheet.create({
   header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
   kicker:       { fontFamily: FF.sansMd, fontSize: 10, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },
   screenTitle:  { fontFamily: FF.sansBold, fontSize: 28, letterSpacing: -0.5 },
-  closeBtn:     { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: "center", justifyContent: "center" },
 
   tile:         { borderRadius: 20, borderWidth: 0.5, padding: 16, overflow: "hidden" },
 

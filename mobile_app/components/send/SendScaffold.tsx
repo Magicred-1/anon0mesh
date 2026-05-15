@@ -1,7 +1,5 @@
-import { Feather } from "@expo/vector-icons";
 import React from "react";
 import {
-  Pressable,
   StyleProp,
   StyleSheet,
   Text,
@@ -10,6 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ScreenCloseButton } from "@/components/primitives";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 interface SendScaffoldProps {
@@ -29,24 +28,12 @@ interface SendScaffoldProps {
 function NavSlot({
   showBack,
   onBack,
-  colors,
 }: {
   readonly showBack: boolean;
   readonly onBack?: () => void;
-  readonly colors: ReturnType<typeof useTheme>["colors"];
 }) {
-  if (showBack) {
-    return (
-      <Pressable
-        accessibilityLabel="Back"
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={onBack}
-        style={[S.navButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-      >
-        <Feather name="arrow-left" size={18} color={colors.textPrimary} />
-      </Pressable>
-    );
+  if (showBack && onBack) {
+    return <ScreenCloseButton icon="arrow-left" onPress={onBack} />;
   }
   return <View style={S.navSpacer} />;
 }
@@ -93,7 +80,7 @@ export function SendScaffold({
           </View>
 
           <View style={S.headerRight}>
-            {trailing ?? <NavSlot showBack={showBack} onBack={onBack} colors={colors} />}
+            {trailing ?? <NavSlot showBack={showBack} onBack={onBack} />}
           </View>
         </View>
 
@@ -148,14 +135,6 @@ const S = StyleSheet.create({
     lineHeight: 21,
     maxWidth: 320,
     paddingTop: 4,
-  },
-  navButton: {
-    alignItems: "center",
-    borderRadius: 18,
-    borderWidth: 0.5,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
   },
   navSpacer: {
     height: 36,
