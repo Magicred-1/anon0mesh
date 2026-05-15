@@ -10,7 +10,7 @@ import { PigeonLoader } from "@/components/ui/PigeonLoader";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
-import { saveAddressBookRecipient } from "@/src/services/addressBook";
+import { saveAddressBookRecipient, useAddressBook } from "@/src/services/addressBook";
 import { describeSendFailure, formatRawError } from "@/src/services/sendErrorMessages";
 import {
   confirmTransaction,
@@ -120,6 +120,12 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   const { colors } = useTheme();
   const { wallet } = useWallet();
   const { adapter: rpcAdapter, mode: networkMode } = useNetworkMode();
+  const { entries: addressBook } = useAddressBook();
+
+  // First-send guard: if the recipient has never been used before, surface a
+  // persistent advisory banner. Saved contacts skip this — they've already
+  // been verified at least once.
+  const isFirstTimeRecipient = !addressBook.some((entry) => entry.pubkey === to);
 
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
@@ -213,6 +219,9 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       return;
     }
 
+    // Isolated mode is also gated at render time (the slide bar is replaced by
+    // a disabled "send unavailable" pill). This branch is a defense-in-depth
+    // guard in case the user's connectivity drops between render and confirm.
     if (rpcAdapter.mode === "isolated") {
       setError({
         kind: "route",
@@ -357,6 +366,17 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
               <Text style={[S.waitingCancelText, { color: colors.textTertiary }]}>Cancel</Text>
             </Pressable>
           </View>
+        ) : networkMode === "isolated" ? (
+          <View
+            accessibilityLabel="Send is unavailable in isolated mode"
+            accessibilityRole="text"
+            style={[S.disabledFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+          >
+            <Feather name="wifi-off" size={16} color={colors.textTertiary} />
+            <Text style={[S.disabledFooterText, { color: colors.textSecondary }]}>
+              send unavailable — no peers or internet
+            </Text>
+          </View>
         ) : (
           <SlideToConfirm
             key={sliderResetKey}
@@ -370,6 +390,30 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         contentContainerStyle={[S.scrollContent, { gap: 10 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* First-send advisory (anti-poisoning Layer 1) */}
+        {isFirstTimeRecipient ? (
+          <View
+            style={[
+              S.firstSendPanel,
+              {
+                backgroundColor: colors.warningSubtle,
+                borderColor: colors.warning,
+              },
+            ]}
+          >
+            <Feather name="alert-triangle" size={16} color={colors.warning} />
+            <View style={S.firstSendBody}>
+              <Text style={[S.firstSendTitle, { color: colors.warning }]}>
+                first send to this address
+              </Text>
+              <Text style={[S.firstSendText, { color: colors.textSecondary }]}>
+                Verify the full address with the recipient before sending. Mistakes
+                are not reversible.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* Amount tile */}
         <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
           <Text style={[S.tileLabel, { color: colors.textTertiary }]}>AMOUNT</Text>
@@ -573,6 +617,46 @@ const S = StyleSheet.create({
   stealthLabel: {
     fontFamily: FF.sansMd,
     fontSize: 15,
+  },
+
+  // first-send / poisoning banner
+  firstSendPanel: {
+    alignItems: "flex-start",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 14,
+  },
+  firstSendBody: {
+    flex: 1,
+    gap: 4,
+  },
+  firstSendTitle: {
+    fontFamily: FF.sansSb,
+    fontSize: 13,
+  },
+  firstSendText: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
+  // isolated-mode disabled footer
+  disabledFooter: {
+    alignItems: "center",
+    borderRadius: 32,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 10,
+    height: 62,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  disabledFooterText: {
+    fontFamily: FF.sansMd,
+    fontSize: 14,
+    textAlign: "center",
   },
 
   waitingFooter: {
