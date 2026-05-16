@@ -118,8 +118,8 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
     <SendScaffold
       showBack={false}
       eyebrow="Transfer receipt"
-      title="sent"
-      subtitle="Settlement confirmed on-chain."
+      title="transfer in motion"
+      subtitle="Receipt below. Explorer state can lag behind settlement for a few seconds."
       footer={
         <DepthButton label="Done" onPress={handleDone} size="lg" tone="cyan" variant="primary" />
       }

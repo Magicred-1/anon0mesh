@@ -57,11 +57,6 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
       .start(() => setModal(false));
   }, [sheetAnim]);
 
-  const handleRegister = useCallback(() => {
-    setBeaconMode(true);
-    dismiss();
-  }, [setBeaconMode, dismiss]);
-
   const commitAmt = useCallback((v: number) => {
     const n = Math.max(0.5, Number.parseFloat(Math.max(0.5, v).toFixed(1)));
     setStakeAmt(n);
@@ -204,7 +199,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 flow remains future work; the JS-side opt-in is the consent gate
                 today. */}
             <Pressable
-              onPress={handleRegister}
+              onPress={() => { setBeaconMode(true); dismiss(); }}
               accessibilityRole="button"
               accessibilityLabel="Enable beacon mode"
               style={({ pressed }) => [

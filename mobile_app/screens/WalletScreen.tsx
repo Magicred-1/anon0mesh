@@ -17,8 +17,8 @@ import { useHideBalance }   from '@/src/hooks/useHideBalance';
 import { useWalletBalance } from '@/src/hooks/useWalletBalance';
 import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
 import type { ActivityEntry, TokenBalance } from '@/src/services/walletData';
-import { relTime } from '@/src/utils/relTime';
 import { fontFamily, useTheme } from '@/theme';
+import { relTime } from '@/src/utils/relTime';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -301,13 +301,13 @@ export default function WalletScreen() {
   const { mode }           = useNetworkMode();
   const [refreshing, setRefreshing] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
-  // Multisig co-sign UI is in preview — items are visual placeholders only,
-  // signing flow is not yet wired (see PendingCosigns: pointerEvents disabled).
-  const pendingCosigns: PendingCosign[] = [
+  const [pendingCosigns, setPendingCosigns] = useState<PendingCosign[]>([
     { id: '1', txHash: 'A3f9c2e8b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3',  amountSol: 0.25,  feeSol: 0.000312, fromHash: 'B7d2a1f4c9e8b3a7d2a1f4c9e8b3a7d2', requestedAt: Date.now() - 90_000 },
     { id: '2', txHash: 'C5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1', amountSol: 1.05,  feeSol: 0.000287, fromHash: 'D4b9c3e2a1f8d4b9c3e2a1f8d4b9c3e2', requestedAt: Date.now() - 240_000 },
     { id: '3', txHash: 'E8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0', amountSol: 0.005, feeSol: 0.000198, fromHash: 'F2c8a7e4b1d0f2c8a7e4b1d0f2c8a7e4', requestedAt: Date.now() - 15_000 },
-  ];
+  ]);
+  const handleSign   = useCallback((id: string) => setPendingCosigns(p => p.filter(x => x.id !== id)), []);
+  const handleReject = useCallback((id: string) => setPendingCosigns(p => p.filter(x => x.id !== id)), []);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -373,7 +373,7 @@ export default function WalletScreen() {
 
           <BalanceTile hidden={hidden} toggle={toggle} />
           <ActionTiles />
-          <PendingCosigns items={pendingCosigns} />
+          <PendingCosigns items={pendingCosigns} onSign={handleSign} onReject={handleReject} />
           <ActivityTile refreshing={refreshing} onRefresh={handleRefresh} />
 
         </View>

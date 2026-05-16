@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useRef, useState } from 'react';
 import {
   NativeScrollEvent, NativeSyntheticEvent,
-  ScrollView, StyleSheet, Text, View, useWindowDimensions,
+  Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
@@ -18,7 +18,9 @@ export interface PendingCosign {
 }
 
 interface Props {
-  items: PendingCosign[];
+  items:    PendingCosign[];
+  onSign:   (id: string) => void;
+  onReject: (id: string) => void;
 }
 
 function short(hash: string) {
@@ -31,7 +33,7 @@ const CARD_GAP = 10;
 // cardW accounts for wallet grid's paddingHorizontal: 16 on each side
 const WALLET_PAD = 32;
 
-export const PendingCosigns = memo(function PendingCosigns({ items }: Props) {
+export const PendingCosigns = memo(function PendingCosigns({ items, onSign, onReject }: Props) {
   const { colors }     = useTheme();
   const { width: sw }  = useWindowDimensions();
   const cardW          = sw - WALLET_PAD - PEEK;
@@ -73,6 +75,8 @@ export const PendingCosigns = memo(function PendingCosigns({ items }: Props) {
                 key={item.id}
                 item={item}
                 cardWidth={cardW}
+                onSign={onSign}
+                onReject={onReject}
               />
             ))}
           </ScrollView>
@@ -109,13 +113,17 @@ function EmptyState() {
 }
 
 const CosignCard = memo(function CosignCard({
-  item, cardWidth,
+  item, cardWidth, onSign, onReject,
 }: {
-  item: PendingCosign;
+  item:     PendingCosign;
   cardWidth: number;
+  onSign:   (id: string) => void;
+  onReject: (id: string) => void;
 }) {
-  const { colors } = useTheme();
-  const glass      = useGlass();
+  const { colors }     = useTheme();
+  const glass          = useGlass();
+  const handleSign     = useCallback(() => onSign(item.id),   [onSign,   item.id]);
+  const handleReject   = useCallback(() => onReject(item.id), [onReject, item.id]);
 
   return (
     <View style={[S.card, glass, { width: cardWidth, borderColor: colors.border }]}>
@@ -148,14 +156,24 @@ const CosignCard = memo(function CosignCard({
         <Text style={[S.feeVal, { color: colors.primary }]}>+{item.feeSol.toFixed(6)} SOL</Text>
       </View>
 
-      {/* Actions — disabled in preview; multisig signing not yet wired */}
-      <View style={S.actions} pointerEvents="none">
-        <View style={[S.rejectBtn, { borderColor: colors.border, backgroundColor: colors.surface2, opacity: 0.4 }]}>
+      {/* Actions */}
+      <View style={S.actions}>
+        <Pressable
+          onPress={handleReject}
+          style={({ pressed }) => [
+            S.rejectBtn,
+            { borderColor: colors.border, backgroundColor: colors.surface2, opacity: pressed ? 0.5 : 1 },
+          ]}
+        >
           <Feather name="x" size={14} color={colors.textTertiary} />
-        </View>
-        <View style={[S.signBtn, { backgroundColor: colors.surface2, borderWidth: 0.5, borderColor: colors.border, opacity: 0.6 }]}>
-          <Text style={[S.signText, { color: colors.textTertiary }]}>Preview — not yet active</Text>
-        </View>
+        </Pressable>
+        <Pressable
+          onPress={handleSign}
+          style={({ pressed }) => [S.signBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.82 : 1 }]}
+        >
+          <Feather name="lock" size={12} color={colors.textInverse} />
+          <Text style={[S.signText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
+        </Pressable>
       </View>
     </View>
   );
