@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -22,6 +22,11 @@ import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import { useAddressBook } from "@/src/services/addressBook";
+import {
+  findSuspiciousMatches,
+  splitForHighlight,
+  type SuspiciousMatch,
+} from "@/src/services/addressPoisoning";
 import { fontFamily as FF, useTheme } from "@/theme";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -89,12 +94,20 @@ export function RecipientPicker() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [poisonAck, setPoisonAck] = useState(false);
   const { tokens } = useWalletBalance();
-  const { entries: addressBook } = useAddressBook();
+  const { entries: addressBook, deleteRecipient } = useAddressBook();
   const token: TokenOption = tokenByName(selectedSymbol, tokens);
 
   const trimmedAddress = address.trim();
   const isValid = isValidSolanaAddress(trimmedAddress);
+
+  // Recompute lookalike matches only when input or saved book changes.
+  // Matches are sorted by combined overlap so the worst offender renders first.
+  const suspicious: SuspiciousMatch[] = useMemo(() => {
+    if (!isValid) return [];
+    return findSuspiciousMatches(trimmedAddress, addressBook);
+  }, [isValid, trimmedAddress, addressBook]);
 
   function pushToAmount(recipient: string, prefilledAmount?: string) {
     router.push({
@@ -110,8 +123,17 @@ export function RecipientPicker() {
     });
   }
 
+  // Lookalike-acknowledge gate: first Continue tap dismisses the warning,
+  // a second tap commits the send. Mirrors Phantom/Backpack 2026 UX.
+  const needsPoisonAck = suspicious.length > 0 && !poisonAck;
+
   function handleNext() {
     if (!isValid) return;
+    if (needsPoisonAck) {
+      haptics.warning();
+      setPoisonAck(true);
+      return;
+    }
     haptics.confirm();
     pushToAmount(trimmedAddress);
   }
@@ -130,7 +152,7 @@ export function RecipientPicker() {
     haptics.tap();
     try {
       const text = await Clipboard.getStringAsync();
-      if (text) setAddress(text);
+      if (text) handleAddressChange(text);
     } catch {
       // non-fatal
     }
@@ -139,6 +161,42 @@ export function RecipientPicker() {
   function handleSelectRecent(pubkey: string) {
     haptics.select();
     setAddress(pubkey);
+    setPoisonAck(false);
+  }
+
+  function handleAddressChange(next: string) {
+    setAddress(next);
+    // Reset the lookalike-ack any time the input meaningfully changes; a
+    // fresh paste should always re-prompt for confirmation.
+    if (poisonAck) setPoisonAck(false);
+  }
+
+  function handleLongPressRecent(entry: { pubkey: string; label: string }) {
+    haptics.warning();
+    // Alert.prompt is iOS-only — rename lives in the full address-book screen
+    // (Settings → address book). Keep the long-press menu cross-platform with
+    // Manage + Delete only.
+    Alert.alert(entry.label, "manage saved recipient", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Manage",
+        onPress: () => router.push("/contacts"),
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          Alert.alert("Delete recipient?", entry.label, [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Delete",
+              style: "destructive",
+              onPress: () => void deleteRecipient(entry.pubkey),
+            },
+          ]);
+        },
+      },
+    ]);
   }
 
   return (
@@ -196,15 +254,31 @@ export function RecipientPicker() {
               </View>
             </Pressable>
 
-            {addressBook.length > 0 ? (
-              <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-                <Text style={[S.tileLabel, { color: colors.textTertiary }]}>RECENT</Text>
+            {/* ── Recents tile (address book) ── */}
+            <View style={[S.tile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+              <View style={S.recentHeader}>
+                <Text style={[S.tileLabel, S.tileLabelInline, { color: colors.textTertiary }]}>RECENT</Text>
+                <Text style={[S.recentNote, { color: colors.textTertiary }]}>
+                  stored locally · never sent
+                </Text>
+              </View>
+              {addressBook.length === 0 ? (
+                <View style={[S.recentEmpty, { borderColor: colors.border }]}>
+                  <Feather name="book-open" size={16} color={colors.textTertiary} />
+                  <Text style={[S.recentEmptyText, { color: colors.textTertiary }]}>
+                    recent recipients will appear here
+                  </Text>
+                </View>
+              ) : (
                 <View style={S.recentList}>
                   {addressBook.slice(0, 5).map((entry) => (
                     <Pressable
+                      accessibilityHint="Long-press for manage and delete options"
                       accessibilityLabel={`Use recent recipient ${entry.label}`}
                       accessibilityRole="button"
+                      delayLongPress={350}
                       key={entry.pubkey}
+                      onLongPress={() => handleLongPressRecent(entry)}
                       onPress={() => handleSelectRecent(entry.pubkey)}
                       style={({ pressed }) => [
                         S.recentRow,
@@ -236,6 +310,76 @@ export function RecipientPicker() {
                     </Pressable>
                   ))}
                 </View>
+              )}
+            </View>
+
+            {/* ── Address-poisoning lookalike alert ── */}
+            {suspicious.length > 0 ? (
+              <View
+                style={[
+                  S.poisonPanel,
+                  {
+                    backgroundColor: colors.warningSubtle,
+                    borderColor: colors.warning,
+                  },
+                ]}
+              >
+                <View style={S.poisonHeader}>
+                  <Feather name="alert-triangle" size={16} color={colors.warning} />
+                  <Text style={[S.poisonTitle, { color: colors.warning }]}>
+                    this address looks similar to a saved contact
+                  </Text>
+                </View>
+                <Text style={[S.poisonBody, { color: colors.textSecondary }]}>
+                  Address-poisoning attackers grind lookalike addresses that share a
+                  few leading or trailing chars. Verify the full address before
+                  sending — mistakes are not reversible.
+                </Text>
+                {suspicious.slice(0, 2).map(({ entry, prefixLen, suffixLen }) => {
+                  const [savedHead, savedMid, savedTail] = splitForHighlight(
+                    entry.pubkey,
+                    prefixLen,
+                    suffixLen,
+                  );
+                  const [pastedHead, pastedMid, pastedTail] = splitForHighlight(
+                    trimmedAddress,
+                    prefixLen,
+                    suffixLen,
+                  );
+                  return (
+                    <View key={entry.pubkey} style={S.poisonRow}>
+                      <View style={S.poisonRowMeta}>
+                        <Text style={[S.poisonRowLabel, { color: colors.textTertiary }]}>
+                          saved · {entry.label}
+                        </Text>
+                        <Text style={[S.poisonRowMono, { color: colors.textPrimary }]}>
+                          <Text style={{ color: colors.textPrimary }}>{savedHead}</Text>
+                          <Text style={{ color: colors.warning }}>{savedMid}</Text>
+                          <Text style={{ color: colors.textPrimary }}>{savedTail}</Text>
+                        </Text>
+                      </View>
+                      <View style={S.poisonRowMeta}>
+                        <Text style={[S.poisonRowLabel, { color: colors.textTertiary }]}>
+                          pasted
+                        </Text>
+                        <Text style={[S.poisonRowMono, { color: colors.textPrimary }]}>
+                          <Text style={{ color: colors.textPrimary }}>{pastedHead}</Text>
+                          <Text style={{ color: colors.error }}>{pastedMid}</Text>
+                          <Text style={{ color: colors.textPrimary }}>{pastedTail}</Text>
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+                {poisonAck ? (
+                  <Text style={[S.poisonAck, { color: colors.warning }]}>
+                    Tap Continue again to confirm send.
+                  </Text>
+                ) : (
+                  <Text style={[S.poisonAck, { color: colors.textTertiary }]}>
+                    Continue requires an extra tap to acknowledge.
+                  </Text>
+                )}
               </View>
             ) : null}
 
@@ -248,7 +392,7 @@ export function RecipientPicker() {
                   autoCorrect={false}
                   multiline={false}
                   numberOfLines={1}
-                  onChangeText={setAddress}
+                  onChangeText={handleAddressChange}
                   placeholder="Solana address"
                   placeholderTextColor={colors.textTertiary}
                   selectionColor={colors.primary}
@@ -292,10 +436,10 @@ export function RecipientPicker() {
         <View style={S.footer}>
           <DepthButton
             disabled={!isValid}
-            label="Continue"
+            label={needsPoisonAck ? "Continue (verify address)" : "Continue"}
             onPress={handleNext}
             size="lg"
-            tone="cyan"
+            tone={needsPoisonAck ? "amber" : "cyan"}
             variant="primary"
           />
         </View>
@@ -321,7 +465,7 @@ export function RecipientPicker() {
             return;
           }
           haptics.confirm();
-          setAddress(result.address);
+          handleAddressChange(result.address);
           // SPL send is gated off (TokenPicker.isSendable allows SOL only),
           // so ignore amount when an spl-token mint was specified.
           if (result.amount && !result.splToken) {
@@ -385,6 +529,9 @@ const S = StyleSheet.create({
     marginBottom: 10,
     textTransform: "uppercase",
   },
+  tileLabelInline: {
+    marginBottom: 0,
+  },
 
   // token tile
   tokenRow: {
@@ -416,6 +563,32 @@ const S = StyleSheet.create({
   },
 
   // recent recipients
+  recentHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  recentNote: {
+    fontFamily: FF.sans,
+    fontSize: 10.5,
+    letterSpacing: 0.4,
+  },
+  recentEmpty: {
+    alignItems: "center",
+    borderRadius: 12,
+    borderStyle: "dashed",
+    borderWidth: 0.5,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
+  recentEmptyText: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+  },
   recentList: {
     gap: 8,
   },
@@ -454,6 +627,51 @@ const S = StyleSheet.create({
   recentCountText: {
     fontFamily: FF.mono,
     fontSize: 11,
+  },
+
+  // poisoning warning panel
+  poisonPanel: {
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+    padding: 14,
+  },
+  poisonHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  poisonTitle: {
+    flex: 1,
+    fontFamily: FF.sansSb,
+    fontSize: 13,
+  },
+  poisonBody: {
+    fontFamily: FF.sans,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  poisonRow: {
+    gap: 6,
+  },
+  poisonRowMeta: {
+    gap: 2,
+  },
+  poisonRowLabel: {
+    fontFamily: FF.sansMd,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+  },
+  poisonRowMono: {
+    fontFamily: FF.mono,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  poisonAck: {
+    fontFamily: FF.sansMd,
+    fontSize: 12,
+    textAlign: "right",
   },
 
   // address tile
