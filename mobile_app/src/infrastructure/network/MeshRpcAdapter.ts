@@ -74,8 +74,11 @@ export class MeshRpcAdapter implements IRpcAdapter {
       } else {
         pending.resolve(resp.result);
       }
-    } catch {
-      // Malformed response — ignore, let pending request time out.
+    } catch (err) {
+      // Malformed response — log so the relay-health surface can diagnose
+      // beacons returning partial/non-JSON frames. The pending request still
+      // times out on its own clock. Per AUDIT § 3 S-1.
+      console.warn('[MeshRpcAdapter] malformed response from beacon', err);
     }
   }
 
