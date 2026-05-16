@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
+import { PreviewedActions } from '@/components/primitives';
 import { BubbleHeader } from './BubbleHeader';
 import type { ReqAddrMsg } from './types';
 
@@ -26,9 +27,13 @@ export const RequestAddressBubble = memo(function RequestAddressBubble({ m }: Pr
           </View>
         </View>
         {!m.me && (
-          <Pressable style={[S.fullBtn, { backgroundColor: colors.primary, marginTop: 4 }]}>
-            <Text style={[S.btnText, { color: colors.background }]}>SHARE {m.asset} ADDRESS</Text>
-          </Pressable>
+          // Dead Pressable (no onPress). Wrap until the share-address reply
+          // flow is wired. Per AUDIT § preview-pill discipline.
+          <PreviewedActions hint="share-address not yet wired" style={{ marginTop: 4 }}>
+            <View style={[S.fullBtn, { backgroundColor: colors.primary }]}>
+              <Text style={[S.btnText, { color: colors.background }]}>SHARE {m.asset} ADDRESS</Text>
+            </View>
+          </PreviewedActions>
         )}
       </View>
     </View>
