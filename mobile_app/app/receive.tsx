@@ -200,7 +200,7 @@ export default function ReceiveScreen() {
           {/* ── header ── */}
           <View style={S.header}>
             <View>
-              <Text style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
+              <Text accessibilityRole="header" style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
               <Text style={[S.screenTitle, { color: colors.textPrimary }]}>receive</Text>
             </View>
             <Pressable
