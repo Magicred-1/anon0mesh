@@ -268,7 +268,7 @@ export default function SettingsScreen() {
               style={[S.signOut, { borderColor: colors.error + '38', opacity: walletLoading ? 0.5 : 1 }]}
             >
               <Text style={[S.signOutText, { color: colors.error }]}>
-                {walletLoading ? 'DISCONNECTING…' : 'SIGN OUT · CLEAR KEYS'}
+                {walletLoading ? 'DISCONNECTING…' : 'DISCONNECT WALLET'}
               </Text>
             </Pressable>
           </View>
