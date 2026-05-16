@@ -493,7 +493,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     };
     secureSet(SecureKeys.LXMF_IDENTITY, JSON.stringify(blob))
       .then(() => setStoredIdentity(blob))
-      .catch(() => {});
+      .catch((err) => {
+        // Off-grid audit § 3: identity persist failure silently dropped means
+        // next cold start can spawn a new identity, losing message continuity.
+        // Surface it so we at least know when secure storage rejected.
+        console.warn('[Lxmf] persist identity failed (next start may re-generate)', err);
+      });
   }, [isRunning, lxmf.status?.addressHex, storedIdentity, getIdentityHex]);
 
   const resetIdentity = useCallback(async () => {
@@ -605,7 +610,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         const parsed = JSON.parse(raw) as LxmfGroup[];
         groupMapRef.current = Object.fromEntries(parsed.map(g => [g.addrHex, g]));
         setGroups(parsed);
-      } catch {}
+      } catch (err) {
+        // Off-grid audit § 3: corrupt JSON in persisted groups silently drops
+        // every group on the device. Worth knowing about, even if recovery
+        // path is "user re-joins the groups".
+        console.warn('[Lxmf] failed to parse persisted groups (groups not restored)', err);
+      }
     });
   }, []);
 

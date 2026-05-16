@@ -34,6 +34,49 @@ const APP_IDENTITY = {
 // `src/infrastructure/network/connection.ts`.
 export { solanaConnection };
 
+// ── Timeout primitive ────────────────────────────────────────────────────────
+// Direct solanaConnection.* calls bypass IRpcAdapter and inherit no per-call
+// budget. On a flaky cell / NAT-flap to mesh, the underlying fetch can hang
+// past the 60s confirmation budget, so the user sees a frozen review screen
+// with no recovery path. We wrap every direct RPC site in withTimeout(...) and
+// throw a typed TimeoutError so callers can render an inline "request timed
+// out — retry?" affordance instead of bubbling a generic error. See
+// OFFGRID_FALLBACK_AUDIT.md (13-site unbounded-await audit).
+
+export class TimeoutError extends Error {
+  constructor(label: string, ms: number) {
+    super(`${label} timed out after ${ms}ms`);
+    this.name = "TimeoutError";
+  }
+}
+
+export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new TimeoutError(label, ms));
+    }, ms);
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+const DIRECT_RPC_TIMEOUT_MS = 10_000;
+
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;
   rpcAdapter: IRpcAdapter;
@@ -122,6 +165,19 @@ export type ConfirmResult =
 
 interface ConfirmOptions {
   signal?: AbortSignal;
+  /**
+   * Optional callback returning the *current* RPC adapter. When the user
+   * transitions online ↔ mesh mid-flight, the captured `rpcAdapter` argument
+   * goes stale and continues polling a dead transport for the rest of the
+   * budget. We re-read on each iteration and emit a one-shot console.warn so
+   * the failure mode shows up in logs. Full hot-swap (cancel current poll,
+   * restart on the new adapter with the same signature) is the next step —
+   * see OFFGRID_FALLBACK_AUDIT.md § C-4.
+   *
+   * Log-only here so we never introduce a regression in the happy path while
+   * the safer full hot-swap is being designed.
+   */
+  getCurrentAdapter?: () => IRpcAdapter;
 }
 
 const ONLINE_POLL_INTERVAL_MS = 500;
@@ -151,10 +207,34 @@ export async function confirmTransaction(
   const budgetMs = isMesh ? MESH_CONFIRM_BUDGET_MS : ONLINE_CONFIRM_BUDGET_MS;
   const deadline = Date.now() + budgetMs;
   const signal = options?.signal;
+  const getCurrentAdapter = options?.getCurrentAdapter;
+  const initialMode = rpcAdapter.mode;
+  let adapterMismatchLogged = false;
 
   while (Date.now() < deadline) {
     if (signal?.aborted) {
       return { kind: 'cancelled', signature };
+    }
+
+    // C-4: detect (but do not yet act on) an online↔mesh transition that
+    // happened after this poll loop started. The captured `rpcAdapter` keeps
+    // polling its original transport; if the user dropped to mesh mid-send,
+    // we'd silently burn the whole budget waiting on a dead direct RPC. Log
+    // once so the case is visible in field reports.
+    if (getCurrentAdapter && !adapterMismatchLogged) {
+      try {
+        const current = getCurrentAdapter();
+        if (current.mode !== initialMode) {
+          console.warn('[confirmTransaction] adapter mode changed mid-flight; still polling original transport', {
+            signature,
+            initialMode,
+            currentMode: current.mode,
+          });
+          adapterMismatchLogged = true;
+        }
+      } catch {
+        // getCurrentAdapter must never break confirmation polling.
+      }
     }
 
     try {
@@ -265,7 +345,11 @@ async function buildSplTransferTransaction({
   // ATA existence is still a direct Solana RPC read because IRpcAdapter only
   // exposes balance/blockhash/submission. Submission itself uses the selected
   // network adapter, so mesh relay still carries the signed transaction.
-  const toAtaInfo = await solanaConnection.getAccountInfo(toAta, "confirmed");
+  const toAtaInfo = await withTimeout(
+    solanaConnection.getAccountInfo(toAta, "confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "ATA lookup",
+  );
   if (!toAtaInfo) {
     tx.add(createAssociatedTokenAccountInstruction(fromPubkey, toAta, toOwner, mint));
   }
@@ -356,12 +440,20 @@ export async function estimateSolTransferFeeLamports({
   }
 
   const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL });
-  const { blockhash } = await solanaConnection.getLatestBlockhash("confirmed");
+  const { blockhash } = await withTimeout(
+    solanaConnection.getLatestBlockhash("confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SOL fee blockhash",
+  );
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
 
   // Fee estimate stays direct-RPC until IRpcAdapter exposes getFeeForMessage.
-  const fee = await solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed");
+  const fee = await withTimeout(
+    solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SOL fee estimate",
+  );
   if (fee.value === null) {
     throw new Error("Fee unavailable");
   }
@@ -389,12 +481,20 @@ export async function estimateSplTransferFeeLamports({
     decimals,
     programId,
   });
-  const { blockhash } = await solanaConnection.getLatestBlockhash("confirmed");
+  const { blockhash } = await withTimeout(
+    solanaConnection.getLatestBlockhash("confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SPL fee blockhash",
+  );
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
 
   // Fee estimate stays direct-RPC until IRpcAdapter exposes getFeeForMessage.
-  const fee = await solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed");
+  const fee = await withTimeout(
+    solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed"),
+    DIRECT_RPC_TIMEOUT_MS,
+    "SPL fee estimate",
+  );
   if (fee.value === null) {
     throw new Error("Fee unavailable");
   }
