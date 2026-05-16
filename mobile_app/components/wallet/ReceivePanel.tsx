@@ -37,7 +37,7 @@ export const ReceivePanel = memo(function ReceivePanel() {
   return (
     <View style={S.panel}>
       <View style={[S.qrCard, glass, { alignItems: 'center' }]}>
-        <Text style={[S.cardLabel, { color: colors.textTertiary, marginBottom: 16 }]}>SOLANA ADDRESS</Text>
+        <Text accessibilityRole="header" style={[S.cardLabel, { color: colors.textTertiary, marginBottom: 16 }]}>SOLANA ADDRESS</Text>
         <View style={[S.qrWrap, { borderColor: colors.border }]}>
           <QRCode data={address} size={180} />
         </View>

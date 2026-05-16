@@ -19,6 +19,7 @@ export function HomeHero() {
     <View style={[styles.row, { paddingHorizontal: spacing[5], paddingVertical: spacing[3] }]}>
       <View style={styles.kickerBlock}>
         <Text
+          accessibilityRole="header"
           style={{
             color: colors.textTertiary,
             fontFamily: fontFamily.sansMd,

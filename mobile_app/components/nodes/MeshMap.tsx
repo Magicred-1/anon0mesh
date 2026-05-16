@@ -493,7 +493,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
       {/* Header — full row is tappable for expand/collapse; maximize captures its own press */}
       <Pressable onPress={toggle} style={[S.header, { borderBottomColor: expanded && !fullscreen ? colors.border : 'transparent' }]}>
         <View style={S.headerPress}>
-          <Text style={[S.headerLabel, { color: colors.textTertiary }]}>
+          <Text accessibilityRole="header" style={[S.headerLabel, { color: colors.textTertiary }]}>
             MESH TOPOLOGY
             <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
             <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>

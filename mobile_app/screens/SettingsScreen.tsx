@@ -108,7 +108,7 @@ export default function SettingsScreen() {
               >
                 {/* ── Page 0: Anonmesh identity ── */}
                 <View style={[S.slide, { width: cardWidth }]}>
-                  <Text style={[S.idLabel, { color: colors.textTertiary }]}>YOUR IDENTITY</Text>
+                  <Text accessibilityRole="header" style={[S.idLabel, { color: colors.textTertiary }]}>YOUR IDENTITY</Text>
                   <Pressable
                     onPress={() => { setQrTab('anonmesh'); setQrOpen(true); }}
                     style={[S.qrWrap, { backgroundColor: colors.surface2, borderColor: colors.border }]}
@@ -136,7 +136,7 @@ export default function SettingsScreen() {
                 <View style={[S.slide, { width: cardWidth }]}>
                   <View style={S.solLabel}>
                     <SolanaIcon size={10} color={colors.textTertiary} />
-                    <Text style={[S.idLabel, { color: colors.textTertiary }]}>SOLANA WALLET</Text>
+                    <Text accessibilityRole="header" style={[S.idLabel, { color: colors.textTertiary }]}>SOLANA WALLET</Text>
                   </View>
 
                   <Pressable
