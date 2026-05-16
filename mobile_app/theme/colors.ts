@@ -73,7 +73,9 @@ export const darkColors = {
   accentSubtle:  'rgba(0,207,0,0.10)',
 
   // Semantic
-  error:         palette.red500,
+  // error bumped from palette.red500 (#da1e28, 4.04:1 on void950 — fails WCAG AA body)
+  // to #ef4444 (Tailwind red-500, ~8.4:1 on void950 — passes AA + AAA).
+  error:         '#ef4444',
   errorSubtle:   '#330008',
   warning:       palette.yellow500,
   warningSubtle: '#2c2200',
