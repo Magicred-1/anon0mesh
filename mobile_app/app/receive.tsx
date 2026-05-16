@@ -181,7 +181,7 @@ export default function ReceiveScreen() {
             <View style={[S.grid, { flex: 1, justifyContent: "center", alignItems: "center" }]}>
               <Text style={[S.noWalletTitle, { color: colors.textPrimary }]}>Set up your wallet to share an address</Text>
               <Text style={[S.noWalletSub, { color: colors.textSecondary }]}>
-                Create or connect a wallet from the home tab — your receive QR shows up here once it's ready.
+                Create or connect a wallet from the home tab — your receive QR shows up here once it&apos;s ready.
               </Text>
             </View>
           </SafeAreaView>
