@@ -105,10 +105,6 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      {/* Bottom-sheet split pattern: dismissArea is a flex:1 Pressable that
-          fills only the space above the sheet (column flex with
-          justifyContent:flex-end). Sheet has no parent Pressable so nested
-          action buttons receive presses without responder competition. */}
       <View style={S.root}>
         <Pressable
           accessible={false}
@@ -215,7 +211,6 @@ const S = StyleSheet.create({
   },
   content: {
     gap: 16,
-    padding: 16,
     paddingBottom: 24,
   },
   header: {

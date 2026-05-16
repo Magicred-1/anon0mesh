@@ -10,6 +10,7 @@ import { useLxmfContext } from '@/context/LxmfContext';
 import { type Href, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import { useNotificationEnabled } from '@/hooks/useNotificationEnabled';
 import { useBiometricEnabled } from '@/hooks/useBiometricEnabled';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
@@ -197,7 +198,8 @@ export default function SettingsScreen() {
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                       <Pill label="CONNECTED" variant="primary" dot />
                       <Pill label="LoRa"      variant="default" />
-                      <Pill label="78% BATT"  variant="default" />
+                      {/* 78% BATT pill removed per AUDIT T11 / ROADMAP § 0.B.5
+                          — no battery telemetry from the pairing API today. */}
                     </View>
                   </View>
                 </View>
@@ -250,7 +252,7 @@ export default function SettingsScreen() {
           <SectionLabel>about</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
-              <SettingsRow label="app version" right={<Text style={[S.valueText, { color: colors.textSecondary }]}>0.4.1 · build 2026.04</Text>} last />
+              <SettingsRow label="app version" right={<Text style={[S.valueText, { color: colors.textSecondary }]}>{Constants.expoConfig?.version ?? '—'}</Text>} last />
             </View>
 
             <Pressable

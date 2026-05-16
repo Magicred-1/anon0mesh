@@ -1,11 +1,12 @@
 import React, { memo, useCallback, useRef, useState } from 'react';
 import {
   NativeScrollEvent, NativeSyntheticEvent,
-  ScrollView, StyleSheet, Text, View, Pressable, useWindowDimensions,
+  Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { relTime } from '@/src/utils/relTime';
 
 export interface PendingCosign {
   id:          string;
@@ -20,13 +21,6 @@ interface Props {
   items:    PendingCosign[];
   onSign:   (id: string) => void;
   onReject: (id: string) => void;
-}
-
-function relTime(ms: number) {
-  const d = Date.now() - ms;
-  if (d < 60_000)    return 'just now';
-  if (d < 3_600_000) return `${Math.floor(d / 60_000)}m ago`;
-  return `${Math.floor(d / 3_600_000)}h ago`;
 }
 
 function short(hash: string) {
@@ -56,12 +50,10 @@ export const PendingCosigns = memo(function PendingCosigns({ items, onSign, onRe
     <View style={S.wrap}>
       {/* Section header */}
       <View style={S.labelRow}>
-        <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>PENDING CO-SIGNS</Text>
-        {!isEmpty && (
-          <View style={[S.badge, { backgroundColor: colors.primary + '22', borderColor: colors.primary + '44' }]}>
-            <Text style={[S.badgeText, { color: colors.primary }]}>{items.length}</Text>
-          </View>
-        )}
+        <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>MULTISIG CO-SIGNS</Text>
+        <View style={[S.badge, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+          <Text style={[S.badgeText, { color: colors.textTertiary }]}>PREVIEW</Text>
+        </View>
       </View>
 
       {isEmpty ? (
@@ -115,7 +107,7 @@ function EmptyState() {
   return (
     <View style={[S.emptyCard, glass, { borderColor: colors.border }]}>
       <MaterialCommunityIcons name="bird" size={20} color={colors.textTertiary} />
-      <Text style={[S.emptyText, { color: colors.textTertiary }]}>No pending requests</Text>
+      <Text style={[S.emptyText, { color: colors.textTertiary }]}>Multisig co-signs not yet live</Text>
     </View>
   );
 }
@@ -123,15 +115,15 @@ function EmptyState() {
 const CosignCard = memo(function CosignCard({
   item, cardWidth, onSign, onReject,
 }: {
-  item: PendingCosign;
+  item:     PendingCosign;
   cardWidth: number;
-  onSign: (id: string) => void;
+  onSign:   (id: string) => void;
   onReject: (id: string) => void;
 }) {
-  const { colors } = useTheme();
-  const glass      = useGlass();
-  const handleSign   = useCallback(() => onSign(item.id),   [item.id, onSign]);
-  const handleReject = useCallback(() => onReject(item.id), [item.id, onReject]);
+  const { colors }     = useTheme();
+  const glass          = useGlass();
+  const handleSign     = useCallback(() => onSign(item.id),   [onSign,   item.id]);
+  const handleReject   = useCallback(() => onReject(item.id), [onReject, item.id]);
 
   return (
     <View style={[S.card, glass, { width: cardWidth, borderColor: colors.border }]}>

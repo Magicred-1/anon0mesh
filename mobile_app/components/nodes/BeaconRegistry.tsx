@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef, useCallback, useEffect } from 'react';
+import React, { memo, useState, useRef, useCallback } from 'react';
 import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
@@ -38,15 +38,14 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const [stakeAmt, setStakeAmt]   = useState(0.5);
   const [rawAmt, setRawAmt]       = useState('0.5');
   const amtInputRef = useRef<TextInput>(null);
-  const autoActivatedRef  = useRef(false);
   const sheetAnim         = useRef(new Animated.Value(0)).current;
   const stakeAnim         = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (!hasInternet || active || autoActivatedRef.current) return;
-    autoActivatedRef.current = true;
-    setBeaconMode(true);
-  }, [hasInternet, active, setBeaconMode]);
+  // Auto-activate on first internet was removed per AUDIT T10 / ROADMAP § 0.B.3:
+  // beacon mode carries trust implications (relaying others' traffic) so the
+  // user has to opt in via the Register-as-Beacon control. hasInternet is still
+  // consumed for UI affordances.
+  void hasInternet;
 
   const openModal = useCallback(() => {
     setModal(true);
@@ -196,12 +195,22 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               ))}
             </View>
 
+            {/* CTA flips the local beacon-mode flag. Stake + biometric co-sign
+                flow remains future work; the JS-side opt-in is the consent gate
+                today. */}
             <Pressable
               onPress={() => { setBeaconMode(true); dismiss(); }}
-              style={({ pressed }) => [S.actionBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Enable beacon mode"
+              style={({ pressed }) => [
+                S.actionBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
             >
-              <Feather name="lock" size={14} color={colors.textInverse} />
-              <Text style={[S.actionText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
+              <Text style={[S.actionText, { color: '#08080A' }]}>Enable Beacon Mode</Text>
             </Pressable>
           </Animated.View>
         </View>
@@ -275,13 +284,12 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
               </View>
             </View>
 
-            <Pressable
-              onPress={dismissStake}
-              style={({ pressed }) => [S.actionBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.88 : 1 }]}
+            <View
+              style={[S.actionBtn, { backgroundColor: colors.surface2, borderWidth: 0.5, borderColor: colors.border, opacity: 0.6 }]}
+              pointerEvents="none"
             >
-              <Feather name="lock" size={14} color={colors.textInverse} />
-              <Text style={[S.actionText, { color: colors.textInverse }]}>Sign with Biometrics</Text>
-            </Pressable>
+              <Text style={[S.actionText, { color: colors.textTertiary }]}>Preview — not yet active</Text>
+            </View>
           </Animated.View>
         </KeyboardAvoidingView>
       </Modal>

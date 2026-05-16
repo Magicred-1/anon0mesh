@@ -1,16 +1,19 @@
 import * as Clipboard from "expo-clipboard";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Pill, SlideToConfirm } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
+import { PigeonLoader } from "@/components/ui/PigeonLoader";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
 import { saveAddressBookRecipient } from "@/src/services/addressBook";
+import { describeSendFailure, formatRawError } from "@/src/services/sendErrorMessages";
 import {
+  confirmTransaction,
   estimateSplTransferFeeLamports,
   estimateSolTransferFeeLamports,
   sendSplTransfer,
@@ -19,6 +22,8 @@ import {
 } from "@/src/services/sendTransaction";
 import { summarizeError } from "@/src/utils/errors";
 import { fontFamily as FF, useTheme } from "@/theme";
+
+type TxPhase = "submitting" | "confirming" | null;
 
 function shortAddress(addr: string): string {
   if (!addr || addr.length <= 14) return addr;
@@ -119,7 +124,18 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
   const [isConfirming, setIsConfirming] = useState(false);
+  const [txPhase, setTxPhase] = useState<TxPhase>(null);
   const [sliderResetKey, setSliderResetKey] = useState(0);
+  const confirmAbortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight confirmation poll when ReviewCard unmounts (user
+  // navigated away mid-send). Prevents stale router.replace on an unmounted
+  // tree and stops a polling loop that nobody is listening to.
+  useEffect(() => {
+    return () => {
+      confirmAbortRef.current?.abort();
+    };
+  }, []);
   const normalizedMint = typeof mintAddress === "string" ? mintAddress : "";
   const normalizedProgramId = typeof programId === "string" ? programId : "";
   const tokenDecimals =
@@ -207,6 +223,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     }
 
     setError(null);
+    setTxPhase("submitting");
     setIsConfirming(true);
 
     try {
@@ -230,13 +247,59 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
 
       await saveAddressBookRecipient(to);
 
-      router.push({
-        pathname: "/send/success",
-        params: { amount, symbol, txId: result.signature },
+      // Phase 2: poll the chain for real confirmation. Loader stays visible
+      // with sublabel updated to "Confirming on devnet". Cancellable via the
+      // unmount cleanup above.
+      setTxPhase("confirming");
+      const controller = new AbortController();
+      confirmAbortRef.current = controller;
+      const conf = await confirmTransaction(rpcAdapter, result.signature, {
+        signal: controller.signal,
       });
+      confirmAbortRef.current = null;
+
+      if (conf.kind === "cancelled") {
+        // Caller already unmounted; nothing to do here.
+        return;
+      }
+
+      if (conf.kind === "confirmed") {
+        router.replace({
+          pathname: "/send/success",
+          params: { amount, symbol, txId: result.signature },
+        });
+        return;
+      }
+
+      // conf.kind === "failed"
+      const { subtitle, pillLabel } = describeSendFailure(conf, rpcAdapter.mode);
+      const rawError = formatRawError(conf.err);
+      console.error("[send/ReviewCard] confirmation failed", {
+        reason: conf.reason,
+        signature: conf.signature,
+        rawError,
+      });
+      // Use push (not replace) so the failure screen sits ON TOP of Review
+      // in the stack. "Try again" on FailureCard does router.back() and the
+      // user lands back on Review with form state preserved.
+      router.push({
+        pathname: "/send/failure",
+        params: {
+          amount,
+          symbol,
+          txId: result.signature,
+          subtitle,
+          pillLabel,
+          rawError,
+          reason: conf.reason,
+        },
+      });
+      return;
     } catch (err: unknown) {
       const summary = summarizeError(err, "Transaction failed before the wallet returned a reason");
-      console.error("[send/ReviewCard] transfer failed", {
+      const isUserCancel = err instanceof TransactionNotApprovedError;
+      const logFn = isUserCancel ? console.warn : console.error;
+      logFn("[send/ReviewCard] transfer failed", {
         message: summary.message,
         name: summary.name ?? null,
         code: summary.code ?? null,
@@ -245,18 +308,17 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         symbol,
         mintAddress: normalizedMint || null,
         networkMode: rpcAdapter.mode,
+        userCancel: isUserCancel,
       });
-      setError(
-        err instanceof TransactionNotApprovedError
-          ? {
-              kind: "approval",
-              message: "Approve the transaction in your wallet to submit it.",
-            }
-          : { kind: "send", message: summary.message },
-      );
+      // User-cancel returns silently per Solana Mobile guidance (LESSON
+      // 2026-05-13) — the wallet popup is the consent surface, an inline banner
+      // double-prompts and reads like an error.
+      if (!isUserCancel) {
+        setError({ kind: "send", message: summary.message });
+      }
       setSliderResetKey((k) => k + 1);
-    } finally {
       setIsConfirming(false);
+      setTxPhase(null);
     }
   }
 
@@ -266,17 +328,34 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
   }
 
   return (
+    <>
     <SendScaffold
       onBack={() => router.back()}
       step={3}
       title="review"
       footer={
         isConfirming ? (
-          <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-            <Feather name="smartphone" size={16} color={colors.primary} />
-            <Text style={[S.waitingFooterText, { color: colors.textPrimary }]}>
-              Approve in wallet
-            </Text>
+          <View style={S.waitingFooterStack}>
+            <View style={[S.waitingFooter, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+              <Feather name="smartphone" size={16} color={colors.primary} />
+              <Text style={[S.waitingFooterText, { color: colors.textPrimary }]}>
+                Approve in wallet
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel approval"
+              hitSlop={10}
+              onPress={() => {
+                haptics.tap();
+                setIsConfirming(false);
+                setTxPhase(null);
+                setSliderResetKey((k) => k + 1);
+              }}
+              style={S.waitingCancelBtn}
+            >
+              <Text style={[S.waitingCancelText, { color: colors.textTertiary }]}>Cancel</Text>
+            </Pressable>
           </View>
         ) : (
           <SlideToConfirm
@@ -333,7 +412,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             colors={colors}
             icon="zap"
             label="Fee"
-            secondary="Estimated from devnet RPC"
+            secondary="Estimated from network RPC"
             value={feeLabel}
           />
         </View>
@@ -392,6 +471,11 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         ) : null}
       </ScrollView>
     </SendScaffold>
+    <PigeonLoader
+      visible={isConfirming}
+      sublabel={txPhase === "confirming" ? "Confirming on devnet" : txPhase === "submitting" ? "Submitting" : undefined}
+    />
+    </>
   );
 }
 
@@ -503,6 +587,20 @@ const S = StyleSheet.create({
   waitingFooterText: {
     fontFamily: FF.sansMd,
     fontSize: 16,
+  },
+  waitingFooterStack: {
+    alignItems: "center",
+    gap: 6,
+  },
+  waitingCancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  waitingCancelText: {
+    fontFamily: FF.sansMd,
+    fontSize: 13,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
 
   // error

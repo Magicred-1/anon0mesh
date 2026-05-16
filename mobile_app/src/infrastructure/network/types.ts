@@ -1,4 +1,4 @@
-import type { PublicKey } from '@solana/web3.js';
+import type { PublicKey, SignatureStatus } from '@solana/web3.js';
 
 export type NetworkMode = 'online' | 'mesh' | 'isolated';
 
@@ -14,6 +14,12 @@ export interface IRpcAdapter {
   getBalance(pubkey: PublicKey): Promise<number>;
   getLatestBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: number }>;
   sendRawTransaction(rawTx: Uint8Array): Promise<string>;
+  /**
+   * Returns the on-chain status of a signature, or null if not yet seen by
+   * the network. Used by confirmation polling — see confirmTransaction in
+   * src/services/sendTransaction.ts.
+   */
+  getSignatureStatus(signature: string): Promise<SignatureStatus | null>;
 }
 
 /**

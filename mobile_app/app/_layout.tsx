@@ -21,6 +21,7 @@ import { Feather } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider, useLxmfContext } from '@/context/LxmfContext';
+import { NetworkModeProvider } from '@/context/NetworkModeContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
@@ -74,7 +75,6 @@ function AppShell() {
     SystemUI.setBackgroundColorAsync(colors.background).catch(() => undefined);
     if (Platform.OS === 'android') {
       NavigationBar.setStyle('dark');
-      NavigationBar.setBackgroundColorAsync(colors.background).catch(() => undefined);
       NavigationBar.setButtonStyleAsync('light').catch(() => undefined);
     }
   }, [colors.background]);
@@ -157,13 +157,15 @@ export default function RootLayout() {
     <GestureHandlerRootView style={R.gestureRoot}>
       <ThemeProvider>
         <LxmfProvider>
-          <WalletProvider autoInitialize>
-            <WalletBalanceProvider>
-            <HideBalanceProvider>
-              <AppShell />
-            </HideBalanceProvider>
-            </WalletBalanceProvider>
-          </WalletProvider>
+          <NetworkModeProvider>
+            <WalletProvider autoInitialize>
+              <WalletBalanceProvider>
+              <HideBalanceProvider>
+                <AppShell />
+              </HideBalanceProvider>
+              </WalletBalanceProvider>
+            </WalletProvider>
+          </NetworkModeProvider>
         </LxmfProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

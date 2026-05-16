@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 
 import { useWallet } from "@/context/WalletContext";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
-import { solanaConnection } from "@/src/services/sendTransaction";
+import { solanaConnection } from "@/src/infrastructure/network/connection";
 import {
   ActivityEntry,
   SOL_DECIMALS,
@@ -18,7 +18,6 @@ interface WalletBalanceState {
   activityLoading: boolean;
   activityError: string | null;
   loading: boolean;
-  error: string | null;
   refetch: () => Promise<void>;
   lastFetched: number | null;
 }
@@ -42,7 +41,6 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<number | null>(null);
 
   const lastFetchedRef = useRef<number | null>(null);
@@ -78,7 +76,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       setTokens([NATIVE_SOL]);
       setSolBalance(null);
       setActivity([]);
-      setError(null);
+      setActivityError(null);
       return;
     }
 
@@ -100,14 +98,13 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       applyBalanceResults(solResult, splResult);
       applyActivityResult(activityResult);
 
-      const allFailed =
-        solResult.status === "rejected" &&
-        splResult.status === "rejected" &&
-        activityResult.status === "rejected";
-      setError(allFailed ? "Couldn't reach devnet" : null);
+      // When every fetch fails (e.g. devnet 429), activityError already
+      // carries the canonical "Devnet rate-limited" string for RecentActivity.
+      // Surfacing a duplicate `error` field here just drifts: nothing reads it.
       setLastFetched(Date.now());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch balance");
+      const msg = err instanceof Error ? err.message : String(err);
+      setActivityError(msg.includes("429") ? "Devnet rate-limited" : "Couldn't load activity");
     } finally {
       setLoading(false);
       setActivityLoading(false);
@@ -140,7 +137,6 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     activityLoading,
     activityError,
     loading,
-    error,
     refetch,
     lastFetched,
   };

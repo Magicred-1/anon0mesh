@@ -18,6 +18,7 @@ import { useWalletBalance } from '@/src/hooks/useWalletBalance';
 import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
 import type { ActivityEntry, TokenBalance } from '@/src/services/walletData';
 import { fontFamily, useTheme } from '@/theme';
+import { relTime } from '@/src/utils/relTime';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,14 +41,6 @@ const TOKEN_COLOR: Record<string, string> = {
   SOL: '#14F195', USDC: '#2775CA', USDT: '#26A17B',
   JUP: '#C7F284', BONK: '#FFB020',
 };
-
-function relTime(ms: number) {
-  const d = Date.now() - ms;
-  if (d < 60_000)     return 'just now';
-  if (d < 3_600_000)  return `${Math.floor(d / 60_000)}m ago`;
-  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h ago`;
-  return `${Math.floor(d / 86_400_000)}d ago`;
-}
 
 // ── tiles ─────────────────────────────────────────────────────────────────────
 
@@ -72,11 +65,25 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
         <Text style={[S.tileLabel, { color: colors.textTertiary }]}>TOTAL BALANCE</Text>
         <View style={S.tileHeaderRight}>
           {loading && !initialLoad && <ActivityIndicator size="small" color={colors.textTertiary} />}
-          <Pressable onPress={toggle} hitSlop={8}>
-            <Feather name={hidden ? 'eye-off' : 'eye'} size={14} color={colors.textTertiary} />
+          <Pressable
+            onPress={toggle}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
+            accessibilityState={{ checked: hidden }}
+            style={({ pressed }) => [S.headerIconBtn, pressed && { opacity: 0.55 }]}
+          >
+            <Feather name={hidden ? 'eye-off' : 'eye'} size={18} color={colors.textSecondary} />
           </Pressable>
-          <Pressable onPress={refetch} hitSlop={8}>
-            <Feather name="refresh-cw" size={13} color={colors.textTertiary} />
+          <Pressable
+            onPress={refetch}
+            hitSlop={16}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh balance"
+            disabled={loading}
+            style={({ pressed }) => [S.headerIconBtn, (pressed || loading) && { opacity: 0.55 }]}
+          >
+            <Feather name="refresh-cw" size={18} color={colors.textSecondary} />
           </Pressable>
         </View>
       </View>
@@ -117,40 +124,54 @@ const ACTIONS = [
 function ActionTiles() {
   const { colors } = useTheme();
   const router = useRouter();
+  // Gate the Send tile at render-time so isolated-mode users can't walk three
+  // screens deep before the confirm-step error tells them no RPC route exists.
+  // ROADMAP § 2.4 / 02-UX P0 #6.
+  const { mode } = useNetworkMode();
+  const isolated = mode === 'isolated';
 
   return (
     <View style={S.actionRow}>
-      {ACTIONS.map(a => (
-        <Pressable
-          key={a.id}
-          disabled={'soon' in a && a.soon}
-          onPress={() => {
-            if (!('route' in a)) return;
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            router.push(a.route as never);
-          }}
-          style={({ pressed }) => {
-            const soon = 'soon' in a && a.soon;
-            const pressedOpacity = pressed ? 0.7 : 1;
-            const opacity = soon ? 0.4 : pressedOpacity;
-            return [S.tile, S.actionTile, {
-              backgroundColor: a.primary ? colors.primary : colors.surface2,
-              borderColor:     a.primary ? colors.primary : colors.border,
-              opacity,
-            }];
-          }}
-        >
-          <View style={[S.actionIconWrap, { backgroundColor: a.primary ? 'rgba(0,0,0,0.15)' : colors.primarySubtle }]}>
-            <Feather name={a.icon} size={18} color={a.primary ? '#08080A' : colors.primary} />
-          </View>
-          <Text style={[S.actionLabel, { color: a.primary ? '#08080A' : colors.textSecondary }]}>
-            {a.label}
-          </Text>
-          {'soon' in a && a.soon && (
-            <Text style={[S.soonBadge, { color: colors.textTertiary }]}>SOON</Text>
-          )}
-        </Pressable>
-      ))}
+      {ACTIONS.map(a => {
+        const soon = 'soon' in a && a.soon;
+        const sendDisabled = a.id === 'send' && isolated;
+        const disabled = soon || sendDisabled;
+        return (
+          <Pressable
+            key={a.id}
+            disabled={disabled}
+            onPress={() => {
+              if (!('route' in a)) return;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push(a.route as never);
+            }}
+            style={({ pressed }) => {
+              const pressedOpacity = pressed ? 0.7 : 1;
+              const opacity = disabled ? 0.4 : pressedOpacity;
+              return [S.tile, S.actionTile, {
+                backgroundColor: a.primary ? colors.primary : colors.surface2,
+                borderColor:     a.primary ? colors.primary : colors.border,
+                opacity,
+              }];
+            }}
+          >
+            <View style={[S.actionIconWrap, { backgroundColor: a.primary ? 'rgba(0,0,0,0.15)' : colors.primarySubtle }]}>
+              <Feather name={a.icon} size={18} color={a.primary ? '#08080A' : colors.primary} />
+            </View>
+            <Text style={[S.actionLabel, { color: a.primary ? '#08080A' : colors.textSecondary }]}>
+              {a.label}
+            </Text>
+            {soon && (
+              <Text style={[S.soonBadge, { color: colors.textTertiary }]}>SOON</Text>
+            )}
+            {sendDisabled && (
+              <Text style={[S.soonBadge, { color: a.primary ? '#08080A' : colors.textTertiary }]}>
+                NO ROUTE
+              </Text>
+            )}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -183,13 +204,38 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
         )}
         {!initialLoad && activityError && (
           <View style={S.center}>
-            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>{activityError}</Text>
+            <Feather name="wifi-off" size={20} color={colors.textTertiary} style={{ marginBottom: 6 }} />
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+              Couldn&apos;t load activity
+            </Text>
+            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center', marginBottom: 12 }]} numberOfLines={2}>
+              {activityError}
+            </Text>
+            <Pressable
+              onPress={onRefresh}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading activity"
+              style={({ pressed }) => [
+                S.retryBtn,
+                { borderColor: colors.border, backgroundColor: colors.surface1 },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Feather name="refresh-cw" size={12} color={colors.textPrimary} />
+              <Text style={[S.activityTime, { color: colors.textPrimary, fontWeight: '600' }]}>Try again</Text>
+            </Pressable>
           </View>
         )}
         {!initialLoad && !activityError && activity.length === 0 && (
           <View style={S.center}>
             <MaterialCommunityIcons name="bird" size={26} color={colors.textTertiary} style={{ marginBottom: 6 }} />
-            <Text style={[S.tileLabel, { color: colors.textTertiary }]}>NO ACTIVITY YET</Text>
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+              No transactions yet
+            </Text>
+            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center' }]}>
+              Tap Receive above to share your address.
+            </Text>
           </View>
         )}
         {!initialLoad && activity.map((tx, i) => {
@@ -378,7 +424,8 @@ const S = StyleSheet.create({
   // balance
   balanceTile:     { gap: 10 },
   tileHeaderRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  headerIconBtn:   { padding: 4, alignItems: 'center', justifyContent: 'center' },
   tileLabel:       { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   amountRow:       { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   bigNum:          { fontFamily: fontFamily.sansBold, fontSize: 52, letterSpacing: -2, lineHeight: 56, flex: 1 },
@@ -400,6 +447,8 @@ const S = StyleSheet.create({
   activityTile:    { flex: 1 },
   activityScroll:  { flexGrow: 1 },
   center:          { paddingVertical: 24, alignItems: 'center', gap: 4 },
+  retryBtn:        { flexDirection: 'row', alignItems: 'center', gap: 6,
+                     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 0.5 },
   activityRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
   activityIconWrap:{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   activityLabel:   { fontFamily: fontFamily.sansMd, fontSize: 12, marginBottom: 2 },

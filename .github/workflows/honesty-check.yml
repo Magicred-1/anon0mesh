@@ -1,0 +1,58 @@
+name: Honesty check
+
+# Greps the diff for theatre phrases that contradict what the app actually
+# does. See ROADMAP § 0.8 + AUDIT § 2 (Category C) for the rationale.
+#
+# Failure means a present-tense claim about an unshipped capability landed in
+# code or docs without a "PREVIEW" / "coming soon" qualifier. Either:
+#  - wrap the UI in <PreviewBadge> / <PreviewedActions>, OR
+#  - rewrite the copy in coming-soon framing, OR
+#  - if the feature actually shipped, add it to ALLOWED_PHRASES below.
+
+on:
+  pull_request:
+    paths:
+      - "mobile_app/**"
+      - "README.md"
+  push:
+    branches: [v3]
+    paths:
+      - "mobile_app/**"
+      - "README.md"
+
+jobs:
+  honesty:
+    runs-on: ubuntu-latest
+    env:
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      PUSH_BEFORE_SHA: ${{ github.event.before }}
+      EVENT_NAME: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Grep diff for banned theatre phrases
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE="$PR_BASE_SHA"
+          else
+            BASE="$PUSH_BEFORE_SHA"
+          fi
+          if [ -z "${BASE:-}" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base ref to diff against; skipping honesty check."
+            exit 0
+          fi
+          # Banned phrases. We grep added lines only so historical text doesn't fail the check.
+          PATTERNS='ARCIUM|MPC 3/3|MPC-3/3|Confidential Offline|JITO_RATE|stealth mode active|routes through nothing|encrypted with AES-256'
+          DIFF=$(git diff --unified=0 "$BASE"...HEAD -- 'mobile_app/**' 'README.md' | grep -E '^\+[^+]' || true)
+          HITS=$(echo "$DIFF" | grep -E "$PATTERNS" || true)
+          if [ -n "$HITS" ]; then
+            echo "Honesty check failed. Banned theatre phrase(s) in diff:" >&2
+            echo "$HITS" >&2
+            echo "" >&2
+            echo "Wrap in PreviewBadge / PreviewedActions, or reframe as coming-soon." >&2
+            exit 1
+          fi
+          echo "Honesty check passed."

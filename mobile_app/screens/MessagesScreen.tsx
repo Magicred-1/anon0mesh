@@ -60,6 +60,7 @@ function decodeBody(raw: string): string {
 }
 
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
+import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 
 let _msgId = Date.now();
 const nextId = () => ++_msgId;
@@ -75,18 +76,6 @@ function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
   if (m.kind === 'media')           return <MediaBubble          key={m.id} m={m} />;
   const chat: ChatMsg = m;
   return <MessageBubble key={m.id} m={chat} sendState={getSendState(m.id)} />;
-}
-
-function sliceNewEvents(
-  events: LxmfEvent[], prevCount: number, prevFirst: LxmfEvent | null,
-): LxmfEvent[] {
-  if (events.length > prevCount) return events.slice(0, events.length - prevCount);
-  const first = events[0] ?? null;
-  if (prevFirst !== null && first !== prevFirst) {
-    const oldIdx = events.indexOf(prevFirst);
-    return oldIdx > 0 ? events.slice(0, oldIdx) : [];
-  }
-  return [];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -311,6 +300,28 @@ export default function MessagesScreen() {
     clearTimeout(immediateTimers.current.get(seq));
     immediateTimers.current.delete(seq);
     setSeqStates(m => new Map(m).set(seq, state));
+
+    // Flip enc to true only on confirmed delivery — never before the native
+    // module reports messageDelivered. AUDIT T9.
+    if (state === 'delivered') {
+      let msgIdForSeq: number | null = null;
+      for (const [mid, s] of idToSeqRef.current) {
+        if (s === seq) { msgIdForSeq = mid; break; }
+      }
+      if (msgIdForSeq !== null) {
+        const mid = msgIdForSeq;
+        const flip = (m: AnyMsg): AnyMsg =>
+          m.id === mid && 'enc' in m ? { ...m, enc: true } : m;
+        // Update currently-rendered thread.
+        setMsgs(prev => prev.map(flip));
+        // Also update any cached non-active thread that holds the sent bubble,
+        // so reopening the conversation still shows the lock after delivery.
+        threadsRef.current.forEach((thread, peerHash) => {
+          if (!thread.some(m => m.id === mid)) return;
+          threadsRef.current.set(peerHash, thread.map(flip));
+        });
+      }
+    }
   }, []);
 
   // Incoming messages + queue state events
@@ -442,7 +453,10 @@ export default function MessagesScreen() {
   const sendMsg = useCallback(async (text: string) => {
     const now   = new Date().toTimeString().slice(0, 8);
     const msgId = nextId();
-    setMsgs(m => [...m, { id: msgId, from: 'me', me: true, time: now, text, enc: true }]);
+    // enc:false until the native module emits messageDelivered for this seq —
+    // a lock icon on a still-queued (or eventually failed) send is a false
+    // present-tense claim per AUDIT T9 / ROADMAP § 0.3.
+    setMsgs(m => [...m, { id: msgId, from: 'me', me: true, time: now, text, enc: false }]);
     if (!activePeerHex) {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
       return;

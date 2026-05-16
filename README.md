@@ -2,11 +2,11 @@
 
 # anonmesh
 
-**No servers. No accounts. No surveillance. No bullshit.**
+**No centralized servers. No accounts. No surveillance. No bullshit.**
 
-Encrypted mesh messaging and Solana payments for Android and iOS works on a mountaintop, in the middle of the ocean, in a blackout, or anywhere the internet doesn't reach. If two devices can find each other over *anything*, Bluetooth, LoRa radio, LAN, the internet, they can talk. No carrier. No cloud. No one in the middle.
+Encrypted mesh messaging and Solana payments for Android and iOS that works on a mountaintop, in the middle of the ocean, in a blackout, or anywhere the internet doesn't reach. If two devices can find each other over *anything* — Bluetooth, LoRa radio, LAN, the internet — they can talk. No carrier required. No cloud account. Community-run public TCP relays are pre-configured for bootstrap and can be removed in settings.
 
-You own the keys. You own the network. Nobody can take it from you.
+You own the keys. You own your share of the network. Nobody can take it from you.
 
 ---
 
@@ -14,7 +14,7 @@ You own the keys. You own the network. Nobody can take it from you.
 
 Every messaging app you use today is a surveillance platform with a chat UI bolted on. Signal requires a phone number. WhatsApp is Meta. Telegram stores your messages on their servers. Even "decentralized" apps route through centralized relays, CDNs, or DNS.
 
-anonmesh routes through **nothing**. It uses [Reticulum](https://reticulum.network), a cryptographic transport network that works over whatever physical medium is available, and [LXMF](https://github.com/markqvist/LXMF) for message delivery. There is no account creation. There is no server to subpoena. There is no company to comply with a warrant. Your identity is a keypair that lives only on your device.
+anonmesh routes through whatever's available — peer-to-peer first, beacon-relays only when no direct path exists. It uses [Reticulum](https://reticulum.network), a cryptographic transport network that works over whatever physical medium is available, and [LXMF](https://github.com/markqvist/LXMF) for message delivery. There is no account creation. There is no central server to subpoena. There is no company to comply with a warrant. Your identity is a keypair that lives only on your device.
 
 ---
 
@@ -22,7 +22,7 @@ anonmesh routes through **nothing**. It uses [Reticulum](https://reticulum.netwo
 
 ### Direct Messages
 
-Scan a QR code or paste an LXMF hash. That's it. The message is encrypted end-to-end with X25519 + AES-256 before it leaves your device. If the peer is offline, the message queues locally and delivers the moment a path opens, over any interface, across any number of hops.
+Scan a QR code or paste an LXMF hash. That's it. The message is encrypted end-to-end with X25519 + AES-128 + HMAC per the [Reticulum spec](https://reticulum.network/manual/understanding.html) before it leaves your device. If the peer is offline, the message queues locally and delivers the moment a path opens, over any interface, across any number of hops.
 
 - No phone number. No username. No account.
 - Peer status (online / offline, hop count, interface) live in the thread header
@@ -70,9 +70,9 @@ Non-custodial. Keys never leave the device.
 - Send SOL or SPL tokens to any address or mesh peer handle
 - Receive via QR
 - On-chain activity history
-- Swap and yield (coming soon)
+- Swap, yield, and confidential offline transfers (coming soon — roadmap previews are labeled in-app)
 
-No analytics. No RPC phoning home beyond what's needed to read the chain and submit transactions. RPC endpoint is yours to configure.
+No analytics. No telemetry. RPC calls are limited to reading the chain and submitting transactions, and the endpoint is yours to configure. On mesh-RPC mode, requests are proxied through a beacon-relay (a future release will encrypt the JSON-RPC payload end-to-end to the relay).
 
 ---
 

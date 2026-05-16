@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Animated } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { useLxmfContext } from '@/context/LxmfContext';
+import { useBiometricEnabled } from '@/hooks/useBiometricEnabled';
 
 const ROTATE_LINES = [
   'wiping ed25519 keypair from secure store…',
@@ -21,6 +23,7 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
   const softGlass   = useGlass('soft');
 
   const { resetIdentity, status } = useLxmfContext();
+  const [biometricEnabled] = useBiometricEnabled();
 
   const [phase,   setPhase]   = useState<0 | 1 | 2>(0); // 0=confirm 1=rotating 2=done
   const [newAddr, setNewAddr] = useState('');
@@ -46,6 +49,21 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
   };
 
   const confirmRotate = async () => {
+    // Re-auth gate so the irreversible step requires a fresh biometric — the
+    // SIGN OUT / rotate confirm row is otherwise reachable from any unlocked
+    // session.
+    if (biometricEnabled) {
+      const hasHw = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (hasHw && enrolled) {
+        const auth = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Authenticate to rotate your anonmesh identity',
+          disableDeviceFallback: true,
+          cancelLabel: 'Cancel',
+        });
+        if (!auth.success) return;
+      }
+    }
     setPhase(1);
     await resetIdentity();
   };

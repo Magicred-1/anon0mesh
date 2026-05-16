@@ -27,7 +27,7 @@ export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCre
           style={S.primary}
         >
           <Text style={S.primaryText}>
-            {isLoading ? 'CONNECTING...' : 'CREATE IDENTITY'}
+            {isLoading ? 'CREATING…' : 'CREATE IDENTITY'}
           </Text>
         </LinearGradient>
       </Pressable>

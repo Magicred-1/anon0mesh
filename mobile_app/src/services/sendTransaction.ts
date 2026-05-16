@@ -1,7 +1,6 @@
 import "@/polyfills";
 
 import {
-  Connection,
   Keypair,
   PublicKey,
   SystemProgram,
@@ -16,6 +15,7 @@ import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
 import { Buffer } from "buffer";
 
 import type { IRpcAdapter } from "@/src/infrastructure/network";
+import { solanaConnection } from "@/src/infrastructure/network/connection";
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { assertSendableSplProgram } from "@/src/services/walletData";
@@ -29,17 +29,10 @@ const APP_IDENTITY = {
   icon: "/favicon.ico",
 };
 
-// Devnet-only for safety. Mainnet wiring is a deliberate future
-// decision — we don't want mainnet funds going out via a dev build.
-//
-// EXPO_PUBLIC_SOLANA_RPC lets teams point at a dedicated devnet
-// endpoint (Helius / QuickNode / Triton free tier) to avoid the
-// public endpoint's 429 rate-limits. Falls back to the public
-// endpoint when unset so cloning the repo "just works".
-const DEFAULT_DEVNET_RPC = "https://api.devnet.solana.com";
-const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || DEFAULT_DEVNET_RPC;
-
-export const solanaConnection = new Connection(RPC_URL, "confirmed");
+// Re-export so existing consumers (`@/src/services/sendTransaction`) keep
+// working without import churn. The singleton lives in
+// `src/infrastructure/network/connection.ts`.
+export { solanaConnection };
 
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;
@@ -110,6 +103,101 @@ async function submitSignedTransaction(
     const summary = summarizeError(err, "RPC rejected the transaction without returning a reason");
     throw new Error(`Transaction submission failed: ${summary.message}`);
   }
+}
+
+// ── Confirmation polling ─────────────────────────────────────────────────────
+
+/**
+ * Outcome of polling getSignatureStatus until a terminal state.
+ * - 'confirmed':  on-chain confirmed (or finalized) at `slot`
+ * - 'failed':     either the tx errored on chain (`reason: 'on-chain'`) or
+ *                 the overall polling budget expired (`reason: 'timeout'`)
+ * - 'cancelled':  caller aborted via AbortSignal — caller should bail without
+ *                 routing the user anywhere (typical on screen unmount)
+ */
+export type ConfirmResult =
+  | { kind: 'confirmed'; signature: string; slot: number }
+  | { kind: 'failed'; signature: string; err: unknown; reason: 'on-chain' | 'timeout' }
+  | { kind: 'cancelled'; signature: string };
+
+interface ConfirmOptions {
+  signal?: AbortSignal;
+}
+
+const ONLINE_POLL_INTERVAL_MS = 500;
+const MESH_POLL_INTERVAL_MS = 1000;
+const ONLINE_CONFIRM_BUDGET_MS = 60_000;
+// Mesh budget is generous because MeshRpcAdapter's per-call timeout is 30s.
+// At 1000ms poll cadence we need ≥3 attempts of headroom for a stuck relay
+// round-trip without aborting the whole confirmation.
+const MESH_CONFIRM_BUDGET_MS = 120_000;
+
+/**
+ * Polls the adapter for the on-chain status of `signature` until it confirms,
+ * fails, or the overall budget expires. Per-call rejections are swallowed and
+ * logged — one hung getSignatureStatus shouldn't abort confirmation.
+ *
+ * Cadence and budget are mode-aware (online vs mesh). Pass an AbortSignal
+ * (typically from a useEffect cleanup) to cancel in-flight polling when the
+ * caller unmounts.
+ */
+export async function confirmTransaction(
+  rpcAdapter: IRpcAdapter,
+  signature: string,
+  options?: ConfirmOptions,
+): Promise<ConfirmResult> {
+  const isMesh = rpcAdapter.mode === 'mesh';
+  const pollIntervalMs = isMesh ? MESH_POLL_INTERVAL_MS : ONLINE_POLL_INTERVAL_MS;
+  const budgetMs = isMesh ? MESH_CONFIRM_BUDGET_MS : ONLINE_CONFIRM_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
+  const signal = options?.signal;
+
+  while (Date.now() < deadline) {
+    if (signal?.aborted) {
+      return { kind: 'cancelled', signature };
+    }
+
+    try {
+      const status = await rpcAdapter.getSignatureStatus(signature);
+      if (status) {
+        if (status.err !== null && status.err !== undefined) {
+          return { kind: 'failed', signature, err: status.err, reason: 'on-chain' };
+        }
+        const cs = status.confirmationStatus;
+        if (cs === 'confirmed' || cs === 'finalized') {
+          return { kind: 'confirmed', signature, slot: status.slot };
+        }
+      }
+    } catch (err: unknown) {
+      console.warn('[confirmTransaction] getSignatureStatus failed (continuing)', err);
+    }
+
+    // Sleep before next poll. Resolve early if the signal aborts so we don't
+    // wait out a full pollInterval after unmount. Listener teardown is
+    // explicit so we don't accumulate one dead listener per poll cycle
+    // (60-120 of them per send before the budget elapses).
+    await new Promise<void>((resolve) => {
+      let onAbort: (() => void) | null = null;
+      const timer = setTimeout(() => {
+        if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, pollIntervalMs);
+      if (signal) {
+        onAbort = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
+  return {
+    kind: 'failed',
+    signature,
+    err: new Error(`Confirmation timed out after ${Math.round(budgetMs / 1000)}s`),
+    reason: 'timeout',
+  };
 }
 
 function buildSolTransferTransaction({
