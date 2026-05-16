@@ -25,7 +25,11 @@ export const ReceivePanel = memo(function ReceivePanel() {
       await Clipboard.setStringAsync(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
-    } catch {
+    } catch (err) {
+      // Off-grid audit § 3: don't silently swallow. The user just pressed
+      // a copy button and got no feedback — at least surface it in logs so
+      // the failure is debuggable. UI state stays "not copied".
+      console.warn('[wallet/ReceivePanel] copy address failed', err);
       setCopied(false);
     }
   }, [address]);
