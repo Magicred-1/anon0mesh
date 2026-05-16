@@ -41,7 +41,7 @@ export function BalanceCard() {
   const { colors, spacing, fontFamily, fontSize } = useTheme();
   const { hidden, toggle } = useHideBalance();
   const { isConnected, publicKey } = useWallet();
-  const { solBalance, tokens, loading, lastFetched, refetch } = useWalletBalance();
+  const { solBalance, tokens, loading, lastFetched } = useWalletBalance();
 
   const [open, setOpen] = useState(false);
   const anim = useRef(new Animated.Value(0)).current;
@@ -80,7 +80,7 @@ export function BalanceCard() {
   return (
     <View style={[styles.outer, { marginHorizontal: spacing[5], marginBottom: spacing[4] }]}>
       <Pressable
-        accessibilityLabel={hasTokens ? (open ? "Collapse token list" : "Expand token list") : "Balance"}
+        accessibilityLabel={hidden ? "Reveal balance" : "Hide balance"}
         accessibilityRole="button"
         onPress={handlePress}
         onLongPress={toggle}
@@ -125,33 +125,6 @@ export function BalanceCard() {
         ) : null}
       </Pressable>
 
-      {/* Header icons: explicit eye + refresh — keeps long-press toggle as accelerator.
-          Rendered after hero so taps register on the icons rather than the outer Pressable. */}
-      <View style={[styles.headerIcons, { gap: spacing[3], top: spacing[4], right: spacing[5] }]}>
-        <Pressable
-          accessibilityLabel={hidden ? "Show balance" : "Hide balance"}
-          accessibilityRole="button"
-          accessibilityState={{ checked: hidden }}
-          hitSlop={16}
-          onPress={toggle}
-          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.55 }]}
-        >
-          <Feather name={hidden ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Refresh balance"
-          accessibilityRole="button"
-          disabled={loading}
-          hitSlop={16}
-          onPress={() => {
-            void refetch();
-          }}
-          style={({ pressed }) => [styles.iconBtn, (pressed || loading) && { opacity: 0.55 }]}
-        >
-          <Feather name="refresh-cw" size={18} color={colors.textSecondary} />
-        </Pressable>
-      </View>
-
       {/* Collapsible SPL token list — horizontal scroll */}
       <Animated.View style={[styles.list, { height: listHeight, opacity: listOpacity }]}>
         <View style={[styles.divider, { backgroundColor: colors.borderSubtle }]} />
@@ -193,14 +166,12 @@ export function BalanceCard() {
 }
 
 const styles = StyleSheet.create({
-  outer:       { position: "relative" },
-  hero:        { alignItems: "center" },
-  amountRow:   { alignItems: "flex-end", flexDirection: "row", justifyContent: "center" },
-  list:        { overflow: "hidden" },
-  divider:     { height: 0.5, marginHorizontal: 16, marginBottom: 4 },
-  tokenCard:   { width: 110, borderRadius: 14, borderWidth: 0.5, padding: 12, alignItems: "flex-start" },
-  dot:         { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  dotText:     { fontSize: 12, fontWeight: "700" },
-  headerIcons: { position: "absolute", flexDirection: "row", alignItems: "center", zIndex: 2 },
-  iconBtn:     { padding: 4, alignItems: "center", justifyContent: "center" },
+  outer:     { position: "relative" },
+  hero:      { alignItems: "center" },
+  amountRow: { alignItems: "flex-end", flexDirection: "row", justifyContent: "center" },
+  list:      { overflow: "hidden" },
+  divider:   { height: 0.5, marginHorizontal: 16, marginBottom: 4 },
+  tokenCard: { width: 110, borderRadius: 14, borderWidth: 0.5, padding: 12, alignItems: "flex-start" },
+  dot:       { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  dotText:   { fontSize: 12, fontWeight: "700" },
 });
