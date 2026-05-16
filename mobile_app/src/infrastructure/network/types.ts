@@ -1,6 +1,29 @@
-import type { PublicKey, SignatureStatus } from '@solana/web3.js';
+import type {
+  AccountInfo,
+  Commitment,
+  ConfirmedSignatureInfo,
+  Finality,
+  ParsedAccountData,
+  PublicKey,
+  RpcResponseAndContext,
+  SignaturesForAddressOptions,
+  SignatureStatus,
+  TokenAccountsFilter,
+  VersionedMessage,
+} from '@solana/web3.js';
 
 export type NetworkMode = 'online' | 'mesh' | 'isolated';
+
+/**
+ * Parsed-token-accounts response shape — pubkey + parsed account data per
+ * SPL token account owned by the queried address.
+ */
+export type ParsedTokenAccountsByOwner = RpcResponseAndContext<
+  {
+    pubkey: PublicKey;
+    account: AccountInfo<ParsedAccountData>;
+  }[]
+>;
 
 /**
  * Transport-agnostic RPC interface. Both online (direct Solana RPC) and
@@ -20,6 +43,47 @@ export interface IRpcAdapter {
    * src/services/sendTransaction.ts.
    */
   getSignatureStatus(signature: string): Promise<SignatureStatus | null>;
+
+  /**
+   * Fetches the raw account data for a pubkey, or null if the account does
+   * not exist on chain. Used by ATA-existence checks before SPL transfers
+   * so we know whether to bundle an ATA-create instruction.
+   */
+  getAccountInfo(
+    pubkey: PublicKey,
+    commitment?: Commitment,
+  ): Promise<AccountInfo<Buffer> | null>;
+
+  /**
+   * Returns the fee in lamports the network would charge for the given
+   * compiled message, or null if the blockhash referenced in the message
+   * has expired. Powers the fee-estimate path in the send flow.
+   */
+  getFeeForMessage(
+    message: VersionedMessage,
+    commitment?: Commitment,
+  ): Promise<number | null>;
+
+  /**
+   * Returns the SPL token accounts (parsed) owned by the given address.
+   * Filter is the usual `{ programId }` or `{ mint }` shape from web3.js.
+   * Used by the wallet balance refresh to enumerate held SPL balances.
+   */
+  getParsedTokenAccountsByOwner(
+    owner: PublicKey,
+    filter: TokenAccountsFilter,
+    commitment?: Commitment,
+  ): Promise<ParsedTokenAccountsByOwner>;
+
+  /**
+   * Returns recent confirmed signatures for an address, newest first.
+   * Powers the recent-activity feed on the wallet home screen.
+   */
+  getSignaturesForAddress(
+    address: PublicKey,
+    options?: SignaturesForAddressOptions,
+    commitment?: Finality,
+  ): Promise<ConfirmedSignatureInfo[]>;
 }
 
 /**

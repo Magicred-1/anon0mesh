@@ -1,8 +1,25 @@
 import "@/polyfills";
 
-import { LAMPORTS_PER_SOL, PublicKey, type SignatureStatus } from '@solana/web3.js';
+import {
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  type AccountInfo,
+  type Commitment,
+  type ConfirmedSignatureInfo,
+  type Finality,
+  type ParsedAccountData,
+  type SignaturesForAddressOptions,
+  type SignatureStatus,
+  type TokenAccountsFilter,
+  type VersionedMessage,
+} from '@solana/web3.js';
 import { Buffer } from 'buffer';
-import type { IRpcAdapter, MeshRpcRequest, MeshRpcResponse } from './types';
+import type {
+  IRpcAdapter,
+  MeshRpcRequest,
+  MeshRpcResponse,
+  ParsedTokenAccountsByOwner,
+} from './types';
 
 const MESH_RPC_TIMEOUT_MS = 30_000;
 
@@ -106,4 +123,114 @@ export class MeshRpcAdapter implements IRpcAdapter {
     const value = (result as { value: (SignatureStatus | null)[] }).value;
     return value?.[0] ?? null;
   }
+
+  async getAccountInfo(
+    pubkey: PublicKey,
+    commitment: Commitment = 'confirmed',
+  ): Promise<AccountInfo<Buffer> | null> {
+    const result = await this.rpc('getAccountInfo', [
+      pubkey.toBase58(),
+      { commitment, encoding: 'base64' },
+    ]);
+    const value = (result as { value: RawAccountInfo | null }).value;
+    if (!value) return null;
+    return decodeAccountInfo(value);
+  }
+
+  async getFeeForMessage(
+    message: VersionedMessage,
+    commitment: Commitment = 'confirmed',
+  ): Promise<number | null> {
+    const encoded = Buffer.from(message.serialize()).toString('base64');
+    const result = await this.rpc('getFeeForMessage', [encoded, { commitment }]);
+    const value = (result as { value: number | null }).value;
+    return value ?? null;
+  }
+
+  async getParsedTokenAccountsByOwner(
+    owner: PublicKey,
+    filter: TokenAccountsFilter,
+    commitment: Commitment = 'confirmed',
+  ): Promise<ParsedTokenAccountsByOwner> {
+    const filterParam = 'programId' in filter
+      ? { programId: filter.programId.toBase58() }
+      : { mint: filter.mint.toBase58() };
+    const result = await this.rpc('getParsedTokenAccountsByOwner', [
+      owner.toBase58(),
+      filterParam,
+      { commitment, encoding: 'jsonParsed' },
+    ]);
+    const raw = result as {
+      context: { slot: number };
+      value: { pubkey: string; account: RawParsedAccount }[];
+    };
+    return {
+      context: raw.context,
+      value: raw.value.map(({ pubkey, account }) => ({
+        pubkey: new PublicKey(pubkey),
+        account: decodeParsedAccount(account),
+      })),
+    };
+  }
+
+  async getSignaturesForAddress(
+    address: PublicKey,
+    options?: SignaturesForAddressOptions,
+    commitment: Finality = 'confirmed',
+  ): Promise<ConfirmedSignatureInfo[]> {
+    const opts: Record<string, unknown> = { commitment };
+    if (options?.before) opts.before = options.before;
+    if (options?.until) opts.until = options.until;
+    if (options?.limit !== undefined) opts.limit = options.limit;
+    if (options?.minContextSlot !== undefined) opts.minContextSlot = options.minContextSlot;
+    const result = await this.rpc('getSignaturesForAddress', [address.toBase58(), opts]);
+    return (result as ConfirmedSignatureInfo[]) ?? [];
+  }
+}
+
+/**
+ * JSON-RPC wire shape for getAccountInfo with base64 encoding.
+ * data is the [base64, "base64"] tuple per Solana JSON-RPC docs.
+ */
+interface RawAccountInfo {
+  data: [string, 'base64'] | string;
+  executable: boolean;
+  lamports: number;
+  owner: string;
+  rentEpoch?: number;
+  space?: number;
+}
+
+function decodeAccountInfo(raw: RawAccountInfo): AccountInfo<Buffer> {
+  const dataStr = Array.isArray(raw.data) ? raw.data[0] : raw.data;
+  return {
+    data: Buffer.from(dataStr, 'base64'),
+    executable: raw.executable,
+    lamports: raw.lamports,
+    owner: new PublicKey(raw.owner),
+    rentEpoch: raw.rentEpoch,
+  };
+}
+
+/**
+ * JSON-RPC wire shape for getParsedTokenAccountsByOwner — account.data is
+ * already the structured {program, parsed, space} object on the wire.
+ */
+interface RawParsedAccount {
+  data: ParsedAccountData;
+  executable: boolean;
+  lamports: number;
+  owner: string;
+  rentEpoch?: number;
+  space?: number;
+}
+
+function decodeParsedAccount(raw: RawParsedAccount): AccountInfo<ParsedAccountData> {
+  return {
+    data: raw.data,
+    executable: raw.executable,
+    lamports: raw.lamports,
+    owner: new PublicKey(raw.owner),
+    rentEpoch: raw.rentEpoch,
+  };
 }
