@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { QRScannerModal } from "@/components/messages/QRScannerModal";
-import { DepthButton, TokenLogo } from "@/components/primitives";
+import { DepthButton, ScreenCloseButton, TokenLogo } from "@/components/primitives";
 import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
@@ -208,15 +208,11 @@ export function RecipientPicker() {
             <Text style={[S.kicker, { color: colors.textTertiary, textTransform: "none" }]}>anonmesh</Text>
             <Text style={[S.screenTitle, { color: colors.textPrimary }]}>send</Text>
           </View>
-          <Pressable
+          <ScreenCloseButton
             accessibilityLabel="Close send"
-            accessibilityRole="button"
-            hitSlop={8}
+            icon="x"
             onPress={() => router.back()}
-            style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-          >
-            <Feather name="x" size={18} color={colors.textPrimary} />
-          </Pressable>
+          />
         </View>
 
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={S.flex}>
@@ -501,15 +497,6 @@ const S = StyleSheet.create({
     fontSize: 28,
     letterSpacing: -0.5,
   },
-  closeButton: {
-    alignItems: "center",
-    borderRadius: 18,
-    borderWidth: 0.5,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-
   // scroll
   scrollContent: {
     paddingTop: 4,

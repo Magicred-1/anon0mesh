@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { DepthButton } from "@/components/primitives";
+import { DepthButton, ScreenCloseButton } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import type { AddressBookEntry } from "@/src/services/addressBook";
 import { useAddressBook } from "@/src/services/addressBook";
@@ -152,14 +152,11 @@ export default function ContactsScreen() {
           <Text style={[S.kicker, { color: colors.textTertiary }]}>LOCAL ONLY</Text>
           <Text style={[S.title, { color: colors.textPrimary }]}>address book</Text>
         </View>
-        <Pressable
+        <ScreenCloseButton
           accessibilityLabel="Close address book"
-          accessibilityRole="button"
+          icon="x"
           onPress={() => router.back()}
-          style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-        >
-          <Feather name="x" size={18} color={colors.textPrimary} />
-        </Pressable>
+        />
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={S.flex}>
@@ -259,14 +256,6 @@ const S = StyleSheet.create({
     fontFamily: FF.sansBold,
     fontSize: 28,
     letterSpacing: -0.5,
-  },
-  closeButton: {
-    alignItems: "center",
-    borderRadius: 18,
-    borderWidth: 0.5,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
   },
   content: {
     gap: 16,
