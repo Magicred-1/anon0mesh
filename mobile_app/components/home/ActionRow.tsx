@@ -3,6 +3,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Icon, PressSurface } from "@/components/primitives";
+import { useNetworkMode } from "@/src/hooks/useNetworkMode";
 import { useTheme } from "@/theme";
 
 type IconName = React.ComponentProps<typeof Icon>["name"];
@@ -27,16 +28,23 @@ interface ActionDef {
 export function ActionRow() {
   const router = useRouter();
   const { colors, radii, spacing, fontFamily, fontSize } = useTheme();
+  // Gate Send at render-time so isolated-mode users can't walk three screens
+  // deep before the confirm-step error tells them no RPC route exists.
+  // ROADMAP § 2.4 / 02-UX P0 #6.
+  const { mode } = useNetworkMode();
+  const sendDisabled = mode === "isolated";
 
   const actions: ActionDef[] = [
     {
       id: "send",
       label: "Send",
       icon: "arrow-up-right",
-      tone: "primary",
+      tone: sendDisabled ? "pending" : "primary",
+      disabled: sendDisabled,
+      badge: sendDisabled ? "No route" : undefined,
       // Route created in Commit C; until then Expo Router will show
       // "Unmatched route" which is an acceptable stub for the port.
-      onPress: () => router.push("/send/recipient" as RouteHref),
+      onPress: sendDisabled ? undefined : () => router.push("/send/recipient" as RouteHref),
     },
     {
       id: "receive",
@@ -92,7 +100,11 @@ export function ActionRow() {
     <View style={[styles.row, { gap: spacing[2], paddingHorizontal: spacing[5], paddingVertical: spacing[4] }]}>
       {actions.map((action) => (
         <PressSurface
-          accessibilityLabel={action.disabled ? `${action.label} — coming soon` : action.label}
+          accessibilityLabel={
+            action.disabled
+              ? `${action.label}${action.badge ? ` — ${action.badge.toLowerCase()}` : " — disabled"}`
+              : action.label
+          }
           disabled={action.disabled}
           key={action.id}
           onPress={action.onPress}
