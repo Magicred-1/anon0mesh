@@ -150,7 +150,7 @@ export const PeersDrawer = memo(function PeersDrawer({
       <SafeAreaView edges={['top']} style={{ backgroundColor: 'transparent' }}>
         <View style={S.header}>
           <View style={S.headerLeft}>
-            <Text style={[S.appLabel, { color: colors.textTertiary }]}>anonmesh</Text>
+            <Text style={[S.appLabel, { color: colors.textTertiary, textTransform: 'none' }]}>anonmesh</Text>
             <View style={S.titleRow}>
               <Text style={[S.title, { color: colors.textPrimary }]}>messages</Text>
               <Text style={[S.onlineCount, { color: colors.textTertiary }]}>

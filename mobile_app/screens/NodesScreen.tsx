@@ -122,7 +122,7 @@ export default function NodesScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
 
         <View style={S.header}>
-          <Text style={[S.sub,   { color: colors.textTertiary }]}>ANONMESH</Text>
+          <Text style={[S.sub,   { color: colors.textTertiary, textTransform: 'none' }]}>anonmesh</Text>
           <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
         </View>
 

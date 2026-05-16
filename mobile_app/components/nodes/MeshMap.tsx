@@ -533,10 +533,10 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
           <GestureHandlerRootView style={[S.fsRoot, { backgroundColor: colors.surface0 }]}>
 
             <View style={[S.fsHeader, { borderBottomColor: colors.border, backgroundColor: colors.surface0, paddingTop: insets.top + 8 }]}>
-              <Text style={[S.headerLabel, { flex: 1, color: colors.textTertiary }]}>
-                ANONMESH TOPOLOGY
-                <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
-                <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
+              <Text style={[S.headerLabel, { flex: 1, color: colors.textTertiary, textTransform: 'none' }]}>
+                <Text>anonmesh</Text>
+                <Text style={{ textTransform: 'uppercase' }}>{` TOPOLOGY  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
+                <Text style={{ color: colors.primary, textTransform: 'uppercase' }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
               </Text>
               {isAnnouncing && <PulseDot size={5} />}
               <Pressable onPress={exitFullscreen} style={[S.iconBtn, { paddingRight: 14 }]} hitSlop={8}>

@@ -331,7 +331,7 @@ export default function WalletScreen() {
           {/* ── Header ── */}
           <View style={S.header}>
             <View>
-              <Text style={[S.kicker,      { color: colors.textTertiary }]}>ANONMESH</Text>
+              <Text style={[S.kicker,      { color: colors.textTertiary }]}>anonmesh</Text>
               <Text style={[S.screenTitle, { color: colors.textPrimary  }]}>wallet</Text>
             </View>
 

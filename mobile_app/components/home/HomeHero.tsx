@@ -24,10 +24,9 @@ export function HomeHero() {
             fontFamily: fontFamily.sansMd,
             fontSize: fontSize.xs,
             letterSpacing: 1.4,
-            textTransform: "uppercase",
           }}
         >
-          ANONMESH
+          anonmesh
         </Text>
         <Text
           style={{

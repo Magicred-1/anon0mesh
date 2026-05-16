@@ -85,7 +85,10 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
 
           <View style={S.header}>
             <View>
-              <Text style={[S.tag,   { color: colors.textTertiary }]}>ANONMESH IDENTITY</Text>
+              <Text style={[S.tag,   { color: colors.textTertiary, textTransform: 'none' }]}>
+                <Text>anonmesh</Text>
+                <Text style={{ textTransform: 'uppercase' }}> IDENTITY</Text>
+              </Text>
               <Text style={[S.title, { color: colors.textPrimary }]}>{phaseTitle}</Text>
             </View>
             {phase !== 1 && (
