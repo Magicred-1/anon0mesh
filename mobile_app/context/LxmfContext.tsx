@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { InteractionManager } from 'react-native';
 import {
@@ -512,6 +512,9 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [bleActive,    setBleActive]    = useState(false);
   const [blePeerCount, setBlePeerCount] = useState(0);
+  // Updated every render so the 80ms debounce timer always reads current value
+  const bleActiveRef = useRef(bleActive);
+  bleActiveRef.current = bleActive;
 
   useEffect(() => {
     if (!bleActive) { setBlePeerCount(0); return; }
@@ -535,46 +538,76 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [lxmf.status?.addressHex]);
 
   useEffect(() => {
-    const map     = knownPeersRef.current;
-    const names   = nameMapRef.current;
-    const now     = Date.now() / 1000;
-    const ownHash = lxmf.status?.addressHex;
+    const timer = setTimeout(() => {
+      const map     = knownPeersRef.current;
+      const names   = nameMapRef.current;
+      const now     = Date.now() / 1000;
+      const ownHash = lxmf.status?.addressHex;
 
-    const prevCount = lastEvtCountRef.current;
-    const prevFirst = lastFirstEvtRef.current;
-    lastEvtCountRef.current = lxmf.events.length;
-    lastFirstEvtRef.current = lxmf.events[0] ?? null;
-    const newEvts = sliceNewEvents(lxmf.events, prevCount, prevFirst);
-    const hasAnnounce = newEvts.some(e =>
-      e.type === 'announceReceived' ||
-      (e.type === 'log' && typeof e.message === 'string' && ANNOUNCE_LOG_RE.test(e.message)),
-    );
-    if (hasAnnounce) {
-      setIsAnnouncing(true);
-      if (announceTimerRef.current) clearTimeout(announceTimerRef.current);
-      announceTimerRef.current = setTimeout(() => setIsAnnouncing(false), 2500);
-    }
+      const prevCount = lastEvtCountRef.current;
+      const prevFirst = lastFirstEvtRef.current;
+      lastEvtCountRef.current = lxmf.events.length;
+      lastFirstEvtRef.current = lxmf.events[0] ?? null;
+      const newEvts = sliceNewEvents(lxmf.events, prevCount, prevFirst);
+      const hasAnnounce = newEvts.some(e =>
+        e.type === 'announceReceived' ||
+        (e.type === 'log' && typeof e.message === 'string' && ANNOUNCE_LOG_RE.test(e.message)),
+      );
+      if (hasAnnounce) {
+        setIsAnnouncing(true);
+        if (announceTimerRef.current) clearTimeout(announceTimerRef.current);
+        announceTimerRef.current = setTimeout(() => setIsAnnouncing(false), 2500);
+      }
 
-    let { peerChanged, nameChanged } = processNewEvents(newEvts, map, names, now, ownHash, bleActive);
+      let { peerChanged, nameChanged } = processNewEvents(newEvts, map, names, now, ownHash, bleActiveRef.current);
 
-    for (const b of lxmf.beacons) {
-      if (mergeBeacon(b, map, names, now, ownHash)) peerChanged = true;
-    }
+      for (const b of lxmf.beacons) {
+        if (mergeBeacon(b, map, names, now, ownHash)) peerChanged = true;
+      }
 
-    if (prunePeerMap(map, now, ownHash)) peerChanged = true;
+      if (nameChanged) startTransition(() => setNameMap({ ...names }));
 
-    if (nameChanged) setNameMap({ ...names });
+      if (!peerChanged) return;
 
-    if (!peerChanged) return;
+      const updated = Array.from(map.values());
+      startTransition(() => setPeers(updated));
 
-    const updated = Array.from(map.values());
-    setPeers(updated);
+      if (storageTimerRef.current) clearTimeout(storageTimerRef.current);
+      storageTimerRef.current = setTimeout(() => {
+        prefSetJson(PrefKeys.PEERS_CACHE, updated);
+      }, 3000);
+    }, 80);
 
-    if (storageTimerRef.current) clearTimeout(storageTimerRef.current);
-    storageTimerRef.current = setTimeout(() => {
-      prefSetJson(PrefKeys.PEERS_CACHE, updated);
-    }, 3000);
+    return () => clearTimeout(timer);
   }, [lxmf.events, lxmf.beacons, lxmf.status, bleActive]);
+
+  useEffect(() => {
+    const ownHash = lxmf.status?.addressHex;
+    const id = setInterval(() => {
+      const map = knownPeersRef.current;
+      const now = Date.now() / 1000;
+      if (prunePeerMap(map, now, ownHash)) {
+        startTransition(() => setPeers(Array.from(map.values())));
+      }
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [lxmf.status?.addressHex]);
+
+  // When BLE is active and peers are connected, re-tag 0-hop peers as BLE and
+  // mark them online. Fixes: (a) stale bleActive at startup tags them as
+  // 'reticulum', (b) cache-loaded peers stay offline until next 60s announce.
+  useEffect(() => {
+    if (!bleActive || blePeerCount === 0) return;
+    const map = knownPeersRef.current;
+    let changed = false;
+    for (const [, peer] of map) {
+      if (peer.hops === 0 && (!peer.online || peer.via !== 'ble')) {
+        map.set(peer.destHash, { ...peer, via: 'ble', online: true });
+        changed = true;
+      }
+    }
+    if (changed) startTransition(() => setPeers(Array.from(map.values())));
+  }, [bleActive, blePeerCount]);
 
   // ── Group channels ──────────────────────────────────────────────────────────
   const [groups,    setGroups]  = useState<LxmfGroup[]>([]);
