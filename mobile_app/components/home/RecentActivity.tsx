@@ -8,7 +8,6 @@ import { useHideBalance } from "@/src/hooks/useHideBalance";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
-import { relTime } from "@/src/utils/relTime";
 import { useTheme } from "@/theme";
 
 const DEFAULT_LIMIT = 5;
@@ -16,6 +15,14 @@ const HIDDEN_AMOUNT = "•••";
 
 function statusTone(status: ActivityEntry["status"]): PillTone {
   return status === "Settled" ? "green" : "red";
+}
+
+function relativeTime(ms: number): string {
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
 function shortAddress(addr: string): string {
@@ -153,11 +160,7 @@ function ActivityRow({
 
   return (
     <PressSurface
-      accessibilityLabel={
-        hidden
-          ? `${isSend ? "Sent" : "Received"} transaction, amount hidden. Tap for transaction details.`
-          : `${isSend ? "Sent" : "Received"} ${formatAmount(tx.amountSol)} ${tx.symbol}. Tap for transaction details.`
-      }
+      accessibilityLabel={`${isSend ? "Sent" : "Received"} ${formatAmount(tx.amountSol)} ${tx.symbol}. Tap for transaction details.`}
       onPress={handlePress}
       style={{
         backgroundColor: colors.surface0,
@@ -211,7 +214,7 @@ function ActivityRow({
               fontSize: fontSize.xs,
             }}
           >
-            {relTime(tx.createdAt)}
+            {relativeTime(tx.createdAt)}
           </Text>
         </View>
 
