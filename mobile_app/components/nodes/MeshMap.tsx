@@ -7,6 +7,7 @@ import {
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
+  useReducedMotion,
   useSharedValue, useAnimatedStyle, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -193,6 +194,7 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
 export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow, onExpandChange, onDirectMessage }: Props) {
   const { colors } = useTheme();
   const insets     = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
 
   // ── Collapse / fullscreen ─────────────────────────────────────────────────
   const [expanded,   setExpanded]   = useState(true);
@@ -225,17 +227,29 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
 
   useEffect(() => {
     if (!shouldRenderCanvas) return undefined;
+    // a11y: hold the "me" pulse halo static under "reduce motion" — pin to a
+    // mid-frame so the indicator is still visible but doesn't loop.
+    if (reduceMotion) {
+      pulse.setValue(0.4);
+      return undefined;
+    }
     const anim = Animated.loop(
       Animated.timing(pulse, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: true }),
     );
     anim.start();
     return () => anim.stop();
-  }, [pulse, shouldRenderCanvas]);
+  }, [pulse, shouldRenderCanvas, reduceMotion]);
 
   // Ghost breathe animation for skeleton placeholders
   const ghost = useRef(new Animated.Value(0.25)).current;
   useEffect(() => {
     if (!shouldRenderCanvas) return undefined;
+    // a11y: hold ghost placeholders at a static mid-opacity under "reduce
+    // motion" — still reads as a skeleton via the surface tint.
+    if (reduceMotion) {
+      ghost.setValue(0.45);
+      return undefined;
+    }
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(ghost, { toValue: 0.65, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -244,7 +258,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
     );
     anim.start();
     return () => anim.stop();
-  }, [ghost, shouldRenderCanvas]);
+  }, [ghost, shouldRenderCanvas, reduceMotion]);
 
   // ── Pan + Pinch shared values ─────────────────────────────────────────────
   const tx  = useSharedValue(0); const ty  = useSharedValue(0);
