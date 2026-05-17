@@ -10,7 +10,6 @@ import { PigeonLoader } from "@/components/ui/PigeonLoader";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
-import { saveAddressBookRecipient } from "@/src/services/addressBook";
 import { saveAddressBookRecipient, useAddressBook } from "@/src/services/addressBook";
 import { describeSendFailure, formatRawError } from "@/src/services/sendErrorMessages";
 import {
