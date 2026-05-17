@@ -3,7 +3,9 @@ import type {
   Commitment,
   ConfirmedSignatureInfo,
   Finality,
+  GetVersionedTransactionConfig,
   ParsedAccountData,
+  ParsedTransactionWithMeta,
   PublicKey,
   RpcResponseAndContext,
   SignaturesForAddressOptions,
@@ -84,6 +86,16 @@ export interface IRpcAdapter {
     options?: SignaturesForAddressOptions,
     commitment?: Finality,
   ): Promise<ConfirmedSignatureInfo[]>;
+
+  /**
+   * Returns parsed transaction details for a batch of confirmed signatures.
+   * Powers the recent-activity feed — called after getSignaturesForAddress
+   * to hydrate each entry with transfer amounts and instruction data.
+   */
+  getParsedTransactions(
+    signatures: string[],
+    config?: GetVersionedTransactionConfig | Finality,
+  ): Promise<(ParsedTransactionWithMeta | null)[]>;
 }
 
 /**

@@ -7,7 +7,9 @@ import {
   type Commitment,
   type ConfirmedSignatureInfo,
   type Finality,
+  type GetVersionedTransactionConfig,
   type ParsedAccountData,
+  type ParsedTransactionWithMeta,
   type SignaturesForAddressOptions,
   type SignatureStatus,
   type TokenAccountsFilter,
@@ -187,6 +189,14 @@ export class MeshRpcAdapter implements IRpcAdapter {
     if (options?.minContextSlot !== undefined) opts.minContextSlot = options.minContextSlot;
     const result = await this.rpc('getSignaturesForAddress', [address.toBase58(), opts]);
     return (result as ConfirmedSignatureInfo[]) ?? [];
+  }
+
+  async getParsedTransactions(
+    signatures: string[],
+    config?: GetVersionedTransactionConfig | Finality,
+  ): Promise<(ParsedTransactionWithMeta | null)[]> {
+    const result = await this.rpc('getParsedTransactions', [signatures, config ?? { maxSupportedTransactionVersion: 0 }]);
+    return (result as (ParsedTransactionWithMeta | null)[]) ?? [];
   }
 }
 

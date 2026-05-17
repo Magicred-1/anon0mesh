@@ -3,6 +3,8 @@ import type {
   Commitment,
   ConfirmedSignatureInfo,
   Finality,
+  GetVersionedTransactionConfig,
+  ParsedTransactionWithMeta,
   PublicKey,
   SignaturesForAddressOptions,
   SignatureStatus,
@@ -58,6 +60,13 @@ export class IsolatedRpcAdapter implements IRpcAdapter {
     _options?: SignaturesForAddressOptions,
     _commitment?: Finality,
   ): Promise<ConfirmedSignatureInfo[]> {
+    throw new Error('No Solana route available');
+  }
+
+  async getParsedTransactions(
+    _signatures: string[],
+    _config?: GetVersionedTransactionConfig | Finality,
+  ): Promise<(ParsedTransactionWithMeta | null)[]> {
     throw new Error('No Solana route available');
   }
 }

@@ -6,6 +6,7 @@ import {
   type ParsedTransactionWithMeta,
   type PartiallyDecodedInstruction,
 } from "@solana/web3.js";
+import type { IRpcAdapter } from "@/src/infrastructure/network";
 
 export const SOL_DECIMALS = 9;
 
@@ -74,7 +75,7 @@ export async function fetchSolBalance(
 }
 
 export async function fetchSplTokens(
-  connection: Connection,
+  rpcAdapter: IRpcAdapter,
   publicKey: PublicKey,
 ): Promise<TokenBalance[]> {
   const programs: { id: PublicKey; tag: SplProgramId }[] = [
@@ -83,7 +84,7 @@ export async function fetchSplTokens(
   ];
   const results = await Promise.all(
     programs.map(({ id, tag }) =>
-      connection
+      rpcAdapter
         .getParsedTokenAccountsByOwner(publicKey, { programId: id })
         .then((response) => ({ response, tag })),
     ),
@@ -372,13 +373,13 @@ async function withRetry<T>(
 }
 
 export async function fetchRecentActivity(
-  connection: Connection,
+  rpcAdapter: IRpcAdapter,
   publicKey: PublicKey,
   limit: number = 8,
 ): Promise<ActivityEntry[]> {
   const walletAddress = publicKey.toBase58();
   const signatures = await withRetry(() =>
-    connection.getSignaturesForAddress(publicKey, { limit }),
+    rpcAdapter.getSignaturesForAddress(publicKey, { limit }),
   );
   if (signatures.length === 0) return [];
 
@@ -386,7 +387,7 @@ export async function fetchRecentActivity(
   // Devnet public endpoint rate-limits aggressively; batching + modest
   // limit + retry-with-backoff keeps us functional under the 429 threshold.
   const parsed = await withRetry(() =>
-    connection.getParsedTransactions(
+    rpcAdapter.getParsedTransactions(
       signatures.map((s) => s.signature),
       { maxSupportedTransactionVersion: 0 },
     ),

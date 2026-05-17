@@ -6,6 +6,8 @@ import {
   type Commitment,
   type ConfirmedSignatureInfo,
   type Finality,
+  type GetVersionedTransactionConfig,
+  type ParsedTransactionWithMeta,
   type SignaturesForAddressOptions,
   type SignatureStatus,
   type TokenAccountsFilter,
@@ -72,5 +74,12 @@ export class DirectRpcAdapter implements IRpcAdapter {
     commitment?: Finality,
   ): Promise<ConfirmedSignatureInfo[]> {
     return this.connection.getSignaturesForAddress(address, options, commitment ?? 'confirmed');
+  }
+
+  async getParsedTransactions(
+    signatures: string[],
+    config?: GetVersionedTransactionConfig | Finality,
+  ): Promise<(ParsedTransactionWithMeta | null)[]> {
+    return this.connection.getParsedTransactions(signatures, config);
   }
 }
