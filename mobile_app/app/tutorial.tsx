@@ -28,38 +28,38 @@ export default function TutorialScreen() {
   const { colors, fontFamily } = useTheme();
   const insets = useSafeAreaInsets();
   const { publicKey } = useWallet();
-  const { bleActive, displayName, myAddress, peers } = useLxmfContext();
+  const { displayName, myAddress, peers } = useLxmfContext();
   const [index, setIndex] = useState(0);
 
   const slides = useMemo<Slide[]>(() => {
     const onlinePeers = peers.filter((peer) => peer.online).length;
     return [
       {
-        icon: "user",
-        kicker: "Identity",
-        title: "anonmesh is your encrypted mesh identity.",
-        body: "Your wallet and LXMF address stay on this device. Messages move over the mesh, and payments settle through Solana when you choose to send.",
-        statLabel: "Wallet",
-        statValue: shortAddress(publicKey?.toBase58()),
+        icon: "message-square",
+        kicker: "Messages",
+        title: "Encrypted chat, no internet.",
+        body: "Send messages to nearby peers over Bluetooth radio. No servers, no phone number, no SIM. Open the Messages tab to start a conversation.",
+        statLabel: "Your mesh ID",
+        statValue: shortAddress(myAddress),
       },
       {
         icon: "radio",
-        kicker: "Evidence",
-        title: "Nearby counts come from live radio signals.",
-        body: "Bluetooth scanning and advertising let the app prove local mesh reachability. Location permission is requested only because Android requires it for BLE discovery.",
-        statLabel: "Radio",
-        statValue: bleActive ? "Active" : "Standby",
+        kicker: "Nodes",
+        title: "Enable radio to appear on the mesh.",
+        body: "Open the Nodes tab and turn on radio. Nearby anonmesh devices appear live. More nodes online = messages travel further.",
+        statLabel: "Peers nearby",
+        statValue: onlinePeers > 0 ? `${onlinePeers} online` : "None yet",
       },
       {
-        icon: "send",
-        kicker: "First action",
-        title: "Start with one concrete connection.",
-        body: "Share your receive QR, scan another peer, or open the wallet tab when you are ready to move value.",
-        statLabel: "Peers",
-        statValue: onlinePeers > 0 ? `${onlinePeers} online` : "Scanning",
+        icon: "credit-card",
+        kicker: "Wallet",
+        title: "Pay any peer, no banks required.",
+        body: "Your Solana wallet is built in. Send SOL or tokens to any mesh peer — scan their QR or pick from Messages. Keys never leave this device.",
+        statLabel: "Wallet",
+        statValue: shortAddress(publicKey?.toBase58()),
       },
     ];
-  }, [bleActive, peers, publicKey]);
+  }, [myAddress, peers, publicKey]);
 
   const slide = slides[index];
   const isLast = index === slides.length - 1;
@@ -67,7 +67,7 @@ export default function TutorialScreen() {
   const finish = useCallback(() => {
     markTutorialCompleted()
       .catch(() => undefined)
-      .finally(() => router.replace("/(tabs)"));
+      .finally(() => router.replace("/(tabs)/messages"));
   }, []);
 
   const next = useCallback(() => {
@@ -147,7 +147,7 @@ export default function TutorialScreen() {
           style={S.footerButton}
         />
         <DepthButton
-          label={isLast ? "Open anonmesh" : "Next"}
+          label={isLast ? "Go to Messages" : "Next"}
           onPress={next}
           size="md"
           tone="cyan"
