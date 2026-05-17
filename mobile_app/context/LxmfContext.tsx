@@ -26,6 +26,11 @@ const PEER_FRESH_WINDOW_SEC = 10 * 60;
 const MAX_TRACKED_PEERS = 300;
 const EPOCH_MS_THRESHOLD = 10_000_000_000;
 
+// Single source of truth for the native LXMF message-store path. Used by
+// useLxmf() at mount and by resetIdentity() so identity rotation also wipes
+// historical message storage (AUDIT T18).
+const LXMF_DB_PATH = (FileSystem.documentDirectory ?? '') + 'lxmf.db';
+
 type StoredIdentity = {
   version:      number;
   identity_hex: string; // 128 hex chars (private key)
@@ -432,7 +437,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     identityHex:    storedIdentity?.identity_hex ?? 'new',
     lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
     logLevel: Number.isFinite(LXMF_LOG_LEVEL) ? LXMF_LOG_LEVEL : 1,
-    dbPath:   (FileSystem.documentDirectory ?? '') + 'lxmf.db',
+    dbPath:   LXMF_DB_PATH,
   });
 
   const { isNativeAvailable, isRunning, start, stop, getIdentityHex } = lxmf;
@@ -488,16 +493,30 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     };
     secureSet(SecureKeys.LXMF_IDENTITY, JSON.stringify(blob))
       .then(() => setStoredIdentity(blob))
-      .catch(() => {});
+      .catch((err) => {
+        // Off-grid audit § 3: identity persist failure silently dropped means
+        // next cold start can spawn a new identity, losing message continuity.
+        // Surface it so we at least know when secure storage rejected.
+        console.warn('[Lxmf] persist identity failed (next start may re-generate)', err);
+      });
   }, [isRunning, lxmf.status?.addressHex, storedIdentity, getIdentityHex]);
 
   const resetIdentity = useCallback(async () => {
+    // Order matters (AUDIT T18):
+    //  1) stop the native node first so it releases its handle on lxmf.db,
+    //  2) delete the on-disk message store so history actually rotates,
+    //  3) only then clear SecureStore + prefs.
+    if (isRunning) await stop();
+    try {
+      await FileSystem.deleteAsync(LXMF_DB_PATH, { idempotent: true });
+    } catch (err) {
+      console.warn('[lxmf] failed to delete lxmf.db during resetIdentity', err);
+    }
     await Promise.allSettled([
       secureDelete(SecureKeys.LXMF_IDENTITY),
       prefRemove(PrefKeys.PEERS_CACHE),
     ]);
     setStoredIdentity(null);
-    if (isRunning) await stop();
   }, [isRunning, stop]);
 
   // ── Peer tracking — incremental, O(new events only) ──────────────────────
@@ -624,7 +643,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         const parsed = JSON.parse(raw) as LxmfGroup[];
         groupMapRef.current = Object.fromEntries(parsed.map(g => [g.addrHex, g]));
         setGroups(parsed);
-      } catch {}
+      } catch (err) {
+        // Off-grid audit § 3: corrupt JSON in persisted groups silently drops
+        // every group on the device. Worth knowing about, even if recovery
+        // path is "user re-joins the groups".
+        console.warn('[Lxmf] failed to parse persisted groups (groups not restored)', err);
+      }
     });
   }, []);
 

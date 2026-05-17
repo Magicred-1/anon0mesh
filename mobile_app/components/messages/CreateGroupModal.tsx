@@ -4,11 +4,16 @@ import {
   StyleSheet, Animated, ActivityIndicator, Platform, Keyboard,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as ScreenCapture from 'expo-screen-capture';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { QRCode } from '@/components/settings/QRCode';
 import type { LxmfGroup } from '@/context/LxmfContext';
+
+// See ChannelShareSheet for the same constant — clipboard auto-wipe window
+// for the AES-128 channel key (AUDIT T19).
+const CLIPBOARD_AUTO_CLEAR_MS = 60_000;
 
 interface Props {
   readonly visible:  boolean;
@@ -29,12 +34,35 @@ export function CreateGroupModal({ visible, onClose, onCreate }: Props) {
 
   const sheetAnim = useRef(new Animated.Value(0)).current;
   const kbOffset  = useRef(new Animated.Value(0)).current;
+  const clipboardClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (visible) {
       Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
     }
   }, [visible, sheetAnim]);
+
+  // Block screen capture while modal is visible — applies to both phases, but
+  // matters most when the AES-128 channel key is on-screen in the 'done' phase
+  // (AUDIT T19). Cheaper to keep on for the whole lifecycle than to flip it
+  // mid-flow.
+  useEffect(() => {
+    if (!visible) return;
+    ScreenCapture.preventScreenCaptureAsync().catch(() => {});
+    return () => {
+      ScreenCapture.allowScreenCaptureAsync().catch(() => {});
+    };
+  }, [visible]);
+
+  // Clear any pending clipboard-wipe timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (clipboardClearTimerRef.current) {
+        clearTimeout(clipboardClearTimerRef.current);
+        clipboardClearTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Lift sheet above keyboard — Keyboard events work inside Modal; KAV does not.
   useEffect(() => {
@@ -86,6 +114,14 @@ export function CreateGroupModal({ visible, onClose, onCreate }: Props) {
     await Clipboard.setStringAsync(text);
     setCopied(which);
     setTimeout(() => setCopied(null), 1800);
+
+    // Auto-wipe clipboard after CLIPBOARD_AUTO_CLEAR_MS (AUDIT T19). Reset
+    // on every copy so the wipe is measured from the most recent paste action.
+    if (clipboardClearTimerRef.current) clearTimeout(clipboardClearTimerRef.current);
+    clipboardClearTimerRef.current = setTimeout(() => {
+      Clipboard.setStringAsync('').catch(() => {});
+      clipboardClearTimerRef.current = null;
+    }, CLIPBOARD_AUTO_CLEAR_MS);
   }
 
   const sheetY    = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
@@ -160,6 +196,15 @@ export function CreateGroupModal({ visible, onClose, onCreate }: Props) {
                     <QRCode size={200} data={groupUri} />
                   </View>
 
+                  {/* Honesty row (AUDIT T19): copied key sits in OS clipboard
+                      in plaintext; we wipe it 60s after the last copy. */}
+                  <View style={S.warnRow}>
+                    <Feather name="clock" size={10} color={colors.textTertiary} />
+                    <Text style={[S.warnText, { color: colors.textTertiary }]}>
+                      key copied to clipboard auto-clears in 60s
+                    </Text>
+                  </View>
+
                   <Text style={[S.fieldLabel, { color: colors.textTertiary }]}>CHANNEL ADDRESS</Text>
                   <Pressable onPress={() => copy(result.addrHex, 'addr')} style={[S.copyRow, baseGlass]}>
                     <Text style={[S.mono, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="middle">
@@ -208,4 +253,6 @@ const S = StyleSheet.create({
   successText:   { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.3 },
   copyRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12 },
   mono:          { fontFamily: fontFamily.sansMd, fontSize: 11, flex: 1 },
+  warnRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: -2, marginBottom: 4 },
+  warnText:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 0.5, textTransform: 'lowercase' },
 });

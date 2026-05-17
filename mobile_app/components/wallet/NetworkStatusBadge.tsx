@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useNetworkMode } from '@/src/infrastructure/network';
 import { useTheme } from '@/theme';
 
@@ -16,9 +17,12 @@ export function NetworkStatusBadge() {
   const cfg = CONFIG[mode];
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (mode === 'online') {
+    // a11y: skip pulse loop under "reduce motion" — color + label still
+    // communicate the mesh/isolated state without animation.
+    if (mode === 'online' || reduceMotion) {
       pulseAnim.setValue(1);
       return;
     }
@@ -30,7 +34,7 @@ export function NetworkStatusBadge() {
     );
     loop.start();
     return () => loop.stop();
-  }, [mode, pulseAnim]);
+  }, [mode, pulseAnim, reduceMotion]);
 
   return (
     <View style={[styles.row, { paddingHorizontal: spacing[5], marginBottom: spacing[2] }]}>

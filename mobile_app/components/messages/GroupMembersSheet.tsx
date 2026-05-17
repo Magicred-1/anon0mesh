@@ -93,7 +93,7 @@ export function GroupMembersSheet({ visible, onClose, group, members, getDisplay
             <View style={S.empty}>
               <Feather name="message-circle" size={32} color={colors.textTertiary} style={{ opacity: 0.4 }} />
               <Text style={[S.emptyText, { color: colors.textTertiary }]}>
-                Members appear here once{'\n'}they send a message to the channel
+                Share the channel invite — members{'\n'}appear here after their first message
               </Text>
             </View>
           ) : (

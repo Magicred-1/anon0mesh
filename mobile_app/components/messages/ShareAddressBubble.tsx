@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
+import { PreviewedActions } from '@/components/primitives';
 import { BubbleHeader } from './BubbleHeader';
 import { ASSET_COLORS } from './constants';
 import type { ShareAddrMsg } from './types';
@@ -27,14 +28,21 @@ export const ShareAddressBubble = memo(function ShareAddressBubble({ m }: Props)
           </Text>
           <Feather name="lock" size={11} color={colors.primary} />
         </View>
-        <View style={[S.addrChip, softGlass]}>
-          <Text style={[S.addrText, { color: colors.textPrimary }]} numberOfLines={1}>{m.address}</Text>
-          <Pressable><Feather name="copy" size={13} color={colors.primary} /></Pressable>
-        </View>
+        {/* Both CTAs below were dead Pressables (no onPress). Wrap them so
+            taps surface "not yet active" instead of being silent dead-ends.
+            Per AUDIT § preview-pill discipline. */}
+        <PreviewedActions hint="copy not yet wired">
+          <View style={[S.addrChip, softGlass]}>
+            <Text style={[S.addrText, { color: colors.textPrimary }]} numberOfLines={1}>{m.address}</Text>
+            <Feather name="copy" size={13} color={colors.primary} />
+          </View>
+        </PreviewedActions>
         {!m.me && (
-          <Pressable style={[S.fullBtn, { backgroundColor: colors.primary, marginTop: 8 }]}>
-            <Text style={[S.btnText, { color: colors.background }]}>SEND TO THIS ADDRESS</Text>
-          </Pressable>
+          <PreviewedActions hint="send-to-address not yet wired" style={{ marginTop: 8 }}>
+            <View style={[S.fullBtn, { backgroundColor: colors.primary }]}>
+              <Text style={[S.btnText, { color: colors.background }]}>SEND TO THIS ADDRESS</Text>
+            </View>
+          </PreviewedActions>
         )}
       </View>
     </View>

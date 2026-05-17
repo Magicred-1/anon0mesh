@@ -129,6 +129,13 @@ export default function NodesScreen() {
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
           <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} onExpandChange={setMapExpanded} onDirectMessage={handleDirectMessage} />
+          {meshNodes.length === 0 && (
+            <View pointerEvents="none" style={S.emptyState}>
+              <Text style={[S.emptyStateText, { color: colors.textTertiary }]}>
+                {emptyStateCopy}
+              </Text>
+            </View>
+          )}
           {mapExpanded && <View style={S.filterOverlay}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.filterRow}>
               {FILTERS.map(f => {

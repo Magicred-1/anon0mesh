@@ -24,7 +24,9 @@ function normalizeAmount(amount: string | undefined): string | null {
   // a comma decimal-pad (de-DE, fr-FR, pt-BR, es-ES, …) deliver "0,5" from
   // the receive amount field; without this swap the URI omits amount=
   // entirely and the QR receiver sees "no amount requested".
-  const trimmed = amount?.trim().replace(",", ".");
+  // Also prefix a leading "0" when the user types ".5" — AMOUNT_RE requires
+  // a digit before the dot, so without this the QR silently drops the amount.
+  const trimmed = amount?.trim().replace(",", ".").replace(/^\./, "0.");
   if (!trimmed || !AMOUNT_RE.test(trimmed)) return null;
   const numeric = Number(trimmed);
   if (!Number.isFinite(numeric) || numeric <= 0) return null;

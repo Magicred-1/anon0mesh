@@ -15,6 +15,7 @@ import { useNotificationEnabled } from '@/hooks/useNotificationEnabled';
 import { useBiometricEnabled } from '@/hooks/useBiometricEnabled';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
 import { Icon } from '@/components/primitives/Icon';
+import { PreviewedActions } from '@/components/primitives';
 
 import {
   QRCode, Toggle, SectionLabel, SettingsRow,
@@ -204,10 +205,16 @@ export default function SettingsScreen() {
                   </View>
                 </View>
                 <View style={S.hwActions}>
+                  {/* AUDIT T5 follow-on: 'configure' and 'update fw' buttons
+                      had no onPress — pure visual placeholders. Wrap them so
+                      taps surface the preview-hint instead of silently doing
+                      nothing. UNPAIR is real and stays plain. */}
                   {(['configure', 'update fw'] as const).map(a => (
-                    <Pressable key={a} style={[S.hwActionBtn, softGlass]}>
-                      <Text style={[S.hwActionText, { color: colors.textSecondary }]}>{a.toUpperCase()}</Text>
-                    </Pressable>
+                    <PreviewedActions key={a} hint={`${a} not yet wired`} style={S.hwActionWrap}>
+                      <View style={[S.hwActionBtn, softGlass]}>
+                        <Text style={[S.hwActionText, { color: colors.textSecondary }]}>{a.toUpperCase()}</Text>
+                      </View>
+                    </PreviewedActions>
                   ))}
                   <Pressable onPress={() => setPaired(null)} style={[S.hwActionBtn, softGlass]}>
                     <Text style={[S.hwActionText, { color: colors.error }]}>UNPAIR</Text>
@@ -309,6 +316,7 @@ const S = StyleSheet.create({
   hwName:       { fontSize: 14, letterSpacing: -0.2 },
   hwSerial:     { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
   hwActions:    { flexDirection: 'row', gap: 6, marginTop: 12 },
+  hwActionWrap: { flex: 1 },
   hwActionBtn:  { flex: 1, padding: 9, borderRadius: 10, alignItems: 'center' },
   hwActionText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
   addHwBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16 },
