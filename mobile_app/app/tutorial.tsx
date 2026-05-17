@@ -226,7 +226,7 @@ export default function TutorialScreen() {
                 { backgroundColor: colors.surface1, borderColor: colors.borderStrong },
               ]}
             >
-              <Icon name={slide.icon} size={42} color={colors.primary} />
+              <Icon name={slide.icon} size={48} color={colors.primary} />
             </Animated.View>
           </View>
 
@@ -240,11 +240,11 @@ export default function TutorialScreen() {
             {slide.body}
           </Text>
 
-          <View style={[S.statRow, { borderTopColor: colors.border }]}>
-            <Text style={[S.statusLabel, { color: colors.textTertiary, fontFamily: fontFamily.sansSb }]}>
+          <View style={[S.statTile, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+            <Text style={[S.statTileLabel, { color: colors.textTertiary, fontFamily: fontFamily.sansSb }]}>
               {slide.statLabel}
             </Text>
-            <Text style={[S.statusValue, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
+            <Text style={[S.statTileValue, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
               {slide.statValue}
             </Text>
           </View>
@@ -355,27 +355,30 @@ const S = StyleSheet.create({
     maxWidth: 360,
     textAlign: "center",
   },
-  statRow: {
+  statTile: {
     alignItems: "center",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 6,
-    marginTop: 32,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 24,
     maxWidth: 420,
-    paddingTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     width: "100%",
   },
-  statusLabel: {
+  statTileLabel: {
     fontSize: 11,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
   },
-  statusValue: {
+  statTileValue: {
     fontSize: 15,
   },
   dots: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 24,
+    marginTop: 16,
   },
   dot: {
     borderRadius: 999,
