@@ -15,7 +15,6 @@ import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
 import { Buffer } from "buffer";
 
 import type { IRpcAdapter } from "@/src/infrastructure/network";
-import { solanaConnection } from "@/src/infrastructure/network/connection";
 import type { IWalletAdapter } from "@/src/infrastructure/wallet";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
 import { assertSendableSplProgram } from "@/src/services/walletData";
@@ -29,14 +28,7 @@ const APP_IDENTITY = {
   icon: "/favicon.ico",
 };
 
-// Re-export so existing consumers (`@/src/services/sendTransaction`) keep
-// working without import churn. The singleton lives in
-// `src/infrastructure/network/connection.ts`.
-export { solanaConnection };
-
 // ── Timeout primitive ────────────────────────────────────────────────────────
-// Direct solanaConnection.* calls bypass IRpcAdapter and inherit no per-call
-// budget. On a flaky cell / NAT-flap to mesh, the underlying fetch can hang
 // past the 60s confirmation budget, so the user sees a frozen review screen
 // with no recovery path. We wrap every direct RPC site in withTimeout(...) and
 // throw a typed TimeoutError so callers can render an inline "request timed
@@ -304,6 +296,7 @@ function buildSolTransferTransaction({
 }
 
 async function buildSplTransferTransaction({
+  rpcAdapter,
   fromPubkey,
   recipientAddress,
   amount,
@@ -312,6 +305,7 @@ async function buildSplTransferTransaction({
   programId,
   rpcAdapter,
 }: {
+  rpcAdapter: IRpcAdapter;
   fromPubkey: PublicKey;
   recipientAddress: string;
   amount: string;
@@ -475,6 +469,7 @@ export async function estimateSplTransferFeeLamports({
   }
 
   const tx = await buildSplTransferTransaction({
+    rpcAdapter,
     fromPubkey,
     recipientAddress,
     amount,
@@ -544,6 +539,7 @@ export async function sendSplTransfer({
   }
 
   const tx = await buildSplTransferTransaction({
+    rpcAdapter,
     fromPubkey,
     recipientAddress,
     amount,
