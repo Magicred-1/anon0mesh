@@ -21,6 +21,17 @@ import { requestBLEPermissions } from '@/src/utils/blePermissions';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import * as ExpoCrypto from 'expo-crypto';
 
+type BeaconExecutePaymentAccounts = {
+  payer: string; broadcaster: string; nonceAccount: string;
+  payerAta: string; recipient: string; recipientAta: string;
+  broadcasterAta: string; mint: string;
+};
+
+type BeaconExecutePaymentParams = {
+  compOffset: number; amount: number; encryptedAmount: string;
+  nonce: string; encryptionPubKey: string;
+};
+
 const IDENTITY_SCHEMA_VERSION = 1;
 const PEER_FRESH_WINDOW_SEC = 10 * 60;
 const MAX_TRACKED_PEERS = 300;
@@ -391,6 +402,15 @@ interface LxmfCtxValue {
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
   setBeaconMode:        (enabled: boolean) => Promise<void>;
+  beaconKeypairHex:     string | null;
+  updateBeaconConfig:   (opts: { keypairHex?: string }) => Promise<void>;
+  partialSignExecutePayment: (
+    payerKeyHex: string,
+    nonceBlockhashHex: string,
+    accounts: BeaconExecutePaymentAccounts,
+    params: BeaconExecutePaymentParams,
+  ) => string | null;
+  extractNonceBlockhash: (accountDataB64: string) => string | null;
   /** Reads from refs — always current, safe to call inside any effect. */
   getDisplayName:       (hash: string) => string;
   // ── Groups ────────────────────────────────────────────────────────────────
@@ -407,10 +427,11 @@ interface LxmfCtxValue {
 const LxmfCtx = createContext<LxmfCtxValue | null>(null);
 
 export function LxmfProvider({ children }: { readonly children: React.ReactNode }) {
-  const [displayName,      setDisplayName]      = useState<string | null>(null);
-  const [storedIdentity,   setStoredIdentity]   = useState<StoredIdentity | null>(null);
-  const [identityHydrated, setIdentityHydrated] = useState(false);
-  const [isBeacon,         setIsBeacon]         = useState(false);
+  const [displayName,        setDisplayName]        = useState<string | null>(null);
+  const [storedIdentity,     setStoredIdentity]     = useState<StoredIdentity | null>(null);
+  const [identityHydrated,   setIdentityHydrated]   = useState(false);
+  const [isBeacon,           setIsBeacon]           = useState(false);
+  const [beaconKeypairHex,   setBeaconKeypairHex]   = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -428,6 +449,9 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       const beaconPref = await prefGet(PrefKeys.BEACON_MODE);
       if (!cancelled) setIsBeacon(beaconPref === 'true');
 
+      const keypair = await secureGet(SecureKeys.BEACON_KEYPAIR_HEX);
+      if (!cancelled && keypair) setBeaconKeypairHex(keypair);
+
       if (!cancelled) setIdentityHydrated(true);
     })();
     return () => { cancelled = true; };
@@ -440,7 +464,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     dbPath:   LXMF_DB_PATH,
   });
 
-  const { isNativeAvailable, isRunning, start, stop, getIdentityHex } = lxmf;
+  const { isNativeAvailable, isRunning, start, stop, getIdentityHex, setBeaconKeypair, setBeaconSolanaRpc } = lxmf;
   const startingRef = useRef(false);
   const autostartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -453,6 +477,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         startingRef.current = true;
         requestBLEPermissions().then(perm => {
           if (cancelled || (perm !== 'granted' && perm !== 'not_required')) return false;
+          if (isBeacon) {
+            if (beaconKeypairHex) setBeaconKeypair(beaconKeypairHex);
+            setBeaconSolanaRpc(process.env.EXPO_PUBLIC_SOLANA_RPC ?? 'https://api.devnet.solana.com');
+          }
           return start({
             mode:           LxmfNodeMode.ReticulumAndBle,
             tcpInterfaces:  configuredTcpInterfaces(),
@@ -475,7 +503,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       }
       interaction.cancel();
     };
-  }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon]);
+  }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon,
+      beaconKeypairHex, setBeaconKeypair, setBeaconSolanaRpc]);
 
   // Persist identity after node starts (using getIdentityHex() per new API)
   useEffect(() => {
@@ -761,6 +790,14 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     return peer?.displayName || nameMapRef.current[hash] || hash.slice(0, 8);
   }, []);
 
+  const updateBeaconConfig = useCallback(async (opts: { keypairHex?: string }) => {
+    if (opts.keypairHex !== undefined) {
+      setBeaconKeypairHex(opts.keypairHex || null);
+      if (opts.keypairHex) await secureSet(SecureKeys.BEACON_KEYPAIR_HEX, opts.keypairHex);
+      else                 await secureDelete(SecureKeys.BEACON_KEYPAIR_HEX);
+    }
+  }, []);
+
   const { fetchMessages: lxmfFetchMessages } = lxmf;
   const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
     const all = lxmfFetchMessages(limit * 2) as StoredMessage[];
@@ -805,6 +842,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     },
     isBeacon,
     setBeaconMode,
+    beaconKeypairHex,
+    updateBeaconConfig,
+    partialSignExecutePayment: lxmf.partialSignExecutePayment,
+    extractNonceBlockhash:     lxmf.extractNonceBlockhash,
     getDisplayName,
     groups,
     createGroup: handleCreateGroup,
@@ -816,7 +857,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
        handleStartBLE, handleStopBLE, handleSend, handleCreateGroup, handleJoinGroup, handleLeaveGroup,
        isGroup, getGroupName, getGroupMembers, groups,
-       isBeacon, setBeaconMode, getDisplayName, getPeerMessages, lxmfFetchMessages,
+       isBeacon, setBeaconMode, beaconKeypairHex, updateBeaconConfig, getDisplayName, getPeerMessages, lxmfFetchMessages,
+       lxmf.partialSignExecutePayment, lxmf.extractNonceBlockhash,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
