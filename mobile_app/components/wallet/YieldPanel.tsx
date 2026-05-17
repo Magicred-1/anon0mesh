@@ -1,10 +1,13 @@
+// FUTURE: re-export from components/wallet/index.ts once yield protocols are integrated. Currently displays preview UI only.
 // FUTURE: roadmap preview. Not exported from `components/wallet/index.ts` —
-// re-add the export only after wiring real behavior and wrapping CTAs in
-// <PreviewedActions>. Per AUDIT A6 / ROADMAP § 0.A.8.
+// re-add the export only after wiring real behavior. Dead CTAs are wrapped in
+// <PreviewedActions> + the panel header carries a <PreviewBadge>. Per AUDIT A6 / ROADMAP § 0.A.8.
 import React, { memo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { PreviewBadge } from '@/components/primitives/PreviewBadge';
+import { PreviewedActions } from '@/components/primitives/PreviewedActions';
 import { VAULTS } from './constants';
 import { AssetDot } from './AssetDot';
 
@@ -17,6 +20,7 @@ export const YieldPanel = memo(function YieldPanel() {
 
   return (
     <View style={S.panel}>
+      <PreviewBadge label="yield · coming soon" />
       <View style={[S.card, glass]}>
         <Text style={[S.cardLabel, { color: colors.textTertiary }]}>LIFETIME EARNINGS</Text>
         <View style={[S.row, { alignItems: 'baseline', gap: 8, marginTop: 6 }]}>
@@ -75,16 +79,18 @@ export const YieldPanel = memo(function YieldPanel() {
                     <Text style={[S.rateVal, { color: colors.textPrimary }]}>{v.deposited} {v.asset}</Text>
                   </View>
                 )}
-                <View style={[S.row, { gap: 8, marginTop: 8 }]}>
-                  <Pressable style={[S.vaultBtn, { backgroundColor: colors.primary, flex: 1 }]}>
-                    <Text style={[S.vaultBtnLabel, { color: '#08080A' }]}>DEPOSIT</Text>
-                  </Pressable>
-                  {v.deposited && (
-                    <Pressable style={[S.vaultBtn, softGlass, { flex: 1 }]}>
-                      <Text style={[S.vaultBtnLabel, { color: colors.textPrimary }]}>WITHDRAW</Text>
-                    </Pressable>
-                  )}
-                </View>
+                <PreviewedActions hint="yield not yet active" style={{ marginTop: 8 }}>
+                  <View style={S.row}>
+                    <View style={[S.vaultBtn, { backgroundColor: colors.primary, flex: 1 }]}>
+                      <Text style={[S.vaultBtnLabel, { color: '#08080A' }]}>DEPOSIT</Text>
+                    </View>
+                    {v.deposited && (
+                      <View style={[S.vaultBtn, softGlass, { flex: 1, marginLeft: 8 }]}>
+                        <Text style={[S.vaultBtnLabel, { color: colors.textPrimary }]}>WITHDRAW</Text>
+                      </View>
+                    )}
+                  </View>
+                </PreviewedActions>
               </View>
             )}
           </View>

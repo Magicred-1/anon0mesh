@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
+import { PreviewedActions } from '@/components/primitives';
 import { BubbleHeader } from './BubbleHeader';
 import { ASSET_COLORS, BLUE } from './constants';
 import type { ReqMoneyMsg } from './types';
@@ -34,13 +35,20 @@ export const RequestMoneyBubble = memo(function RequestMoneyBubble({ m }: Props)
         </View>
         {m.note && <Text style={[S.note, { color: colors.textSecondary }]}>&quot;{m.note}&quot;</Text>}
         {!m.me ? (
+          // Both CTAs were dead Pressables — neither initiated a real flow.
+          // Wrap them so taps surface "not yet active" rather than silently
+          // doing nothing. Per AUDIT § preview-pill discipline.
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Pressable style={[S.payBtn, { backgroundColor: colors.primary }]}>
-              <Text style={[S.btnText, { color: colors.background }]}>PAY PRIVATELY</Text>
-            </Pressable>
-            <Pressable style={[S.declineBtn, softGlass]}>
-              <Text style={[S.btnText, { color: colors.textTertiary }]}>DECLINE</Text>
-            </Pressable>
+            <PreviewedActions hint="pay-privately not yet wired" style={{ flex: 1 }}>
+              <View style={[S.payBtn, { backgroundColor: colors.primary }]}>
+                <Text style={[S.btnText, { color: colors.background }]}>PAY PRIVATELY</Text>
+              </View>
+            </PreviewedActions>
+            <PreviewedActions hint="decline not yet wired">
+              <View style={[S.declineBtn, softGlass]}>
+                <Text style={[S.btnText, { color: colors.textTertiary }]}>DECLINE</Text>
+              </View>
+            </PreviewedActions>
           </View>
         ) : (
           <View style={[S.sentFooter, { borderTopColor: colors.borderSubtle }]}>

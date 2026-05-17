@@ -16,7 +16,6 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -32,18 +31,23 @@ import { useTheme } from "@/theme";
 //
 // Behavior:
 // - Pan from anywhere on the sheet body. Inner Pressables/inputs still
-//   receive their taps (Pan.activeOffsetY(12) only claims after 12pt of
-//   downward motion; failOffsetY(-10) yields entirely on upward intent).
+//   receive their taps (Pan.activeOffsetY(5) only claims after 5pt of
+//   downward motion; failOffsetY(-10) yields entirely on upward intent;
+//   activeOffsetX([-20, 20]) blocks diagonal flicks from triggering).
 // - Native-thread translateY follows the finger 1:1 during drag.
 // - Release past distance threshold (120pt) OR with high downward velocity
 //   (800px/s) dismisses; otherwise springs back to rest.
-// - Open uses timing (320ms ease-out cubic) — matches iOS modal sheet curve
-//   without the underdamped spring overshoot we'd get over SCREEN_HEIGHT.
-// - Close uses timing (220ms ease-in cubic).
-// - Snap-back after partial drag uses a real spring (damping 22, stiffness
-//   320) — short distance, no overshoot risk, feels natural after gesture.
-// - Backdrop opacity interpolates with drag progress so the dim fades as
-//   the sheet leaves.
+// - Open: backdrop fades in over 200ms (leading), sheet slides up over
+//   320ms (ease-out cubic). The lead establishes the dim before the sheet
+//   visibly moves — iOS-standard sheet-modal feel. Without the lead, the
+//   backdrop cross-fading with the slide reads as "dim rises with the
+//   sheet" rather than as a separate scrim.
+// - Close: backdrop + sheet animate in lockstep over 220ms (ease-in cubic).
+// - Snap-back after partial drag uses timing (260ms ease-out exponential)
+//   — deterministic, no overshoot. A spring here oscillates visibly on
+//   settle after short drags where there's no perceptual cover for wobble.
+// - During drag, backdrop opacity mirrors sheet translateY so the dim
+//   fades as the sheet leaves. Decoupled on open, coupled on drag/close.
 // - Internal mounted state lags `visible` prop on close so the slide-down
 //   animation completes before the Modal unmounts.
 //
@@ -69,15 +73,35 @@ import { useTheme } from "@/theme";
 const SCREEN_HEIGHT = Dimensions.get("screen").height;
 const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 800;
+const BACKDROP_MAX_OPACITY = 0.7;
 // Open + close use timing with iOS-feel ease-out cubic — spring physics
 // over SCREEN_HEIGHT travel are underdamped (oscillate / overshoot) and
 // don't match Apple's modal-sheet animation curve. Timing is deterministic
 // and matches the platform.
 const TIMING_OPEN = { duration: 320, easing: Easing.out(Easing.cubic) } as const;
 const TIMING_CLOSE = { duration: 220, easing: Easing.in(Easing.cubic) } as const;
-// Snap-back after partial drag uses a real spring — short distance, no
-// overshoot risk, feels natural after interactive gesture.
-const SPRING_BACK = { damping: 22, stiffness: 320 } as const;
+// Backdrop leads on open: fade in faster (200ms) so the dim is established
+// BEFORE the sheet has visibly slid up. Without this lead, the backdrop
+// opacity tied to a single translateY value reads as "dim rises with the
+// sheet" rather than the iOS-standard "sheet rises onto already-dim canvas".
+const TIMING_BACKDROP_OPEN = { duration: 200, easing: Easing.out(Easing.cubic) } as const;
+// Snap-back after partial drag. Previously used a spring (damping 22,
+// stiffness 320) which is mathematically underdamped — the system overshot
+// the rest position and oscillated visibly on settle, especially after
+// short drags where there's no perceptual cover for the wobble. Production
+// sheet libraries (gorhom/bottom-sheet, etc.) use a deterministic timing
+// curve here for exactly this reason: no overshoot, predictable duration,
+// no visible jitter on settle.
+const TIMING_SNAP_BACK = { duration: 260, easing: Easing.out(Easing.exp) } as const;
+// Pan activation thresholds. Lowered from 12 → 5 because with Pressable
+// children inside the sheet, RN's responder system may hold the touch
+// through the first ~10pt of motion before Pressable cancels — by which
+// time gesture-handler can miss the in-progress drag. 5pt activates the
+// pan before that contention window, giving the gesture a fair shot.
+// activeOffsetX constraint blocks diagonal flicks from claiming the pan.
+const PAN_ACTIVE_Y = 5;
+const PAN_FAIL_Y = -10;
+const PAN_BLOCKED_X: [number, number] = [-20, 20];
 
 export interface AppBottomSheetProps {
   readonly visible: boolean;
@@ -105,6 +129,13 @@ export function AppBottomSheet({
   // off-screen. We animate between these two on visibility flip and during
   // drag.
   const translateY = useSharedValue(SCREEN_HEIGHT);
+  // backdropOpacity: 0 = invisible, 1 = full BACKDROP_MAX_OPACITY (0.7).
+  // Decoupled from translateY so we can lead the open animation (dim
+  // establishes before the sheet visibly slides) — without that lead the
+  // cross-fade synchronized with the slide reads as "dim rises with the
+  // sheet". During interactive drag the gesture's onUpdate keeps the two
+  // in sync so dimming fades as the sheet leaves.
+  const backdropOpacity = useSharedValue(0);
 
   // Internal mounted state lags the visible prop on close so the slide-down
   // animation finishes before the native Modal unmounts. Without this the
@@ -120,31 +151,53 @@ export function AppBottomSheet({
       // in case a previous open was interrupted mid-animation.
       setMounted(true);
       translateY.value = SCREEN_HEIGHT;
+      backdropOpacity.value = 0;
+      // Backdrop leads (200ms) — sheet follows (320ms). Net feel: dim
+      // appears, then sheet rises onto already-dim background.
+      backdropOpacity.value = withTiming(1, TIMING_BACKDROP_OPEN);
       translateY.value = withTiming(0, TIMING_OPEN);
     } else if (mounted) {
       translateY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE, (finished) => {
         if (finished) runOnJS(finalizeClose)();
       });
+      // Close fades both in lockstep — the dim leaves with the sheet so
+      // the user doesn't see a lingering scrim over the post-dismissal UI.
+      backdropOpacity.value = withTiming(0, TIMING_CLOSE);
     }
-  }, [visible, mounted, translateY, finalizeClose]);
+  }, [visible, mounted, translateY, backdropOpacity, finalizeClose]);
 
-  // activeOffsetY(12) — single positive number — activates ONLY on
-  // downward translation past 12pt. (Array form [12, SCREEN_HEIGHT]
-  // means "activate when Y is OUTSIDE [12, SCREEN_HEIGHT]", which is
-  // upward past 12 — opposite of what a pull-down dismiss needs.)
+  // Pan activation tuned more aggressively than initial implementation
+  // (was activeOffsetY 12, no X constraint). Inner Pressables compete for
+  // the touch via RN's responder system; lowering the Y threshold and
+  // blocking X motion gives the Pan a fair shot at claiming the gesture
+  // before Pressable's press-cancel window. shouldCancelWhenOutside(false)
+  // keeps the drag alive if the finger crosses the sheet's visible bounds.
   const panGesture = Gesture.Pan()
-    .activeOffsetY(12)
-    .failOffsetY(-10)
+    .activeOffsetY(PAN_ACTIVE_Y)
+    .failOffsetY(PAN_FAIL_Y)
+    .activeOffsetX(PAN_BLOCKED_X)
+    .shouldCancelWhenOutside(false)
     .onUpdate((e) => {
-      translateY.value = Math.max(0, e.translationY);
+      const ty = Math.max(0, e.translationY);
+      translateY.value = ty;
+      // Mirror sheet position to backdrop while dragging so dismissal
+      // fade-out feels coupled to the gesture.
+      backdropOpacity.value = interpolate(
+        ty,
+        [0, SCREEN_HEIGHT],
+        [1, 0],
+        Extrapolation.CLAMP,
+      );
     })
     .onEnd((e) => {
       const past = translateY.value > DISMISS_DISTANCE || e.velocityY > DISMISS_VELOCITY;
       if (past) {
         translateY.value = withTiming(SCREEN_HEIGHT, TIMING_CLOSE);
+        backdropOpacity.value = withTiming(0, TIMING_CLOSE);
         runOnJS(onClose)();
       } else {
-        translateY.value = withSpring(0, SPRING_BACK);
+        translateY.value = withTiming(0, TIMING_SNAP_BACK);
+        backdropOpacity.value = withTiming(1, TIMING_SNAP_BACK);
       }
     });
 
@@ -153,12 +206,7 @@ export function AppBottomSheet({
   }));
 
   const backdropAnimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      translateY.value,
-      [0, SCREEN_HEIGHT],
-      [0.7, 0],
-      Extrapolation.CLAMP,
-    ),
+    opacity: backdropOpacity.value * BACKDROP_MAX_OPACITY,
   }));
 
   return (

@@ -1,11 +1,14 @@
+// FUTURE: re-export from components/wallet/index.ts once swap protocol is integrated. Currently displays preview UI only.
 // FUTURE: roadmap preview. Not exported from `components/wallet/index.ts` —
-// re-add the export only after wiring real behavior and wrapping CTAs in
-// <PreviewedActions>. Per AUDIT A6 / ROADMAP § 0.A.8.
+// re-add the export only after wiring real behavior. Dead CTA is wrapped in
+// <PreviewedActions> + the panel header carries a <PreviewBadge>. Per AUDIT A6 / ROADMAP § 0.A.8.
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { PreviewBadge } from '@/components/primitives/PreviewBadge';
+import { PreviewedActions } from '@/components/primitives/PreviewedActions';
 import { ASSETS } from './constants';
 import { SwapRow } from './SwapRow';
 import type { Asset } from './types';
@@ -34,6 +37,7 @@ export const SwapPanel = memo(function SwapPanel() {
 
   return (
     <View style={S.panel}>
+      <PreviewBadge label="swap · coming soon" />
       <SwapRow label="you pay" asset={from} value={amt} onValue={setAmt} readOnly={false} editable={phase === 0} />
 
       <View style={S.flipWrap}>
@@ -63,9 +67,11 @@ export const SwapPanel = memo(function SwapPanel() {
       </View>
 
       {phase === 0 && (
-        <Pressable onPress={() => setPhase(1)} style={[S.actionBtn, { backgroundColor: colors.primary, marginTop: 2 }]}>
-          <Text style={[S.actionLabel, { color: '#08080A' }]}>SWAP</Text>
-        </Pressable>
+        <PreviewedActions hint="swap not yet active" style={{ marginTop: 2 }}>
+          <View style={[S.actionBtn, { backgroundColor: colors.primary }]}>
+            <Text style={[S.actionLabel, { color: '#08080A' }]}>SWAP</Text>
+          </View>
+        </PreviewedActions>
       )}
       {phase > 0 && phase < 3 && (
         <View style={[S.actionBtn, softGlass]}>
@@ -75,9 +81,11 @@ export const SwapPanel = memo(function SwapPanel() {
         </View>
       )}
       {phase === 3 && (
-        <Pressable onPress={() => setPhase(0)} style={[S.actionBtn, accentGlass]}>
-          <Text style={[S.actionLabel, { color: colors.primary }]}>✓ SWAPPED · NEW ORDER</Text>
-        </Pressable>
+        <PreviewedActions hint="swap not yet active">
+          <View style={[S.actionBtn, accentGlass]}>
+            <Text style={[S.actionLabel, { color: colors.primary }]}>✓ SWAPPED · NEW ORDER</Text>
+          </View>
+        </PreviewedActions>
       )}
     </View>
   );

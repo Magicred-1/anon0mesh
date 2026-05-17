@@ -1,12 +1,15 @@
+// FUTURE: re-export from components/wallet/index.ts once private MPC send is integrated. Currently displays preview UI only.
 // FUTURE: roadmap preview. Not exported from `components/wallet/index.ts` —
-// re-add the export only after wiring real behavior and wrapping CTAs in
-// <PreviewedActions>. Per AUDIT A6 / ROADMAP § 0.A.8.
+// re-add the export only after wiring real behavior. Dead CTA is wrapped in
+// <PreviewedActions> + the panel header carries a <PreviewBadge>. Per AUDIT A6 / ROADMAP § 0.A.8.
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { Pill } from '@/components/ui';
 import { useGlass } from '@/hooks/useGlass';
+import { PreviewBadge } from '@/components/primitives/PreviewBadge';
+import { PreviewedActions } from '@/components/primitives/PreviewedActions';
 import { ASSETS } from './constants';
 import { AssetDot } from './AssetDot';
 import type { Asset } from './types';
@@ -34,6 +37,7 @@ export const SendPanel = memo(function SendPanel() {
 
   return (
     <View style={S.panel}>
+      <PreviewBadge label="private send · coming soon" />
       <View style={[S.card, glass]}>
         <Text style={[S.cardLabel, { color: colors.textTertiary }]}>FROM</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
@@ -128,9 +132,11 @@ export const SendPanel = memo(function SendPanel() {
       )}
 
       {phase === 0 && (
-        <Pressable onPress={() => setPhase(1)} style={[S.actionBtn, { backgroundColor: colors.primary }]}>
-          <Text style={[S.actionLabel, { color: '#08080A' }]}>SEND PRIVATELY</Text>
-        </Pressable>
+        <PreviewedActions hint="private send not yet active">
+          <View style={[S.actionBtn, { backgroundColor: colors.primary }]}>
+            <Text style={[S.actionLabel, { color: '#08080A' }]}>SEND PRIVATELY</Text>
+          </View>
+        </PreviewedActions>
       )}
       {phase > 0 && phase < 3 && (
         <View style={[S.actionBtn, softGlass]}>
@@ -140,9 +146,11 @@ export const SendPanel = memo(function SendPanel() {
         </View>
       )}
       {phase === 3 && (
-        <Pressable onPress={() => setPhase(0)} style={[S.actionBtn, accentGlass]}>
-          <Text style={[S.actionLabel, { color: colors.primary }]}>✓ SENT · NEW TRANSFER</Text>
-        </Pressable>
+        <PreviewedActions hint="private send not yet active">
+          <View style={[S.actionBtn, accentGlass]}>
+            <Text style={[S.actionLabel, { color: colors.primary }]}>✓ SENT · NEW TRANSFER</Text>
+          </View>
+        </PreviewedActions>
       )}
     </View>
   );

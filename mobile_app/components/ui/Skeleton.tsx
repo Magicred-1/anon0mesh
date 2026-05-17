@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, View, type ViewStyle } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '@/theme';
 
 type Props = {
@@ -12,8 +13,15 @@ type Props = {
 export function Skeleton({ width = '100%', height = 16, radius, style }: Props) {
   const { colors, radii } = useTheme();
   const opacity = useRef(new Animated.Value(0.4)).current;
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    // a11y: hold a static mid-opacity placeholder when "reduce motion" is on.
+    // Still reads as a loading state via the surface tint.
+    if (reduceMotion) {
+      opacity.setValue(0.65);
+      return;
+    }
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.9, duration: 800, useNativeDriver: true }),
@@ -22,7 +30,7 @@ export function Skeleton({ width = '100%', height = 16, radius, style }: Props) 
     );
     anim.start();
     return () => anim.stop();
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   return (
     <Animated.View
