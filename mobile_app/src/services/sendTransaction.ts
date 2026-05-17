@@ -236,7 +236,6 @@ export async function confirmTransaction(
         // getCurrentAdapter must never break confirmation polling.
       }
     }
-
     try {
       const status = await rpcAdapter.getSignatureStatus(signature);
       if (status) {

@@ -111,7 +111,7 @@ function EmptyState() {
 const CosignCard = memo(function CosignCard({
   item, cardWidth,
 }: {
-  item: PendingCosign;
+  item:     PendingCosign;
   cardWidth: number;
 }) {
   const { colors } = useTheme();

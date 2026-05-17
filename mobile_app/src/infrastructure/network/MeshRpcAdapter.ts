@@ -126,7 +126,6 @@ export class MeshRpcAdapter implements IRpcAdapter {
     const value = (result as { value: (SignatureStatus | null)[] }).value;
     return value?.[0] ?? null;
   }
-
   async getAccountInfo(
     pubkey: PublicKey,
     commitment: Commitment = 'confirmed',

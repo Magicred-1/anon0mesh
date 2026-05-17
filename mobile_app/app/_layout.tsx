@@ -75,7 +75,6 @@ function AppShell() {
     SystemUI.setBackgroundColorAsync(colors.background).catch(() => undefined);
     if (Platform.OS === 'android') {
       NavigationBar.setStyle('dark');
-      NavigationBar.setBackgroundColorAsync(colors.background).catch(() => undefined);
       NavigationBar.setButtonStyleAsync('light').catch(() => undefined);
     }
   }, [colors.background]);

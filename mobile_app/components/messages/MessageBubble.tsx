@@ -5,7 +5,7 @@ import { useTheme, fontFamily } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 import type { ChatMsg } from './types';
 
-type SendState = 'sent' | 'queued' | 'delivered' | 'failed';
+type SendState = 'sent' | 'queued' | 'delivered' | 'failed' | 'stale';
 
 interface Props {
   readonly m: ChatMsg;
@@ -17,6 +17,7 @@ const STATE_META: Record<SendState, { icon: React.ComponentProps<typeof Feather>
   queued:    { icon: 'clock',        label: 'queued'    },
   delivered: { icon: 'check-circle', label: 'delivered' },
   failed:    { icon: 'x-circle',     label: 'failed'    },
+  stale:     { icon: 'clock',        label: 'queued'    },
 };
 
 function SendStatus({ state, colors }: { readonly state: SendState; readonly colors: ReturnType<typeof useTheme>['colors'] }) {
@@ -25,9 +26,14 @@ function SendStatus({ state, colors }: { readonly state: SendState; readonly col
   if (state === 'failed')    color = colors.error;
   if (state === 'delivered') color = colors.primary;
   return (
-    <View style={S.statusRow}>
-      <Feather name={icon} size={10} color={color} />
-      <Text style={[S.statusText, { color }]}>{label}</Text>
+    <View>
+      <View style={S.statusRow}>
+        <Feather name={icon} size={10} color={color} />
+        <Text style={[S.statusText, { color }]}>{label}</Text>
+      </View>
+      {state === 'stale' && (
+        <Text style={[S.staleHint, { color: colors.textTertiary }]}>Waiting for peer…</Text>
+      )}
     </View>
   );
 }
@@ -94,4 +100,5 @@ const S = StyleSheet.create({
   fileSize:     { fontFamily: fontFamily.sansMd, fontSize: 10 },
   statusRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, justifyContent: 'flex-end' },
   statusText:   { fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' },
+  staleHint:    { fontSize: 9, letterSpacing: 0.3, textAlign: 'right', marginTop: 2, opacity: 0.7 },
 });

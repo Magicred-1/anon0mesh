@@ -65,7 +65,9 @@ import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 let _msgId = Date.now();
 const nextId = () => ++_msgId;
 
-type GetSendState = (id: number) => 'sent' | 'queued' | 'delivered' | 'failed' | undefined;
+type GetSendState = (id: number) => 'sent' | 'queued' | 'delivered' | 'failed' | 'stale' | undefined;
+
+const QUEUE_STALE_MS = 45_000;
 
 function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
   if (m.kind === 'sys')             return <SystemLine           key={m.id} text={m.text} />;
@@ -268,7 +270,7 @@ export default function MessagesScreen() {
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
   const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
-  const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed'>>(new Map());
+  const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed' | 'stale'>>(new Map());
 
   const { destHash: paramDestHash, handle: paramHandle } = useLocalSearchParams<{ destHash?: string; handle?: string }>();
   const handledDeepLinkRef = useRef<string | null>(null);
@@ -281,6 +283,7 @@ export default function MessagesScreen() {
   const lastEvtCountRef  = useRef(0);
   const lastFirstEvtRef  = useRef<(typeof events)[0] | null>(null);
   const idToSeqRef       = useRef<Map<number, number>>(new Map());
+  const seqQueuedAt      = useRef<Map<number, number>>(new Map());
   const immediateTimers  = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const threadsRef       = useRef<Map<string, AnyMsg[]>>(new Map());
   const msgsRef          = useRef<AnyMsg[]>([]);
@@ -303,11 +306,35 @@ export default function MessagesScreen() {
 
   // Cleanup timers on unmount
   useEffect(() => () => { immediateTimers.current.forEach(clearTimeout); }, []);
+
+  // Transition queued messages to 'stale' after QUEUE_STALE_MS with no delivery
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = Date.now();
+      const staleSeqs: number[] = [];
+      seqQueuedAt.current.forEach((queuedAt, seq) => {
+        if (now - queuedAt >= QUEUE_STALE_MS) staleSeqs.push(seq);
+      });
+      if (staleSeqs.length === 0) return;
+      staleSeqs.forEach(seq => seqQueuedAt.current.delete(seq));
+      setSeqStates(m => {
+        const next = new Map(m);
+        staleSeqs.forEach(seq => next.set(seq, 'stale'));
+        return next;
+      });
+    }, 10_000);
+    return () => clearInterval(id);
+  }, []);
   useEffect(() => { msgsRef.current = msgs; }, [msgs]);
 
   const resolveSeq = useCallback((seq: number, state: 'sent' | 'queued' | 'delivered' | 'failed') => {
     clearTimeout(immediateTimers.current.get(seq));
     immediateTimers.current.delete(seq);
+    if (state === 'queued') {
+      seqQueuedAt.current.set(seq, Date.now());
+    } else {
+      seqQueuedAt.current.delete(seq);
+    }
     setSeqStates(m => new Map(m).set(seq, state));
 
     // Flip enc to true only on confirmed delivery — never before the native
@@ -387,7 +414,7 @@ export default function MessagesScreen() {
 
 
   const queuedCount = useMemo(
-    () => [...seqStates.values()].filter(s => s === 'queued').length,
+    () => [...seqStates.values()].filter(s => s === 'queued' || s === 'stale').length,
     [seqStates],
   );
 
