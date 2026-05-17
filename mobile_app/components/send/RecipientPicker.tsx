@@ -205,7 +205,7 @@ export function RecipientPicker() {
         {/* ── Header ── */}
         <View style={[S.header, { paddingHorizontal: 16, paddingVertical: 16 }]}>
           <View>
-            <Text style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
+            <Text accessibilityRole="header" style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
             <Text style={[S.screenTitle, { color: colors.textPrimary }]}>send</Text>
           </View>
           <Pressable
