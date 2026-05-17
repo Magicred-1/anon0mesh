@@ -267,16 +267,16 @@ export default function TutorialScreen() {
           <DepthButton
             label="Back"
             onPress={back}
-            size="md"
+            size="lg"
             tone="cyan"
-            variant="ghost"
+            variant="secondary"
             style={S.footerButton}
           />
         )}
         <DepthButton
           label={isLast ? "Go to Messages" : "Next"}
           onPress={next}
-          size="md"
+          size="lg"
           tone="cyan"
           variant="primary"
           style={S.footerButton}
