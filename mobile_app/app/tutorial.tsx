@@ -31,7 +31,7 @@ type Slide = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function shortAddress(value: string | null | undefined): string {
-  if (!value) return "Ready";
+  if (!value) return "—";
   if (value.length <= 12) return value;
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
@@ -100,7 +100,6 @@ export default function TutorialScreen() {
       iconScale.value = 1;
       return;
     }
-    // opacity and translateX are at exit values; reset X to entry side then animate in
     translateX.value = dirRef.current * SLIDE_DISTANCE;
     iconScale.value = 0.9;
     opacity.value = withTiming(1, { duration: ENTRY_MS, easing: ENTRY_EASING });
@@ -239,7 +238,7 @@ export default function TutorialScreen() {
             {slide.body}
           </Text>
 
-          <View style={[S.statusPanel, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+          <View style={[S.statRow, { borderTopColor: colors.border }]}>
             <View>
               <Text style={[S.statusLabel, { color: colors.textTertiary, fontFamily: fontFamily.sansSb }]}>
                 {slide.statLabel}
@@ -248,11 +247,9 @@ export default function TutorialScreen() {
                 {slide.statValue}
               </Text>
             </View>
-            <View style={[S.identityPill, { borderColor: colors.borderStrong }]}>
-              <Text style={[S.identityText, { color: colors.primary, fontFamily: fontFamily.sansMd }]}>
-                {shortAddress(myAddress)}
-              </Text>
-            </View>
+            <Text style={[S.addressText, { color: colors.primary, fontFamily: fontFamily.sansMd }]}>
+              {shortAddress(myAddress)}
+            </Text>
           </View>
         </Animated.View>
 
@@ -327,7 +324,7 @@ const S = StyleSheet.create({
   },
   iconShell: {
     alignItems: "center",
-    borderRadius: 24,
+    borderRadius: 12,
     borderWidth: 1,
     height: 96,
     justifyContent: "center",
@@ -352,16 +349,14 @@ const S = StyleSheet.create({
     maxWidth: 360,
     textAlign: "center",
   },
-  statusPanel: {
+  statRow: {
     alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 32,
     maxWidth: 420,
-    minHeight: 72,
-    paddingHorizontal: 16,
+    paddingTop: 14,
     width: "100%",
   },
   statusLabel: {
@@ -373,15 +368,10 @@ const S = StyleSheet.create({
   statusValue: {
     fontSize: 17,
   },
-  identityPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    maxWidth: "48%",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  identityText: {
+  addressText: {
     fontSize: 13,
+    maxWidth: "48%",
+    textAlign: "right",
   },
   dots: {
     flexDirection: "row",
