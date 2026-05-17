@@ -13,9 +13,7 @@ export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCre
   return (
     <View style={S.wrap}>
 
-      {/* CREATE IDENTITY — flat solid cyan pill. Previously wrapped in a
-          LinearGradient + cyan glow shadow which read as stock-effect
-          AI-generated aesthetic. Solid color, no gradient, no glow. */}
+      {/* CREATE IDENTITY — flat solid cyan pill, no gradient, no glow. */}
       <Pressable
         onPress={onCreate}
         disabled={isLoading}
@@ -49,9 +47,7 @@ export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCre
 const S = StyleSheet.create({
   wrap: { paddingHorizontal: 24, gap: 14 },
 
-  // Primary CTA — flat solid cyan, no gradient, no shadow glow. Matches
-  // the brand primary color from the dark theme. The previous shell +
-  // gradient + glow stack was visually busy and read as AI-generated.
+  // Primary CTA — flat solid cyan, no gradient, no shadow glow.
   primary: {
     height: 60, borderRadius: 32,
     alignItems: 'center', justifyContent: 'center',
