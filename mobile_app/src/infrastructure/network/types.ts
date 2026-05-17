@@ -87,11 +87,6 @@ export interface IRpcAdapter {
     commitment?: Finality,
   ): Promise<ConfirmedSignatureInfo[]>;
 
-  /**
-   * Returns parsed transaction details for a batch of confirmed signatures.
-   * Powers the recent-activity feed — called after getSignaturesForAddress
-   * to hydrate each entry with transfer amounts and instruction data.
-   */
   getParsedTransactions(
     signatures: string[],
     config?: GetVersionedTransactionConfig | Finality,
@@ -99,7 +94,8 @@ export interface IRpcAdapter {
 }
 
 /**
- * Mesh RPC wire protocol.
+ * Mesh RPC wire protocol — DEPRECATED, kept for reference only.
+ * The new transport uses beaconRpcWait (Reticulum Link + JSON-RPC 2.0).
  *
  * Request  → LXMF body (base64-encoded JSON):
  *   { id: string, type: 'solana_rpc', method: string, params: unknown[] }
