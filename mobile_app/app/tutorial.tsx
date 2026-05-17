@@ -127,7 +127,7 @@ export default function TutorialScreen() {
         icon: "message-square",
         kicker: "Messages",
         title: "Encrypted chat, no internet.",
-        body: "Send messages to nearby peers over Bluetooth radio. No servers, no phone number, no SIM. Open the Messages tab to start a conversation.",
+        body: "Peer-to-peer messages over BLE, LoRa radio, or LAN. No servers, no phone number, no SIM. Open the Messages tab to start a conversation.",
         statLabel: "Mesh ID",
         statValue: shortAddress(myAddress),
       },
