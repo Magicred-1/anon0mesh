@@ -1,6 +1,5 @@
 import React, { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { fontFamily } from '@/theme';
 import { SolanaIcon } from './SolanaIcon';
 
@@ -14,22 +13,15 @@ export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCre
   return (
     <View style={S.wrap}>
 
-      {/* CREATE IDENTITY — cyan gradient pill + glow */}
+      {/* CREATE IDENTITY — flat solid cyan pill, no gradient, no glow. */}
       <Pressable
         onPress={onCreate}
         disabled={isLoading}
-        style={({ pressed }) => [S.primaryShell, isLoading && S.dim, pressed && S.pressed]}
+        style={({ pressed }) => [S.primary, isLoading && S.dim, pressed && S.pressed]}
       >
-        <LinearGradient
-          colors={['#00e5ff', '#0099bb']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={S.primary}
-        >
-          <Text style={S.primaryText}>
-            {isLoading ? 'CREATING…' : 'CREATE IDENTITY'}
-          </Text>
-        </LinearGradient>
+        <Text style={S.primaryText}>
+          {isLoading ? 'CREATING…' : 'CREATE IDENTITY'}
+        </Text>
       </Pressable>
 
       {/* CONNECT WALLET — Android only, cyan outline pill */}
@@ -55,18 +47,11 @@ export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCre
 const S = StyleSheet.create({
   wrap: { paddingHorizontal: 24, gap: 14 },
 
-  // Outer shell carries the shadow / glow
-  primaryShell: {
-    borderRadius: 32,
-    shadowColor: '#00e5ff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    elevation: 10,
-  },
+  // Primary CTA — flat solid cyan, no gradient, no shadow glow.
   primary: {
     height: 60, borderRadius: 32,
     alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#00c8e0',
   },
   primaryText: {
     fontFamily: fontFamily.sansMd,
