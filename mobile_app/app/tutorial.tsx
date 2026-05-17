@@ -1,13 +1,23 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { DepthButton, Icon } from "@/components/primitives";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
 import { markTutorialCompleted } from "@/src/services/tutorialState";
 import { useTheme } from "@/theme";
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type Slide = {
   readonly icon: React.ComponentProps<typeof Icon>["name"];
@@ -18,11 +28,47 @@ type Slide = {
   readonly statValue: string;
 };
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 function shortAddress(value: string | null | undefined): string {
   if (!value) return "Ready";
   if (value.length <= 12) return value;
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
+
+// ── Motion constants ─────────────────────────────────────────────────────────
+
+const SLIDE_DISTANCE = 24;
+const EXIT_MS = 140;
+const ENTRY_MS = 240;
+const EXIT_EASING = Easing.in(Easing.cubic);
+const ENTRY_EASING = Easing.out(Easing.cubic);
+
+// ── SlideDot ─────────────────────────────────────────────────────────────────
+
+type DotProps = Readonly<{ active: boolean; primary: string; inactive: string }>;
+
+function SlideDot({ active, primary, inactive }: DotProps) {
+  const reduced = useReducedMotion();
+  const w = useSharedValue(active ? 28 : 8);
+
+  useEffect(() => {
+    const target = active ? 28 : 8;
+    w.value = reduced
+      ? target
+      : withTiming(target, { duration: 220, easing: ENTRY_EASING });
+  }, [active, reduced, w]);
+
+  const dotStyle = useAnimatedStyle(() => ({ width: w.value }));
+
+  return (
+    <Animated.View
+      style={[S.dot, dotStyle, { backgroundColor: active ? primary : inactive }]}
+    />
+  );
+}
+
+// ── Screen ───────────────────────────────────────────────────────────────────
 
 export default function TutorialScreen() {
   const { colors, fontFamily } = useTheme();
@@ -31,8 +77,52 @@ export default function TutorialScreen() {
   const { displayName, myAddress, peers } = useLxmfContext();
   const [index, setIndex] = useState(0);
 
+  const reduced = useReducedMotion();
+  const dirRef = useRef<1 | -1>(1);
+  const isFirstRender = useRef(true);
+
+  // ── Shared values ─────────────────────────────────────────────────────────
+
+  const opacity = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const iconScale = useSharedValue(1);
+
+  // ── Entry animation triggered by index change ─────────────────────────────
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (reduced) {
+      opacity.value = 1;
+      translateX.value = 0;
+      iconScale.value = 1;
+      return;
+    }
+    // opacity and translateX are at exit values; reset X to entry side then animate in
+    translateX.value = dirRef.current * SLIDE_DISTANCE;
+    iconScale.value = 0.9;
+    opacity.value = withTiming(1, { duration: ENTRY_MS, easing: ENTRY_EASING });
+    translateX.value = withTiming(0, { duration: ENTRY_MS, easing: ENTRY_EASING });
+    iconScale.value = withTiming(1, { duration: ENTRY_MS + 40, easing: ENTRY_EASING });
+  }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Animated styles ───────────────────────────────────────────────────────
+
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const iconShellStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconScale.value }],
+  }));
+
+  // ── Slides ────────────────────────────────────────────────────────────────
+
   const slides = useMemo<Slide[]>(() => {
-    const onlinePeers = peers.filter((peer) => peer.online).length;
+    const onlinePeers = peers.filter((p) => p.online).length;
     return [
       {
         icon: "message-square",
@@ -59,10 +149,12 @@ export default function TutorialScreen() {
         statValue: shortAddress(publicKey?.toBase58()),
       },
     ];
-  }, [displayName, myAddress, peers, publicKey]);
+  }, [displayName, peers, publicKey]);
 
   const slide = slides[index];
   const isLast = index === slides.length - 1;
+
+  // ── Navigation ────────────────────────────────────────────────────────────
 
   const finish = useCallback(() => {
     markTutorialCompleted()
@@ -70,17 +162,38 @@ export default function TutorialScreen() {
       .finally(() => router.replace("/(tabs)/messages"));
   }, []);
 
+  const navigateWith = useCallback(
+    (dir: 1 | -1, action: () => void) => {
+      dirRef.current = dir;
+      if (reduced) {
+        action();
+        return;
+      }
+      opacity.value = withTiming(0, { duration: EXIT_MS, easing: EXIT_EASING });
+      translateX.value = withTiming(
+        dir * -SLIDE_DISTANCE,
+        { duration: EXIT_MS, easing: EXIT_EASING },
+        (done) => {
+          if (done) runOnJS(action)();
+        },
+      );
+    },
+    [opacity, reduced, translateX],
+  );
+
   const next = useCallback(() => {
     if (isLast) {
       finish();
       return;
     }
-    setIndex((current) => Math.min(current + 1, slides.length - 1));
-  }, [finish, isLast, slides.length]);
+    navigateWith(1, () => setIndex((c) => Math.min(c + 1, slides.length - 1)));
+  }, [finish, isLast, navigateWith, slides.length]);
 
   const back = useCallback(() => {
-    setIndex((current) => Math.max(current - 1, 0));
-  }, []);
+    navigateWith(-1, () => setIndex((c) => Math.max(c - 1, 0)));
+  }, [navigateWith]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={[S.root, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
@@ -95,7 +208,9 @@ export default function TutorialScreen() {
           accessibilityRole="button"
           accessibilityLabel="Skip tutorial"
         >
-          <Text style={[S.skipText, { color: colors.textTertiary, fontFamily: fontFamily.sans }]}>Skip</Text>
+          <Text style={[S.skipText, { color: colors.textTertiary, fontFamily: fontFamily.sans }]}>
+            Skip
+          </Text>
         </Pressable>
       </View>
 
@@ -103,41 +218,51 @@ export default function TutorialScreen() {
         contentContainerStyle={[S.content, { paddingBottom: Math.max(24, insets.bottom + 20) }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[S.iconShell, { backgroundColor: colors.primarySubtle, borderColor: colors.borderStrong }]}>
-          <Icon name={slide.icon} size={42} color={colors.primary} />
-        </View>
+        <Animated.View style={[S.slideContent, contentStyle]}>
+          <Animated.View
+            style={[
+              S.iconShell,
+              iconShellStyle,
+              { backgroundColor: colors.primarySubtle, borderColor: colors.borderStrong },
+            ]}
+          >
+            <Icon name={slide.icon} size={42} color={colors.primary} />
+          </Animated.View>
 
-        <Text style={[S.kicker, { color: colors.primary, fontFamily: fontFamily.sansSb }]}>{slide.kicker}</Text>
-        <Text style={[S.title, { color: colors.textPrimary, fontFamily: fontFamily.sansBold }]}>{slide.title}</Text>
-        <Text style={[S.body, { color: colors.textSecondary, fontFamily: fontFamily.sans }]}>{slide.body}</Text>
+          <Text style={[S.kicker, { color: colors.primary, fontFamily: fontFamily.sansSb }]}>
+            {slide.kicker}
+          </Text>
+          <Text style={[S.title, { color: colors.textPrimary, fontFamily: fontFamily.sansBold }]}>
+            {slide.title}
+          </Text>
+          <Text style={[S.body, { color: colors.textSecondary, fontFamily: fontFamily.sans }]}>
+            {slide.body}
+          </Text>
 
-        <View style={[S.statusPanel, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-          <View>
-            <Text style={[S.statusLabel, { color: colors.textTertiary, fontFamily: fontFamily.sansSb }]}>
-              {slide.statLabel}
-            </Text>
-            <Text style={[S.statusValue, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
-              {slide.statValue}
-            </Text>
+          <View style={[S.statusPanel, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+            <View>
+              <Text style={[S.statusLabel, { color: colors.textTertiary, fontFamily: fontFamily.sansSb }]}>
+                {slide.statLabel}
+              </Text>
+              <Text style={[S.statusValue, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
+                {slide.statValue}
+              </Text>
+            </View>
+            <View style={[S.identityPill, { borderColor: colors.borderStrong }]}>
+              <Text style={[S.identityText, { color: colors.primary, fontFamily: fontFamily.sansMd }]}>
+                {shortAddress(myAddress)}
+              </Text>
+            </View>
           </View>
-          <View style={[S.identityPill, { borderColor: colors.borderStrong }]}>
-            <Text style={[S.identityText, { color: colors.primary, fontFamily: fontFamily.sansMd }]}>
-              {shortAddress(myAddress)}
-            </Text>
-          </View>
-        </View>
+        </Animated.View>
 
         <View style={S.dots}>
           {slides.map((item, dotIndex) => (
-            <View
+            <SlideDot
               key={item.kicker}
-              style={[
-                S.dot,
-                {
-                  backgroundColor: dotIndex === index ? colors.primary : colors.surface3,
-                  width: dotIndex === index ? 28 : 8,
-                },
-              ]}
+              active={dotIndex === index}
+              primary={colors.primary}
+              inactive={colors.surface3}
             />
           ))}
         </View>
@@ -164,6 +289,8 @@ export default function TutorialScreen() {
     </SafeAreaView>
   );
 }
+
+// ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
   root: {
@@ -193,6 +320,10 @@ const S = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
     paddingTop: 24,
+  },
+  slideContent: {
+    alignItems: "center",
+    width: "100%",
   },
   iconShell: {
     alignItems: "center",
