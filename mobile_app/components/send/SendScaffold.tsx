@@ -79,7 +79,7 @@ export function SendScaffold({
         {/* Header */}
         <View style={S.header}>
           <View style={S.headerLeft}>
-            <Text style={[S.kicker, { color: colors.textTertiary }]}>
+            <Text accessibilityRole="header" style={[S.kicker, { color: colors.textTertiary }]}>
               {resolvedEyebrow}
             </Text>
             <Text style={[S.screenTitle, { color: colors.textPrimary }]}>

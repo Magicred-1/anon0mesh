@@ -48,7 +48,7 @@ export const PendingCosigns = memo(function PendingCosigns({ items }: Props) {
     <View style={S.wrap}>
       {/* Section header */}
       <View style={S.labelRow}>
-        <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>MULTISIG CO-SIGNS</Text>
+        <Text accessibilityRole="header" style={[S.sectionLabel, { color: colors.textTertiary }]}>MULTISIG CO-SIGNS</Text>
         <View style={[S.badge, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
           <Text style={[S.badgeText, { color: colors.textTertiary }]}>PREVIEW</Text>
         </View>
