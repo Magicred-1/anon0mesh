@@ -69,7 +69,6 @@ export class MeshRpcAdapter implements IRpcAdapter {
     );
     return result.value?.[0] ?? null;
   }
-
   async getAccountInfo(
     pubkey: PublicKey,
     commitment: Commitment = 'confirmed',
@@ -135,6 +134,14 @@ export class MeshRpcAdapter implements IRpcAdapter {
     return this.rpc<(ParsedTransactionWithMeta | null)[]>(
       'getParsedTransactions', [signatures, config ?? { maxSupportedTransactionVersion: 0 }],
     );
+  }
+
+  async getParsedTransactions(
+    signatures: string[],
+    config?: GetVersionedTransactionConfig | Finality,
+  ): Promise<(ParsedTransactionWithMeta | null)[]> {
+    const result = await this.rpc('getParsedTransactions', [signatures, config ?? { maxSupportedTransactionVersion: 0 }]);
+    return (result as (ParsedTransactionWithMeta | null)[]) ?? [];
   }
 }
 

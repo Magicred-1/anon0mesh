@@ -32,6 +32,8 @@ export const SecureKeys = {
   TUTORIAL_COMPLETED: 'tutorial_completed',
   // MWA auth token
   MWA_TOKEN:        'mwa_auth_token_v1',
+  // Beacon node config — keypair seed (hex). RPC URL comes from EXPO_PUBLIC_SOLANA_RPC.
+  BEACON_KEYPAIR_HEX: 'beacon_keypair_hex',
 } as const;
 
 export const PrefKeys = {

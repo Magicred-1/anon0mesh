@@ -17,7 +17,6 @@ import { useHideBalance }   from '@/src/hooks/useHideBalance';
 import { useWalletBalance } from '@/src/hooks/useWalletBalance';
 import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
 import type { ActivityEntry, TokenBalance } from '@/src/services/walletData';
-import { relTime } from '@/src/utils/relTime';
 import { fontFamily, useTheme } from '@/theme';
 import { relTime } from '@/src/utils/relTime';
 
@@ -63,7 +62,7 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
     <View style={[S.tile, S.balanceTile, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
       <View style={[S.accentBar, { backgroundColor: colors.primary }]} />
       <View style={S.tileHeaderRow}>
-        <Text style={[S.tileLabel, { color: colors.textTertiary }]}>TOTAL BALANCE</Text>
+        <Text accessibilityRole="header" style={[S.tileLabel, { color: colors.textTertiary }]}>TOTAL BALANCE</Text>
         <View style={S.tileHeaderRight}>
           {loading && !initialLoad && <ActivityIndicator size="small" color={colors.textTertiary} />}
           <Pressable
@@ -186,7 +185,7 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
 
   return (
     <View style={[S.tile, S.activityTile, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-      <Text style={[S.tileLabel, { color: colors.textTertiary, marginBottom: 14 }]}>RECENT ACTIVITY</Text>
+      <Text accessibilityRole="header" style={[S.tileLabel, { color: colors.textTertiary, marginBottom: 14 }]}>RECENT ACTIVITY</Text>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={S.activityScroll}
@@ -332,7 +331,7 @@ export default function WalletScreen() {
           {/* ── Header ── */}
           <View style={S.header}>
             <View>
-              <Text style={[S.kicker,      { color: colors.textTertiary }]}>ANONMESH</Text>
+              <Text accessibilityRole="header" style={[S.kicker,      { color: colors.textTertiary }]}>ANONMESH</Text>
               <Text style={[S.screenTitle, { color: colors.textPrimary  }]}>wallet</Text>
             </View>
 

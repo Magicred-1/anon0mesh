@@ -96,7 +96,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
     <>
       <View style={[S.wrap, style]}>
         <View style={S.labelRow}>
-          <Text style={[S.sectionLabel, { color: colors.textTertiary }]}>BEACON REGISTRY</Text>
+          <Text accessibilityRole="header" style={[S.sectionLabel, { color: colors.textTertiary }]}>BEACON REGISTRY</Text>
           <Pill label={active ? 'ACTIVE' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
         </View>
 

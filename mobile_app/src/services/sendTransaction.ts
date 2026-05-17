@@ -96,12 +96,14 @@ export interface SendSplParams {
 
 export interface EstimateSolTransferFeeParams {
   walletAdapter: IWalletAdapter;
+  rpcAdapter: IRpcAdapter;
   recipientAddress: string;
   amountSOL: string;
 }
 
 export interface EstimateSplTransferFeeParams {
   walletAdapter: IWalletAdapter;
+  rpcAdapter: IRpcAdapter;
   recipientAddress: string;
   amount: string;
   mintAddress: string;
@@ -236,7 +238,6 @@ export async function confirmTransaction(
         // getCurrentAdapter must never break confirmation polling.
       }
     }
-
     try {
       const status = await rpcAdapter.getSignatureStatus(signature);
       if (status) {
@@ -309,6 +310,7 @@ async function buildSplTransferTransaction({
   mintAddress,
   decimals,
   programId,
+  rpcAdapter,
 }: {
   fromPubkey: PublicKey;
   recipientAddress: string;
@@ -316,6 +318,7 @@ async function buildSplTransferTransaction({
   mintAddress: string;
   decimals: number;
   programId?: string;
+  rpcAdapter: IRpcAdapter;
 }): Promise<Transaction> {
   // Bottom-line guard against any caller (including direct deep-links to
   // /send/review with a tampered programId param) trying to build an SPL
@@ -342,11 +345,8 @@ async function buildSplTransferTransaction({
 
   const tx = new Transaction();
 
-  // ATA existence is still a direct Solana RPC read because IRpcAdapter only
-  // exposes balance/blockhash/submission. Submission itself uses the selected
-  // network adapter, so mesh relay still carries the signed transaction.
   const toAtaInfo = await withTimeout(
-    solanaConnection.getAccountInfo(toAta, "confirmed"),
+    rpcAdapter.getAccountInfo(toAta, "confirmed"),
     DIRECT_RPC_TIMEOUT_MS,
     "ATA lookup",
   );
@@ -431,6 +431,7 @@ async function signAndSubmitTransaction({
 
 export async function estimateSolTransferFeeLamports({
   walletAdapter,
+  rpcAdapter,
   recipientAddress,
   amountSOL,
 }: EstimateSolTransferFeeParams): Promise<number> {
@@ -441,27 +442,27 @@ export async function estimateSolTransferFeeLamports({
 
   const tx = buildSolTransferTransaction({ fromPubkey, recipientAddress, amountSOL });
   const { blockhash } = await withTimeout(
-    solanaConnection.getLatestBlockhash("confirmed"),
+    rpcAdapter.getLatestBlockhash(),
     DIRECT_RPC_TIMEOUT_MS,
     "SOL fee blockhash",
   );
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
 
-  // Fee estimate stays direct-RPC until IRpcAdapter exposes getFeeForMessage.
   const fee = await withTimeout(
-    solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed"),
+    rpcAdapter.getFeeForMessage(tx.compileMessage(), "confirmed"),
     DIRECT_RPC_TIMEOUT_MS,
     "SOL fee estimate",
   );
-  if (fee.value === null) {
+  if (fee === null) {
     throw new Error("Fee unavailable");
   }
-  return fee.value;
+  return fee;
 }
 
 export async function estimateSplTransferFeeLamports({
   walletAdapter,
+  rpcAdapter,
   recipientAddress,
   amount,
   mintAddress,
@@ -480,25 +481,25 @@ export async function estimateSplTransferFeeLamports({
     mintAddress,
     decimals,
     programId,
+    rpcAdapter,
   });
   const { blockhash } = await withTimeout(
-    solanaConnection.getLatestBlockhash("confirmed"),
+    rpcAdapter.getLatestBlockhash(),
     DIRECT_RPC_TIMEOUT_MS,
     "SPL fee blockhash",
   );
   tx.recentBlockhash = blockhash;
   tx.feePayer = fromPubkey;
 
-  // Fee estimate stays direct-RPC until IRpcAdapter exposes getFeeForMessage.
   const fee = await withTimeout(
-    solanaConnection.getFeeForMessage(tx.compileMessage(), "confirmed"),
+    rpcAdapter.getFeeForMessage(tx.compileMessage(), "confirmed"),
     DIRECT_RPC_TIMEOUT_MS,
     "SPL fee estimate",
   );
-  if (fee.value === null) {
+  if (fee === null) {
     throw new Error("Fee unavailable");
   }
-  return fee.value;
+  return fee;
 }
 
 /**
@@ -549,6 +550,7 @@ export async function sendSplTransfer({
     mintAddress,
     decimals,
     programId,
+    rpcAdapter,
   });
   return signAndSubmitTransaction({ walletAdapter, rpcAdapter, tx, expectedPubkey: fromPubkey });
 }
