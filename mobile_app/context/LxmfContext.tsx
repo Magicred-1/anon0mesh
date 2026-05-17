@@ -319,6 +319,18 @@ export interface StoredMessage {
 }
 
 const LXMF_LOG_LEVEL = Number(process.env.EXPO_PUBLIC_LXMF_LOG_LEVEL ?? 1);
+const PROGRAM_ID_HEX = process.env.EXPO_PUBLIC_PROGRAM_ID_HEX ?? null;
+
+// Local mirrors of useLxmf types — not re-exported from module index
+type ExecutePaymentAccounts = {
+  payer: string; broadcaster: string; nonceAccount: string;
+  payerAta: string; recipient: string; recipientAta: string;
+  broadcasterAta: string; mint: string;
+};
+type ExecutePaymentParams = {
+  compOffset: number; amount: number; encryptedAmount: string;
+  nonce: string; encryptionPubKey: string;
+};
 const LXMF_AUTOSTART_DELAY_MS = 1_500;
 
 function isUsableTcpHost(host: string): boolean {
@@ -387,6 +399,7 @@ interface LxmfCtxValue {
   getNusUnpairedRNodes:   () => { mac: string; name: string }[];
   pairNusRNode:           (mac: string) => boolean;
   beaconRpc:              (destHashHex: string, method: string, params?: unknown) => Promise<number>;
+  beaconRpcWait:          (destHashHex: string, method: string, params?: unknown, timeoutMs?: number) => Promise<{ resultJson: string; isError: boolean }>;
   blePeerCount:           number;
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
@@ -796,6 +809,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     getNusUnpairedRNodes:   lxmf.getNusUnpairedRNodes,
     pairNusRNode:           lxmf.pairNusRNode,
     beaconRpc:              lxmf.beaconRpc,
+    beaconRpcWait:          lxmf.beaconRpcWait,
     blePeerCount,
     updateDisplayName: async (name: string) => {
       const trimmed = name.trim();
@@ -821,7 +835,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
-       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc]);
+       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc, lxmf.beaconRpcWait]);
 
   return (
     <LxmfCtx.Provider value={value}>

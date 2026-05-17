@@ -7,7 +7,6 @@ import React, {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 
@@ -59,8 +58,8 @@ export interface NetworkState {
 
 const NetworkModeContext = createContext<NetworkState | undefined>(undefined);
 
-export function NetworkModeProvider({ children }: { children: ReactNode }) {
-  const { beacons, send, events, status } = useLxmfContext();
+export function NetworkModeProvider({ children }: { readonly children: ReactNode }) {
+  const { beacons, beaconRpcWait, status } = useLxmfContext();
   const [internet, setInternet] = useState(true);
 
   // Subscribe to OS-level connectivity — no polling, no HTTP spam.
@@ -88,38 +87,12 @@ export function NetworkModeProvider({ children }: { children: ReactNode }) {
     mode = "isolated";
   }
 
-  // Stable adapter ref — single MeshRpcAdapter instance across the app so
-  // pending-request maps + rpcResponse routing don't fragment under
-  // simultaneous mounts. Fixes T23.
-  const meshAdapterRef = useRef<MeshRpcAdapter | null>(null);
   const adapter = useMemo<IRpcAdapter>(() => {
-    if (mode === "online") {
-      meshAdapterRef.current = null;
-      return new DirectRpcAdapter(solanaConnection);
-    }
-    if (mode === "mesh" && relay) {
-      const a = new MeshRpcAdapter(relay.destHash, send);
-      meshAdapterRef.current = a;
-      return a;
-    }
-    meshAdapterRef.current = null;
+    if (mode === "online") return new DirectRpcAdapter(solanaConnection);
+    if (mode === "mesh" && relay) return new MeshRpcAdapter(relay.destHash, beaconRpcWait);
     return new IsolatedRpcAdapter();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, relay?.destHash]);
-
-  // Route incoming LXMF messages + rpcResponse events to the active mesh adapter.
-  useEffect(() => {
-    const mesh = meshAdapterRef.current;
-    if (!mesh || events.length === 0) return;
-    const last = events[0];
-    if (last?.type === "messageReceived" && last.source && last.body) {
-      const decoded = Buffer.from(last.body as string, "base64").toString("utf8");
-      mesh.handleIncoming(last.source as string, decoded);
-    }
-    if (last?.type === "rpcResponse") {
-      mesh.handleIncoming(last.source as string ?? "", last.body as string ?? "");
-    }
-  }, [events]);
 
   const value = useMemo<NetworkState>(
     () => ({ mode, adapter, relayHash: adapter.relayHash }),
