@@ -39,8 +39,8 @@ export default function TutorialScreen() {
         kicker: "Messages",
         title: "Encrypted chat, no internet.",
         body: "Send messages to nearby peers over Bluetooth radio. No servers, no phone number, no SIM. Open the Messages tab to start a conversation.",
-        statLabel: "Your mesh ID",
-        statValue: shortAddress(myAddress),
+        statLabel: "Identity",
+        statValue: displayName || "Ready",
       },
       {
         icon: "radio",
@@ -54,12 +54,12 @@ export default function TutorialScreen() {
         icon: "credit-card",
         kicker: "Wallet",
         title: "Pay any peer, no banks required.",
-        body: "Your Solana wallet is built in. Send SOL or tokens to any mesh peer — scan their QR or pick from Messages. Keys never leave this device.",
+        body: "Your Solana wallet is built in. Send SOL or tokens to any mesh peer: scan their QR or pick from Messages. Keys never leave this device.",
         statLabel: "Wallet",
         statValue: shortAddress(publicKey?.toBase58()),
       },
     ];
-  }, [myAddress, peers, publicKey]);
+  }, [displayName, myAddress, peers, publicKey]);
 
   const slide = slides[index];
   const isLast = index === slides.length - 1;
@@ -88,7 +88,13 @@ export default function TutorialScreen() {
         <Text style={[S.brand, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
           {displayName || "anonmesh"}
         </Text>
-        <Pressable onPress={finish} hitSlop={12} style={S.skip}>
+        <Pressable
+          onPress={finish}
+          hitSlop={12}
+          style={S.skip}
+          accessibilityRole="button"
+          accessibilityLabel="Skip tutorial"
+        >
           <Text style={[S.skipText, { color: colors.textTertiary, fontFamily: fontFamily.sans }]}>Skip</Text>
         </Pressable>
       </View>
@@ -174,32 +180,33 @@ const S = StyleSheet.create({
     fontSize: 17,
   },
   skip: {
-    minHeight: 36,
     justifyContent: "center",
+    minHeight: 36,
     paddingHorizontal: 8,
   },
   skipText: {
-    fontSize: 14,
+    fontSize: 13,
   },
   content: {
     alignItems: "center",
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
-    paddingTop: 28,
+    paddingTop: 24,
   },
   iconShell: {
     alignItems: "center",
-    borderRadius: 26,
+    borderRadius: 24,
     borderWidth: 1,
     height: 96,
     justifyContent: "center",
-    marginBottom: 28,
+    marginBottom: 24,
     width: 96,
   },
   kicker: {
     fontSize: 12,
-    marginBottom: 10,
+    letterSpacing: 1.5,
+    marginBottom: 8,
     textTransform: "uppercase",
   },
   title: {
@@ -209,8 +216,8 @@ const S = StyleSheet.create({
     textAlign: "center",
   },
   body: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 17,
+    lineHeight: 26,
     maxWidth: 360,
     textAlign: "center",
   },
@@ -220,7 +227,7 @@ const S = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 34,
+    marginTop: 32,
     maxWidth: 420,
     minHeight: 72,
     paddingHorizontal: 16,
@@ -228,11 +235,12 @@ const S = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 11,
+    letterSpacing: 1,
     marginBottom: 4,
     textTransform: "uppercase",
   },
   statusValue: {
-    fontSize: 18,
+    fontSize: 17,
   },
   identityPill: {
     borderRadius: 999,
@@ -247,7 +255,7 @@ const S = StyleSheet.create({
   dots: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 28,
+    marginTop: 24,
   },
   dot: {
     borderRadius: 999,
