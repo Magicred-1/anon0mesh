@@ -1,7 +1,4 @@
-// FUTURE: re-export from components/wallet/index.ts once swap protocol is integrated. Currently displays preview UI only.
-// FUTURE: roadmap preview. Not exported from `components/wallet/index.ts` —
-// re-add the export only after wiring real behavior. Dead CTA is wrapped in
-// <PreviewedActions> + the panel header carries a <PreviewBadge>. Per AUDIT A6 / ROADMAP § 0.A.8.
+// FUTURE: preview-only panel; re-export from components/wallet/index.ts once swap protocol is integrated and behavior is fully wired (AUDIT A6 / ROADMAP § 0.A.8).
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';

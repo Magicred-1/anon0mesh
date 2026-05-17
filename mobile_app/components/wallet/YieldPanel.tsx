@@ -1,7 +1,4 @@
-// FUTURE: re-export from components/wallet/index.ts once yield protocols are integrated. Currently displays preview UI only.
-// FUTURE: roadmap preview. Not exported from `components/wallet/index.ts` —
-// re-add the export only after wiring real behavior. Dead CTAs are wrapped in
-// <PreviewedActions> + the panel header carries a <PreviewBadge>. Per AUDIT A6 / ROADMAP § 0.A.8.
+// FUTURE: preview-only panel; re-export from components/wallet/index.ts once yield protocols are integrated and behavior is fully wired (AUDIT A6 / ROADMAP § 0.A.8).
 import React, { memo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { fontFamily, useTheme } from '@/theme';

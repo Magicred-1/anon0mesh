@@ -19,7 +19,6 @@ import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
 import type { ActivityEntry, TokenBalance } from '@/src/services/walletData';
 import { relTime } from '@/src/utils/relTime';
 import { fontFamily, useTheme } from '@/theme';
-import { relTime } from '@/src/utils/relTime';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
