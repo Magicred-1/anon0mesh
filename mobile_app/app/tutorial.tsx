@@ -128,8 +128,8 @@ export default function TutorialScreen() {
         kicker: "Messages",
         title: "Encrypted chat, no internet.",
         body: "Send messages to nearby peers over Bluetooth radio. No servers, no phone number, no SIM. Open the Messages tab to start a conversation.",
-        statLabel: "Identity",
-        statValue: displayName || "Ready",
+        statLabel: "Mesh ID",
+        statValue: shortAddress(myAddress),
       },
       {
         icon: "radio",
@@ -148,7 +148,7 @@ export default function TutorialScreen() {
         statValue: shortAddress(publicKey?.toBase58()),
       },
     ];
-  }, [displayName, peers, publicKey]);
+  }, [myAddress, peers, publicKey]);
 
   const slide = slides[index];
   const isLast = index === slides.length - 1;
@@ -158,7 +158,7 @@ export default function TutorialScreen() {
   const finish = useCallback(() => {
     markTutorialCompleted()
       .catch(() => undefined)
-      .finally(() => router.replace("/(tabs)/messages"));
+      .finally(() => router.replace("/(tabs)"));
   }, []);
 
   const navigateWith = useCallback(
@@ -218,15 +218,17 @@ export default function TutorialScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={[S.slideContent, contentStyle]}>
-          <Animated.View
-            style={[
-              S.iconShell,
-              iconShellStyle,
-              { backgroundColor: colors.primarySubtle, borderColor: colors.borderStrong },
-            ]}
-          >
-            <Icon name={slide.icon} size={42} color={colors.primary} />
-          </Animated.View>
+          <View style={[S.iconGlow, { backgroundColor: colors.primarySubtle }]}>
+            <Animated.View
+              style={[
+                S.iconShell,
+                iconShellStyle,
+                { backgroundColor: colors.surface1, borderColor: colors.borderStrong },
+              ]}
+            >
+              <Icon name={slide.icon} size={42} color={colors.primary} />
+            </Animated.View>
+          </View>
 
           <Text style={[S.kicker, { color: colors.primary, fontFamily: fontFamily.sansSb }]}>
             {slide.kicker}
@@ -239,16 +241,11 @@ export default function TutorialScreen() {
           </Text>
 
           <View style={[S.statRow, { borderTopColor: colors.border }]}>
-            <View>
-              <Text style={[S.statusLabel, { color: colors.textTertiary, fontFamily: fontFamily.sansSb }]}>
-                {slide.statLabel}
-              </Text>
-              <Text style={[S.statusValue, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
-                {slide.statValue}
-              </Text>
-            </View>
-            <Text style={[S.addressText, { color: colors.primary, fontFamily: fontFamily.sansMd }]}>
-              {shortAddress(myAddress)}
+            <Text style={[S.statusLabel, { color: colors.textTertiary, fontFamily: fontFamily.sansSb }]}>
+              {slide.statLabel}
+            </Text>
+            <Text style={[S.statusValue, { color: colors.textPrimary, fontFamily: fontFamily.sansMd }]}>
+              {slide.statValue}
             </Text>
           </View>
         </Animated.View>
@@ -266,14 +263,16 @@ export default function TutorialScreen() {
       </ScrollView>
 
       <View style={[S.footer, { paddingBottom: Math.max(16, insets.bottom + 8) }]}>
-        <DepthButton
-          label="Back"
-          onPress={back}
-          disabled={index === 0}
-          size="md"
-          variant="secondary"
-          style={S.footerButton}
-        />
+        {index > 0 && (
+          <DepthButton
+            label="Back"
+            onPress={back}
+            size="md"
+            tone="cyan"
+            variant="ghost"
+            style={S.footerButton}
+          />
+        )}
         <DepthButton
           label={isLast ? "Go to Messages" : "Next"}
           onPress={next}
@@ -322,13 +321,20 @@ const S = StyleSheet.create({
     alignItems: "center",
     width: "100%",
   },
+  iconGlow: {
+    alignItems: "center",
+    borderRadius: 999,
+    height: 148,
+    justifyContent: "center",
+    marginBottom: 28,
+    width: 148,
+  },
   iconShell: {
     alignItems: "center",
     borderRadius: 12,
     borderWidth: 1,
     height: 96,
     justifyContent: "center",
-    marginBottom: 24,
     width: 96,
   },
   kicker: {
@@ -352,8 +358,7 @@ const S = StyleSheet.create({
   statRow: {
     alignItems: "center",
     borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    justifyContent: "space-between",
+    gap: 6,
     marginTop: 32,
     maxWidth: 420,
     paddingTop: 14,
@@ -362,16 +367,10 @@ const S = StyleSheet.create({
   statusLabel: {
     fontSize: 11,
     letterSpacing: 1,
-    marginBottom: 4,
     textTransform: "uppercase",
   },
   statusValue: {
-    fontSize: 17,
-  },
-  addressText: {
-    fontSize: 13,
-    maxWidth: "48%",
-    textAlign: "right",
+    fontSize: 15,
   },
   dots: {
     flexDirection: "row",
