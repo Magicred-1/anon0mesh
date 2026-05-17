@@ -3,7 +3,9 @@ import type {
   Commitment,
   ConfirmedSignatureInfo,
   Finality,
+  GetVersionedTransactionConfig,
   ParsedAccountData,
+  ParsedTransactionWithMeta,
   PublicKey,
   RpcResponseAndContext,
   SignaturesForAddressOptions,
@@ -84,10 +86,16 @@ export interface IRpcAdapter {
     options?: SignaturesForAddressOptions,
     commitment?: Finality,
   ): Promise<ConfirmedSignatureInfo[]>;
+
+  getParsedTransactions(
+    signatures: string[],
+    config?: GetVersionedTransactionConfig | Finality,
+  ): Promise<(ParsedTransactionWithMeta | null)[]>;
 }
 
 /**
- * Mesh RPC wire protocol.
+ * Mesh RPC wire protocol — DEPRECATED, kept for reference only.
+ * The new transport uses beaconRpcWait (Reticulum Link + JSON-RPC 2.0).
  *
  * Request  → LXMF body (base64-encoded JSON):
  *   { id: string, type: 'solana_rpc', method: string, params: unknown[] }

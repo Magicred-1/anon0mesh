@@ -160,6 +160,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             ? await withTimeout(
                 estimateSolTransferFeeLamports({
                   walletAdapter: wallet,
+                  rpcAdapter,
                   recipientAddress: to,
                   amountSOL: amount,
                 }),
@@ -169,6 +170,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             : await withTimeout(
                 estimateSplTransferFeeLamports({
                   walletAdapter: wallet,
+                  rpcAdapter,
                   recipientAddress: to,
                   amount,
                   mintAddress: normalizedMint,
