@@ -20,6 +20,7 @@ import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import * as ExpoCrypto from 'expo-crypto';
+import { ed25519 } from '@noble/curves/ed25519.js';
 
 type BeaconExecutePaymentAccounts = {
   payer: string; broadcaster: string; nonceAccount: string;
@@ -363,6 +364,24 @@ function configuredTcpInterfaces(): TcpInterface[] {
   return interfaces;
 }
 
+async function ensureBeaconKeypair(): Promise<string> {
+  const existing = await secureGet(SecureKeys.BEACON_KEYPAIR_HEX);
+  if (existing) {
+    // Last 64 hex chars = 32-byte ed25519 pubkey
+    return existing.slice(64);
+  }
+  const seed    = ExpoCrypto.getRandomBytes(32);
+  const pubkey  = ed25519.getPublicKey(seed);
+  const full64  = new Uint8Array(64);
+  full64.set(seed);
+  full64.set(pubkey, 32);
+  const keypairHex = Array.from(full64, b => b.toString(16).padStart(2, '0')).join('');
+  const pubkeyHex  = Array.from(pubkey,  b => b.toString(16).padStart(2, '0')).join('');
+  await secureSet(SecureKeys.BEACON_KEYPAIR_HEX, keypairHex);
+  await secureSet(SecureKeys.BEACON_PUBKEY_HEX,  pubkeyHex);
+  return pubkeyHex;
+}
+
 export interface LxmfPeer {
   destHash:     string;
   displayName:  string;
@@ -415,8 +434,9 @@ interface LxmfCtxValue {
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
   setBeaconMode:        (enabled: boolean) => Promise<void>;
-  beaconKeypairHex:     string | null;
-  updateBeaconConfig:   (opts: { keypairHex?: string }) => Promise<void>;
+  beaconKeypairReady:      boolean;
+  beaconPubkeyHex:         string | null;
+  regenerateBeaconKeypair: () => Promise<void>;
   partialSignExecutePayment: (
     payerKeyHex: string,
     nonceBlockhashHex: string,
@@ -444,7 +464,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const [storedIdentity,     setStoredIdentity]     = useState<StoredIdentity | null>(null);
   const [identityHydrated,   setIdentityHydrated]   = useState(false);
   const [isBeacon,           setIsBeacon]           = useState(false);
-  const [beaconKeypairHex,   setBeaconKeypairHex]   = useState<string | null>(null);
+  const [beaconKeypairReady, setBeaconKeypairReady] = useState(false);
+  const [beaconPubkeyHex,    setBeaconPubkeyHex]    = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -462,8 +483,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       const beaconPref = await prefGet(PrefKeys.BEACON_MODE);
       if (!cancelled) setIsBeacon(beaconPref === 'true');
 
-      const keypair = await secureGet(SecureKeys.BEACON_KEYPAIR_HEX);
-      if (!cancelled && keypair) setBeaconKeypairHex(keypair);
+      const pubkeyHex = await ensureBeaconKeypair();
+      if (!cancelled) {
+        setBeaconPubkeyHex(pubkeyHex);
+        setBeaconKeypairReady(true);
+      }
 
       if (!cancelled) setIdentityHydrated(true);
     })();
@@ -488,10 +512,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       autostartTimerRef.current = setTimeout(() => {
         if (cancelled || isRunning || startingRef.current) return;
         startingRef.current = true;
-        requestBLEPermissions().then(perm => {
+        requestBLEPermissions().then(async perm => {
           if (cancelled || (perm !== 'granted' && perm !== 'not_required')) return false;
           if (isBeacon) {
-            if (beaconKeypairHex) setBeaconKeypair(beaconKeypairHex);
+            const keypairHex = await secureGet(SecureKeys.BEACON_KEYPAIR_HEX);
+            if (keypairHex) setBeaconKeypair(keypairHex);
             setBeaconSolanaRpc(process.env.EXPO_PUBLIC_SOLANA_RPC ?? 'https://api.devnet.solana.com');
           }
           return start({
@@ -517,7 +542,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       interaction.cancel();
     };
   }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon,
-      beaconKeypairHex, setBeaconKeypair, setBeaconSolanaRpc]);
+      beaconKeypairReady, setBeaconKeypair, setBeaconSolanaRpc]);
 
   // Persist identity after node starts (using getIdentityHex() per new API)
   useEffect(() => {
@@ -803,13 +828,13 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     return peer?.displayName || nameMapRef.current[hash] || hash.slice(0, 8);
   }, []);
 
-  const updateBeaconConfig = useCallback(async (opts: { keypairHex?: string }) => {
-    if (opts.keypairHex !== undefined) {
-      setBeaconKeypairHex(opts.keypairHex || null);
-      if (opts.keypairHex) await secureSet(SecureKeys.BEACON_KEYPAIR_HEX, opts.keypairHex);
-      else                 await secureDelete(SecureKeys.BEACON_KEYPAIR_HEX);
-    }
-  }, []);
+  const regenerateBeaconKeypair = useCallback(async (): Promise<void> => {
+    await secureDelete(SecureKeys.BEACON_KEYPAIR_HEX);
+    await secureDelete(SecureKeys.BEACON_PUBKEY_HEX);
+    const pubkeyHex = await ensureBeaconKeypair();
+    setBeaconPubkeyHex(pubkeyHex);
+    if (isRunning) await stop();
+  }, [isRunning, stop]);
 
   const { fetchMessages: lxmfFetchMessages } = lxmf;
   const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
@@ -856,9 +881,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     },
     isBeacon,
     setBeaconMode,
-    beaconKeypairHex,
-    updateBeaconConfig,
-    partialSignExecutePayment: lxmf.partialSignExecutePayment,
+    beaconKeypairReady,
+    beaconPubkeyHex,
+    regenerateBeaconKeypair,
+    partialSignExecutePayment: (payerKeyHex: string, nonceBlockhashHex: string, accounts: any, params: any) =>
+      lxmf.partialSignExecutePayment(payerKeyHex, nonceBlockhashHex, JSON.stringify(accounts), JSON.stringify(params)),
     extractNonceBlockhash:     lxmf.extractNonceBlockhash,
     getDisplayName,
     groups,
@@ -871,7 +898,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
        handleStartBLE, handleStopBLE, handleSend, handleCreateGroup, handleJoinGroup, handleLeaveGroup,
        isGroup, getGroupName, getGroupMembers, groups,
-       isBeacon, setBeaconMode, beaconKeypairHex, updateBeaconConfig, getDisplayName, getPeerMessages, lxmfFetchMessages,
+       isBeacon, setBeaconMode, beaconKeypairReady, beaconPubkeyHex, regenerateBeaconKeypair, getDisplayName, getPeerMessages, lxmfFetchMessages,
        lxmf.partialSignExecutePayment, lxmf.extractNonceBlockhash,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
