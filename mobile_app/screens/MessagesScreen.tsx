@@ -402,12 +402,11 @@ export default function MessagesScreen() {
       if (srcHash === activePeerHexRef.current) {
         setMsgs(m => [...m, ...newMsgs]);
       } else {
-        // Route to that peer's thread regardless of whether any peer is active
+        // Route to that peer's thread regardless of whether any peer is active.
+        // Do NOT append a toast to the active thread — cross-thread "↙ message
+        // from X" lines pollute the visible transcript with unrelated traffic.
         const thread = threadsRef.current.get(srcHash) ?? [];
         threadsRef.current.set(srcHash, [...thread, ...newMsgs]);
-        if (activePeerHexRef.current !== null) {
-          setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `↙ message from ${from}` }]);
-        }
       }
     }
   }, [events, getDisplayName, resolveSeq]);
