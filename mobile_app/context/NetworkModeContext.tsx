@@ -17,8 +17,10 @@ import { IsolatedRpcAdapter } from "@/src/infrastructure/network/IsolatedRpcAdap
 import { MeshRpcAdapter } from "@/src/infrastructure/network/MeshRpcAdapter";
 import type { IRpcAdapter, NetworkMode } from "@/src/infrastructure/network/types";
 
-// Beacon must be active and recently announced to be considered a usable
-// Solana relay route. Plain peers / BLE are mesh presence, not RPC transport.
+// freshRelayBeacon picks the best hash for routing metadata (active + recently
+// announced). Mode decision is broader: any beacon in the native registry
+// (any state) or any online peer beacon qualifies — beaconBroadcastRpc makes
+// its own routing call and shouldn't be blocked by stale JS-side state.
 const BEACON_STALE_MS = 120_000;
 const EPOCH_MS_THRESHOLD = 10_000_000_000;
 
@@ -59,7 +61,7 @@ export interface NetworkState {
 const NetworkModeContext = createContext<NetworkState | undefined>(undefined);
 
 export function NetworkModeProvider({ children }: { readonly children: ReactNode }) {
-  const { beacons, beaconBroadcastRpc, status } = useLxmfContext();
+  const { beacons, beaconBroadcastRpc, status, peers } = useLxmfContext();
   const [internet, setInternet] = useState(true);
 
   // Subscribe to OS-level connectivity — no polling, no HTTP spam.
@@ -78,21 +80,36 @@ export function NetworkModeProvider({ children }: { readonly children: ReactNode
     [beacons, status?.addressHex],
   );
 
+  const activePeerBeacon = useMemo(
+    () => peers.find(p => p.isBeaconNode && p.online) ?? null,
+    [peers],
+  );
+
+  // Any beacon the native registry knows about, regardless of state.
+  // beaconBroadcastRpc routes independently — 'inactive' on the JS side
+  // does not mean the native layer cannot reach it.
+  const anyKnownBeacon = useMemo(
+    () => beacons.find(b => b.destHash !== status?.addressHex) ?? null,
+    [beacons, status?.addressHex],
+  );
+
   let mode: NetworkMode;
   if (internet) {
     mode = "online";
-  } else if (relay) {
+  } else if (activePeerBeacon || anyKnownBeacon) {
     mode = "mesh";
   } else {
     mode = "isolated";
   }
 
+  // Hash priority: freshest active beacon > online peer beacon > any known beacon
+  const meshHash = relay?.destHash ?? activePeerBeacon?.destHash ?? anyKnownBeacon?.destHash ?? '';
+
   const adapter = useMemo<IRpcAdapter>(() => {
     if (mode === "online") return new DirectRpcAdapter(solanaConnection);
-    if (mode === "mesh" && relay) return new MeshRpcAdapter(relay.destHash, beaconBroadcastRpc);
+    if (mode === "mesh")   return new MeshRpcAdapter(meshHash, beaconBroadcastRpc);
     return new IsolatedRpcAdapter();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, relay?.destHash]);
+  }, [mode, meshHash, beaconBroadcastRpc]);
 
   const value = useMemo<NetworkState>(
     () => ({ mode, adapter, relayHash: adapter.relayHash }),

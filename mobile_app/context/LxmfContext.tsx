@@ -481,7 +481,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       if (!cancelled && identity) setStoredIdentity(identity);
 
       const beaconPref = await prefGet(PrefKeys.BEACON_MODE);
-      if (!cancelled) setIsBeacon(beaconPref === 'true');
+      const beaconEnabled = beaconPref === null ? true : beaconPref === 'true';
+      if (!cancelled) setIsBeacon(beaconEnabled);
+      if (beaconPref === null) {
+        await prefSet(PrefKeys.BEACON_MODE, 'true');
+      }
 
       const pubkeyHex = await ensureBeaconKeypair();
       if (!cancelled) {
