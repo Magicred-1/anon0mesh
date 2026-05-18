@@ -26,6 +26,7 @@ import { PeersDrawer }           from '@/components/messages/PeersDrawer';
 import { CreateGroupModal }      from '@/components/messages/CreateGroupModal';
 import { JoinGroupModal }        from '@/components/messages/JoinGroupModal';
 import { ChannelShareSheet }     from '@/components/messages/ChannelShareSheet';
+import { GroupMembersSheet }     from '@/components/messages/GroupMembersSheet';
 import { type Peer }             from '@/components/messages/constants';
 import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { Feather }               from '@expo/vector-icons';
@@ -257,7 +258,7 @@ export default function MessagesScreen() {
   const {
     isRunning, displayName, peers: lxmfPeers, events, send,
     getDisplayName, getPeerMessages, myAddress,
-    groups, createGroup, joinGroup, leaveGroup,
+    groups, createGroup, joinGroup, leaveGroup, getGroupMembers,
   } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
@@ -270,6 +271,7 @@ export default function MessagesScreen() {
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
   const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
+  const [membersSheetOpen,   setMembersSheetOpen]   = useState(false);
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed' | 'stale'>>(new Map());
 
   const { destHash: paramDestHash, handle: paramHandle } = useLocalSearchParams<{ destHash?: string; handle?: string }>();
@@ -444,6 +446,15 @@ export default function MessagesScreen() {
     () => livePeers.find(p => p.destHash === activePeerHex) ?? null,
     [livePeers, activePeerHex],
   );
+
+  // Members list only matters when a group thread is open. events.length is
+  // the trigger — getGroupMembers reads the native DB, which gains new senders
+  // as messageReceived events arrive; the callback reference itself is stable.
+  const activeGroupMembers = useMemo(() => {
+    if (!activePeerObj?.isGroup || !activePeerHex) return [];
+    return getGroupMembers(activePeerHex);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePeerObj?.isGroup, activePeerHex, getGroupMembers, events.length]);
 
   // State reset — called on JS thread after slide-out animation completes
   const resetChat = useCallback(() => {
@@ -667,10 +678,11 @@ export default function MessagesScreen() {
             hops={activePeerObj?.hops}
             iface={activePeerObj?.iface as 'TCP' | 'BLE' | 'RNode' | undefined}
             online={activePeerObj?.online}
+            isGroup={activePeerObj?.isGroup}
+            memberCount={activeGroupMembers.length}
             onOpen={goBack}
-            onShareQR={groups.some(g => g.addrHex === activePeerHex)
-              ? () => setShareSheetOpen(true)
-              : undefined}
+            onShareQR={activePeerObj?.isGroup ? () => setShareSheetOpen(true) : undefined}
+            onShowMembers={activePeerObj?.isGroup ? () => setMembersSheetOpen(true) : undefined}
           />
           {queuedCount > 0 && (
             <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
@@ -720,6 +732,13 @@ export default function MessagesScreen() {
         visible={shareSheetOpen}
         onClose={() => setShareSheetOpen(false)}
         group={groups.find(g => g.addrHex === activePeerHex) ?? null}
+      />
+      <GroupMembersSheet
+        visible={membersSheetOpen}
+        onClose={() => setMembersSheetOpen(false)}
+        group={groups.find(g => g.addrHex === activePeerHex) ?? null}
+        members={activeGroupMembers}
+        getDisplayName={getDisplayName}
       />
     </View>
   );
