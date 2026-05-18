@@ -8,16 +8,36 @@ import { useGlass } from '../../hooks/useGlass';
 import { useLxmfContext } from '@/context/LxmfContext';
 
 interface Props {
-  peer:         string | null;
-  selfName?:    string;
-  hops?:        number;
-  iface?:       'TCP' | 'BLE' | 'RNode';
-  online?:      boolean;
-  onOpen:       () => void;
-  onShareQR?:   () => void;
+  peer:           string | null;
+  selfName?:      string;
+  hops?:          number;
+  iface?:         'TCP' | 'BLE' | 'RNode';
+  online?:        boolean;
+  isGroup?:       boolean;
+  memberCount?:   number;
+  onOpen:         () => void;
+  onShareQR?:     () => void;
+  onShowMembers?: () => void;
 }
 
 // ── Peer info row ─────────────────────────────────────────────────────────────
+
+function GroupInfo({ peer, memberCount }: { readonly peer: string | null; readonly memberCount?: number }) {
+  const { colors } = useTheme();
+  const count = memberCount ?? 0;
+  return (
+    <>
+      <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{peer}</Text>
+      <View style={S.statusRow}>
+        <Feather name="hash" size={9} color={colors.textTertiary} style={{ marginRight: 4 }} />
+        <Text style={[S.meta, { color: colors.textTertiary }]}>CHANNEL</Text>
+        <Text style={[S.meta, { color: colors.textTertiary }]}>
+          {` · ${count} active participant${count === 1 ? '' : 's'}`}
+        </Text>
+      </View>
+    </>
+  );
+}
 
 function PeerInfo({ peer, hops, iface, online }: Readonly<Pick<Props, 'peer' | 'hops' | 'iface' | 'online'>>) {
   const { colors } = useTheme();
@@ -80,7 +100,7 @@ function EditIcon({ onPress }: { readonly onPress: () => void }) {
 
 // ── ThreadHeader ──────────────────────────────────────────────────────────────
 
-export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, onOpen, onShareQR }: Props) {
+export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, isGroup, memberCount, onOpen, onShareQR, onShowMembers }: Props) {
   const { colors }            = useTheme();
   const baseGlass             = useGlass();
   const { updateDisplayName } = useLxmfContext();
@@ -108,7 +128,34 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
   }, []);
 
   let rightSlot: React.ReactNode;
-  if (hasPeer && onShareQR) {
+  if (hasPeer && isGroup) {
+    rightSlot = (
+      <View style={S.rightGroup}>
+        {onShowMembers && (
+          <Pressable
+            onPress={onShowMembers}
+            hitSlop={10}
+            style={S.qrBtn}
+            accessibilityRole="button"
+            accessibilityLabel="show channel members"
+          >
+            <Feather name="users" size={14} color={colors.textTertiary} />
+          </Pressable>
+        )}
+        {onShareQR && (
+          <Pressable
+            onPress={onShareQR}
+            hitSlop={10}
+            style={S.qrBtn}
+            accessibilityRole="button"
+            accessibilityLabel="share channel"
+          >
+            <Feather name="share-2" size={14} color={colors.textTertiary} />
+          </Pressable>
+        )}
+      </View>
+    );
+  } else if (hasPeer && onShareQR) {
     rightSlot = (
       <View style={S.rightGroup}>
         <Pressable onPress={onShareQR} hitSlop={10} style={S.qrBtn}>
@@ -132,7 +179,8 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
       </Pressable>
 
       <View style={{ flex: 1 }}>
-        {hasPeer && <PeerInfo peer={peer} hops={hops} iface={iface} online={online} />}
+        {hasPeer && isGroup && <GroupInfo peer={peer} memberCount={memberCount} />}
+        {hasPeer && !isGroup && <PeerInfo peer={peer} hops={hops} iface={iface} online={online} />}
         {!hasPeer && !editing && (
           <View style={S.nameRow}>
             <Text style={[S.handle, { color: colors.textPrimary, fontSize: 13 }]}>{selfName ?? 'messages'}</Text>
