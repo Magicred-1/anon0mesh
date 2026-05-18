@@ -431,6 +431,7 @@ interface LxmfCtxValue {
   pairNusRNode:           (mac: string) => boolean;
   beaconRpc:              (destHashHex: string, method: string, params?: unknown) => Promise<number>;
   beaconBroadcastRpc:     (method: string, params?: unknown, timeoutMs?: number) => Promise<{ resultJson: string; beaconHash: string }>;
+  beaconRpcWait:          (destHashHex: string, method: string, params?: unknown, timeoutMs?: number) => Promise<{ resultJson: string; isError: boolean }>;
   blePeerCount:           number;
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
@@ -877,6 +878,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     pairNusRNode:           lxmf.pairNusRNode,
     beaconRpc:              lxmf.beaconRpc,
     beaconBroadcastRpc:     lxmf.beaconBroadcastRpc,
+    beaconRpcWait:          lxmf.beaconRpcWait,
     blePeerCount,
     updateDisplayName: async (name: string) => {
       const trimmed = name.trim();
@@ -909,7 +911,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
-       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc, lxmf.beaconBroadcastRpc]);
+       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc, lxmf.beaconBroadcastRpc, lxmf.beaconRpcWait]);
 
   return (
     <LxmfCtx.Provider value={value}>
