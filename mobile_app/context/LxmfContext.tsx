@@ -97,9 +97,9 @@ async function loadOrMigrateDisplayName(): Promise<string | null> {
   return null;
 }
 
-function sanitizeName(raw: string, fallback: string): string {
+function sanitizeName(raw: string): string | null {
   const cleaned = raw.replaceAll(/[^\x20-\x7E]/g, '').replaceAll(/\s+/g, '_').trim();
-  return cleaned.length >= 2 ? cleaned.slice(0, 32) : fallback.slice(0, 8);
+  return cleaned.length >= 2 ? cleaned.slice(0, 32) : null;
 }
 
 type PeerMap  = Map<string, LxmfPeer>;
@@ -126,7 +126,7 @@ function applyAnnounceEvent(
   const appData    = typeof rawAppData === 'string' ? rawAppData : '';
   const isBeaconNode = appData.startsWith('anonmesh::beacon::v1');
   const nameRaw  = isBeaconNode ? (appData.split('\0')[1] ?? '') : appData.trim();
-  const name     = nameRaw ? sanitizeName(nameRaw, hash) : undefined;
+  const name     = nameRaw ? sanitizeName(nameRaw) : null;
   const nameChanged = !!name && names[hash] !== name;
   if (nameChanged) names[hash] = name!;
 
@@ -227,8 +227,8 @@ function applyBeaconDiscovered(e: LxmfEvent, names: NameDict): boolean {
   const rawAppData = typeof e.appData === 'string' ? e.appData : (e as any).app_data;
   const appData    = typeof rawAppData === 'string' ? rawAppData.trim() : '';
   if (!appData) return false;
-  const name = sanitizeName(appData, hash);
-  if (names[hash] === name) return false;
+  const name = sanitizeName(appData);
+  if (!name || names[hash] === name) return false;
   names[hash] = name;
   return true;
 }
