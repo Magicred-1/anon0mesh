@@ -142,6 +142,7 @@ function applyAnnounceEvent(
     online:       true,
     via:          resolveVia(hops, bleActive, existing),
     isBeaconNode: isBeaconNode || (existing?.isBeaconNode ?? false),
+    nameKnown:    !!name || (existing?.nameKnown ?? false),
   });
   return { peerChanged: true, nameChanged };
 }
@@ -168,6 +169,7 @@ function applyLogAnnounce(
     online:       true,
     via:          resolveVia(hops, bleActive, existing),
     isBeaconNode: existing?.isBeaconNode ?? false,
+    nameKnown:    existing?.nameKnown ?? !!names[hash],
   });
   return true;
 }
@@ -193,6 +195,7 @@ function applyMessageReceived(
       online:       true,
       via:          bleActive ? 'ble' : 'reticulum',
       isBeaconNode: false,
+      nameKnown:    !!names[srcHash],
     });
   }
   return true;
@@ -252,6 +255,7 @@ function mergeBeacon(
     online:       isOnline,
     via:          existing?.via ?? 'reticulum',
     isBeaconNode: true,
+    nameKnown:    !!names[b.destHash] || (existing?.nameKnown ?? false),
   });
   return true;
 }
@@ -391,6 +395,8 @@ export interface LxmfPeer {
   online:       boolean;
   via:          'ble' | 'reticulum' | 'rnode';
   isBeaconNode: boolean;
+  /** True iff displayName came from an announce/beacon name field, not a hash-prefix fallback. */
+  nameKnown:    boolean;
 }
 
 interface LxmfCtxValue {
@@ -447,6 +453,8 @@ interface LxmfCtxValue {
   extractNonceBlockhash: (accountDataB64: string) => string | null;
   /** Reads from refs — always current, safe to call inside any effect. */
   getDisplayName:       (hash: string) => string;
+  /** Structured identity: name + nameKnown flag. nameKnown=false when fallback to hash prefix. */
+  getPeerIdentity:      (hash: string) => { name: string; nameKnown: boolean };
   // ── Groups ────────────────────────────────────────────────────────────────
   groups:      LxmfGroup[];
   createGroup: (name: string) => Promise<LxmfGroup>;
@@ -833,6 +841,14 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     return peer?.displayName || nameMapRef.current[hash] || hash.slice(0, 8);
   }, []);
 
+  const getPeerIdentity = useCallback((hash: string): { name: string; nameKnown: boolean } => {
+    const peer = knownPeersRef.current.get(hash);
+    if (peer?.nameKnown) return { name: peer.displayName, nameKnown: true };
+    const mapped = nameMapRef.current[hash];
+    if (mapped) return { name: mapped, nameKnown: true };
+    return { name: peer?.displayName || hash.slice(0, 8), nameKnown: false };
+  }, []);
+
   const regenerateBeaconKeypair = useCallback(async (): Promise<void> => {
     await secureDelete(SecureKeys.BEACON_KEYPAIR_HEX);
     await secureDelete(SecureKeys.BEACON_PUBKEY_HEX);
@@ -893,6 +909,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       lxmf.partialSignExecutePayment(payerKeyHex, nonceBlockhashHex, JSON.stringify(accounts), JSON.stringify(params)),
     extractNonceBlockhash:     lxmf.extractNonceBlockhash,
     getDisplayName,
+    getPeerIdentity,
     groups,
     createGroup: handleCreateGroup,
     joinGroup:   handleJoinGroup,
@@ -903,7 +920,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
        handleStartBLE, handleStopBLE, handleSend, handleCreateGroup, handleJoinGroup, handleLeaveGroup,
        isGroup, getGroupName, getGroupMembers, groups,
-       isBeacon, setBeaconMode, beaconKeypairReady, beaconPubkeyHex, regenerateBeaconKeypair, getDisplayName, getPeerMessages, lxmfFetchMessages,
+       isBeacon, setBeaconMode, beaconKeypairReady, beaconPubkeyHex, regenerateBeaconKeypair, getDisplayName, getPeerIdentity, getPeerMessages, lxmfFetchMessages,
        lxmf.partialSignExecutePayment, lxmf.extractNonceBlockhash,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
        lxmf.events, lxmf.error, lxmf.start, lxmf.stop,

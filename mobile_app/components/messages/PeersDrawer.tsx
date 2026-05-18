@@ -266,6 +266,8 @@ export const PeersDrawer = memo(function PeersDrawer({
                 );
               }
 
+              const showAnon = p.nameKnown === false;
+              const hashShort = p.destHash ? p.destHash.slice(0, 8) : '';
               return (
                 <Pressable
                   key={id}
@@ -284,7 +286,14 @@ export const PeersDrawer = memo(function PeersDrawer({
                   />
                   <View style={S.info}>
                     <View style={S.infoTop}>
-                      <Text style={[S.handle, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>{p.handle}</Text>
+                      {showAnon ? (
+                        <View style={S.anonRow}>
+                          <Text style={[S.handle, S.anonLabel, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>Anonymous</Text>
+                          <Text style={[S.anonHash, { color: colors.textTertiary }]} numberOfLines={1}>· {hashShort}</Text>
+                        </View>
+                      ) : (
+                        <Text style={[S.handle, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>{p.handle}</Text>
+                      )}
                       <Text style={[S.time, { color: colors.textTertiary }]}>{p.time}</Text>
                     </View>
                     <View style={S.infoBottom}>
@@ -366,6 +375,9 @@ const S = StyleSheet.create({
   infoTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 4 },
   infoBottom:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
   handle:       { fontFamily: fontFamily.sansMd, fontSize: 14, flex: 1, letterSpacing: 0.1 },
+  anonRow:      { flexDirection: 'row', alignItems: 'baseline', flex: 1, gap: 5, minWidth: 0 },
+  anonLabel:    { flex: 0 },
+  anonHash:     { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, flex: 1, minWidth: 0 },
   time:         { fontFamily: fontFamily.sansMd, fontSize: 10 },
   last:         { fontSize: 12.5, flex: 1, fontFamily: fontFamily.sansMd },
 });
