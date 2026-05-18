@@ -169,7 +169,7 @@ function applyLogAnnounce(
     online:       true,
     via:          resolveVia(hops, bleActive, existing),
     isBeaconNode: existing?.isBeaconNode ?? false,
-    nameKnown:    existing?.nameKnown ?? !!names[hash],
+    nameKnown:    (existing?.nameKnown ?? false) || !!names[hash],
   });
   return true;
 }
@@ -184,8 +184,9 @@ function applyMessageReceived(
   if (!srcHash || srcHash === ownHash) return false;
   const existing = map.get(srcHash);
   if (existing) {
-    if (existing.online) return false;
-    map.set(srcHash, { ...existing, online: true, lastSeen: now });
+    const nameKnown = existing.nameKnown || !!names[srcHash];
+    if (existing.online && existing.nameKnown === nameKnown) return false;
+    map.set(srcHash, { ...existing, online: true, lastSeen: now, nameKnown });
   } else {
     map.set(srcHash, {
       destHash:     srcHash,
@@ -213,14 +214,17 @@ function processNewEvents(
     if (ann.nameChanged) nameChanged = true;
     if (!ann.peerChanged) {
       if (applyLogAnnounce(e, map, names, now, ownHash, bleActive)) peerChanged = true;
-      if (applyBeaconDiscovered(e, names)) nameChanged = true;
+      if (applyBeaconDiscovered(e, map, names)) {
+        nameChanged = true;
+        peerChanged = true;
+      }
     }
     if (applyMessageReceived(e, map, names, now, ownHash, bleActive)) peerChanged = true;
   }
   return { peerChanged, nameChanged };
 }
 
-function applyBeaconDiscovered(e: LxmfEvent, names: NameDict): boolean {
+function applyBeaconDiscovered(e: LxmfEvent, map: PeerMap, names: NameDict): boolean {
   if (e.type !== 'beaconDiscovered') return false;
   const hash = (e.destHash ?? (e as any).dest_hash ?? e.address ?? e.source) as string | undefined;
   if (typeof hash !== 'string') return false;
@@ -230,6 +234,10 @@ function applyBeaconDiscovered(e: LxmfEvent, names: NameDict): boolean {
   const name = sanitizeName(appData);
   if (!name || names[hash] === name) return false;
   names[hash] = name;
+  const existing = map.get(hash);
+  if (existing && !existing.nameKnown) {
+    map.set(hash, { ...existing, displayName: name, nameKnown: true });
+  }
   return true;
 }
 
