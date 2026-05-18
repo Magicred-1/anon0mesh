@@ -18,7 +18,9 @@ import { MeshRpcAdapter } from "@/src/infrastructure/network/MeshRpcAdapter";
 import type { IRpcAdapter, NetworkMode } from "@/src/infrastructure/network/types";
 
 // Beacon must be active and recently announced to be considered a usable
-// Solana relay route. Plain peers / BLE are mesh presence, not RPC transport.
+// Solana relay route. Peer beacon nodes (isBeaconNode && online) are also
+// accepted — they may surface via announce events before the native beacon
+// registry reflects them, and beaconBroadcastRpc routes to both.
 const BEACON_STALE_MS = 120_000;
 const EPOCH_MS_THRESHOLD = 10_000_000_000;
 
@@ -59,7 +61,7 @@ export interface NetworkState {
 const NetworkModeContext = createContext<NetworkState | undefined>(undefined);
 
 export function NetworkModeProvider({ children }: { readonly children: ReactNode }) {
-  const { beacons, beaconBroadcastRpc, status } = useLxmfContext();
+  const { beacons, beaconBroadcastRpc, status, peers } = useLxmfContext();
   const [internet, setInternet] = useState(true);
 
   // Subscribe to OS-level connectivity — no polling, no HTTP spam.
@@ -78,21 +80,27 @@ export function NetworkModeProvider({ children }: { readonly children: ReactNode
     [beacons, status?.addressHex],
   );
 
+  const activePeerBeacon = useMemo(
+    () => peers.find(p => p.isBeaconNode && p.online) ?? null,
+    [peers],
+  );
+
   let mode: NetworkMode;
   if (internet) {
     mode = "online";
-  } else if (relay) {
+  } else if (relay || activePeerBeacon) {
     mode = "mesh";
   } else {
     mode = "isolated";
   }
 
+  const meshHash = relay?.destHash ?? activePeerBeacon?.destHash ?? '';
+
   const adapter = useMemo<IRpcAdapter>(() => {
     if (mode === "online") return new DirectRpcAdapter(solanaConnection);
-    if (mode === "mesh" && relay) return new MeshRpcAdapter(relay.destHash, beaconBroadcastRpc);
+    if (mode === "mesh")   return new MeshRpcAdapter(meshHash, beaconBroadcastRpc);
     return new IsolatedRpcAdapter();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, relay?.destHash]);
+  }, [mode, meshHash, beaconBroadcastRpc]);
 
   const value = useMemo<NetworkState>(
     () => ({ mode, adapter, relayHash: adapter.relayHash }),
