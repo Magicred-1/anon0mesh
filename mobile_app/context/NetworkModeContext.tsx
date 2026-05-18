@@ -61,7 +61,7 @@ export interface NetworkState {
 const NetworkModeContext = createContext<NetworkState | undefined>(undefined);
 
 export function NetworkModeProvider({ children }: { readonly children: ReactNode }) {
-  const { beacons, beaconRpcWait, status, peers } = useLxmfContext();
+  const { beacons, beaconBroadcastRpc, status, peers } = useLxmfContext();
   const [internet, setInternet] = useState(true);
 
   // Subscribe to OS-level connectivity — no polling, no HTTP spam.
