@@ -86,8 +86,6 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setActivityLoading(true);
     try {
-      // Parsed-token and activity RPCs stay direct until IRpcAdapter exposes
-      // those broader Solana APIs; native SOL balance uses the selected route.
       const [solResult, splResult, activityResult] = await Promise.allSettled([
         rpcAdapter.getBalance(publicKey),
         fetchSplTokens(rpcAdapter, publicKey),

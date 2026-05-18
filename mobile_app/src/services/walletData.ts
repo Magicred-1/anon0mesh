@@ -1,5 +1,4 @@
 import {
-  Connection,
   LAMPORTS_PER_SOL,
   PublicKey,
   type ParsedInstruction,
@@ -64,14 +63,6 @@ function resolveMint(mint: string): { symbol: string; name: string } {
 
 function mintShort(mint: string): string {
   return `${mint.slice(0, 4)}…${mint.slice(-4)}`;
-}
-
-export async function fetchSolBalance(
-  connection: Connection,
-  publicKey: PublicKey,
-): Promise<number> {
-  const lamports = await connection.getBalance(publicKey, "confirmed");
-  return lamports / LAMPORTS_PER_SOL;
 }
 
 export async function fetchSplTokens(
