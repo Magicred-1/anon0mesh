@@ -61,7 +61,7 @@ export interface NetworkState {
 const NetworkModeContext = createContext<NetworkState | undefined>(undefined);
 
 export function NetworkModeProvider({ children }: { readonly children: ReactNode }) {
-  const { beacons, beaconRpcWait, status, peers } = useLxmfContext();
+  const { beacons, beaconBroadcastRpc, beaconRpcWait, status, peers } = useLxmfContext();
   const [internet, setInternet] = useState(true);
 
   // Subscribe to OS-level connectivity — no polling, no HTTP spam.
@@ -107,9 +107,9 @@ export function NetworkModeProvider({ children }: { readonly children: ReactNode
 
   const adapter = useMemo<IRpcAdapter>(() => {
     if (mode === "online") return new DirectRpcAdapter(solanaConnection);
-    if (mode === "mesh")   return new MeshRpcAdapter(meshHash, beaconRpcWait);
+    if (mode === "mesh")   return new MeshRpcAdapter(meshHash, beaconBroadcastRpc);
     return new IsolatedRpcAdapter();
-  }, [mode, meshHash, beaconRpcWait]);
+  }, [mode, meshHash, beaconBroadcastRpc]);
 
   const value = useMemo<NetworkState>(
     () => ({ mode, adapter, relayHash: adapter.relayHash }),
