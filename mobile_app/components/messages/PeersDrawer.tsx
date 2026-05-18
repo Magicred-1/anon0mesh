@@ -1,5 +1,5 @@
-import React, { memo, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
+import React, { memo, useState, useCallback } from 'react';
+import { Alert, View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -28,7 +28,7 @@ interface Props {
 
 const REVEAL = 82;
 
-function SwipeableGroupRow({ onLeave, children }: { readonly onLeave: () => void; readonly children: React.ReactNode }) {
+function SwipeableGroupRow({ groupName, onLeave, children }: { readonly groupName: string; readonly onLeave: () => void; readonly children: React.ReactNode }) {
   const tx = useSharedValue(0);
 
   const pan = Gesture.Pan()
@@ -50,14 +50,29 @@ function SwipeableGroupRow({ onLeave, children }: { readonly onLeave: () => void
     opacity: interpolate(tx.value, [-REVEAL, -REVEAL * 0.3, 0], [1, 0.9, 0.5], Extrapolation.CLAMP),
   }));
 
+  const confirmLeave = useCallback(() => {
+    // Channel keys are unrecoverable from local state once we leave. Block on
+    // explicit confirm so a fat-finger swipe doesn't destroy access.
+    Alert.alert(
+      `Leave ${groupName}?`,
+      'You will need the address + key to re-join. Keys live only with members of this channel.',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); } },
+        { text: 'Leave',  style: 'destructive', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); onLeave(); } },
+      ],
+    );
+  }, [groupName, onLeave, tx]);
+
   return (
     <View style={S.swipeWrap}>
       <View style={S.leaveAction}>
         <Reanimated.View style={actionAnim}>
           <Pressable
-            onPress={() => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); onLeave(); }}
+            onPress={confirmLeave}
             style={S.leaveInner}
             hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={`leave channel ${groupName}`}
           >
             <Feather name="log-out" size={16} color="#fff" />
             <Text style={S.leaveText}>LEAVE</Text>
@@ -227,7 +242,7 @@ export const PeersDrawer = memo(function PeersDrawer({
 
               if (p.isGroup) {
                 return (
-                  <SwipeableGroupRow key={id} onLeave={() => onLeaveGroup?.(id)}>
+                  <SwipeableGroupRow key={id} groupName={p.handle} onLeave={() => onLeaveGroup?.(id)}>
                     <Pressable
                       onPress={() => onPick(p)}
                       style={({ pressed }) => [
@@ -251,6 +266,8 @@ export const PeersDrawer = memo(function PeersDrawer({
                 );
               }
 
+              const showAnon = p.nameKnown === false;
+              const hashShort = p.destHash ? p.destHash.slice(0, 8) : '';
               return (
                 <Pressable
                   key={id}
@@ -269,7 +286,14 @@ export const PeersDrawer = memo(function PeersDrawer({
                   />
                   <View style={S.info}>
                     <View style={S.infoTop}>
-                      <Text style={[S.handle, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>{p.handle}</Text>
+                      {showAnon ? (
+                        <View style={S.anonRow}>
+                          <Text style={[S.handle, S.anonLabel, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>Anonymous</Text>
+                          <Text style={[S.anonHash, { color: colors.textTertiary }]} numberOfLines={1}>· {hashShort}</Text>
+                        </View>
+                      ) : (
+                        <Text style={[S.handle, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>{p.handle}</Text>
+                      )}
                       <Text style={[S.time, { color: colors.textTertiary }]}>{p.time}</Text>
                     </View>
                     <View style={S.infoBottom}>
@@ -351,6 +375,9 @@ const S = StyleSheet.create({
   infoTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 4 },
   infoBottom:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
   handle:       { fontFamily: fontFamily.sansMd, fontSize: 14, flex: 1, letterSpacing: 0.1 },
+  anonRow:      { flexDirection: 'row', alignItems: 'baseline', flex: 1, gap: 5, minWidth: 0 },
+  anonLabel:    { flex: 0 },
+  anonHash:     { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, flex: 1, minWidth: 0 },
   time:         { fontFamily: fontFamily.sansMd, fontSize: 10 },
   last:         { fontSize: 12.5, flex: 1, fontFamily: fontFamily.sansMd },
 });

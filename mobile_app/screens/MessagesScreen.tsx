@@ -26,6 +26,7 @@ import { PeersDrawer }           from '@/components/messages/PeersDrawer';
 import { CreateGroupModal }      from '@/components/messages/CreateGroupModal';
 import { JoinGroupModal }        from '@/components/messages/JoinGroupModal';
 import { ChannelShareSheet }     from '@/components/messages/ChannelShareSheet';
+import { GroupMembersSheet }     from '@/components/messages/GroupMembersSheet';
 import { type Peer }             from '@/components/messages/constants';
 import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { Feather }               from '@expo/vector-icons';
@@ -108,15 +109,16 @@ function lxmfPeerToPeer(p: LxmfPeer): Peer {
   const now = Math.floor(Date.now() / 1000);
   const ago = p.lastSeen > 0 ? formatAgo(now - p.lastSeen) : '—';
   return {
-    handle:   p.displayName || p.destHash.slice(0, 8),
-    hops:     p.hops,
-    iface:    viaToIface(p.via),
-    online:   p.online,
-    unread:   0,
-    last:     `${p.via} · ${p.online ? 'active' : 'offline'}`,
-    time:     ago,
-    beacon:   false,
-    destHash: p.destHash,
+    handle:    p.nameKnown ? p.displayName : p.destHash.slice(0, 8),
+    hops:      p.hops,
+    iface:     viaToIface(p.via),
+    online:    p.online,
+    unread:    0,
+    last:      `${p.via} · ${p.online ? 'active' : 'offline'}`,
+    time:      ago,
+    beacon:    false,
+    destHash:  p.destHash,
+    nameKnown: p.nameKnown,
   };
 }
 
@@ -256,8 +258,8 @@ export default function MessagesScreen() {
   const { colors } = useTheme();
   const {
     isRunning, displayName, peers: lxmfPeers, events, send,
-    getDisplayName, getPeerMessages, myAddress,
-    groups, createGroup, joinGroup, leaveGroup,
+    getDisplayName, getPeerIdentity, getPeerMessages, myAddress,
+    groups, createGroup, joinGroup, leaveGroup, getGroupMembers,
   } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
@@ -270,6 +272,7 @@ export default function MessagesScreen() {
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
   const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
   const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
+  const [membersSheetOpen,   setMembersSheetOpen]   = useState(false);
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed' | 'stale'>>(new Map());
 
   const { destHash: paramDestHash, handle: paramHandle } = useLocalSearchParams<{ destHash?: string; handle?: string }>();
@@ -402,12 +405,11 @@ export default function MessagesScreen() {
       if (srcHash === activePeerHexRef.current) {
         setMsgs(m => [...m, ...newMsgs]);
       } else {
-        // Route to that peer's thread regardless of whether any peer is active
+        // Route to that peer's thread regardless of whether any peer is active.
+        // Do NOT append a toast to the active thread — cross-thread "↙ message
+        // from X" lines pollute the visible transcript with unrelated traffic.
         const thread = threadsRef.current.get(srcHash) ?? [];
         threadsRef.current.set(srcHash, [...thread, ...newMsgs]);
-        if (activePeerHexRef.current !== null) {
-          setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: `↙ message from ${from}` }]);
-        }
       }
     }
   }, [events, getDisplayName, resolveSeq]);
@@ -427,16 +429,17 @@ export default function MessagesScreen() {
   const livePeers: Peer[] = useMemo(() => {
     const dms = lxmfPeers.map(lxmfPeerToPeer);
     const groupPeers: Peer[] = groups.map(g => ({
-      handle:   g.name,
-      destHash: g.addrHex,
-      hops:     0,
-      iface:    'TCP' as const,
-      online:   true,
-      unread:   0,
-      last:     '',
-      time:     '',
-      beacon:   false,
-      isGroup:  true,
+      handle:    g.name,
+      destHash:  g.addrHex,
+      hops:      0,
+      iface:     'TCP' as const,
+      online:    true,
+      unread:    0,
+      last:      '',
+      time:      '',
+      beacon:    false,
+      isGroup:   true,
+      nameKnown: true,
     }));
     return [...groupPeers, ...dms];
   }, [lxmfPeers, groups]);
@@ -445,6 +448,15 @@ export default function MessagesScreen() {
     () => livePeers.find(p => p.destHash === activePeerHex) ?? null,
     [livePeers, activePeerHex],
   );
+
+  // Members list only matters when a group thread is open. events.length is
+  // the trigger — getGroupMembers reads the native DB, which gains new senders
+  // as messageReceived events arrive; the callback reference itself is stable.
+  const activeGroupMembers = useMemo(() => {
+    if (!activePeerObj?.isGroup || !activePeerHex) return [];
+    return getGroupMembers(activePeerHex);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePeerObj?.isGroup, activePeerHex, getGroupMembers, events.length]);
 
   // State reset — called on JS thread after slide-out animation completes
   const resetChat = useCallback(() => {
@@ -592,20 +604,22 @@ export default function MessagesScreen() {
       pendingConversationRef.current = null;
       if (hash === activePeerHexRef.current) return;
       const peer = lxmfPeers.find(p => p.destHash === hash);
+      const ident = getPeerIdentity(hash);
       pickPeer(peer ? lxmfPeerToPeer(peer) : {
-        handle:   getDisplayName(hash),
-        hops:     0,
-        iface:    'TCP',
-        online:   true,
-        unread:   0,
-        last:     '—',
-        time:     '—',
-        beacon:   false,
-        destHash: hash,
+        handle:    ident.nameKnown ? ident.name : hash.slice(0, 8),
+        hops:      0,
+        iface:     'TCP',
+        online:    true,
+        unread:    0,
+        last:      '—',
+        time:      '—',
+        beacon:    false,
+        destHash:  hash,
+        nameKnown: ident.nameKnown,
       });
     }
     return () => { messagesFocusedRef.current = false; };
-  }, [lxmfPeers, pickPeer, getDisplayName]));
+  }, [lxmfPeers, pickPeer, getPeerIdentity]));
 
   // Open a thread when navigated from another screen (e.g. Nodes DM button)
   useFocusEffect(useCallback(() => {
@@ -613,18 +627,20 @@ export default function MessagesScreen() {
     if (handledDeepLinkRef.current === paramDestHash) return;
     handledDeepLinkRef.current = paramDestHash;
     const lxmfPeer = lxmfPeers.find(p => p.destHash === paramDestHash);
+    const ident = getPeerIdentity(paramDestHash);
     pickPeer(lxmfPeer ? lxmfPeerToPeer(lxmfPeer) : {
-      handle:   paramHandle,
-      hops:     0,
-      iface:    'TCP',
-      online:   true,
-      unread:   0,
-      last:     '—',
-      time:     '—',
-      beacon:   false,
-      destHash: paramDestHash,
+      handle:    ident.nameKnown ? ident.name : (paramHandle || paramDestHash.slice(0, 8)),
+      hops:      0,
+      iface:     'TCP',
+      online:    true,
+      unread:    0,
+      last:      '—',
+      time:      '—',
+      beacon:    false,
+      destHash:  paramDestHash,
+      nameKnown: ident.nameKnown,
     });
-  }, [paramDestHash, paramHandle, lxmfPeers, pickPeer]));
+  }, [paramDestHash, paramHandle, lxmfPeers, pickPeer, getPeerIdentity]));
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
@@ -642,17 +658,21 @@ export default function MessagesScreen() {
           onPick={pickPeer}
           syncing={!isRunning}
           peers={livePeers}
-          onNewHash={hash => pickPeer({
-            handle:   getDisplayName(hash) || hash.slice(0, 8),
-            hops:     0,
-            iface:    'TCP',
-            online:   true,
-            unread:   0,
-            last:     '—',
-            time:     '—',
-            beacon:   false,
-            destHash: hash,
-          })}
+          onNewHash={hash => {
+            const ident = getPeerIdentity(hash);
+            pickPeer({
+              handle:    ident.nameKnown ? ident.name : hash.slice(0, 8),
+              hops:      0,
+              iface:     'TCP',
+              online:    true,
+              unread:    0,
+              last:      '—',
+              time:      '—',
+              beacon:    false,
+              destHash:  hash,
+              nameKnown: ident.nameKnown,
+            });
+          }}
           onCreateGroup={() => setCreateGroupVisible(true)}
           onJoinGroup={() => setJoinGroupVisible(true)}
           onLeaveGroup={addrHex => leaveGroup(addrHex)}
@@ -668,10 +688,13 @@ export default function MessagesScreen() {
             hops={activePeerObj?.hops}
             iface={activePeerObj?.iface as 'TCP' | 'BLE' | 'RNode' | undefined}
             online={activePeerObj?.online}
+            isGroup={activePeerObj?.isGroup}
+            memberCount={activeGroupMembers.length}
+            nameKnown={activePeerObj?.nameKnown ?? true}
+            hashShort={activePeerHex ? activePeerHex.slice(0, 8) : undefined}
             onOpen={goBack}
-            onShareQR={groups.some(g => g.addrHex === activePeerHex)
-              ? () => setShareSheetOpen(true)
-              : undefined}
+            onShareQR={activePeerObj?.isGroup ? () => setShareSheetOpen(true) : undefined}
+            onShowMembers={activePeerObj?.isGroup ? () => setMembersSheetOpen(true) : undefined}
           />
           {queuedCount > 0 && (
             <View style={[S.queueBanner, { backgroundColor: colors.primarySubtle, borderColor: colors.primary + '40' }]}>
@@ -721,6 +744,13 @@ export default function MessagesScreen() {
         visible={shareSheetOpen}
         onClose={() => setShareSheetOpen(false)}
         group={groups.find(g => g.addrHex === activePeerHex) ?? null}
+      />
+      <GroupMembersSheet
+        visible={membersSheetOpen}
+        onClose={() => setMembersSheetOpen(false)}
+        group={groups.find(g => g.addrHex === activePeerHex) ?? null}
+        members={activeGroupMembers}
+        getDisplayName={getDisplayName}
       />
     </View>
   );
