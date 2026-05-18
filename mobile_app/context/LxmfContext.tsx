@@ -330,6 +330,7 @@ export interface StoredMessage {
   files?:    { name: string; data: string }[];
 }
 
+// TODO: add the program ID as a parameter to the context and enforce it in send() and broadcast() so we don't accidentally send unsupported messages through a beacon that doesn't know how to handle them. This will be important as we add support for more message types (e.g. group channels) that require specific handling by the beacon.
 const LXMF_LOG_LEVEL = Number(process.env.EXPO_PUBLIC_LXMF_LOG_LEVEL ?? 1);
 const PROGRAM_ID_HEX = process.env.EXPO_PUBLIC_PROGRAM_ID_HEX ?? null;
 

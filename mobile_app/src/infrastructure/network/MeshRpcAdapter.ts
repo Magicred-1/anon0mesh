@@ -135,14 +135,6 @@ export class MeshRpcAdapter implements IRpcAdapter {
       'getParsedTransactions', [signatures, config ?? { maxSupportedTransactionVersion: 0 }],
     );
   }
-
-  async getParsedTransactions(
-    signatures: string[],
-    config?: GetVersionedTransactionConfig | Finality,
-  ): Promise<(ParsedTransactionWithMeta | null)[]> {
-    const result = await this.rpc('getParsedTransactions', [signatures, config ?? { maxSupportedTransactionVersion: 0 }]);
-    return (result as (ParsedTransactionWithMeta | null)[]) ?? [];
-  }
 }
 
 interface RawAccountInfo {
