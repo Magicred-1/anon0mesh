@@ -82,7 +82,12 @@ export function useMessageNotifications(
         if (appStateRef.current === 'active') {
           onInApp(payload);
         } else {
+          // Per-peer identifier replaces any prior unread notification from the
+          // same sender instead of stacking. Matches usePeerCountNotification's
+          // single-id pattern. On iOS this maps to UNNotificationRequest reuse;
+          // on Android the channel already groups under 'messages'.
           Notifications.scheduleNotificationAsync({
+            identifier: `anonmesh-msg-${srcHash}`,
             content: { title: sender, body: 'new message', sound: true },
             trigger: null,
           }).catch(() => {});
