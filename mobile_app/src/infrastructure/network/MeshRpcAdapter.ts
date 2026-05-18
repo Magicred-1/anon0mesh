@@ -20,26 +20,37 @@ import type { IRpcAdapter, ParsedTokenAccountsByOwner } from './types';
 
 const MESH_RPC_TIMEOUT_MS = 30_000;
 
-type BeaconBroadcastRpcFn = (
+type BeaconRpcWaitFn = (
+  destHashHex: string,
   method: string,
   params?: unknown,
   timeoutMs?: number,
-) => Promise<{ resultJson: string; beaconHash: string }>;
+) => Promise<{ resultJson: string; isError: boolean }>;
 
 export class MeshRpcAdapter implements IRpcAdapter {
   readonly mode = 'mesh' as const;
   readonly relayHash: string;
 
-  private readonly beaconBroadcastRpc: BeaconBroadcastRpcFn;
+  private readonly beaconRpcWait: BeaconRpcWaitFn;
 
-  constructor(relayBeaconHash: string, beaconBroadcastRpc: BeaconBroadcastRpcFn) {
+  constructor(relayBeaconHash: string, beaconRpcWait: BeaconRpcWaitFn) {
     this.relayHash = relayBeaconHash;
-    this.beaconBroadcastRpc = beaconBroadcastRpc;
+    this.beaconRpcWait = beaconRpcWait;
   }
 
   private async rpc<T>(method: string, params: unknown[]): Promise<T> {
-    const { resultJson } = await this.beaconBroadcastRpc(method, params, MESH_RPC_TIMEOUT_MS);
-    return JSON.parse(resultJson) as T;
+    const { resultJson, isError } = await this.beaconRpcWait(
+      this.relayHash,
+      method,
+      params,
+      MESH_RPC_TIMEOUT_MS,
+    );
+    const parsed = JSON.parse(resultJson) as unknown;
+    if (isError) {
+      const err = parsed as { code?: number; message?: string };
+      throw new Error(err.message ?? `RPC error (${err.code ?? -1})`);
+    }
+    return parsed as T;
   }
 
   async getBalance(pubkey: PublicKey): Promise<number> {
