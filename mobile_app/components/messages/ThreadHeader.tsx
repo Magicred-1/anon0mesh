@@ -15,6 +15,10 @@ interface Props {
   online?:        boolean;
   isGroup?:       boolean;
   memberCount?:   number;
+  /** False when the active thread's peer has not announced a name; render "Anonymous · prefix". */
+  nameKnown?:     boolean;
+  /** 8-char hash prefix for anonymous-peer display. */
+  hashShort?:     string;
   onOpen:         () => void;
   onShareQR?:     () => void;
   onShowMembers?: () => void;
@@ -39,11 +43,20 @@ function GroupInfo({ peer, memberCount }: { readonly peer: string | null; readon
   );
 }
 
-function PeerInfo({ peer, hops, iface, online }: Readonly<Pick<Props, 'peer' | 'hops' | 'iface' | 'online'>>) {
+function PeerInfo({ peer, hops, iface, online, nameKnown, hashShort }:
+  Readonly<Pick<Props, 'peer' | 'hops' | 'iface' | 'online' | 'nameKnown' | 'hashShort'>>) {
   const { colors } = useTheme();
+  const showAnon = nameKnown === false && !!hashShort;
   return (
     <>
-      <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{peer}</Text>
+      {showAnon ? (
+        <View style={S.anonRow}>
+          <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>Anonymous</Text>
+          <Text style={[S.anonHash, { color: colors.textTertiary }]} numberOfLines={1}>· {hashShort}</Text>
+        </View>
+      ) : (
+        <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{peer}</Text>
+      )}
       <View style={S.statusRow}>
         <View style={[S.dot, { backgroundColor: online ? colors.primary : colors.textTertiary }]} />
         <Text style={[S.meta, { color: online ? colors.primary : colors.textTertiary }]}>
@@ -100,7 +113,7 @@ function EditIcon({ onPress }: { readonly onPress: () => void }) {
 
 // ── ThreadHeader ──────────────────────────────────────────────────────────────
 
-export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, isGroup, memberCount, onOpen, onShareQR, onShowMembers }: Props) {
+export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, isGroup, memberCount, nameKnown, hashShort, onOpen, onShareQR, onShowMembers }: Props) {
   const { colors }            = useTheme();
   const baseGlass             = useGlass();
   const { updateDisplayName } = useLxmfContext();
@@ -180,7 +193,7 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
 
       <View style={{ flex: 1 }}>
         {hasPeer && isGroup && <GroupInfo peer={peer} memberCount={memberCount} />}
-        {hasPeer && !isGroup && <PeerInfo peer={peer} hops={hops} iface={iface} online={online} />}
+        {hasPeer && !isGroup && <PeerInfo peer={peer} hops={hops} iface={iface} online={online} nameKnown={nameKnown} hashShort={hashShort} />}
         {!hasPeer && !editing && (
           <View style={S.nameRow}>
             <Text style={[S.handle, { color: colors.textPrimary, fontSize: 13 }]}>{selfName ?? 'messages'}</Text>
@@ -215,6 +228,8 @@ const S = StyleSheet.create({
   header:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 0.5 },
   hamburger:   { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   handle:      { fontFamily: fontFamily.sansMd, fontSize: 14 },
+  anonRow:     { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
+  anonHash:    { fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.5 },
   input:       { borderBottomWidth: 1, paddingBottom: 1, paddingHorizontal: 0, minWidth: 80 },
   statusRow:   { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   dot:         { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
