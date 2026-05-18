@@ -17,10 +17,10 @@ import { IsolatedRpcAdapter } from "@/src/infrastructure/network/IsolatedRpcAdap
 import { MeshRpcAdapter } from "@/src/infrastructure/network/MeshRpcAdapter";
 import type { IRpcAdapter, NetworkMode } from "@/src/infrastructure/network/types";
 
-// Beacon must be active and recently announced to be considered a usable
-// Solana relay route. Peer beacon nodes (isBeaconNode && online) are also
-// accepted — they may surface via announce events before the native beacon
-// registry reflects them, and beaconBroadcastRpc routes to both.
+// freshRelayBeacon picks the best hash for routing metadata (active + recently
+// announced). Mode decision is broader: any beacon in the native registry
+// (any state) or any online peer beacon qualifies — beaconBroadcastRpc makes
+// its own routing call and shouldn't be blocked by stale JS-side state.
 const BEACON_STALE_MS = 120_000;
 const EPOCH_MS_THRESHOLD = 10_000_000_000;
 
@@ -85,16 +85,25 @@ export function NetworkModeProvider({ children }: { readonly children: ReactNode
     [peers],
   );
 
+  // Any beacon the native registry knows about, regardless of state.
+  // beaconBroadcastRpc routes independently — 'inactive' on the JS side
+  // does not mean the native layer cannot reach it.
+  const anyKnownBeacon = useMemo(
+    () => beacons.find(b => b.destHash !== status?.addressHex) ?? null,
+    [beacons, status?.addressHex],
+  );
+
   let mode: NetworkMode;
   if (internet) {
     mode = "online";
-  } else if (relay || activePeerBeacon) {
+  } else if (activePeerBeacon || anyKnownBeacon) {
     mode = "mesh";
   } else {
     mode = "isolated";
   }
 
-  const meshHash = relay?.destHash ?? activePeerBeacon?.destHash ?? '';
+  // Hash priority: freshest active beacon > online peer beacon > any known beacon
+  const meshHash = relay?.destHash ?? activePeerBeacon?.destHash ?? anyKnownBeacon?.destHash ?? '';
 
   const adapter = useMemo<IRpcAdapter>(() => {
     if (mode === "online") return new DirectRpcAdapter(solanaConnection);
