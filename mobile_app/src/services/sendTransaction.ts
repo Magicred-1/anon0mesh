@@ -303,7 +303,6 @@ async function buildSplTransferTransaction({
   mintAddress,
   decimals,
   programId,
-  rpcAdapter,
 }: {
   rpcAdapter: IRpcAdapter;
   fromPubkey: PublicKey;
@@ -312,7 +311,6 @@ async function buildSplTransferTransaction({
   mintAddress: string;
   decimals: number;
   programId?: string;
-  rpcAdapter: IRpcAdapter;
 }): Promise<Transaction> {
   // Bottom-line guard against any caller (including direct deep-links to
   // /send/review with a tampered programId param) trying to build an SPL
@@ -476,7 +474,6 @@ export async function estimateSplTransferFeeLamports({
     mintAddress,
     decimals,
     programId,
-    rpcAdapter,
   });
   const { blockhash } = await withTimeout(
     rpcAdapter.getLatestBlockhash(),
@@ -546,7 +543,6 @@ export async function sendSplTransfer({
     mintAddress,
     decimals,
     programId,
-    rpcAdapter,
   });
   return signAndSubmitTransaction({ walletAdapter, rpcAdapter, tx, expectedPubkey: fromPubkey });
 }
