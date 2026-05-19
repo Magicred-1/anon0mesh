@@ -117,7 +117,14 @@ export function QRScannerModal({ visible, onResult, onClose }: Props) {
 
   if (!visible) return null;
 
-  const denied = permission && !permission.granted && !permission.canAskAgain;
+  const denied  = permission && !permission.granted && !permission.canAskAgain;
+  // Mount CameraView ONLY after permission is explicitly granted. On iOS the
+  // CameraView component caches its initial permission state at mount time —
+  // if we render it before the OS prompt resolves, the preview stays black
+  // even after the user taps "Allow," and an app restart is needed to recover.
+  // Gating on permission.granted means the flip from null→granted re-mounts
+  // CameraView fresh with the new permission in place.
+  const granted = permission?.granted === true;
 
   return (
     <Modal visible transparent={false} animationType="slide" onRequestClose={onClose}>
@@ -129,13 +136,20 @@ export function QRScannerModal({ visible, onResult, onClose }: Props) {
               Camera permission denied.{'\n'}Enable it in Settings.
             </Text>
           </View>
-        ) : (
+        ) : granted ? (
           <CameraView
             style={StyleSheet.absoluteFill}
             facing="back"
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
             onBarcodeScanned={onBarcodeScanned}
           />
+        ) : (
+          <View style={S.center}>
+            <Feather name="camera" size={40} color={colors.textTertiary} />
+            <Text style={[S.deniedText, { color: colors.textSecondary }]}>
+              Requesting camera access…
+            </Text>
+          </View>
         )}
 
         {/* Viewfinder */}

@@ -323,8 +323,27 @@ export const PeersDrawer = memo(function PeersDrawer({
         onClose={() => setScannerOpen(false)}
         onResult={result => {
           setScannerOpen(false);
+          if (__DEV__) console.log('[QR scan/PeersDrawer]', JSON.stringify(result));
           if (result.type === 'lxmf') {
             onNewHash?.(result.hash);
+          } else if (result.type === 'lxmf-group') {
+            // Group QR scanned in peer-finder flow — route to join modal instead.
+            Alert.alert(
+              'Looks like a channel QR',
+              'Open "Join channel" and scan the same QR to join the channel.',
+            );
+          } else if (result.type === 'solana') {
+            Alert.alert(
+              'Solana address scanned',
+              'This is a wallet address. Use the Send screen to send funds.',
+            );
+          } else {
+            // unknown — surface the raw payload so the user can debug what they scanned
+            const preview = result.raw.length > 64 ? result.raw.slice(0, 64) + '…' : result.raw;
+            Alert.alert(
+              'Unrecognized QR',
+              `Not a peer or channel QR. Scanned content:\n\n${preview}`,
+            );
           }
         }}
       />
