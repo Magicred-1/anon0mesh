@@ -82,13 +82,20 @@ export function useMessageNotifications(
         if (appStateRef.current === 'active') {
           onInApp(payload);
         } else {
-          // Per-peer identifier replaces any prior unread notification from the
-          // same sender instead of stacking. Matches usePeerCountNotification's
-          // single-id pattern. On iOS this maps to UNNotificationRequest reuse;
-          // on Android the channel already groups under 'messages'.
+          // OS notification path (lock screen / Notification Center) shows no
+          // identifying content — generic title + body keep sender and message
+          // out of any screen the user hasn't unlocked into the app for. The
+          // in-app banner above still surfaces sender when the app is active.
+          // Per-peer identifier collapses repeats; passive interruption stops
+          // re-presenting the banner on every follow-up.
           Notifications.scheduleNotificationAsync({
             identifier: `anonmesh-msg-${srcHash}`,
-            content: { title: sender, body: 'new message', sound: true },
+            content: {
+              title: 'anonmesh',
+              body: 'New message',
+              sound: true,
+              interruptionLevel: 'passive',
+            },
             trigger: null,
           }).catch(() => {});
         }
