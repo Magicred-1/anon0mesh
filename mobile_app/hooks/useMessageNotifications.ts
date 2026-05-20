@@ -82,8 +82,20 @@ export function useMessageNotifications(
         if (appStateRef.current === 'active') {
           onInApp(payload);
         } else {
+          // OS notification path (lock screen / Notification Center) shows no
+          // identifying content — generic title + body keep sender and message
+          // out of any screen the user hasn't unlocked into the app for. The
+          // in-app banner above still surfaces sender when the app is active.
+          // Per-peer identifier collapses repeats; passive interruption stops
+          // re-presenting the banner on every follow-up.
           Notifications.scheduleNotificationAsync({
-            content: { title: sender, body: 'new message', sound: true },
+            identifier: `anonmesh-msg-${srcHash}`,
+            content: {
+              title: 'anonmesh',
+              body: 'New message',
+              sound: true,
+              interruptionLevel: 'passive',
+            },
             trigger: null,
           }).catch(() => {});
         }
