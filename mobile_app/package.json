@@ -77,6 +77,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@babel/plugin-transform-class-static-block": "^7.28.6",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
