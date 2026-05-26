@@ -565,6 +565,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon,
       beaconKeypairReady, setBeaconKeypair, setBeaconSolanaRpc]);
 
+  // Surfaced when secure-storage rejects an identity write (off-grid audit §3),
+  // so a failed persist is visible instead of dying in a console.warn.
+  const [identityError, setIdentityError] = useState<string | null>(null);
+
   // Persist identity after node starts (using getIdentityHex() per new API)
   useEffect(() => {
     if (!isRunning) return;
@@ -580,12 +584,16 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       created_at:   new Date().toISOString(),
     };
     secureSet(SecureKeys.LXMF_IDENTITY, JSON.stringify(blob))
-      .then(() => setStoredIdentity(blob))
+      .then(() => {
+        setStoredIdentity(blob);
+        setIdentityError(null);
+      })
       .catch((err) => {
-        // Off-grid audit § 3: identity persist failure silently dropped means
-        // next cold start can spawn a new identity, losing message continuity.
-        // Surface it so we at least know when secure storage rejected.
+        // Off-grid audit § 3: a dropped identity persist means the next cold
+        // start can spawn a new identity, losing the mesh address + history.
+        // Surface it through the error banner instead of swallowing it.
         console.warn('[Lxmf] persist identity failed (next start may re-generate)', err);
+        setIdentityError('Identity not saved — secure storage rejected the write. Your mesh address may reset on next launch.');
       });
   }, [isRunning, lxmf.status?.addressHex, storedIdentity, getIdentityHex]);
 
@@ -867,8 +875,18 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
 
   const { fetchMessages: lxmfFetchMessages } = lxmf;
   const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
-    const all = lxmfFetchMessages(limit * 2) as StoredMessage[];
-    return all.filter(m => m.source === destHash || m.dest === destHash).slice(0, limit);
+    // Native fetchMessages(n) returns only the most-recent n messages globally —
+    // there is no peer-scoped query. Filtering a fixed window (the old limit*2)
+    // silently undershoots for a peer whose messages sit deeper than that window.
+    // Grow the window until we have `limit` matches, or a short page proves the
+    // store is drained. Converges: window doubles until it exceeds total stored.
+    let window = Math.max(limit, 1) * 2;
+    for (;;) {
+      const all = lxmfFetchMessages(window) as StoredMessage[];
+      const matches = all.filter(m => m.source === destHash || m.dest === destHash);
+      if (matches.length >= limit || all.length < window) return matches.slice(0, limit);
+      window *= 2;
+    }
   }, [lxmfFetchMessages]);
 
   const value = useMemo(() => ({
@@ -879,7 +897,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     status:                lxmf.status,
     beacons:               lxmf.beacons,
     events:                lxmf.events,
-    error:                 lxmf.error,
+    error:                 lxmf.error ?? identityError,
     nameMap,
     displayName:           displayName ?? '',
     myAddress:             lxmf.status?.addressHex ?? storedIdentity?.address_hex ?? null,
@@ -931,7 +949,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
        isBeacon, setBeaconMode, beaconKeypairReady, beaconPubkeyHex, regenerateBeaconKeypair, getDisplayName, getPeerIdentity, getPeerMessages, lxmfFetchMessages,
        lxmf.partialSignExecutePayment, lxmf.extractNonceBlockhash,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
-       lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
+       lxmf.events, lxmf.error, identityError, lxmf.start, lxmf.stop,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
        lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc, lxmf.beaconBroadcastRpc]);
