@@ -36,6 +36,9 @@ export const SecureKeys = {
   BEACON_KEYPAIR_HEX: 'beacon_keypair_hex',
   // Beacon ed25519 public key (hex) — safe to expose in state/UI.
   BEACON_PUBKEY_HEX:  'beacon_pubkey_hex',
+  // Arcium beacon-operator x25519 secret key (hex, 32 bytes) — derives the
+  // shared secret for encrypting/decrypting private beacon binding + relay stats.
+  ARCIUM_X25519_SECRET: 'arcium_x25519_secret_v1',
 } as const;
 
 export const PrefKeys = {

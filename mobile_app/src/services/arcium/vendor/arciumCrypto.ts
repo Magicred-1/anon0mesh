@@ -9,6 +9,8 @@
  * Validated byte-for-byte against the real SDK (scripts/validate-vendor.mjs).
  * x25519 is used directly from @noble/curves by callers. */
 import { ed25519 } from '@noble/curves/ed25519.js';
+export { x25519 } from '@noble/curves/ed25519.js';
+export { randomBytes } from '@noble/hashes/utils.js';
 import { invert, mod, isNegativeLE, pow2 } from '@noble/curves/abstract/modular.js';
 import { shake256, sha3_512 } from '@noble/hashes/sha3.js';
 import { sha256 as _nobleSha256 } from '@noble/hashes/sha2.js';
