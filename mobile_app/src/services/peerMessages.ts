@@ -1,13 +1,14 @@
 /**
  * Collect up to `limit` messages involving `destHash` from a store that only
  * exposes a "most-recent N globally" fetch (the native LXMF DB has no
- * peer-scoped query). Filtering a single fixed window silently undershoots for
- * a peer whose messages sit deeper than that window, so grow the window until
- * we have `limit` matches — or a short page proves the store is drained.
+ * peer-scoped query).
  *
- * Converges: `window` doubles until it exceeds the total stored count, at which
- * point a fetch returns fewer rows than requested (`all.length < window`) and
- * the loop returns. Pure + injectable so it can be unit-tested without a device.
+ * Single bounded fetch: pull one most-recent window and filter it. We
+ * deliberately do NOT grow-and-refetch until `limit` matches are found — that
+ * re-scanned the whole store on every conversation open and made opening a
+ * thread take seconds on a busy mesh. A peer whose history sits entirely beyond
+ * this window won't fully load here; closing that gap needs a native per-peer
+ * query (see CATALOGUE.md), not a JS loop. Pure + injectable for unit testing.
  */
 export interface PeerScopedMessage {
   source: string;
@@ -19,11 +20,6 @@ export function collectPeerMessages<T extends PeerScopedMessage>(
   destHash: string,
   limit = 200,
 ): T[] {
-  let window = Math.max(limit, 1) * 2;
-  for (;;) {
-    const all = fetchRecent(window);
-    const matches = all.filter((m) => m.source === destHash || m.dest === destHash);
-    if (matches.length >= limit || all.length < window) return matches.slice(0, limit);
-    window *= 2;
-  }
+  const all = fetchRecent(Math.max(limit, 1) * 2);
+  return all.filter((m) => m.source === destHash || m.dest === destHash).slice(0, limit);
 }

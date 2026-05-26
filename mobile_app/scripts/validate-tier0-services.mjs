@@ -411,33 +411,27 @@ function testCollectPeerMessages() {
   // store[0] is the most-recent message; native fetchMessages(n) returns top n.
   const makeFetch = (store) => (n) => store.slice(0, n);
 
-  // 1) THE BUG THIS FIXES: a peer whose messages sit deep in the store (far past
-  //    the old fixed limit*2 window) must still be found. The pre-fix code
-  //    fetched only limit*2 and would return 0 here.
-  const deep = [];
-  for (let i = 0; i < 1000; i++) {
-    deep.push(i >= 900 && i <= 904 ? { source: "AAA", dest: "me" } : { source: "other", dest: "other2" });
-  }
-  const deepRes = collectPeerMessages(makeFetch(deep), "AAA", 10);
-  assert.equal(deepRes.length, 5, "deep peer: all 5 messages found despite sitting past the initial window");
-  assert.ok(deepRes.every((m) => m.source === "AAA"), "deep peer: only the peer's messages returned");
-
-  // 2) A peer dense in the recent window returns exactly `limit` (no over-fetch).
+  // Filters the most-recent window (limit*2) to the peer, capped at limit.
   const dense = [];
   for (let i = 0; i < 500; i++) dense.push({ source: i % 2 === 0 ? "BBB" : "x", dest: "me" });
   const denseRes = collectPeerMessages(makeFetch(dense), "BBB", 10);
-  assert.equal(denseRes.length, 10, "dense peer: returns exactly limit");
+  assert.equal(denseRes.length, 10, "returns exactly limit (capped)");
+  assert.ok(denseRes.every((m) => m.source === "BBB"), "only the peer's messages returned");
 
-  // 3) An absent peer must terminate (drained store) and return [].
-  assert.equal(collectPeerMessages(makeFetch(deep), "ZZZ", 10).length, 0, "absent peer: empty, loop terminates");
-
-  // 4) dest-side matches count (incoming messages), not just source.
+  // dest-side matches count (incoming messages), not just source.
   const incoming = [{ source: "x", dest: "CCC" }, { source: "x", dest: "y" }];
-  assert.equal(collectPeerMessages(makeFetch(incoming), "CCC", 10).length, 1, "incoming message to peer is matched");
+  assert.equal(collectPeerMessages(makeFetch(incoming), "CCC", 10).length, 1, "incoming message matched via dest");
 
-  // 5) Never returns more than `limit`.
-  const many = Array.from({ length: 100 }, () => ({ source: "DDD", dest: "me" }));
-  assert.equal(collectPeerMessages(makeFetch(many), "DDD", 7).length, 7, "result capped at limit");
+  // Single BOUNDED fetch: only the most-recent window (limit*2) is scanned — no
+  // full-store re-scan. A peer whose messages sit entirely beyond that window is
+  // not returned. Deliberate perf tradeoff over the old escalating loop, which
+  // re-fetched the whole store and made opening a thread take seconds.
+  const deep = [];
+  for (let i = 0; i < 200; i++) deep.push(i >= 100 ? { source: "DEEP", dest: "me" } : { source: "x", dest: "y" });
+  assert.equal(collectPeerMessages(makeFetch(deep), "DEEP", 10).length, 0, "peer beyond the window is not fetched (bounded by design)");
+
+  // Absent peer → [].
+  assert.equal(collectPeerMessages(makeFetch(dense), "ZZZ", 10).length, 0, "absent peer -> empty");
 }
 
 testSolanaPayUri();
