@@ -7,7 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 
 import { fontFamily, fontSize, useTheme } from '@/theme';
 import { useWallet } from '@/context/WalletContext';
@@ -19,7 +19,7 @@ import {
 } from '@/src/services/arcium';
 import { runCryptoSelfTest, type SelfTestResult } from '@/src/services/arcium/selfTest';
 
-export default function ArciumBeaconDevScreen() {
+function ArciumBeaconDevScreen() {
   const { colors } = useTheme();
   const { wallet, publicKey, isConnected } = useWallet();
   const { adapter: rpcAdapter } = useNetworkMode();
@@ -179,4 +179,14 @@ export default function ArciumBeaconDevScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+/**
+ * Route wrapper. __DEV__ is a build-time constant: in production builds this is
+ * statically false, so the dev screen (and its arcium-service imports) never
+ * renders and the route just redirects home. Keeps this surface out of prod.
+ */
+export default function ArciumBeaconRoute() {
+  if (!__DEV__) return <Redirect href="/" />;
+  return <ArciumBeaconDevScreen />;
 }
