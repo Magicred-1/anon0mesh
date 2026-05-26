@@ -23,8 +23,8 @@ import {
 } from './vendor/arciumCrypto';
 import {
   ANONBETA1_PROGRAM_ID,
-  ARCIUM_CLOCK_ACCOUNT,
-  ARCIUM_POOL_ACCOUNT,
+  MXE_CLOCK,
+  MXE_FEE_POOL,
   BEACON_REGISTRY_OFFSETS,
   CIRCUITS,
   CLUSTER_OFFSET,
@@ -68,9 +68,21 @@ export async function getMxeX25519Pubkey(
 ): Promise<Uint8Array> {
   const info = await getAccountInfo(getMXEAccAddress(PID));
   if (!info) throw new Error('anonbeta1 MXE account not found on this cluster');
-  return new Uint8Array(
+  if (info.data.length < MXE_X25519_PUBKEY_OFFSET + 32) {
+    throw new Error('MXE account smaller than expected — Arcium layout may have changed');
+  }
+  const key = new Uint8Array(
     info.data.subarray(MXE_X25519_PUBKEY_OFFSET, MXE_X25519_PUBKEY_OFFSET + 32),
   );
+  // Offset is verified against the deployed MXE; guard against a silent wrong
+  // read (all-zero) that would otherwise surface as an opaque MPC decrypt
+  // failure far downstream.
+  if (key.every((b) => b === 0)) {
+    throw new Error(
+      `MXE x25519 pubkey read as all-zero at offset ${MXE_X25519_PUBKEY_OFFSET} — Arcium MXE account layout likely changed`,
+    );
+  }
+  return key;
 }
 
 type Meta = { pubkey: PublicKey; isSigner: boolean; isWritable: boolean };
@@ -119,7 +131,7 @@ export function buildRegisterBeaconInstruction(args: RegisterBeaconArgs): Transa
     m(arciumSignerPda(), false, true),
     m(a.mxe, false, false), m(a.mempool, false, true), m(a.execPool, false, true),
     m(a.computation, false, true), m(a.compDef, false, false), m(a.cluster, false, true),
-    m(ARCIUM_POOL_ACCOUNT, false, true), m(ARCIUM_CLOCK_ACCOUNT, false, true),
+    m(MXE_FEE_POOL, false, true), m(MXE_CLOCK, false, true),
     m(SystemProgram.programId, false, false), m(getArciumProgramId(), false, false),
   ];
   return new TransactionInstruction({ programId: PID, keys, data });
@@ -173,7 +185,7 @@ export function buildRecordRelayInstruction(args: RecordRelayArgs): TransactionI
     m(arciumSignerPda(), false, true),
     m(a.mxe, false, false), m(a.mempool, false, true), m(a.execPool, false, true),
     m(a.computation, false, true), m(a.compDef, false, false), m(a.cluster, false, true),
-    m(ARCIUM_POOL_ACCOUNT, false, true), m(ARCIUM_CLOCK_ACCOUNT, false, true),
+    m(MXE_FEE_POOL, false, true), m(MXE_CLOCK, false, true),
     m(SystemProgram.programId, false, false), m(getArciumProgramId(), false, false),
   ];
   return new TransactionInstruction({ programId: PID, keys, data });

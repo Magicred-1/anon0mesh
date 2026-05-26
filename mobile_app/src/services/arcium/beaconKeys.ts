@@ -21,23 +21,23 @@ export interface BeaconX25519Key {
  * MPC re-encrypts results the operator can later decrypt.
  */
 export async function getOrCreateBeaconX25519Key(): Promise<BeaconX25519Key> {
-  const existing = await secureGet(SecureKeys.ARCIUM_X25519_SECRET);
+  const existing = await secureGet(SecureKeys.BEACON_X25519_SECRET);
   if (existing) {
     const secret = fromHex(existing);
     return { secret, publicKey: x25519.getPublicKey(secret) };
   }
   const secret = x25519.utils.randomSecretKey();
-  await secureSet(SecureKeys.ARCIUM_X25519_SECRET, toHex(secret));
+  await secureSet(SecureKeys.BEACON_X25519_SECRET, toHex(secret));
   return { secret, publicKey: x25519.getPublicKey(secret) };
 }
 
 /** Public key only — for status displays that don't need the secret. */
 export async function getBeaconX25519PublicKey(): Promise<Uint8Array | null> {
-  const existing = await secureGet(SecureKeys.ARCIUM_X25519_SECRET);
+  const existing = await secureGet(SecureKeys.BEACON_X25519_SECRET);
   return existing ? x25519.getPublicKey(fromHex(existing)) : null;
 }
 
 /** Wipe the operator key (e.g. on wallet reset). */
 export async function deleteBeaconX25519Key(): Promise<void> {
-  await secureDelete(SecureKeys.ARCIUM_X25519_SECRET);
+  await secureDelete(SecureKeys.BEACON_X25519_SECRET);
 }

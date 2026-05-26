@@ -35,10 +35,19 @@ function requireOperator(walletAdapter: IWalletAdapter): PublicKey {
   return pk;
 }
 
-/** Build a RescueCipher bound to (operator x25519 secret, live MXE pubkey). */
+/**
+ * Build a RescueCipher bound to (operator x25519 secret, live MXE pubkey).
+ * Zeroes the operator secret + derived shared secret once the cipher has
+ * absorbed the key material — mirrors the secret-key hygiene in
+ * sendTransaction.ts (the cipher keeps its own derived key, not these buffers).
+ */
 async function buildCipher(rpcAdapter: IRpcAdapter, secret: Uint8Array): Promise<RescueCipher> {
   const mxePub = await getMxeX25519Pubkey((pk) => rpcAdapter.getAccountInfo(pk));
-  return new RescueCipher(x25519.getSharedSecret(secret, mxePub));
+  const shared = x25519.getSharedSecret(secret, mxePub);
+  const cipher = new RescueCipher(shared);
+  secret.fill(0);
+  shared.fill(0);
+  return cipher;
 }
 
 async function submit(ctx: Ctx, ix: ReturnType<typeof buildRegisterBeaconInstruction>, operator: PublicKey) {
@@ -65,6 +74,10 @@ export async function registerBeacon(ctx: Ctx, opts: RegisterOptions = {}) {
   const { secret, publicKey } = await getOrCreateBeaconX25519Key();
   const cipher = await buildCipher(ctx.rpcAdapter, secret);
 
+  // TODO(product): in a real deployment, pass the operator's actual Reticulum/
+  // LXMF destination hash so the Arcium binding commits to the real mesh
+  // identity. The random fallback below only exercises the flow (dev/devnet);
+  // it does NOT bind a meaningful destination.
   const rns = opts.rnsDestHash ? deserializeLE(opts.rnsDestHash) % (2n ** 128n) : deserializeLE(randomBytes(16)) % (2n ** 128n);
   const region = opts.regionCode ?? Uint8Array.from([0x55, 0x53, 0x20, 0x20]); // "US  "
   const regionU32 = BigInt(region[0] | (region[1] << 8) | (region[2] << 16) | (region[3] << 24)) & 0xffffffffn;

@@ -1128,11 +1128,11 @@ class RescueCipher {
 
 
 // ── Arcium account derivations (vendored) ──────────────────────────────────
-const ARCIUM_ADDR = 'Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ';
+const ARX_PROGRAM_ADDR = 'Arcj82pX7HxYKLR92qvgZUAd7vGS1k4hQvAFcPATFdEQ';
 const OFFSET_BUFFER_SIZE = 4, COMP_DEF_OFFSET_SIZE = 4;
 const COMPUTATION_ACC_SEED='ComputationAccount', MEMPOOL_ACC_SEED='Mempool', EXEC_POOL_ACC_SEED='Execpool';
 const CLUSTER_ACC_SEED='Cluster', MXE_ACCOUNT_SEED='MXEAccount', COMP_DEF_ACC_SEED='ComputationDefinitionAccount';
-export function getArciumProgramId(){ return new PublicKey(ARCIUM_ADDR); }
+export function getArciumProgramId(){ return new PublicKey(ARX_PROGRAM_ADDR); }
 function pda(seeds){ return PublicKey.findProgramAddressSync(seeds, getArciumProgramId())[0]; }
 export function getArciumAccountBaseSeed(name){ return Buffer.from(name,'utf-8'); }
 export function getCompDefAccOffset(circuitName){ return sha256([Buffer.from(circuitName,'utf-8')]).slice(0, COMP_DEF_OFFSET_SIZE); }

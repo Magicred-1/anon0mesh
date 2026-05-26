@@ -2,7 +2,7 @@ import { PublicKey } from '@solana/web3.js';
 
 /**
  * anonbeta1 Arcium program (devnet). Values verified on-chain — see
- * LOCAL_NOTES/ARCIUM_INTEGRATION.md and the proven harness in contract/scripts.
+ * the arcium integration notes (LOCAL_NOTES) and the proven harness in contract/scripts.
  */
 export const ANONBETA1_PROGRAM_ID = new PublicKey(
   'anon7uu8UtVoFgS8GCSfw2RqyphJhkN3xEjgPwznYDe',
@@ -12,8 +12,8 @@ export const ANONBETA1_PROGRAM_ID = new PublicKey(
 export const CLUSTER_OFFSET = 456;
 
 /** Fixed Arcium accounts (constant addresses from the program IDL). */
-export const ARCIUM_POOL_ACCOUNT = new PublicKey('G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC');
-export const ARCIUM_CLOCK_ACCOUNT = new PublicKey('7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot');
+export const MXE_FEE_POOL = new PublicKey('G2sRWJvi3xoyh5k2gY49eG9L8YhAEWQPtNb1zb1GXTtC');
+export const MXE_CLOCK = new PublicKey('7EbMUTLo5DjdzbN7s8BXeZwXzEwNQb1hScfRvWg8a6ot');
 
 /**
  * Byte offset of the MXE x25519 encryption pubkey inside the MXE account.
