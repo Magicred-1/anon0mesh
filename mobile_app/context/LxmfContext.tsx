@@ -794,7 +794,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const getGroupMembers = useCallback((addrHex: string): string[] => {
     try {
       const msgs    = lxmf.fetchMessages(500) as StoredMessage[];
-      const ownHash = lxmf.getStatus()?.addressHex ?? storedIdentity?.address_hex;
+      // Read the cached status, not getStatus(): getGroupMembers runs inside a
+      // MessagesScreen useMemo (during render), and getStatus() triggers a
+      // LxmfProvider setState → "Cannot update a component while rendering
+      // another" warning. The cached value is identical for our own addressHex.
+      const ownHash = lxmf.status?.addressHex ?? storedIdentity?.address_hex;
       const seen    = new Set<string>();
       for (const m of msgs) {
         const raw     = m as unknown as Record<string, unknown>;
@@ -808,7 +812,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       return [];
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lxmf.fetchMessages, lxmf.getStatus, storedIdentity]);
+  }, [lxmf.fetchMessages, lxmf.status, storedIdentity]);
 
   // Auto-route send: group addresses → sendGroup, peers → send
   const handleSend = useCallback(async (
