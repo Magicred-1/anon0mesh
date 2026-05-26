@@ -17,6 +17,7 @@ import {
   recordRelay, waitForRelayRecorded, getBeaconStatus, getDecryptedRelayCount,
   type BeaconStatus,
 } from '@/src/services/arcium';
+import { runCryptoSelfTest, type SelfTestResult } from '@/src/services/arcium/selfTest';
 
 export default function ArciumBeaconDevScreen() {
   const { colors } = useTheme();
@@ -28,6 +29,14 @@ export default function ArciumBeaconDevScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastTx, setLastTx] = useState<string | null>(null);
+  const [selfTest, setSelfTest] = useState<SelfTestResult | null>(null);
+
+  const onSelfTest = useCallback(() => {
+    const result = runCryptoSelfTest();
+    setSelfTest(result);
+    // logged so it can be captured via logcat during automated on-device runs
+    console.log('[arcium self-test]', result.pass ? 'PASS' : 'FAIL', JSON.stringify(result.lines));
+  }, []);
 
   const ctx = useMemo(
     () => (wallet && rpcAdapter ? { walletAdapter: wallet, rpcAdapter } : null),
@@ -123,6 +132,21 @@ export default function ArciumBeaconDevScreen() {
           Arcium MPC (never public), and relay activity is counted in an encrypted on-chain
           counter only you can decrypt. Runs against anonbeta1 on devnet.
         </Text>
+
+        <Btn label="Run crypto self-test (Hermes)" onPress={onSelfTest} ghost />
+        {selfTest && (
+          <View style={s.card}>
+            <Text style={[s.value, { color: selfTest.pass ? '#16a34a' : '#dc2626' }]}>
+              {selfTest.pass ? 'SELF-TEST PASS ✓' : 'SELF-TEST FAIL ✗'}
+            </Text>
+            {selfTest.lines.map((l) => (
+              <View key={l.name} style={s.row}>
+                <Text style={s.label}>{l.name}</Text>
+                <Text style={[s.value, { color: l.ok ? '#16a34a' : '#dc2626' }]}>{l.ok ? '✓' : '✗'}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {!isConnected || !ctx ? (
           <View style={s.card}><Text style={s.value}>Connect a wallet first.</Text></View>
