@@ -97,7 +97,10 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
       <View style={[S.wrap, style]}>
         <View style={S.labelRow}>
           <Text accessibilityRole="header" style={[S.sectionLabel, { color: colors.textTertiary }]}>BEACON REGISTRY</Text>
-          <Pill label={active ? 'ACTIVE' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
+          <View style={S.pillRow}>
+            {active && <Pill label="PREVIEW" variant="default" />}
+            <Pill label={active ? 'ACTIVE' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
+          </View>
         </View>
 
         <View style={[S.card, glass, { borderColor: active ? colors.borderStrong : colors.border }]}>
@@ -146,6 +149,10 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                   <Text style={[S.footerNum, { color: colors.primary }]}>{reachableCount}</Text>{'  '}reachable
                 </Text>
               </View>
+
+              <Text style={[S.previewNote, { color: colors.textTertiary, borderTopColor: colors.borderSubtle }]}>
+                Preview — co-sign rewards, staking, and yield are not live yet; the figures above are illustrative. Reachable-peer count is real.
+              </Text>
             </>
           ) : (
             <>
@@ -305,6 +312,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 const S = StyleSheet.create({
   wrap:        { paddingHorizontal: 20, marginTop: 16, marginBottom: 16 },
   labelRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  pillRow:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sectionLabel:{ fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
 
   card:        { borderRadius: 18, overflow: 'hidden', borderWidth: 0.5 },
@@ -327,6 +335,7 @@ const S = StyleSheet.create({
   footerStat:  { fontFamily: fontFamily.sansMd, fontSize: 12 },
   footerNum:   { fontFamily: fontFamily.sansBold, fontSize: 14 },
   footerDot:   { width: 3, height: 3, borderRadius: 2 },
+  previewNote: { fontFamily: fontFamily.sansMd, fontSize: 10.5, lineHeight: 15, paddingHorizontal: 16, paddingBottom: 14, paddingTop: 12, borderTopWidth: 0.5 },
 
   desc:        { fontFamily: fontFamily.sansMd, fontSize: 12.5, lineHeight: 19, padding: 18, paddingBottom: 14 },
   regBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
