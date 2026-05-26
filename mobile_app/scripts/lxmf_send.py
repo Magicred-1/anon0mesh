@@ -1,4 +1,4 @@
-#!/home/m4gicred1/.local/share/pipx/venvs/lxmf/bin/python3
+#!/usr/bin/env python3
 """
 Minimal LXMF send script with persistent identity.
 Usage: ./lxmf_send.py <dest_hex> "message text"
