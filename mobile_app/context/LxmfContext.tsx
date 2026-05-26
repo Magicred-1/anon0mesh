@@ -19,6 +19,7 @@ import {
 import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
+import { collectPeerMessages } from '@/src/services/peerMessages';
 import * as ExpoCrypto from 'expo-crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
 
@@ -874,20 +875,15 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [isRunning, stop]);
 
   const { fetchMessages: lxmfFetchMessages } = lxmf;
-  const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
-    // Native fetchMessages(n) returns only the most-recent n messages globally —
-    // there is no peer-scoped query. Filtering a fixed window (the old limit*2)
-    // silently undershoots for a peer whose messages sit deeper than that window.
-    // Grow the window until we have `limit` matches, or a short page proves the
-    // store is drained. Converges: window doubles until it exceeds total stored.
-    let window = Math.max(limit, 1) * 2;
-    for (;;) {
-      const all = lxmfFetchMessages(window) as StoredMessage[];
-      const matches = all.filter(m => m.source === destHash || m.dest === destHash);
-      if (matches.length >= limit || all.length < window) return matches.slice(0, limit);
-      window *= 2;
-    }
-  }, [lxmfFetchMessages]);
+  const getPeerMessages = useCallback(
+    // Native fetchMessages(n) is most-recent-N-globally with no peer-scoped
+    // query; collectPeerMessages grows the window until it has `limit` matches
+    // or drains the store, so a peer's older messages aren't silently dropped.
+    // Logic is unit-tested in scripts/validate-tier0-services.mjs.
+    (destHash: string, limit = 200): StoredMessage[] =>
+      collectPeerMessages((n) => lxmfFetchMessages(n) as StoredMessage[], destHash, limit),
+    [lxmfFetchMessages],
+  );
 
   const value = useMemo(() => ({
     isRunning:             lxmf.isRunning,
