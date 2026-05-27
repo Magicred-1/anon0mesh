@@ -20,6 +20,7 @@ import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import { collectPeerMessages } from '@/src/services/peerMessages';
+import { activeConversationRef } from '@/hooks/activeConversation';
 import * as ExpoCrypto from 'expo-crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
 
@@ -617,6 +618,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       secureDelete(SecureKeys.LXMF_IDENTITY),
       prefRemove(PrefKeys.PEERS_CACHE),
     ]);
+    // Clear the active-conversation marker: it holds the *old* identity's peer
+    // hash. Left stale, useMessageNotifications would treat the new identity's
+    // first incoming message as "already in the active thread" and silently
+    // suppress its notification (QA-26).
+    activeConversationRef.current = null;
     setStoredIdentity(null);
   }, [isRunning, stop]);
 
