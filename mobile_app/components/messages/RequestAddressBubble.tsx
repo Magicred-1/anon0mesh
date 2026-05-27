@@ -13,6 +13,11 @@ export const RequestAddressBubble = memo(function RequestAddressBubble({ m }: Pr
   const { colors } = useTheme();
   const glass     = useGlass();
   const softGlass = useGlass('soft');
+  // Render-time safety net for a peer-controlled payload — coerce before these
+  // values reach <Text> children so a non-string can't crash the renderer.
+  // QA-18 (mirrors the parse-boundary guard in MessagesScreen).
+  const asset = typeof m.asset === 'string' && m.asset.length > 0 ? m.asset : 'SOL';
+  const note  = typeof m.note === 'string' ? m.note : '';
   return (
     <View style={[S.wrap, { alignItems: m.me ? 'flex-end' : 'flex-start' }]}>
       <BubbleHeader me={m.me} m={m} label="address request" />
@@ -22,8 +27,8 @@ export const RequestAddressBubble = memo(function RequestAddressBubble({ m }: Pr
             <Feather name="grid" size={14} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[S.askText, { color: colors.textPrimary }]}>asking for your {m.asset} address</Text>
-            {m.note && <Text style={[S.note, { color: colors.textSecondary }]}>&quot;{m.note}&quot;</Text>}
+            <Text style={[S.askText, { color: colors.textPrimary }]}>asking for your {asset} address</Text>
+            {note ? <Text style={[S.note, { color: colors.textSecondary }]}>&quot;{note}&quot;</Text> : null}
           </View>
         </View>
         {!m.me && (
@@ -31,7 +36,7 @@ export const RequestAddressBubble = memo(function RequestAddressBubble({ m }: Pr
           // flow is wired. Per AUDIT § preview-pill discipline.
           <PreviewedActions hint="share-address not yet wired" style={{ marginTop: 4 }}>
             <View style={[S.fullBtn, { backgroundColor: colors.primary }]}>
-              <Text style={[S.btnText, { color: colors.background }]}>SHARE {m.asset} ADDRESS</Text>
+              <Text style={[S.btnText, { color: colors.background }]}>SHARE {asset} ADDRESS</Text>
             </View>
           </PreviewedActions>
         )}

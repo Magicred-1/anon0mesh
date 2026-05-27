@@ -99,6 +99,17 @@ function utf8ToBase64(s: string): string {
   return bytesToBase64(new TextEncoder().encode(s));
 }
 
+// LXMF destination hashes are 16-byte truncated identity hashes → exactly 32
+// lowercase hex chars (see LxmfContext: getRandomBytes(16) → hex). Deep-link
+// params and notification payloads are externally controllable, so validate the
+// shape before routing on them — a malformed hash is a mis-route / notification-
+// suppression vector (it could falsely equal — or never equal — the active
+// peer's hash, suppressing real alerts or opening a bogus thread). QA-11.
+const DEST_HASH_RE = /^[0-9a-f]{32}$/;
+function isValidDestHash(v: unknown): v is string {
+  return typeof v === 'string' && DEST_HASH_RE.test(v);
+}
+
 function viaToIface(via: LxmfPeer['via']): 'BLE' | 'TCP' | 'RNode' {
   if (via === 'ble')   return 'BLE';
   if (via === 'rnode') return 'RNode';
@@ -124,17 +135,69 @@ function lxmfPeerToPeer(p: LxmfPeer): Peer {
 
 // ── Incoming message parsing ──────────────────────────────────────────────────
 
+// A peer fully controls the JSON body of req-pay/req-addr/share-addr. The bubble
+// components render `note`/`asset`/`amount` straight as React children, so a
+// non-string value (object, array, number) thrown into a <Text> crashes the
+// renderer and — with no error boundary above this screen — white-screens the
+// app. These guards coerce/validate at the trust boundary so a hostile or buggy
+// peer can never reach the renderer with an unsafe value. QA-18.
+
+const KNOWN_ASSETS = ['SOL', 'USDC', 'JUP', 'BONK'] as const;
+
+// Asset must be a short known ticker; anything else falls back to SOL so the
+// bubble's `m.asset[0]` / color lookup always has a safe string.
+function safeAsset(v: unknown): string {
+  return typeof v === 'string' && (KNOWN_ASSETS as readonly string[]).includes(v) ? v : 'SOL';
+}
+
+// Notes are free text but optional. Drop non-strings entirely (returns
+// undefined → bubble skips the note row) and clamp length so a megabyte of
+// peer text can't be forced into one <Text>.
+function safeNote(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const trimmed = v.slice(0, 280);
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+// Amount is rendered verbatim. Accept the peer's string only if it parses to a
+// finite, non-negative number; otherwise reject the whole req-pay (return null)
+// rather than render an attacker-chosen string.
+function safeAmount(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const trimmed = v.trim();
+  // Decimal digits only. `Number()` alone would accept '' and '   ' (→0), hex
+  // ('0x10'→16), and scientific ('1e9'), letting a peer render a misleading or
+  // empty amount. Require plain decimal so the bubble shows exactly what was sent.
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? trimmed : null;
+}
+
+// Addresses are rendered verbatim too; require a plain non-empty string of
+// reasonable length.
+function safeAddr(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const trimmed = v.trim();
+  return trimmed.length > 0 && trimmed.length <= 128 ? trimmed : null;
+}
+
 function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | null {
   try {
     const p = JSON.parse(text);
     if (!p || typeof p !== 'object') return null;
     const id = nextId();
-    if (p.t === 'share-addr' && typeof p.addr === 'string')
-      return { id, kind: 'share-address', from, me: false, time, asset: p.asset ?? 'SOL', address: p.addr };
+    if (p.t === 'share-addr') {
+      const address = safeAddr(p.addr);
+      if (address === null) return null;
+      return { id, kind: 'share-address', from, me: false, time, asset: safeAsset(p.asset), address };
+    }
     if (p.t === 'req-addr')
-      return { id, kind: 'request-address', from, me: false, time, asset: p.asset ?? 'SOL', note: p.note };
-    if (p.t === 'req-pay' && typeof p.amount === 'string')
-      return { id, kind: 'request-money', from, me: false, time, asset: p.asset ?? 'SOL', amount: p.amount, note: p.note };
+      return { id, kind: 'request-address', from, me: false, time, asset: safeAsset(p.asset), note: safeNote(p.note) };
+    if (p.t === 'req-pay') {
+      const amount = safeAmount(p.amount);
+      if (amount === null) return null;
+      return { id, kind: 'request-money', from, me: false, time, asset: safeAsset(p.asset), amount, note: safeNote(p.note) };
+    }
   } catch { /* plain text */ }
   return null;
 }
@@ -162,22 +225,29 @@ function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: strin
 // ── No-peers empty state ─────────────────────────────────────────────────────
 
 function NoPeersScreen({
-  colors, bottomInset, onCreateGroup, onJoinGroup,
+  colors, bottomInset, onCreateGroup, onJoinGroup, isRunning, bleActive,
 }: {
   colors: ReturnType<typeof useTheme>['colors'];
   bottomInset: number;
   onCreateGroup: () => void;
   onJoinGroup: () => void;
+  isRunning: boolean;
+  bleActive: boolean;
 }) {
   const ring1 = useSharedValue(0);
   const ring2 = useSharedValue(0);
   const ring3 = useSharedValue(0);
   const reduceMotion = useReducedMotion();
 
+  // We are only actually scanning when the node is up AND the BLE radio is on.
+  // Animating a "sonar sweep" while offline or with Bluetooth denied is a lie —
+  // nothing is being scanned. Branch the whole empty state on this. QA-03.
+  const scanning = isRunning && bleActive;
+
   useEffect(() => {
-    // a11y: skip the 3-ring sonar sweep under "reduce motion" — the static
-    // "SCANNING FOR PEERS" label + center icon still communicate state.
-    if (reduceMotion) {
+    // Don't run the sonar unless we're genuinely scanning, and respect a11y
+    // "reduce motion". When not animating, park the rings at 0 (fully hidden).
+    if (!scanning || reduceMotion) {
       ring1.value = 0;
       ring2.value = 0;
       ring3.value = 0;
@@ -192,18 +262,29 @@ function NoPeersScreen({
     sonar(ring1, 0);
     sonar(ring2, 733);
     sonar(ring3, 1466);
-  }, [ring1, ring2, ring3, reduceMotion]);
+  }, [ring1, ring2, ring3, reduceMotion, scanning]);
 
+  // Truthful copy for each real state. "Scanning" only when scanning; an
+  // offline/BLE-off user gets an actionable prompt instead of a false promise
+  // that peers "will appear automatically."
+  const title = scanning ? 'SCANNING FOR PEERS' : "YOU'RE OFFLINE";
+  const subtitle = scanning
+    ? 'No one nearby yet — that’s normal.\nAnyone running anonmesh will appear here.'
+    : 'Enable Bluetooth to find people nearby.\nWe can’t scan while the radio is off.';
+
+  // When not scanning the rings are parked at 0; force opacity to 0 too so they
+  // vanish entirely rather than sitting as static circles (which would still
+  // read as a passive "radar").
   const r1Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 1 - ring1.value) * 0.32,
+    opacity: scanning ? Math.max(0, 1 - ring1.value) * 0.32 : 0,
     transform: [{ scale: 1 + ring1.value * 2.4 }],
   }));
   const r2Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 1 - ring2.value) * 0.32,
+    opacity: scanning ? Math.max(0, 1 - ring2.value) * 0.32 : 0,
     transform: [{ scale: 1 + ring2.value * 2.4 }],
   }));
   const r3Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 1 - ring3.value) * 0.32,
+    opacity: scanning ? Math.max(0, 1 - ring3.value) * 0.32 : 0,
     transform: [{ scale: 1 + ring3.value * 2.4 }],
   }));
 
@@ -216,22 +297,22 @@ function NoPeersScreen({
         <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r3Style]} />
         <View style={{
           width: R, height: R, borderRadius: R / 2,
-          backgroundColor: colors.primarySubtle,
+          backgroundColor: scanning ? colors.primarySubtle : colors.surface1,
           alignItems: 'center', justifyContent: 'center',
         }}>
           <Image
             source={require('@/assets/icons/anonmesh_white_icon.png')}
-            style={{ width: 38, height: 38, tintColor: colors.primary }}
+            style={{ width: 38, height: 38, tintColor: scanning ? colors.primary : colors.textTertiary }}
             resizeMode="contain"
           />
         </View>
       </View>
 
       <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textPrimary, fontSize: 12, letterSpacing: 3, marginTop: 32 }}>
-        SCANNING FOR PEERS
+        {title}
       </Text>
       <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 48, lineHeight: 18 }}>
-        Anyone nearby running anonmesh{'\n'}will appear automatically.
+        {subtitle}
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 32 }}>
@@ -257,7 +338,7 @@ function NoPeersScreen({
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const {
-    isRunning, displayName, peers: lxmfPeers, events, send,
+    isRunning, bleActive, displayName, peers: lxmfPeers, events, send,
     getDisplayName, getPeerIdentity, getPeerMessages, myAddress,
     groups, createGroup, joinGroup, leaveGroup, getGroupMembers,
   } = useLxmfContext();
@@ -544,29 +625,61 @@ export default function MessagesScreen() {
     }
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
-  const handleGridAction = useCallback((a: GridAction) => {
-    const now  = new Date().toTimeString().slice(0, 8);
-    const addr = publicKey?.toBase58() ?? '';
+  const handleGridAction = useCallback(async (a: GridAction) => {
+    const now   = new Date().toTimeString().slice(0, 8);
+    const addr  = publicKey?.toBase58() ?? '';
+    const msgId = nextId();
 
     let bubble: AnyMsg;
     let payload: string;
 
     if (a.type === 'share-address') {
-      bubble  = { id: nextId(), kind: 'share-address', from: 'me', me: true, time: now, asset: 'SOL', address: addr };
+      bubble  = { id: msgId, kind: 'share-address', from: 'me', me: true, time: now, asset: 'SOL', address: addr };
       payload = JSON.stringify({ t: 'share-addr', asset: 'SOL', addr });
     } else if (a.type === 'request-address') {
-      bubble  = { id: nextId(), kind: 'request-address', from: 'me', me: true, time: now, asset: 'SOL' };
+      bubble  = { id: msgId, kind: 'request-address', from: 'me', me: true, time: now, asset: 'SOL' };
       payload = JSON.stringify({ t: 'req-addr', asset: 'SOL' });
     } else {
-      bubble  = { id: nextId(), kind: 'request-money', from: 'me', me: true, time: now, asset: a.asset, amount: a.amount };
+      bubble  = { id: msgId, kind: 'request-money', from: 'me', me: true, time: now, asset: a.asset, amount: a.amount };
       payload = JSON.stringify({ t: 'req-pay', asset: a.asset, amount: a.amount });
     }
 
     setMsgs(m => [...m, bubble]);
 
-    if (!activePeerHex) return;
-    send(activePeerHex, utf8ToBase64(payload));
-  }, [publicKey, activePeerHex, send]);
+    // Mirror sendMsg's delivery discipline (QA-05): without these guards the
+    // grid action was fire-and-forget — no peer check, no node-up check, the
+    // promise unawaited, and no queued/failed signal. A user could tap "request
+    // 2 SOL" with the node down and see the bubble appear as if it sent.
+    if (!activePeerHex) {
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
+      return;
+    }
+    if (!isRunning) {
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
+      return;
+    }
+    let seq: number;
+    try {
+      seq = await send(activePeerHex, utf8ToBase64(payload));
+    } catch (err) {
+      // A native-bridge / transport throw must not surface as an unhandled
+      // rejection. Treat it as a failed send so the bubble + queued/failed
+      // banner reflect reality instead of the app silently dropping it.
+      console.warn('[messages] grid action send threw', err);
+      seq = -1;
+    }
+    // Track the seq so the queued/stale banner reflects this send too, exactly
+    // like a text message.
+    if (seq < 0) {
+      const pseudoSeq = -msgId;
+      idToSeqRef.current.set(msgId, pseudoSeq);
+      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
+    } else {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
+    }
+  }, [publicKey, activePeerHex, isRunning, send, resolveSeq]);
 
   const pickPeer = useCallback((p: Peer) => {
     const prevHash = activePeerHexRef.current;
@@ -600,8 +713,13 @@ export default function MessagesScreen() {
   useFocusEffect(useCallback(() => {
     messagesFocusedRef.current = true;
     const hash = pendingConversationRef.current;
-    if (hash) {
-      pendingConversationRef.current = null;
+    // The pending hash comes from a notification tap (externally influenced).
+    // Consume it unconditionally so junk can't linger and re-fire, but only
+    // route when it's a well-formed dest hash — a malformed value must not slip
+    // past the active-peer check (notification-suppression) or open a junk
+    // thread. QA-11.
+    if (hash) pendingConversationRef.current = null;
+    if (hash && isValidDestHash(hash)) {
       if (hash === activePeerHexRef.current) return;
       const peer = lxmfPeers.find(p => p.destHash === hash);
       const ident = getPeerIdentity(hash);
@@ -624,6 +742,9 @@ export default function MessagesScreen() {
   // Open a thread when navigated from another screen (e.g. Nodes DM button)
   useFocusEffect(useCallback(() => {
     if (!paramDestHash || !paramHandle) return;
+    // Reject a malformed deep-link hash rather than opening a thread keyed on
+    // attacker-controlled junk (mis-route vector). QA-11.
+    if (!isValidDestHash(paramDestHash)) return;
     if (handledDeepLinkRef.current === paramDestHash) return;
     handledDeepLinkRef.current = paramDestHash;
     const lxmfPeer = lxmfPeers.find(p => p.destHash === paramDestHash);
@@ -651,6 +772,8 @@ export default function MessagesScreen() {
           bottomInset={insets.bottom}
           onCreateGroup={() => setCreateGroupVisible(true)}
           onJoinGroup={() => setJoinGroupVisible(true)}
+          isRunning={isRunning}
+          bleActive={bleActive}
         />
       ) : (
         <PeersDrawer
