@@ -64,35 +64,43 @@ export function ConfirmHost() {
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
   const [visible, setVisible] = useState(false);
 
-  // Guards the resolver to exactly one call per request, regardless of how
-  // the sheet closes (button vs backdrop vs drag, or a confirm tap racing a
-  // dismiss). Without this a drag-dismiss firing onClose after a confirm tap
-  // could double-resolve.
-  const settledRef = useRef(false);
+  // The in-flight request's resolver, held in a ref so it survives re-renders.
+  // Tracking the resolver (not just a settled flag) lets every exit path honor
+  // the "resolves exactly once" contract: settle() nulls it so a drag-dismiss
+  // racing a confirm tap can't double-resolve; a *new* request declines the open
+  // one instead of leaking its promise; host unmount declines rather than hangs.
+  // Null = nothing in flight.
+  const pendingRef = useRef<((confirmed: boolean) => void) | null>(null);
 
   useEffect(() => {
     listener = (next: ConfirmRequest) => {
-      settledRef.current = false;
+      // A second confirm() arriving while one is still open would otherwise
+      // orphan the first awaiter forever — decline it (false) before swapping.
+      // No-op if the prior already settled (pendingRef is null).
+      pendingRef.current?.(false);
+      pendingRef.current = next.resolve;
       setRequest(next);
       setVisible(true);
     };
     return () => {
+      // Unmounting with a request still open would hang its awaiter — decline it.
+      pendingRef.current?.(false);
+      pendingRef.current = null;
       listener = null;
     };
   }, []);
 
-  // Resolve the current request once and begin the close animation. The
-  // request object is kept mounted until the sheet finishes sliding out
-  // (onClose path) so the content doesn't blank mid-animation.
-  const settle = useCallback(
-    (confirmed: boolean) => {
-      if (settledRef.current) return;
-      settledRef.current = true;
-      request?.resolve(confirmed);
-      setVisible(false);
-    },
-    [request],
-  );
+  // Resolve the in-flight request exactly once and begin the close animation.
+  // Nulling pendingRef first makes this idempotent: a backdrop/drag dismiss
+  // firing onClose right after a confirm tap finds nothing pending and no-ops.
+  // The request stays mounted until the sheet slides out so content doesn't blank.
+  const settle = useCallback((confirmed: boolean) => {
+    const resolve = pendingRef.current;
+    if (!resolve) return;
+    pendingRef.current = null;
+    resolve(confirmed);
+    setVisible(false);
+  }, []);
 
   // AppBottomSheet fires onClose on backdrop tap and drag-to-dismiss. Both
   // are an explicit decline → resolve false. (If the confirm button already
