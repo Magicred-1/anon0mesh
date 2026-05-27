@@ -609,29 +609,52 @@ export default function MessagesScreen() {
     }
   }, [activePeerHex, isRunning, send, resolveSeq]);
 
-  const handleGridAction = useCallback((a: GridAction) => {
-    const now  = new Date().toTimeString().slice(0, 8);
-    const addr = publicKey?.toBase58() ?? '';
+  const handleGridAction = useCallback(async (a: GridAction) => {
+    const now   = new Date().toTimeString().slice(0, 8);
+    const addr  = publicKey?.toBase58() ?? '';
+    const msgId = nextId();
 
     let bubble: AnyMsg;
     let payload: string;
 
     if (a.type === 'share-address') {
-      bubble  = { id: nextId(), kind: 'share-address', from: 'me', me: true, time: now, asset: 'SOL', address: addr };
+      bubble  = { id: msgId, kind: 'share-address', from: 'me', me: true, time: now, asset: 'SOL', address: addr };
       payload = JSON.stringify({ t: 'share-addr', asset: 'SOL', addr });
     } else if (a.type === 'request-address') {
-      bubble  = { id: nextId(), kind: 'request-address', from: 'me', me: true, time: now, asset: 'SOL' };
+      bubble  = { id: msgId, kind: 'request-address', from: 'me', me: true, time: now, asset: 'SOL' };
       payload = JSON.stringify({ t: 'req-addr', asset: 'SOL' });
     } else {
-      bubble  = { id: nextId(), kind: 'request-money', from: 'me', me: true, time: now, asset: a.asset, amount: a.amount };
+      bubble  = { id: msgId, kind: 'request-money', from: 'me', me: true, time: now, asset: a.asset, amount: a.amount };
       payload = JSON.stringify({ t: 'req-pay', asset: a.asset, amount: a.amount });
     }
 
     setMsgs(m => [...m, bubble]);
 
-    if (!activePeerHex) return;
-    send(activePeerHex, utf8ToBase64(payload));
-  }, [publicKey, activePeerHex, send]);
+    // Mirror sendMsg's delivery discipline (QA-05): without these guards the
+    // grid action was fire-and-forget — no peer check, no node-up check, the
+    // promise unawaited, and no queued/failed signal. A user could tap "request
+    // 2 SOL" with the node down and see the bubble appear as if it sent.
+    if (!activePeerHex) {
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
+      return;
+    }
+    if (!isRunning) {
+      setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
+      return;
+    }
+    const seq = await send(activePeerHex, utf8ToBase64(payload));
+    // Track the seq so the queued/stale banner reflects this send too, exactly
+    // like a text message.
+    if (seq < 0) {
+      const pseudoSeq = -msgId;
+      idToSeqRef.current.set(msgId, pseudoSeq);
+      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
+    } else {
+      idToSeqRef.current.set(msgId, seq);
+      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+      immediateTimers.current.set(seq, timer);
+    }
+  }, [publicKey, activePeerHex, isRunning, send, resolveSeq]);
 
   const pickPeer = useCallback((p: Peer) => {
     const prevHash = activePeerHexRef.current;
