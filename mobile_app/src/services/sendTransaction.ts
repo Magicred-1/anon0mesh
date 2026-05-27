@@ -29,46 +29,13 @@ const APP_IDENTITY = {
   icon: "/favicon.ico",
 };
 
-// ── Timeout primitive ────────────────────────────────────────────────────────
-// past the 60s confirmation budget, so the user sees a frozen review screen
-// with no recovery path. We wrap every direct RPC site in withTimeout(...) and
-// throw a typed TimeoutError so callers can render an inline "request timed
-// out — retry?" affordance instead of bubbling a generic error. See
-// OFFGRID_FALLBACK_AUDIT.md (13-site unbounded-await audit).
-
-export class TimeoutError extends Error {
-  constructor(label: string, ms: number) {
-    super(`${label} timed out after ${ms}ms`);
-    this.name = "TimeoutError";
-  }
-}
-
-export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new TimeoutError(label, ms));
-    }, ms);
-    promise.then(
-      (value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err: unknown) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
-}
-
-export const DIRECT_RPC_TIMEOUT_MS = 10_000;
+// Timeout primitive moved to a dependency-free util (src/utils/withTimeout.ts)
+// so walletData.ts can import it without dragging this module's heavy "@/"
+// graph into the raw-node tier0 services validator. Re-exported here so the
+// existing call sites (ReviewCard, useWalletBalance) keep importing from this
+// module unchanged.
+import { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS } from "@/src/utils/withTimeout";
+export { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS };
 
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;

@@ -6,7 +6,11 @@ import {
   type PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import type { IRpcAdapter } from "@/src/infrastructure/network";
-import { DIRECT_RPC_TIMEOUT_MS, withTimeout } from "@/src/services/sendTransaction";
+// Relative + explicit .ts: this module is loaded by the raw-node tier0 services
+// validator, which can't resolve the "@/" alias. Importing the timeout helper
+// from the dependency-free util (not sendTransaction.ts) keeps that module's
+// heavy "@/" graph out of the validator. Matches the ./errors.ts pattern.
+import { DIRECT_RPC_TIMEOUT_MS, withTimeout } from "../utils/withTimeout.ts";
 
 export const SOL_DECIMALS = 9;
 
