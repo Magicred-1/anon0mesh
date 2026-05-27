@@ -25,6 +25,7 @@ import { NetworkModeProvider } from '@/context/NetworkModeContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
+import { ToastHost } from '@/components/ui/Toast';
 import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
 import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
@@ -128,6 +129,8 @@ function AppShell() {
           router.push('/(tabs)');
         }}
       />
+
+      <ToastHost />
     </View>
   );
 }
