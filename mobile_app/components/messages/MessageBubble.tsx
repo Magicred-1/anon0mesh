@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, Pressable, Alert, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme, fontFamily } from '@/theme';
+import { useTheme, fontFamily, fontSize, radii } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 import type { ChatMsg } from './types';
 
@@ -91,12 +91,12 @@ const S = StyleSheet.create({
   meta:         { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   from:         { fontSize: 10, letterSpacing: 0.5 },
   time:         { fontSize: 10, letterSpacing: 0.5 },
-  bubble:       { maxWidth: '78%', padding: 10, paddingHorizontal: 13, borderRadius: 16 },
-  text:         { fontSize: 14.5, lineHeight: 21 },
+  bubble:       { maxWidth: '78%', padding: 10, paddingHorizontal: 13, borderRadius: radii.lg },
+  text:         { fontSize: fontSize.md, lineHeight: 21 },
   files:        { gap: 4 },
   filesWithText:{ marginTop: 8 },
-  fileRow:      { flexDirection: 'row', alignItems: 'center', gap: 7, padding: 8, borderRadius: 8, borderWidth: 0.5 },
-  fileName:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 12 },
+  fileRow:      { flexDirection: 'row', alignItems: 'center', gap: 7, padding: 8, borderRadius: radii.sm, borderWidth: 0.5 },
+  fileName:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm },
   fileSize:     { fontFamily: fontFamily.sansMd, fontSize: 10 },
   statusRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, justifyContent: 'flex-end' },
   statusText:   { fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' },

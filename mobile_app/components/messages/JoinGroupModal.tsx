@@ -4,7 +4,7 @@ import {
   StyleSheet, Animated, ActivityIndicator, Platform, Keyboard,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { QRScannerModal } from './QRScannerModal';
 
@@ -95,7 +95,7 @@ export function JoinGroupModal({ visible, onClose, onJoin }: Props) {
     <>
       <Modal transparent animationType="none" visible={visible} onRequestClose={dismiss}>
         <View style={StyleSheet.absoluteFill}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
           </Animated.View>
 
@@ -127,7 +127,7 @@ export function JoinGroupModal({ visible, onClose, onJoin }: Props) {
                 </View>
 
                 <Text style={[S.fieldLabel, { color: colors.textTertiary }]}>CHANNEL ADDRESS</Text>
-                <View style={[S.inputRow, baseGlass, addrHex && !addrOk ? { borderColor: '#FF4444', borderWidth: 0.5 } : {}]}>
+                <View style={[S.inputRow, baseGlass, addrHex && !addrOk ? { borderColor: colors.error, borderWidth: 0.5 } : {}]}>
                   <TextInput
                     style={[S.input, { color: colors.textPrimary }]}
                     placeholder="32-hex address…"
@@ -140,7 +140,7 @@ export function JoinGroupModal({ visible, onClose, onJoin }: Props) {
                 </View>
 
                 <Text style={[S.fieldLabel, { color: colors.textTertiary }]}>ENCRYPTION KEY</Text>
-                <View style={[S.inputRow, baseGlass, keyHex && !keyOk ? { borderColor: '#FF4444', borderWidth: 0.5 } : {}]}>
+                <View style={[S.inputRow, baseGlass, keyHex && !keyOk ? { borderColor: colors.error, borderWidth: 0.5 } : {}]}>
                   <TextInput
                     style={[S.input, { color: colors.textPrimary }]}
                     placeholder="32-hex key…"
@@ -171,7 +171,7 @@ export function JoinGroupModal({ visible, onClose, onJoin }: Props) {
                 </View>
 
                 {!!error && (
-                  <Text style={[S.hint, { color: '#FF4444', textAlign: 'center' }]}>{error}</Text>
+                  <Text style={[S.hint, { color: colors.error, textAlign: 'center' }]}>{error}</Text>
                 )}
 
                 <Pressable
@@ -180,8 +180,8 @@ export function JoinGroupModal({ visible, onClose, onJoin }: Props) {
                   style={[S.actionBtn, { backgroundColor: colors.primary, opacity: canJoin ? 1 : 0.4, marginTop: 4 }]}
                 >
                   {loading
-                    ? <ActivityIndicator color="#08080A" size="small" />
-                    : <Text style={[S.actionBtnText, { color: '#08080A' }]}>JOIN CHANNEL</Text>
+                    ? <ActivityIndicator color={colors.background} size="small" />
+                    : <Text style={[S.actionBtnText, { color: colors.background }]}>JOIN CHANNEL</Text>
                   }
                 </Pressable>
               </View>
@@ -211,22 +211,22 @@ export function JoinGroupModal({ visible, onClose, onJoin }: Props) {
 }
 
 const S = StyleSheet.create({
-  scanBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12 },
-  scanBtnText:   { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
+  scanBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: radii.md },
+  scanBtnText:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
   orRow:         { flexDirection: 'row', alignItems: 'center', gap: 8 },
   orLine:        { flex: 1, height: 0.5 },
   orText:        { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
   sheetWrap:     { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  sheet:         { borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 32, borderWidth: 0.5 },
-  grab:          { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
+  sheet:         { borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 32, borderWidth: 0.5 },
+  grab:          { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   tag:           { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:         { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
-  closeBtn:      { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  title:         { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
+  closeBtn:      { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   fieldLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  inputRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 13 : 10, borderRadius: 12 },
-  input:         { flex: 1, fontSize: 14, fontFamily: fontFamily.sansMd, padding: 0 },
+  inputRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 13 : 10, borderRadius: radii.md },
+  input:         { flex: 1, fontSize: fontSize.md, fontFamily: fontFamily.sansMd, padding: 0 },
   hint:          { fontFamily: fontFamily.sansMd, fontSize: 10.5, letterSpacing: 0.2 },
-  actionBtn:     { padding: 13, borderRadius: 12, alignItems: 'center' },
-  actionBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+  actionBtn:     { padding: 13, borderRadius: radii.md, alignItems: 'center' },
+  actionBtnText: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
 });

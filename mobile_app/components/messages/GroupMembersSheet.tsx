@@ -4,8 +4,9 @@ import {
   StyleSheet, Animated, Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { EmptyState } from '@/components/ui';
 import type { LxmfGroup } from '@/context/LxmfContext';
 
 interface Props {
@@ -63,7 +64,7 @@ export function GroupMembersSheet({ visible, onClose, group, members, getDisplay
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={dismiss}>
       <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         </Animated.View>
 
@@ -90,12 +91,12 @@ export function GroupMembersSheet({ visible, onClose, group, members, getDisplay
           </View>
 
           {members.length === 0 ? (
-            <View style={S.empty}>
-              <Feather name="message-circle" size={32} color={colors.textTertiary} style={{ opacity: 0.4 }} />
-              <Text style={[S.emptyText, { color: colors.textTertiary }]}>
-                Share the channel invite — members{'\n'}appear here after their first message
-              </Text>
-            </View>
+            <EmptyState
+              fill={false}
+              icon="message-circle"
+              title="no activity yet"
+              description="Share the channel invite — members appear here after their first message"
+            />
           ) : (
             <ScrollView
               style={S.list}
@@ -121,23 +122,21 @@ export function GroupMembersSheet({ visible, onClose, group, members, getDisplay
 }
 
 const S = StyleSheet.create({
-  sheet:           { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 24, borderWidth: 0.5, maxHeight: '70%' },
-  grab:            { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
+  sheet:           { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 24, borderWidth: 0.5, maxHeight: '70%' },
+  grab:            { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   tag:             { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:           { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
-  closeBtn:        { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  title:           { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
+  closeBtn:        { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   countRow:        { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   countText:       { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
   list:            { flexGrow: 0 },
-  empty:           { alignItems: 'center', gap: 12, paddingVertical: 28 },
-  emptyText:       { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.2, textAlign: 'center', lineHeight: 18, opacity: 0.6 },
-  memberRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12 },
-  avatar:          { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
-  avatarText:      { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
+  memberRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: radii.md },
+  avatar:          { width: 34, height: 34, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
+  avatarText:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
   memberInfo:      { flex: 1, minWidth: 0 },
-  memberName:      { fontFamily: fontFamily.sansMd, fontSize: 12, letterSpacing: 0.2 },
+  memberName:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 0.2 },
   memberHash:      { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, marginTop: 2, opacity: 0.6 },
-  activeBadge:     { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  activeBadge:     { paddingHorizontal: 7, paddingVertical: 3, borderRadius: radii.sm },
   activeBadgeText: { fontFamily: fontFamily.sansMd, fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase' },
 });

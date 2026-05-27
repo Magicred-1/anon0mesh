@@ -6,7 +6,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import * as ScreenCapture from 'expo-screen-capture';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { QRCode } from '@/components/settings/QRCode';
 import type { LxmfGroup } from '@/context/LxmfContext';
@@ -89,7 +89,7 @@ export function ChannelShareSheet({ visible, onClose, group }: Props) {
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={dismiss}>
       <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         </Animated.View>
 
@@ -163,20 +163,20 @@ export function ChannelShareSheet({ visible, onClose, group }: Props) {
 }
 
 const S = StyleSheet.create({
-  sheet:       { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 24, borderWidth: 0.5 },
-  grab:        { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
+  sheet:       { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 24, borderWidth: 0.5 },
+  grab:        { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   tag:         { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:       { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
-  closeBtn:    { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  title:       { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
+  closeBtn:    { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   qrWrap:      { alignItems: 'center', marginBottom: 12 },
   hint:        { fontFamily: fontFamily.sansMd, fontSize: 10.5, letterSpacing: 0.2, textAlign: 'center', marginBottom: 4 },
   warnRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 8 },
   warnText:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 0.5, textTransform: 'lowercase' },
-  copyRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  copyRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radii.md },
   copyLabel:   { flex: 1, minWidth: 0 },
   copyTag:     { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 },
-  mono:        { fontFamily: fontFamily.sansMd, fontSize: 11 },
-  copyAllBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 11, borderRadius: 12, borderWidth: 0.5, marginTop: 6 },
+  mono:        { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
+  copyAllBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 11, borderRadius: radii.md, borderWidth: 0.5, marginTop: 6 },
   copyAllText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
 });

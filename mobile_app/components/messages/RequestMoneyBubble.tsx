@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 import { PreviewedActions } from '@/components/primitives';
 import { BubbleHeader } from './BubbleHeader';
@@ -62,16 +62,16 @@ export const RequestMoneyBubble = memo(function RequestMoneyBubble({ m }: Props)
 
 const S = StyleSheet.create({
   wrap:       { paddingHorizontal: 16, marginBottom: 14 },
-  card:       { maxWidth: '82%', padding: 14, borderRadius: 16 },
+  card:       { maxWidth: '82%', padding: 14, borderRadius: radii.lg },
   assetRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  dot:        { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  dotText:    { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600' },
+  dot:        { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
+  dotText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600' },
   reqLabel:   { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
-  amount:     { fontFamily: fontFamily.sansMd, fontSize: 20, fontWeight: '500' },
-  assetText:  { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5 },
+  amount:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xl, fontWeight: '500' },
+  assetText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5 },
   note:       { fontSize: 12.5, fontStyle: 'italic', lineHeight: 18, marginBottom: 10 },
-  payBtn:     { flex: 1, padding: 9, borderRadius: 10, alignItems: 'center' },
-  declineBtn: { padding: 9, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center' },
+  payBtn:     { flex: 1, padding: 9, borderRadius: radii.md, alignItems: 'center' },
+  declineBtn: { padding: 9, paddingHorizontal: 12, borderRadius: radii.md, alignItems: 'center' },
   btnText:    { fontFamily: fontFamily.sansMd, fontSize: 10, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
   sentFooter: { borderTopWidth: 0.5, paddingTop: 6 },
   sentText:   { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },

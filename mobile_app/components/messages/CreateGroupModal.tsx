@@ -6,7 +6,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import * as ScreenCapture from 'expo-screen-capture';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { QRCode } from '@/components/settings/QRCode';
 import type { LxmfGroup } from '@/context/LxmfContext';
@@ -132,7 +132,7 @@ export function CreateGroupModal({ visible, onClose, onCreate }: Props) {
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={dismiss}>
       <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         </Animated.View>
 
@@ -176,8 +176,8 @@ export function CreateGroupModal({ visible, onClose, onCreate }: Props) {
                   style={[S.actionBtn, { backgroundColor: colors.primary, opacity: !name.trim() || loading ? 0.45 : 1 }]}
                 >
                   {loading
-                    ? <ActivityIndicator color="#08080A" size="small" />
-                    : <Text style={[S.actionBtnText, { color: '#08080A' }]}>CREATE CHANNEL</Text>
+                    ? <ActivityIndicator color={colors.background} size="small" />
+                    : <Text style={[S.actionBtnText, { color: colors.background }]}>CREATE CHANNEL</Text>
                   }
                 </Pressable>
               </View>
@@ -222,7 +222,7 @@ export function CreateGroupModal({ visible, onClose, onCreate }: Props) {
                   </Pressable>
 
                   <Pressable onPress={dismiss} style={[S.actionBtn, { backgroundColor: colors.primary }]}>
-                    <Text style={[S.actionBtnText, { color: '#08080A' }]}>DONE</Text>
+                    <Text style={[S.actionBtnText, { color: colors.background }]}>DONE</Text>
                   </Pressable>
                 </View>
               );
@@ -236,23 +236,23 @@ export function CreateGroupModal({ visible, onClose, onCreate }: Props) {
 
 const S = StyleSheet.create({
   sheetWrap:     { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  sheet:         { borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 32, borderWidth: 0.5 },
-  grab:          { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
+  sheet:         { borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 32, borderWidth: 0.5 },
+  grab:          { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   tag:           { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:         { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
-  closeBtn:      { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  title:         { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
+  closeBtn:      { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   fieldLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  inputRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 13 : 10, borderRadius: 12 },
-  input:         { flex: 1, fontSize: 14, fontFamily: fontFamily.sansMd, padding: 0 },
+  inputRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: Platform.OS === 'ios' ? 13 : 10, borderRadius: radii.md },
+  input:         { flex: 1, fontSize: fontSize.md, fontFamily: fontFamily.sansMd, padding: 0 },
   hint:          { fontFamily: fontFamily.sansMd, fontSize: 10.5, letterSpacing: 0.2, paddingHorizontal: 2 },
-  actionBtn:     { padding: 13, borderRadius: 12, alignItems: 'center', marginTop: 4 },
-  actionBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+  actionBtn:     { padding: 13, borderRadius: radii.md, alignItems: 'center', marginTop: 4 },
+  actionBtnText: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
   qrWrap:        { alignItems: 'center', paddingVertical: 8 },
-  successRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11, borderRadius: 11 },
-  successText:   { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.3 },
-  copyRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12 },
-  mono:          { fontFamily: fontFamily.sansMd, fontSize: 11, flex: 1 },
+  successRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11, borderRadius: radii.md },
+  successText:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.3 },
+  copyRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderRadius: radii.md },
+  mono:          { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, flex: 1 },
   warnRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: -2, marginBottom: 4 },
   warnText:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 0.5, textTransform: 'lowercase' },
 });

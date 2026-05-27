@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 import { PreviewedActions } from '@/components/primitives';
 import { BubbleHeader } from './BubbleHeader';
@@ -42,11 +42,11 @@ export const RequestAddressBubble = memo(function RequestAddressBubble({ m }: Pr
 
 const S = StyleSheet.create({
   wrap:    { paddingHorizontal: 16, marginBottom: 14 },
-  card:    { maxWidth: '82%', padding: 14, borderRadius: 16 },
+  card:    { maxWidth: '82%', padding: 14, borderRadius: radii.lg },
   row:     { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  qrBox:   { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  askText: { fontSize: 13.5, lineHeight: 19 },
+  qrBox:   { width: 30, height: 30, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' },
+  askText: { fontSize: fontSize.sm, lineHeight: 19 },
   note:    { fontSize: 12.5, fontStyle: 'italic', lineHeight: 18 },
-  fullBtn: { padding: 9, borderRadius: 10, alignItems: 'center' },
+  fullBtn: { padding: 9, borderRadius: radii.md, alignItems: 'center' },
   btnText: { fontFamily: fontFamily.sansMd, fontSize: 10, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
 });

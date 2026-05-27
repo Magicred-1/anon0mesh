@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '../../hooks/useGlass';
 import { PreviewedActions } from '@/components/primitives';
 import { BubbleHeader } from './BubbleHeader';
@@ -51,13 +51,13 @@ export const ShareAddressBubble = memo(function ShareAddressBubble({ m }: Props)
 
 const S = StyleSheet.create({
   wrap:        { paddingHorizontal: 16, marginBottom: 14 },
-  card:        { maxWidth: '82%', padding: 14, borderRadius: 16 },
+  card:        { maxWidth: '82%', padding: 14, borderRadius: radii.lg },
   row:         { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dot:         { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  dot:         { width: 26, height: 26, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   dotText:     { fontFamily: fontFamily.sansMd, fontSize: 10, fontWeight: '600' },
   sharedLabel: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  addrChip:    { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 9, paddingHorizontal: 11, borderRadius: 10 },
-  addrText:    { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.3 },
-  fullBtn:     { padding: 9, borderRadius: 10, alignItems: 'center' },
+  addrChip:    { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 9, paddingHorizontal: 11, borderRadius: radii.md },
+  addrText:    { flex: 1, fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.3 },
+  fullBtn:     { padding: 9, borderRadius: radii.md, alignItems: 'center' },
   btnText:     { fontFamily: fontFamily.sansMd, fontSize: 10, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
 });

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { parseSolanaPayUri } from '@/src/services/solanaPayUri';
 
 export type ScannedAddress =
@@ -173,7 +173,7 @@ const BORDER = 3;
 const S = StyleSheet.create({
   root:      { flex: 1, backgroundColor: '#000' },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 32 },
-  deniedText:{ fontFamily: fontFamily.sansMd, fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  deniedText:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, textAlign: 'center', lineHeight: 20 },
 
   overlay:   {
     ...StyleSheet.absoluteFillObject,
@@ -183,7 +183,7 @@ const S = StyleSheet.create({
     position: 'absolute', width: CORNER, height: CORNER,
     borderColor: '#fff',
     top:  '35%', left: '20%',
-    borderTopWidth: BORDER, borderLeftWidth: BORDER, borderRadius: 4,
+    borderTopWidth: BORDER, borderLeftWidth: BORDER, borderRadius: radii.xs,
   },
   cornerTR:  { left: undefined, right: '20%', borderLeftWidth: 0, borderRightWidth: BORDER },
   cornerBL:  { top: undefined, bottom: '35%', borderTopWidth: 0, borderBottomWidth: BORDER },
@@ -194,9 +194,9 @@ const S = StyleSheet.create({
     alignItems: 'center',
   },
   labelText: {
-    fontFamily: fontFamily.sansMd, fontSize: 12, letterSpacing: 1.5,
+    fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 1.5,
     color: '#fff', backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: radii.sm,
   },
   hint:      {
     position: 'absolute', bottom: 100, left: 0, right: 0, alignItems: 'center',
@@ -206,7 +206,7 @@ const S = StyleSheet.create({
     position: 'absolute',
     top: Platform.OS === 'ios' ? 60 : 40,
     right: 20,
-    width: 38, height: 38, borderRadius: 19,
+    width: 38, height: 38, borderRadius: radii.full,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center', justifyContent: 'center',
   },
