@@ -8,3 +8,4 @@ export { ScreenHeader } from './ScreenHeader';
 export { EmptyState } from './EmptyState';
 export { ErrorState } from './ErrorState';
 export { LoadingState } from './LoadingState';
+export { ToastHost, showToast } from './Toast';

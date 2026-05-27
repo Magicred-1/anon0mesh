@@ -2,7 +2,6 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Linking,
   Pressable,
   StyleSheet,
@@ -22,6 +21,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { DepthButton, Pill } from "@/components/primitives";
+import { showToast } from "@/components/ui/Toast";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import * as haptics from "@/src/design-system/haptics";
 import { useGlass } from "@/hooks/useGlass";
@@ -110,13 +110,13 @@ export function FailureCard({
     if (!txId) return;
     haptics.tap();
     await Clipboard.setStringAsync(txId);
-    Alert.alert("Copied", "Transaction signature copied to clipboard.");
+    showToast("Transaction signature copied");
   }
 
   async function handleCopyError() {
     haptics.tap();
     await Clipboard.setStringAsync(rawError);
-    Alert.alert("Copied", "Error details copied to clipboard.");
+    showToast("Error details copied");
   }
 
   function handleTryAgain() {
