@@ -105,7 +105,15 @@
       ],
       "@magicred-1/react-native-lxmf",
       "./plugins/withAndroidForegroundService",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "anonmesh",
+          "project": "react-native",
+          "url": "https://sentry.io/"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

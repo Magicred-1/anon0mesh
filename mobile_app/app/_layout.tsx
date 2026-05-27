@@ -30,6 +30,11 @@ import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 import { pendingConversationRef }    from '@/hooks/pendingConversation';
 import { useBackgroundService }      from '@/hooks/useBackgroundService';
+import { ErrorBoundary }             from '@/src/observability/ErrorBoundary';
+import { initObservability, Sentry } from '@/src/observability/sentry';
+
+// Crash observability. No-op unless EXPO_PUBLIC_SENTRY_DSN is set and not __DEV__.
+initObservability();
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -142,7 +147,7 @@ const R = StyleSheet.create({
   },
 });
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_300Light,
     SpaceGrotesk_400Regular,
@@ -154,20 +159,26 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={R.gestureRoot}>
-      <ThemeProvider>
-        <LxmfProvider>
-          <NetworkModeProvider>
-            <WalletProvider autoInitialize>
-              <WalletBalanceProvider>
-              <HideBalanceProvider>
-                <AppShell />
-              </HideBalanceProvider>
-              </WalletBalanceProvider>
-            </WalletProvider>
-          </NetworkModeProvider>
-        </LxmfProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={R.gestureRoot}>
+        <ThemeProvider>
+          <LxmfProvider>
+            <NetworkModeProvider>
+              <WalletProvider autoInitialize>
+                <WalletBalanceProvider>
+                <HideBalanceProvider>
+                  <AppShell />
+                </HideBalanceProvider>
+                </WalletBalanceProvider>
+              </WalletProvider>
+            </NetworkModeProvider>
+          </LxmfProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
+
+// Sentry.wrap enables native crash context + (disabled here) tracing. It is a
+// transparent pass-through when observability is off.
+export default Sentry.wrap(RootLayout);
