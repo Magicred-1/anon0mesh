@@ -67,7 +67,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): 
   });
 }
 
-const DIRECT_RPC_TIMEOUT_MS = 10_000;
+export const DIRECT_RPC_TIMEOUT_MS = 10_000;
 
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;
@@ -135,7 +135,11 @@ async function submitSignedTransaction(
   tx: Transaction,
 ): Promise<string> {
   try {
-    return await rpcAdapter.sendRawTransaction(tx.serialize());
+    return await withTimeout(
+      rpcAdapter.sendRawTransaction(tx.serialize()),
+      DIRECT_RPC_TIMEOUT_MS,
+      "transaction submission",
+    );
   } catch (err: unknown) {
     const summary = summarizeError(err, "RPC rejected the transaction without returning a reason");
     throw new Error(`Transaction submission failed: ${summary.message}`);
@@ -231,7 +235,17 @@ export async function confirmTransaction(
       }
     }
     try {
-      const status = await rpcAdapter.getSignatureStatus(signature);
+      // Bound each status read so one hung getSignatureStatus can't stall the
+      // poll loop past its deadline. Without this, a degraded RPC that accepts
+      // the connection but never responds parks the await forever and the
+      // `while (Date.now() < deadline)` guard never re-evaluates — the user
+      // sees a permanent "Confirming" spinner with no timeout. A rejection
+      // here is swallowed below and we simply poll again next cycle.
+      const status = await withTimeout(
+        rpcAdapter.getSignatureStatus(signature),
+        DIRECT_RPC_TIMEOUT_MS,
+        "confirmation status",
+      );
       if (status) {
         if (status.err !== null && status.err !== undefined) {
           return { kind: 'failed', signature, err: status.err, reason: 'on-chain' };
@@ -361,7 +375,11 @@ async function signAndSubmitTransaction({
   tx: Transaction;
   expectedPubkey: PublicKey;
 }): Promise<SendResult> {
-  const { blockhash } = await rpcAdapter.getLatestBlockhash();
+  const { blockhash } = await withTimeout(
+    rpcAdapter.getLatestBlockhash(),
+    DIRECT_RPC_TIMEOUT_MS,
+    "blockhash",
+  );
   tx.recentBlockhash = blockhash;
   tx.feePayer = expectedPubkey;
 
