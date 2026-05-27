@@ -19,7 +19,7 @@ import { DepthButton } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import type { AddressBookEntry } from "@/src/services/addressBook";
 import { useAddressBook } from "@/src/services/addressBook";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, ScreenHeader } from "@/components/ui";
 import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
@@ -148,20 +148,21 @@ export default function ContactsScreen() {
 
   return (
     <SafeAreaView style={[S.root, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <View style={S.header}>
-        <View>
-          <Text style={[S.kicker, { color: colors.textTertiary }]}>LOCAL ONLY</Text>
-          <Text style={[S.title, { color: colors.textPrimary }]}>address book</Text>
-        </View>
-        <Pressable
-          accessibilityLabel="Close address book"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-        >
-          <Feather name="x" size={18} color={colors.textPrimary} />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        kicker="LOCAL ONLY"
+        title="address book"
+        style={S.header}
+        right={
+          <Pressable
+            accessibilityLabel="Close address book"
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+          >
+            <Feather name="x" size={18} color={colors.textPrimary} />
+          </Pressable>
+        }
+      />
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={S.flex}>
         <ScrollView
@@ -241,24 +242,9 @@ const S = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  // ScreenHeader owns layout + typography; keep this screen's wider spacing[6] gutter.
   header: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
     paddingHorizontal: spacing[6],
-    paddingVertical: spacing[5],
-  },
-  kicker: {
-    fontFamily: FF.sansMd,
-    fontSize: fontSize.xs,
-    letterSpacing: 2,
-    marginBottom: 2,
-    textTransform: "uppercase",
-  },
-  title: {
-    fontFamily: FF.sansBold,
-    fontSize: fontSize["3xl"],
-    letterSpacing: -0.5,
   },
   closeButton: {
     alignItems: "center",
