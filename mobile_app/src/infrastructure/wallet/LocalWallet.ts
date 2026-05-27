@@ -139,9 +139,12 @@ export class LocalWallet implements IWalletAdapter {
   }
 
   static async create(): Promise<LocalWallet> {
+    // Allow the device passcode as a fallback so users with no enrolled
+    // biometric (PIN-only devices) can still create a wallet — this is the
+    // single auth prompt for the create flow.
     const auth = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Authenticate to create your anonmesh wallet',
-      disableDeviceFallback: true,
+      disableDeviceFallback: false,
       cancelLabel: 'Cancel',
     });
     if (!auth.success) throw new Error('Authentication cancelled');
