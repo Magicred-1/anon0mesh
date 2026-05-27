@@ -99,6 +99,17 @@ function utf8ToBase64(s: string): string {
   return bytesToBase64(new TextEncoder().encode(s));
 }
 
+// LXMF destination hashes are 16-byte truncated identity hashes → exactly 32
+// lowercase hex chars (see LxmfContext: getRandomBytes(16) → hex). Deep-link
+// params and notification payloads are externally controllable, so validate the
+// shape before routing on them — a malformed hash is a mis-route / notification-
+// suppression vector (it could falsely equal — or never equal — the active
+// peer's hash, suppressing real alerts or opening a bogus thread). QA-11.
+const DEST_HASH_RE = /^[0-9a-f]{32}$/;
+function isValidDestHash(v: unknown): v is string {
+  return typeof v === 'string' && DEST_HASH_RE.test(v);
+}
+
 function viaToIface(via: LxmfPeer['via']): 'BLE' | 'TCP' | 'RNode' {
   if (via === 'ble')   return 'BLE';
   if (via === 'rnode') return 'RNode';
@@ -688,8 +699,13 @@ export default function MessagesScreen() {
   useFocusEffect(useCallback(() => {
     messagesFocusedRef.current = true;
     const hash = pendingConversationRef.current;
-    if (hash) {
-      pendingConversationRef.current = null;
+    // The pending hash comes from a notification tap (externally influenced).
+    // Consume it unconditionally so junk can't linger and re-fire, but only
+    // route when it's a well-formed dest hash — a malformed value must not slip
+    // past the active-peer check (notification-suppression) or open a junk
+    // thread. QA-11.
+    if (hash) pendingConversationRef.current = null;
+    if (hash && isValidDestHash(hash)) {
       if (hash === activePeerHexRef.current) return;
       const peer = lxmfPeers.find(p => p.destHash === hash);
       const ident = getPeerIdentity(hash);
@@ -712,6 +728,9 @@ export default function MessagesScreen() {
   // Open a thread when navigated from another screen (e.g. Nodes DM button)
   useFocusEffect(useCallback(() => {
     if (!paramDestHash || !paramHandle) return;
+    // Reject a malformed deep-link hash rather than opening a thread keyed on
+    // attacker-controlled junk (mis-route vector). QA-11.
+    if (!isValidDestHash(paramDestHash)) return;
     if (handledDeepLinkRef.current === paramDestHash) return;
     handledDeepLinkRef.current = paramDestHash;
     const lxmfPeer = lxmfPeers.find(p => p.destHash === paramDestHash);
