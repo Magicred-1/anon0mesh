@@ -209,22 +209,29 @@ function storedMsgToAnyMsg(m: StoredMessage, ownHash: string | null, from: strin
 // ── No-peers empty state ─────────────────────────────────────────────────────
 
 function NoPeersScreen({
-  colors, bottomInset, onCreateGroup, onJoinGroup,
+  colors, bottomInset, onCreateGroup, onJoinGroup, isRunning, bleActive,
 }: {
   colors: ReturnType<typeof useTheme>['colors'];
   bottomInset: number;
   onCreateGroup: () => void;
   onJoinGroup: () => void;
+  isRunning: boolean;
+  bleActive: boolean;
 }) {
   const ring1 = useSharedValue(0);
   const ring2 = useSharedValue(0);
   const ring3 = useSharedValue(0);
   const reduceMotion = useReducedMotion();
 
+  // We are only actually scanning when the node is up AND the BLE radio is on.
+  // Animating a "sonar sweep" while offline or with Bluetooth denied is a lie —
+  // nothing is being scanned. Branch the whole empty state on this. QA-03.
+  const scanning = isRunning && bleActive;
+
   useEffect(() => {
-    // a11y: skip the 3-ring sonar sweep under "reduce motion" — the static
-    // "SCANNING FOR PEERS" label + center icon still communicate state.
-    if (reduceMotion) {
+    // Don't run the sonar unless we're genuinely scanning, and respect a11y
+    // "reduce motion". When not animating, park the rings at 0 (fully hidden).
+    if (!scanning || reduceMotion) {
       ring1.value = 0;
       ring2.value = 0;
       ring3.value = 0;
@@ -239,18 +246,29 @@ function NoPeersScreen({
     sonar(ring1, 0);
     sonar(ring2, 733);
     sonar(ring3, 1466);
-  }, [ring1, ring2, ring3, reduceMotion]);
+  }, [ring1, ring2, ring3, reduceMotion, scanning]);
 
+  // Truthful copy for each real state. "Scanning" only when scanning; an
+  // offline/BLE-off user gets an actionable prompt instead of a false promise
+  // that peers "will appear automatically."
+  const title = scanning ? 'SCANNING FOR PEERS' : "YOU'RE OFFLINE";
+  const subtitle = scanning
+    ? 'No one nearby yet — that’s normal.\nAnyone running anonmesh will appear here.'
+    : 'Enable Bluetooth to find people nearby.\nWe can’t scan while the radio is off.';
+
+  // When not scanning the rings are parked at 0; force opacity to 0 too so they
+  // vanish entirely rather than sitting as static circles (which would still
+  // read as a passive "radar").
   const r1Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 1 - ring1.value) * 0.32,
+    opacity: scanning ? Math.max(0, 1 - ring1.value) * 0.32 : 0,
     transform: [{ scale: 1 + ring1.value * 2.4 }],
   }));
   const r2Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 1 - ring2.value) * 0.32,
+    opacity: scanning ? Math.max(0, 1 - ring2.value) * 0.32 : 0,
     transform: [{ scale: 1 + ring2.value * 2.4 }],
   }));
   const r3Style = useAnimatedStyle(() => ({
-    opacity: Math.max(0, 1 - ring3.value) * 0.32,
+    opacity: scanning ? Math.max(0, 1 - ring3.value) * 0.32 : 0,
     transform: [{ scale: 1 + ring3.value * 2.4 }],
   }));
 
@@ -263,22 +281,22 @@ function NoPeersScreen({
         <Reanimated.View style={[{ position: 'absolute', width: R, height: R, borderRadius: R / 2, borderWidth: 1, borderColor: colors.primary }, r3Style]} />
         <View style={{
           width: R, height: R, borderRadius: R / 2,
-          backgroundColor: colors.primarySubtle,
+          backgroundColor: scanning ? colors.primarySubtle : colors.surface1,
           alignItems: 'center', justifyContent: 'center',
         }}>
           <Image
             source={require('@/assets/icons/anonmesh_white_icon.png')}
-            style={{ width: 38, height: 38, tintColor: colors.primary }}
+            style={{ width: 38, height: 38, tintColor: scanning ? colors.primary : colors.textTertiary }}
             resizeMode="contain"
           />
         </View>
       </View>
 
       <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textPrimary, fontSize: 12, letterSpacing: 3, marginTop: 32 }}>
-        SCANNING FOR PEERS
+        {title}
       </Text>
       <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 48, lineHeight: 18 }}>
-        Anyone nearby running anonmesh{'\n'}will appear automatically.
+        {subtitle}
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 32 }}>
@@ -304,7 +322,7 @@ function NoPeersScreen({
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const {
-    isRunning, displayName, peers: lxmfPeers, events, send,
+    isRunning, bleActive, displayName, peers: lxmfPeers, events, send,
     getDisplayName, getPeerIdentity, getPeerMessages, myAddress,
     groups, createGroup, joinGroup, leaveGroup, getGroupMembers,
   } = useLxmfContext();
@@ -698,6 +716,8 @@ export default function MessagesScreen() {
           bottomInset={insets.bottom}
           onCreateGroup={() => setCreateGroupVisible(true)}
           onJoinGroup={() => setJoinGroupVisible(true)}
+          isRunning={isRunning}
+          bleActive={bleActive}
         />
       ) : (
         <PeersDrawer
