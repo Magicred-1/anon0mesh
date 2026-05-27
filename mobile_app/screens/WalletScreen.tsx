@@ -47,7 +47,7 @@ const TOKEN_COLOR: Record<string, string> = {
 function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly toggle: () => void }) {
   const { colors } = useTheme();
   const { isConnected, publicKey } = useWallet();
-  const { solBalance, tokens, loading, lastFetched, refetch } = useWalletBalance();
+  const { solBalance, tokens, loading, lastFetched, refetch, balanceStale } = useWalletBalance();
 
   const hasWallet   = isConnected && Boolean(publicKey);
   const initialLoad = hasWallet && solBalance === null && lastFetched === null;
@@ -94,6 +94,11 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
         }
         <Text style={[S.unit, { color: colors.primary }]}>SOL</Text>
       </View>
+      {balanceStale && !hidden && solBalance !== null && (
+        <Text style={{ fontSize: 11, letterSpacing: 0.3, marginTop: 6, color: colors.error }}>
+          Balance may be stale — showing last known
+        </Text>
+      )}
       {splTokens.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.splStrip}>
           {splTokens.map((t: TokenBalance) => {

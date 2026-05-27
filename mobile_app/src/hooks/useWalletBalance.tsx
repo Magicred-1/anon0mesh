@@ -17,6 +17,7 @@ interface WalletBalanceState {
   activity: ActivityEntry[];
   activityLoading: boolean;
   activityError: string | null;
+  balanceStale: boolean;
   loading: boolean;
   refetch: () => Promise<void>;
   lastFetched: number | null;
@@ -40,6 +41,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [balanceStale, setBalanceStale] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastFetched, setLastFetched] = useState<number | null>(null);
 
@@ -59,11 +61,19 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     solResult: PromiseSettledResult<number>,
     splResult: PromiseSettledResult<TokenBalance[]>,
   ) {
-    if (solResult.status !== "fulfilled") return;
+    if (solResult.status !== "fulfilled") {
+      // Balance read timed out / RPC-rejected on a refresh. Keep the last known
+      // value (blanking it to 0/null would be a worse lie) but mark it stale so
+      // the UI can say "last known" — send decisions ride on this number, so a
+      // stale balance must never be presented as live.
+      setBalanceStale(true);
+      return;
+    }
     const sol = solResult.value;
     const splTokens = splResult.status === "fulfilled" ? splResult.value : [];
     setSolBalance(sol);
     setTokens([{ ...NATIVE_SOL, uiAmount: sol }, ...splTokens]);
+    setBalanceStale(false);
   }
 
   function applyActivityResult(result: PromiseSettledResult<ActivityEntry[]>) {
@@ -83,6 +93,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       setSolBalance(null);
       setActivity([]);
       setActivityError(null);
+      setBalanceStale(false);
       return;
     }
 
@@ -171,6 +182,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     activity,
     activityLoading,
     activityError,
+    balanceStale,
     loading,
     refetch,
     lastFetched,
