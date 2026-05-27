@@ -1,11 +1,9 @@
-import React, { useRef, useEffect } from 'react';
-import {
-  Modal, View, Text, Pressable, ScrollView,
-  StyleSheet, Animated, Platform,
-} from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { AppBottomSheet } from '@/components/primitives';
 import { EmptyState } from '@/components/ui';
 import type { LxmfGroup } from '@/context/LxmfContext';
 
@@ -46,84 +44,57 @@ export function GroupMembersSheet({ visible, onClose, group, members, getDisplay
   const baseGlass  = useGlass();
   const softGlass  = useGlass('soft');
 
-  const sheetAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
-    }
-  }, [visible, sheetAnim]);
-
-  function dismiss() {
-    Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(onClose);
-  }
-
-  const sheetY    = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
-  const overlayOp = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' });
-
   return (
-    <Modal transparent animationType="none" visible={visible} onRequestClose={dismiss}>
-      <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-        </Animated.View>
-
-        <Animated.View style={[S.sheet, { backgroundColor: colors.glass, borderColor: colors.border, transform: [{ translateY: sheetY }] }]}>
-          <View style={[S.grab, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
-
-          <View style={S.header}>
-            <View>
-              <Text style={[S.tag, { color: colors.textTertiary }]}>CHANNEL MEMBERS</Text>
-              <Text style={[S.title, { color: colors.textPrimary }]}>{group?.name ?? '—'}</Text>
-            </View>
-            <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]}>
-              <Feather name="x" size={14} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-
-          <View style={[S.countRow]}>
-            <Feather name="users" size={12} color={colors.textTertiary} />
-            <Text style={[S.countText, { color: colors.textTertiary }]}>
-              {members.length === 0
-                ? 'no activity yet'
-                : `${members.length} active participant${members.length === 1 ? '' : 's'}`}
-            </Text>
-          </View>
-
-          {members.length === 0 ? (
-            <EmptyState
-              fill={false}
-              icon="message-circle"
-              title="no activity yet"
-              description="Share the channel invite — members appear here after their first message"
-            />
-          ) : (
-            <ScrollView
-              style={S.list}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ gap: 6, paddingBottom: 8 }}
-              nestedScrollEnabled
-            >
-              {members.map(hash => (
-                <MemberRow
-                  key={hash}
-                  hash={hash}
-                  getDisplayName={getDisplayName}
-                  colors={colors}
-                  baseGlass={baseGlass}
-                />
-              ))}
-            </ScrollView>
-          )}
-        </Animated.View>
+    <AppBottomSheet visible={visible} onClose={onClose} backgroundColor={colors.glass}>
+      <View style={S.header}>
+        <View>
+          <Text style={[S.tag, { color: colors.textTertiary }]}>CHANNEL MEMBERS</Text>
+          <Text style={[S.title, { color: colors.textPrimary }]}>{group?.name ?? '—'}</Text>
+        </View>
+        <Pressable onPress={onClose} style={[S.closeBtn, softGlass]}>
+          <Feather name="x" size={14} color={colors.textSecondary} />
+        </Pressable>
       </View>
-    </Modal>
+
+      <View style={[S.countRow]}>
+        <Feather name="users" size={12} color={colors.textTertiary} />
+        <Text style={[S.countText, { color: colors.textTertiary }]}>
+          {members.length === 0
+            ? 'no activity yet'
+            : `${members.length} active participant${members.length === 1 ? '' : 's'}`}
+        </Text>
+      </View>
+
+      {members.length === 0 ? (
+        <EmptyState
+          fill={false}
+          icon="message-circle"
+          title="no activity yet"
+          description="Share the channel invite — members appear here after their first message"
+        />
+      ) : (
+        <ScrollView
+          style={S.list}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ gap: 6, paddingBottom: 8 }}
+          nestedScrollEnabled
+        >
+          {members.map(hash => (
+            <MemberRow
+              key={hash}
+              hash={hash}
+              getDisplayName={getDisplayName}
+              colors={colors}
+              baseGlass={baseGlass}
+            />
+          ))}
+        </ScrollView>
+      )}
+    </AppBottomSheet>
   );
 }
 
 const S = StyleSheet.create({
-  sheet:           { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 24, borderWidth: 0.5, maxHeight: '70%' },
-  grab:            { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   tag:             { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   title:           { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
