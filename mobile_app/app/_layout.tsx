@@ -18,7 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-import { ThemeProvider, useTheme } from '@/theme';
+import { ThemeProvider, useTheme, fontSize, radii, spacing } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider, useLxmfContext } from '@/context/LxmfContext';
 import { NetworkModeProvider } from '@/context/NetworkModeContext';
@@ -54,9 +54,9 @@ function LxmfErrorBanner() {
 }
 
 const E = StyleSheet.create({
-  bar:  { position: 'absolute', bottom: 90, left: 16, right: 16, flexDirection: 'row', alignItems: 'center',
-          gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 0.5, zIndex: 99 },
-  text: { flex: 1, fontSize: 12, lineHeight: 17 },
+  bar:  { position: 'absolute', bottom: 90, left: spacing[5], right: spacing[5], flexDirection: 'row', alignItems: 'center',
+          gap: spacing[3], paddingHorizontal: 14, paddingVertical: 10, borderRadius: radii.md, borderWidth: 0.5, zIndex: 99 },
+  text: { flex: 1, fontSize: fontSize.sm, lineHeight: 17 },
 });
 
 function NotificationBridge({ onInApp }: { readonly onInApp: (n: NotificationPayload) => void }) {
