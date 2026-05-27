@@ -72,7 +72,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: "0,5",
     }),
-    "solana:11111111111111111111111111111111?amount=0.5&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=0.5&label=anonmesh&message=anonmesh+receive",
     "comma decimal in amount must normalize to dot",
   );
   assert.equal(
@@ -80,7 +80,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: "1,234500",
     }),
-    "solana:11111111111111111111111111111111?amount=1.234500&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=1.234500&label=anonmesh&message=anonmesh+receive",
     "comma decimal with trailing zeros preserved in URI",
   );
   // Whitespace plus comma is the case that locales actually emit.
@@ -89,7 +89,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: " 0,001 ",
     }),
-    "solana:11111111111111111111111111111111?amount=0.001&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=0.001&label=anonmesh&message=anonmesh+receive",
     "padded comma decimal must trim and normalize",
   );
   // Receive screen feeds a plain decimal string, not a locale-grouped number
@@ -107,7 +107,7 @@ function testSolanaPayUri() {
   // amount= rather than crashing on undefined.
   assert.equal(
     buildSolanaPayUri({ recipient: "11111111111111111111111111111111" }),
-    "solana:11111111111111111111111111111111?label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?label=anonmesh&message=anonmesh+receive",
     "missing amount must produce a recipient-only URI",
   );
 }
