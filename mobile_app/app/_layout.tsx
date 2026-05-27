@@ -26,6 +26,7 @@ import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { ToastHost } from '@/components/ui/Toast';
+import { ConfirmHost } from '@/components/ui/ConfirmSheet';
 import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
 import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
@@ -131,6 +132,7 @@ function AppShell() {
       />
 
       <ToastHost />
+      <ConfirmHost />
     </View>
   );
 }
