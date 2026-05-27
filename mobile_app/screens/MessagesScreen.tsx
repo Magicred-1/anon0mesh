@@ -37,6 +37,7 @@ import type { LxmfPeer, StoredMessage } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
+import { useConversationSummaries } from '@/hooks/useConversationSummaries';
 import { formatAgo }             from '@/utils/time';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
@@ -264,6 +265,9 @@ export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
 
   const { publicKey } = useWallet();
+
+  const { summaries, markRead } = useConversationSummaries();
+  const [activeTab, setActiveTab] = useState<'contacts' | 'groups' | 'all'>('contacts');
 
   const [msgs,             setMsgs]             = useState<AnyMsg[]>([]);
   const [activePeer,       setActivePeer]        = useState('');
@@ -592,7 +596,8 @@ export default function MessagesScreen() {
     }
 
     setMsgs([{ id: nextId(), kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` }]);
-  }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW]);
+    if (newHash) markRead(newHash);
+  }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW, markRead]);
 
   useFocusEffect(useCallback(() => { requestBLEPermissions(); }, []));
 
@@ -658,6 +663,9 @@ export default function MessagesScreen() {
           onPick={pickPeer}
           syncing={!isRunning}
           peers={livePeers}
+          summaries={summaries}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
           onNewHash={hash => {
             const ident = getPeerIdentity(hash);
             pickPeer({
