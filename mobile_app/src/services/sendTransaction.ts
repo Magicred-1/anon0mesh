@@ -6,6 +6,7 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
+import bs58 from "bs58";
 import {
   createAssociatedTokenAccountInstruction,
   createTransferInstruction,
@@ -67,7 +68,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): 
   });
 }
 
-const DIRECT_RPC_TIMEOUT_MS = 10_000;
+export const DIRECT_RPC_TIMEOUT_MS = 10_000;
 
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;
@@ -130,13 +131,44 @@ function normalizeWalletError(err: unknown, fallback?: string): never {
   throw err;
 }
 
+/**
+ * The signed transaction's signature, base58-encoded — i.e. the exact string
+ * `sendRawTransaction` returns on success. Known the instant the tx is signed,
+ * so we can hand it to confirmation polling even if the *submit* call never
+ * returns a value (timeout). Returns null only if the tx isn't signed yet,
+ * which never happens on the submit paths below.
+ */
+function signedTransactionSignature(tx: Transaction): string | null {
+  return tx.signature ? bs58.encode(tx.signature) : null;
+}
+
 async function submitSignedTransaction(
   rpcAdapter: IRpcAdapter,
   tx: Transaction,
 ): Promise<string> {
   try {
-    return await rpcAdapter.sendRawTransaction(tx.serialize());
+    return await withTimeout(
+      rpcAdapter.sendRawTransaction(tx.serialize()),
+      DIRECT_RPC_TIMEOUT_MS,
+      "transaction submission",
+    );
   } catch (err: unknown) {
+    // CRITICAL — double-send guard. A TimeoutError here does NOT mean the
+    // transaction failed: the RPC accepted the socket and may already have
+    // forwarded the signed tx to the cluster; it just didn't answer within
+    // DIRECT_RPC_TIMEOUT_MS. The broadcast outcome is UNKNOWN. The signature
+    // is deterministic from the already-signed tx, so we return it and let the
+    // caller's confirmation poll establish the real outcome. Throwing here
+    // would surface an inline "Try again" that re-signs with a fresh blockhash
+    // and can land a SECOND transfer. Only a genuine RPC *rejection* (the RPC
+    // responded with an error → tx was NOT accepted) is safe to rethrow for
+    // inline retry.
+    if (err instanceof TimeoutError) {
+      const signature = signedTransactionSignature(tx);
+      if (signature) return signature;
+      // No signature to confirm against (should be unreachable on a signed
+      // tx). Fall through to the rejection path so we don't claim a send.
+    }
     const summary = summarizeError(err, "RPC rejected the transaction without returning a reason");
     throw new Error(`Transaction submission failed: ${summary.message}`);
   }
@@ -231,7 +263,17 @@ export async function confirmTransaction(
       }
     }
     try {
-      const status = await rpcAdapter.getSignatureStatus(signature);
+      // Bound each status read so one hung getSignatureStatus can't stall the
+      // poll loop past its deadline. Without this, a degraded RPC that accepts
+      // the connection but never responds parks the await forever and the
+      // `while (Date.now() < deadline)` guard never re-evaluates — the user
+      // sees a permanent "Confirming" spinner with no timeout. A rejection
+      // here is swallowed below and we simply poll again next cycle.
+      const status = await withTimeout(
+        rpcAdapter.getSignatureStatus(signature),
+        DIRECT_RPC_TIMEOUT_MS,
+        "confirmation status",
+      );
       if (status) {
         if (status.err !== null && status.err !== undefined) {
           return { kind: 'failed', signature, err: status.err, reason: 'on-chain' };
@@ -361,7 +403,11 @@ async function signAndSubmitTransaction({
   tx: Transaction;
   expectedPubkey: PublicKey;
 }): Promise<SendResult> {
-  const { blockhash } = await rpcAdapter.getLatestBlockhash();
+  const { blockhash } = await withTimeout(
+    rpcAdapter.getLatestBlockhash(),
+    DIRECT_RPC_TIMEOUT_MS,
+    "blockhash",
+  );
   tx.recentBlockhash = blockhash;
   tx.feePayer = expectedPubkey;
 
