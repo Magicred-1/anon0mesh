@@ -23,19 +23,20 @@ import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 import { parseBaseUnits } from "@/src/utils/amount";
 import { summarizeError } from "@/src/utils/errors";
 import { isWalletDenial } from "@/src/utils/walletDenial";
+// Timeout primitive lives in a dependency-free util (src/utils/withTimeout.ts)
+// so walletData.ts can import it without dragging this module's heavy "@/"
+// graph into the raw-node tier0 services validator.
+import { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS } from "@/src/utils/withTimeout";
+
+// Re-exported so the existing call sites (ReviewCard, useWalletBalance) keep
+// importing the timeout primitive from this module unchanged.
+export { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS };
+
 const APP_IDENTITY = {
   name: "anonmesh",
   uri: "https://anonme.sh",
   icon: "/favicon.ico",
 };
-
-// Timeout primitive moved to a dependency-free util (src/utils/withTimeout.ts)
-// so walletData.ts can import it without dragging this module's heavy "@/"
-// graph into the raw-node tier0 services validator. Re-exported here so the
-// existing call sites (ReviewCard, useWalletBalance) keep importing from this
-// module unchanged.
-import { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS } from "@/src/utils/withTimeout";
-export { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS };
 
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;
