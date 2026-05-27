@@ -266,7 +266,7 @@ export default function MessagesScreen() {
 
   const { publicKey } = useWallet();
 
-  const { summaries, markRead } = useConversationSummaries();
+  const { summaries, markRead, touchPeer } = useConversationSummaries();
   const [activeTab, setActiveTab] = useState<'contacts' | 'groups' | 'all'>('contacts');
 
   const [msgs,             setMsgs]             = useState<AnyMsg[]>([]);
@@ -581,6 +581,7 @@ export default function MessagesScreen() {
     chatTx.value = screenW; // park off-screen before state change so slide-in useEffect animates from there
     setActivePeer(p.handle);
     setActivePeerHex(newHash);
+    if (newHash) touchPeer(newHash);
 
     const cached = newHash ? threadsRef.current.get(newHash) : undefined;
     if (cached) { setMsgs(cached); return; }
@@ -597,7 +598,7 @@ export default function MessagesScreen() {
 
     setMsgs([{ id: nextId(), kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` }]);
     if (newHash) markRead(newHash);
-  }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW, markRead]);
+  }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW, markRead, touchPeer]);
 
   useFocusEffect(useCallback(() => { requestBLEPermissions(); }, []));
 
