@@ -6,6 +6,7 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
+import bs58 from "bs58";
 import {
   createAssociatedTokenAccountInstruction,
   createTransferInstruction,
@@ -130,6 +131,17 @@ function normalizeWalletError(err: unknown, fallback?: string): never {
   throw err;
 }
 
+/**
+ * The signed transaction's signature, base58-encoded — i.e. the exact string
+ * `sendRawTransaction` returns on success. Known the instant the tx is signed,
+ * so we can hand it to confirmation polling even if the *submit* call never
+ * returns a value (timeout). Returns null only if the tx isn't signed yet,
+ * which never happens on the submit paths below.
+ */
+function signedTransactionSignature(tx: Transaction): string | null {
+  return tx.signature ? bs58.encode(tx.signature) : null;
+}
+
 async function submitSignedTransaction(
   rpcAdapter: IRpcAdapter,
   tx: Transaction,
@@ -141,6 +153,22 @@ async function submitSignedTransaction(
       "transaction submission",
     );
   } catch (err: unknown) {
+    // CRITICAL — double-send guard. A TimeoutError here does NOT mean the
+    // transaction failed: the RPC accepted the socket and may already have
+    // forwarded the signed tx to the cluster; it just didn't answer within
+    // DIRECT_RPC_TIMEOUT_MS. The broadcast outcome is UNKNOWN. The signature
+    // is deterministic from the already-signed tx, so we return it and let the
+    // caller's confirmation poll establish the real outcome. Throwing here
+    // would surface an inline "Try again" that re-signs with a fresh blockhash
+    // and can land a SECOND transfer. Only a genuine RPC *rejection* (the RPC
+    // responded with an error → tx was NOT accepted) is safe to rethrow for
+    // inline retry.
+    if (err instanceof TimeoutError) {
+      const signature = signedTransactionSignature(tx);
+      if (signature) return signature;
+      // No signature to confirm against (should be unreachable on a signed
+      // tx). Fall through to the rejection path so we don't claim a send.
+    }
     const summary = summarizeError(err, "RPC rejected the transaction without returning a reason");
     throw new Error(`Transaction submission failed: ${summary.message}`);
   }
