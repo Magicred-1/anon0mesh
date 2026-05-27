@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Buffer } from 'buffer';
 
 import { useLxmfContext, type StoredMessage } from '@/context/LxmfContext';
+import { PrefKeys, prefGet, prefSetJson } from '@/src/storage';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
@@ -31,6 +32,7 @@ function decodePreview(body: string): string {
 function buildSummaries(
   messages: StoredMessage[],
   lastReadAt: Map<string, number>,
+  contacted: Set<string>,
 ): Map<string, ConvSummary> {
   // Sort ascending so the newest message overwrites earlier ones
   const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
@@ -50,16 +52,26 @@ function buildSummaries(
       unreadCount:   (existing?.unreadCount ?? 0) + (isUnread ? 1 : 0),
     });
   }
+
+  // Add stub entries for peers the user has opened without any messages yet
+  for (const hash of contacted) {
+    if (!map.has(hash)) {
+      map.set(hash, { lastText: '', lastTimestamp: 0, unreadCount: 0 });
+    }
+  }
+
   return map;
 }
 
 export function useConversationSummaries(): {
   summaries:       Map<string, ConvSummary>;
   markRead:        (destHash: string) => void;
+  touchPeer:       (destHash: string) => void;
   hasConversation: (destHash: string) => boolean;
 } {
   const { fetchMessages, events } = useLxmfContext();
   const lastReadAt      = useRef<Map<string, number>>(new Map());
+  const contactedRef    = useRef<Set<string>>(new Set());
   const lastEvtCountRef = useRef(0);
   const lastFirstEvtRef = useRef<LxmfEvent | null>(null);
 
@@ -67,10 +79,26 @@ export function useConversationSummaries(): {
 
   const derive = useCallback(() => {
     const msgs = fetchMessages(500) as StoredMessage[];
-    setSummaries(buildSummaries(msgs, lastReadAt.current));
+    setSummaries(buildSummaries(msgs, lastReadAt.current, contactedRef.current));
   }, [fetchMessages]);
 
-  // Initial derive on mount
+  // Load persisted contacted peers on mount
+  useEffect(() => {
+    prefGet(PrefKeys.CONTACTED_PEERS).then(raw => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          contactedRef.current = new Set(parsed.filter((h): h is string => typeof h === 'string'));
+        }
+      } catch {}
+      derive();
+    });
+  // derive is stable — only run this once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Initial derive on mount (before storage load resolves — runs immediately)
   useEffect(() => { derive(); }, [derive]);
 
   // Re-derive only when new messageReceived events arrive
@@ -86,10 +114,20 @@ export function useConversationSummaries(): {
     derive();
   }, [derive]);
 
+  // Record that the user opened a conversation with this peer. Persisted so
+  // the Contacts tab shows them even after an app restart, before any
+  // messages are exchanged.
+  const touchPeer = useCallback((destHash: string) => {
+    if (contactedRef.current.has(destHash)) return;
+    contactedRef.current.add(destHash);
+    prefSetJson(PrefKeys.CONTACTED_PEERS, [...contactedRef.current]).catch(() => {});
+    derive();
+  }, [derive]);
+
   const hasConversation = useCallback(
     (destHash: string) => summaries.has(destHash),
     [summaries],
   );
 
-  return { summaries, markRead, hasConversation };
+  return { summaries, markRead, touchPeer, hasConversation };
 }
