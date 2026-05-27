@@ -191,6 +191,14 @@ export class LocalWallet implements IWalletAdapter {
     await secureSet(SecureKeys.WALLET_SECRET, JSON.stringify(payload));
     await secureSet(SecureKeys.WALLET_MARKER, 'true');
 
+    // Zero the transient secret buffers now that they are persisted. The seed
+    // has been fully consumed by Keypair.fromSeed and the AES key by both the
+    // encrypt call and its base64 persist — neither is read again, so wiping
+    // them shrinks the window where raw key material sits in JS heap. We do NOT
+    // touch keypair.secretKey: the returned wallet still needs it to sign.
+    seed.fill(0);
+    aesKey.fill(0);
+
     const w = new LocalWallet();
     w._publicKey = keypair.publicKey;
     return w;
