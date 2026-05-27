@@ -92,39 +92,9 @@ export const darkColors = {
   glass:   'rgba(0,8,12,0.92)',
 } as const;
 
-export const lightColors = {
-  background: '#f0f8fc',
-  surface0:   palette.white,
-  surface1:   '#e8f4fa',
-  surface2:   '#d0e8f4',
-  surface3:   '#b8dced',
-
-  textPrimary:   palette.void950,
-  textSecondary: palette.void700,
-  textTertiary:  palette.void500,
-  textDisabled:  palette.void300,
-  textInverse:   palette.white,
-
-  primary:       '#0070b8',
-  primaryDim:    '#005590',
-  primarySubtle: 'rgba(0,112,184,0.10)',
-
-  accent:        palette.neon500,
-  accentSubtle:  'rgba(0,159,0,0.10)',
-
-  error:         '#c01020',
-  errorSubtle:   '#fff0f0',
-  warning:       '#7a5400',
-  warningSubtle: '#fff8e0',
-  success:       palette.green500,
-  successSubtle: '#e8f9ee',
-
-  borderSubtle: '#d0e8f4',
-  border:       '#a8d0e4',
-  borderStrong: '#80b8d0',
-
-  overlay: 'rgba(0,0,0,0.40)',
-  glass:   'rgba(240,248,252,0.92)',
-} as const;
-
-export type AppColors = typeof darkColors | typeof lightColors;
+// Dark is the only theme — the app's identity is the dark void/cyan palette.
+// A lightColors set used to live here but had zero consumers (ThemeProvider is
+// dark-only, no useColorScheme anywhere), so it was removed rather than imply
+// theme support that doesn't exist. Wiring light mode would be a feature, not a
+// consistency fix.
+export type AppColors = typeof darkColors;
