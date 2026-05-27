@@ -1,6 +1,6 @@
 import React, { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
-import { InteractionManager } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import {
   SecureKeys, LegacySecureKeys, PrefKeys,
   secureGet, secureSet, secureDelete, secureDeleteAll,
@@ -20,6 +20,7 @@ import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import { collectPeerMessages } from '@/src/services/peerMessages';
+import { activeConversationRef } from '@/hooks/activeConversation';
 import * as ExpoCrypto from 'expo-crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
 
@@ -617,6 +618,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       secureDelete(SecureKeys.LXMF_IDENTITY),
       prefRemove(PrefKeys.PEERS_CACHE),
     ]);
+    // Clear the active-conversation marker: it holds the *old* identity's peer
+    // hash. Left stale, useMessageNotifications would treat the new identity's
+    // first incoming message as "already in the active thread" and silently
+    // suppress its notification (QA-26).
+    activeConversationRef.current = null;
     setStoredIdentity(null);
   }, [isRunning, stop]);
 
@@ -632,17 +638,51 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [bleActive,    setBleActive]    = useState(false);
   const [blePeerCount, setBlePeerCount] = useState(0);
+  // Gate JS poll loops on foreground (QA-07). Native foreground service keeps the
+  // mesh alive in the background — these are just the UI-facing polls (BLE peer
+  // count, peer-map prune) that have no reason to run while backgrounded.
+  const [appActive,    setAppActive]    = useState(AppState.currentState === 'active');
   // Updated every render so the 80ms debounce timer always reads current value
   const bleActiveRef = useRef(bleActive);
   bleActiveRef.current = bleActive;
 
+  // Inner debounce timers (announce-flag reset, peer-cache persist) outlive the
+  // event effect that schedules them — they're tracked on refs, not the effect's
+  // local timer, so the effect's own cleanup never clears them. On provider
+  // unmount they'd still fire setIsAnnouncing / prefSetJson after teardown.
+  // Clear them here so nothing runs post-unmount (QA-15).
+  useEffect(() => {
+    return () => {
+      if (announceTimerRef.current) {
+        clearTimeout(announceTimerRef.current);
+        announceTimerRef.current = null;
+      }
+      if (storageTimerRef.current) {
+        clearTimeout(storageTimerRef.current);
+        storageTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Track foreground vs background so the poll loops below can pause/resume.
+  // Mirrors the AppState pattern in useMessageNotifications.ts (QA-07).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => { setAppActive(s === 'active'); });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     if (!bleActive) { setBlePeerCount(0); return; }
+    if (!appActive) { return; }
     const tick = () => { try { setBlePeerCount(LxmfModule.blePeerCount()); } catch { /* native not ready */ } };
     tick();
     const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [bleActive]);
+    if (__DEV__) console.log('[Lxmf] blePeerCount poll: running (foreground)');
+    return () => {
+      clearInterval(id);
+      if (__DEV__) console.log('[Lxmf] blePeerCount poll: paused (background/inactive)');
+    };
+  }, [bleActive, appActive]);
 
   useEffect(() => {
     prefGetJson<LxmfPeer[]>(PrefKeys.PEERS_CACHE).then(cached => {
@@ -702,6 +742,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [lxmf.events, lxmf.beacons, lxmf.status, bleActive]);
 
   useEffect(() => {
+    if (!appActive) return;
     const ownHash = lxmf.status?.addressHex;
     const id = setInterval(() => {
       const map = knownPeersRef.current;
@@ -710,8 +751,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         startTransition(() => setPeers(Array.from(map.values())));
       }
     }, 10_000);
-    return () => clearInterval(id);
-  }, [lxmf.status?.addressHex]);
+    if (__DEV__) console.log('[Lxmf] peer-prune poll: running (foreground)');
+    return () => {
+      clearInterval(id);
+      if (__DEV__) console.log('[Lxmf] peer-prune poll: paused (background/inactive)');
+    };
+  }, [lxmf.status?.addressHex, appActive]);
 
   // When BLE is active and peers are connected, re-tag 0-hop peers as BLE and
   // mark them online. Fixes: (a) stale bleActive at startup tags them as

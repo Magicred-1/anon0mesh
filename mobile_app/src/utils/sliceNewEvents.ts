@@ -5,7 +5,9 @@ import type { LxmfEvent } from "@magicred-1/react-native-lxmf";
  * the cap is hit length stops growing, so callers track the previous head by
  * reference to detect new prepended events.
  *
- * Three semantics for the return value:
+ * Four semantics for the return value:
+ * - length shrank → return [] (a transport reset cleared the log; treat the
+ *   smaller log as a fresh baseline, not as all-new events to re-notify on)
  * - length grew → return the prefix slice that's new
  * - length capped but head moved → return the prefix up to the previous head
  *   (or everything if the previous head fell off the end)
@@ -16,6 +18,7 @@ export function sliceNewEvents(
   prevCount: number,
   prevFirst: LxmfEvent | null,
 ): LxmfEvent[] {
+  if (events.length < prevCount) return [];
   if (events.length > prevCount) return events.slice(0, events.length - prevCount);
   const first = events[0] ?? null;
   if (prevFirst !== null && first !== prevFirst) {
