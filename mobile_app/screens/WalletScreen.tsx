@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ScreenHeader } from '@/components/ui';
 import { ReceivePanel } from '@/components/wallet/ReceivePanel';
 import { TxDetailModal } from '@/components/wallet/TxDetailModal';
 import { PendingCosigns, type PendingCosign } from '@/components/nodes/PendingCosigns';
@@ -329,47 +330,47 @@ export default function WalletScreen() {
         <View style={S.grid}>
 
           {/* ── Header ── */}
-          <View style={S.header}>
-            <View>
-              <Text accessibilityRole="header" style={[S.kicker,      { color: colors.textTertiary }]}>ANONMESH</Text>
-              <Text style={[S.screenTitle, { color: colors.textPrimary  }]}>wallet</Text>
-            </View>
+          <ScreenHeader
+            kicker="ANONMESH"
+            title="wallet"
+            style={S.header}
+            right={
+              <View style={S.headerRight}>
+                {/* Network chip */}
+                <View style={[S.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                  {(mode === 'online' || mode === 'mesh')
+                    ? <MaterialCommunityIcons name="bird" size={12} color={netColor} />
+                    : <View style={[S.chipDot, { backgroundColor: netColor }]} />
+                  }
+                  <Text style={[S.chipText, { color: netColor }]}>{netLabel}</Text>
+                </View>
 
-            <View style={S.headerRight}>
-              {/* Network chip */}
-              <View style={[S.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-                {(mode === 'online' || mode === 'mesh')
-                  ? <MaterialCommunityIcons name="bird" size={12} color={netColor} />
-                  : <View style={[S.chipDot, { backgroundColor: netColor }]} />
-                }
-                <Text style={[S.chipText, { color: netColor }]}>{netLabel}</Text>
+                {/* Peers chip */}
+                <View style={[S.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                  <Feather name="users" size={10} color={onlinePeers > 0 ? colors.primary : colors.textTertiary} />
+                  <Text style={[S.chipText, { color: onlinePeers > 0 ? colors.primary : colors.textTertiary }]}>
+                    {peers.length}
+                  </Text>
+                </View>
+
+                {/* QR button */}
+                {addr && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setShowReceive(true);
+                    }}
+                    style={({ pressed }) => [
+                      S.qrBtn,
+                      { backgroundColor: colors.surface2, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <Ionicons name="qr-code" size={16} color={colors.primary} />
+                  </Pressable>
+                )}
               </View>
-
-              {/* Peers chip */}
-              <View style={[S.chip, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-                <Feather name="users" size={10} color={onlinePeers > 0 ? colors.primary : colors.textTertiary} />
-                <Text style={[S.chipText, { color: onlinePeers > 0 ? colors.primary : colors.textTertiary }]}>
-                  {peers.length}
-                </Text>
-              </View>
-
-              {/* QR button */}
-              {addr && (
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setShowReceive(true);
-                  }}
-                  style={({ pressed }) => [
-                    S.qrBtn,
-                    { backgroundColor: colors.surface2, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <Ionicons name="qr-code" size={16} color={colors.primary} />
-                </Pressable>
-              )}
-            </View>
-          </View>
+            }
+          />
 
           <BalanceTile hidden={hidden} toggle={toggle} />
           <ActionTiles />
@@ -403,10 +404,8 @@ const S = StyleSheet.create({
   root:  { flex: 1 },
   grid:  { flex: 1, paddingHorizontal: spacing[5], paddingTop: 0, gap: GAP, paddingBottom: spacing[5] },
 
-  // header
-  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing[5], paddingBottom: 6 },
-  kicker:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, marginBottom: 2 },
-  screenTitle: { fontFamily: fontFamily.sansSb, fontSize: fontSize.xl, letterSpacing: -0.5 },
+  // header — ScreenHeader owns layout/typography; grid already pads horizontally.
+  header:      { paddingHorizontal: 0 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: radii.xl, borderWidth: 0.5 },
   chipDot:     { width: 5, height: 5, borderRadius: radii.full },
