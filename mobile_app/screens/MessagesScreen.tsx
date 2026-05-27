@@ -124,17 +124,64 @@ function lxmfPeerToPeer(p: LxmfPeer): Peer {
 
 // ── Incoming message parsing ──────────────────────────────────────────────────
 
+// A peer fully controls the JSON body of req-pay/req-addr/share-addr. The bubble
+// components render `note`/`asset`/`amount` straight as React children, so a
+// non-string value (object, array, number) thrown into a <Text> crashes the
+// renderer and — with no error boundary above this screen — white-screens the
+// app. These guards coerce/validate at the trust boundary so a hostile or buggy
+// peer can never reach the renderer with an unsafe value. QA-18.
+
+const KNOWN_ASSETS = ['SOL', 'USDC', 'JUP', 'BONK'] as const;
+
+// Asset must be a short known ticker; anything else falls back to SOL so the
+// bubble's `m.asset[0]` / color lookup always has a safe string.
+function safeAsset(v: unknown): string {
+  return typeof v === 'string' && (KNOWN_ASSETS as readonly string[]).includes(v) ? v : 'SOL';
+}
+
+// Notes are free text but optional. Drop non-strings entirely (returns
+// undefined → bubble skips the note row) and clamp length so a megabyte of
+// peer text can't be forced into one <Text>.
+function safeNote(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const trimmed = v.slice(0, 280);
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+// Amount is rendered verbatim. Accept the peer's string only if it parses to a
+// finite, non-negative number; otherwise reject the whole req-pay (return null)
+// rather than render an attacker-chosen string.
+function safeAmount(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? v : null;
+}
+
+// Addresses are rendered verbatim too; require a plain non-empty string of
+// reasonable length.
+function safeAddr(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const trimmed = v.trim();
+  return trimmed.length > 0 && trimmed.length <= 128 ? trimmed : null;
+}
+
 function parseStructuredMsg(text: string, from: string, time: string): AnyMsg | null {
   try {
     const p = JSON.parse(text);
     if (!p || typeof p !== 'object') return null;
     const id = nextId();
-    if (p.t === 'share-addr' && typeof p.addr === 'string')
-      return { id, kind: 'share-address', from, me: false, time, asset: p.asset ?? 'SOL', address: p.addr };
+    if (p.t === 'share-addr') {
+      const address = safeAddr(p.addr);
+      if (address === null) return null;
+      return { id, kind: 'share-address', from, me: false, time, asset: safeAsset(p.asset), address };
+    }
     if (p.t === 'req-addr')
-      return { id, kind: 'request-address', from, me: false, time, asset: p.asset ?? 'SOL', note: p.note };
-    if (p.t === 'req-pay' && typeof p.amount === 'string')
-      return { id, kind: 'request-money', from, me: false, time, asset: p.asset ?? 'SOL', amount: p.amount, note: p.note };
+      return { id, kind: 'request-address', from, me: false, time, asset: safeAsset(p.asset), note: safeNote(p.note) };
+    if (p.t === 'req-pay') {
+      const amount = safeAmount(p.amount);
+      if (amount === null) return null;
+      return { id, kind: 'request-money', from, me: false, time, asset: safeAsset(p.asset), amount, note: safeNote(p.note) };
+    }
   } catch { /* plain text */ }
   return null;
 }
