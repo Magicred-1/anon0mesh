@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback } from 'react';
-import { Alert, View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -9,6 +9,7 @@ import Reanimated, {
 import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { confirm } from '@/components/ui/ConfirmSheet';
 import { useGlass } from '../../hooks/useGlass';
 import { QRScannerModal } from './QRScannerModal';
 import { type Peer } from './constants';
@@ -50,17 +51,19 @@ function SwipeableGroupRow({ groupName, onLeave, children }: { readonly groupNam
     opacity: interpolate(tx.value, [-REVEAL, -REVEAL * 0.3, 0], [1, 0.9, 0.5], Extrapolation.CLAMP),
   }));
 
-  const confirmLeave = useCallback(() => {
+  const confirmLeave = useCallback(async () => {
     // Channel keys are unrecoverable from local state once we leave. Block on
     // explicit confirm so a fat-finger swipe doesn't destroy access.
-    Alert.alert(
-      `Leave ${groupName}?`,
-      'You will need the address + key to re-join. Keys live only with members of this channel.',
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); } },
-        { text: 'Leave',  style: 'destructive', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); onLeave(); } },
-      ],
-    );
+    const ok = await confirm({
+      title: `Leave ${groupName}?`,
+      message: 'You will need the address + key to re-join. Keys live only with members of this channel.',
+      confirmLabel: 'Leave',
+      destructive: true,
+    });
+    // Snap the swiped row back to rest regardless of the decision (both the
+    // old cancel and leave branches did this).
+    tx.value = withSpring(0, { damping: 18, stiffness: 240 });
+    if (ok) onLeave();
   }, [groupName, onLeave, tx]);
 
   return (

@@ -3,7 +3,6 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,7 +18,7 @@ import { DepthButton } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import type { AddressBookEntry } from "@/src/services/addressBook";
 import { useAddressBook } from "@/src/services/addressBook";
-import { EmptyState, ScreenHeader } from "@/components/ui";
+import { confirm, EmptyState, ScreenHeader } from "@/components/ui";
 import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
@@ -62,16 +61,18 @@ function ContactRow({
     setEditing(false);
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     haptics.warning();
-    Alert.alert("Delete recipient?", shortAddress(entry.pubkey), [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => onDelete(entry.pubkey),
-      },
-    ]);
+    if (
+      await confirm({
+        title: "Delete recipient?",
+        message: shortAddress(entry.pubkey),
+        confirmLabel: "Delete",
+        destructive: true,
+      })
+    ) {
+      onDelete(entry.pubkey);
+    }
   }
 
   return (
