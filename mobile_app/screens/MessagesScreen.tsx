@@ -164,8 +164,13 @@ function safeNote(v: unknown): string | undefined {
 // rather than render an attacker-chosen string.
 function safeAmount(v: unknown): string | null {
   if (typeof v !== 'string') return null;
-  const n = Number(v);
-  return Number.isFinite(n) && n >= 0 ? v : null;
+  const trimmed = v.trim();
+  // Decimal digits only. `Number()` alone would accept '' and '   ' (→0), hex
+  // ('0x10'→16), and scientific ('1e9'), letting a peer render a misleading or
+  // empty amount. Require plain decimal so the bubble shows exactly what was sent.
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? trimmed : null;
 }
 
 // Addresses are rendered verbatim too; require a plain non-empty string of
@@ -653,7 +658,16 @@ export default function MessagesScreen() {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
       return;
     }
-    const seq = await send(activePeerHex, utf8ToBase64(payload));
+    let seq: number;
+    try {
+      seq = await send(activePeerHex, utf8ToBase64(payload));
+    } catch (err) {
+      // A native-bridge / transport throw must not surface as an unhandled
+      // rejection. Treat it as a failed send so the bubble + queued/failed
+      // banner reflect reality instead of the app silently dropping it.
+      console.warn('[messages] grid action send threw', err);
+      seq = -1;
+    }
     // Track the seq so the queued/stale banner reflects this send too, exactly
     // like a text message.
     if (seq < 0) {
