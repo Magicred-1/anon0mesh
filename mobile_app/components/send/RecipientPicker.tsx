@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { QRScannerModal } from "@/components/messages/QRScannerModal";
 import { DepthButton, TokenLogo } from "@/components/primitives";
+import { confirm } from "@/components/ui";
 import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
 import * as haptics from "@/src/design-system/haptics";
@@ -185,15 +186,17 @@ export function RecipientPicker() {
       {
         text: "Delete",
         style: "destructive",
-        onPress: () => {
-          Alert.alert("Delete recipient?", entry.label, [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Delete",
-              style: "destructive",
-              onPress: () => void deleteRecipient(entry.pubkey),
-            },
-          ]);
+        onPress: async () => {
+          if (
+            await confirm({
+              title: "Delete recipient?",
+              message: entry.label,
+              confirmLabel: "Delete",
+              destructive: true,
+            })
+          ) {
+            void deleteRecipient(entry.pubkey);
+          }
         },
       },
     ]);

@@ -9,3 +9,5 @@ export { EmptyState } from './EmptyState';
 export { ErrorState } from './ErrorState';
 export { LoadingState } from './LoadingState';
 export { ToastHost, showToast } from './Toast';
+export { ConfirmHost, confirm } from './ConfirmSheet';
+export type { ConfirmOptions } from './ConfirmSheet';
