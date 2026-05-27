@@ -38,7 +38,7 @@ function formatTokenAmount(amount: number, maxDecimals: number): string {
 }
 
 export function BalanceCard() {
-  const { colors, spacing, fontFamily, fontSize } = useTheme();
+  const { colors, spacing, radii, fontFamily, fontSize } = useTheme();
   const { hidden, toggle } = useHideBalance();
   const { isConnected, publicKey } = useWallet();
   const { solBalance, tokens, loading, lastFetched } = useWalletBalance();
@@ -131,24 +131,24 @@ export function BalanceCard() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: spacing[5], gap: 10, paddingBottom: 8 }}
+          contentContainerStyle={{ paddingHorizontal: spacing[5], gap: 10, paddingBottom: spacing[3] }}
         >
           {splTokens.map((token: TokenBalance) => {
             const color = TOKEN_COLORS[token.symbol] ?? colors.textSecondary;
             const amount = hidden ? HIDDEN_MASK : formatTokenAmount(token.uiAmount, token.maxDecimals);
             const isToken2022 = token.programId === "spl-token-2022";
             return (
-              <View key={token.mintAddress ?? token.symbol} style={[styles.tokenCard, { backgroundColor: colors.surface1, borderColor: colors.borderSubtle }]}>
-                <View style={[styles.dot, { backgroundColor: color + "22" }]}>
-                  <Text style={[styles.dotText, { color }]}>{token.symbol[0]}</Text>
+              <View key={token.mintAddress ?? token.symbol} style={[styles.tokenCard, { backgroundColor: colors.surface1, borderColor: colors.borderSubtle, borderRadius: radii.lg }]}>
+                <View style={[styles.dot, { backgroundColor: color + "22", borderRadius: radii.md }]}>
+                  <Text style={[styles.dotText, { color, fontSize: fontSize.sm }]}>{token.symbol[0]}</Text>
                 </View>
-                <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.2, textTransform: "uppercase", marginTop: 8 }}>
+                <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.2, textTransform: "uppercase", marginTop: spacing[3] }}>
                   {token.symbol}
                 </Text>
                 <Text style={{ color: colors.textPrimary, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, marginTop: 2 }}>
                   {amount}
                 </Text>
-                <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: 10, marginTop: 1 }}>
+                <Text style={{ color: colors.textTertiary, fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, marginTop: 1 }}>
                   {token.name}
                 </Text>
                 {isToken2022 ? (
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   amountRow: { alignItems: "flex-end", flexDirection: "row", justifyContent: "center" },
   list:      { overflow: "hidden" },
   divider:   { height: 0.5, marginHorizontal: 16, marginBottom: 4 },
-  tokenCard: { width: 110, borderRadius: 14, borderWidth: 0.5, padding: 12, alignItems: "flex-start" },
-  dot:       { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  dotText:   { fontSize: 12, fontWeight: "700" },
+  tokenCard: { width: 110, borderWidth: 0.5, padding: 12, alignItems: "flex-start" },
+  dot:       { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  dotText:   { fontWeight: "700" },
 });

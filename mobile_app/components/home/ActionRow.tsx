@@ -126,7 +126,7 @@ export function ActionRow() {
                 style={{
                   color: colors.warning,
                   fontFamily: fontFamily.sansMd,
-                  fontSize: 10,
+                  fontSize: fontSize.xs,
                   letterSpacing: 0.8,
                   textTransform: "uppercase",
                 }}

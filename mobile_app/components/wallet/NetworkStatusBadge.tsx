@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useNetworkMode } from '@/src/infrastructure/network';
-import { useTheme } from '@/theme';
+import { fontSize, radii, useTheme } from '@/theme';
 
 const CONFIG = {
   online:  { label: 'ONLINE',     icon: 'wifi'        as const, color: '#14F195' },
@@ -62,10 +62,10 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 20,
+    borderRadius: radii.xl,
     borderWidth: 0.5,
   },
-  dot:   { width: 5, height: 5, borderRadius: 99 },
-  label: { fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  relay: { fontSize: 10, letterSpacing: 0.5 },
+  dot:   { width: 5, height: 5, borderRadius: radii.full },
+  label: { fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
+  relay: { fontSize: fontSize.xs, letterSpacing: 0.5 },
 });

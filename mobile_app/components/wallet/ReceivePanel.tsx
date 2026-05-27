@@ -1,7 +1,7 @@
 import React, { memo, useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { useWallet } from '@/context/WalletContext';
 import { QRCode } from '@/components/settings/QRCode';
@@ -37,7 +37,7 @@ export const ReceivePanel = memo(function ReceivePanel() {
   return (
     <View style={S.panel}>
       <View style={[S.qrCard, glass, { alignItems: 'center' }]}>
-        <Text accessibilityRole="header" style={[S.cardLabel, { color: colors.textTertiary, marginBottom: 16 }]}>SOLANA ADDRESS</Text>
+        <Text accessibilityRole="header" style={[S.cardLabel, { color: colors.textTertiary, marginBottom: spacing[5] }]}>SOLANA ADDRESS</Text>
         <View style={[S.qrWrap, { borderColor: colors.border }]}>
           <QRCode data={address} size={180} />
         </View>
@@ -61,14 +61,14 @@ export const ReceivePanel = memo(function ReceivePanel() {
 });
 
 const S = StyleSheet.create({
-  panel:     { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16, gap: 12 },
+  panel:     { paddingHorizontal: spacing[6], paddingTop: 14, paddingBottom: spacing[5], gap: spacing[4] },
   cardLabel: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  qrCard:    { borderRadius: 16, padding: 20, gap: 14 },
-  qrWrap:    { padding: 10, borderRadius: 12, borderWidth: 0.5, overflow: 'hidden' },
-  address:   { fontFamily: fontFamily.mono, fontSize: 13, letterSpacing: 0.5 },
+  qrCard:    { borderRadius: radii.lg, padding: spacing[6], gap: 14 },
+  qrWrap:    { padding: 10, borderRadius: radii.md, borderWidth: 0.5, overflow: 'hidden' },
+  address:   { fontFamily: fontFamily.mono, fontSize: fontSize.sm, letterSpacing: 0.5 },
   hint:      { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2.5, textTransform: 'uppercase' },
-  infoCard:  { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12 },
+  infoCard:  { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radii.md },
   infoText:  { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  copyBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderRadius: 14 },
-  copyLabel: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
+  copyBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[3], padding: 14, borderRadius: radii.lg },
+  copyLabel: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
 });

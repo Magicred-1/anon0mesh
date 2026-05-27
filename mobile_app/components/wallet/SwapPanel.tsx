@@ -2,7 +2,7 @@
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { PreviewBadge } from '@/components/primitives/PreviewBadge';
 import { PreviewedActions } from '@/components/primitives/PreviewedActions';
@@ -89,15 +89,15 @@ export const SwapPanel = memo(function SwapPanel() {
 });
 
 const S = StyleSheet.create({
-  panel:     { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16, gap: 12 },
+  panel:     { paddingHorizontal: spacing[6], paddingTop: 14, paddingBottom: spacing[5], gap: spacing[4] },
   row:       { flexDirection: 'row', alignItems: 'center' },
-  card:      { borderRadius: 16, padding: 12 },
+  card:      { borderRadius: radii.lg, padding: spacing[4] },
   privLabel: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   flipWrap:  { alignItems: 'center', marginVertical: -20, zIndex: 2 },
-  flipBtn:   { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  flipBtn:   { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   rateRow:   { flexDirection: 'row', justifyContent: 'space-between' },
-  rateKey:   { fontFamily: fontFamily.sansMd, fontSize: 11 },
-  rateVal:   { fontFamily: fontFamily.sansMd, fontSize: 11 },
-  actionBtn: { padding: 15, borderRadius: 14, alignItems: 'center' },
-  actionLabel:{ fontFamily: fontFamily.sansMd, fontSize: 12, letterSpacing: 3.5, textTransform: 'uppercase', fontWeight: '600' },
+  rateKey:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
+  rateVal:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
+  actionBtn: { padding: 15, borderRadius: radii.lg, alignItems: 'center' },
+  actionLabel:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 3.5, textTransform: 'uppercase', fontWeight: '600' },
 });

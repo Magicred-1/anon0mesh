@@ -1,7 +1,7 @@
 // FUTURE: preview-only panel; re-export from components/wallet/index.ts once yield protocols are integrated and behavior is fully wired (AUDIT A6 / ROADMAP § 0.A.8).
 import React, { memo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { PreviewBadge } from '@/components/primitives/PreviewBadge';
 import { PreviewedActions } from '@/components/primitives/PreviewedActions';
@@ -20,11 +20,11 @@ export const YieldPanel = memo(function YieldPanel() {
       <PreviewBadge label="yield · coming soon" />
       <View style={[S.card, glass]}>
         <Text style={[S.cardLabel, { color: colors.textTertiary }]}>LIFETIME EARNINGS</Text>
-        <View style={[S.row, { alignItems: 'baseline', gap: 8, marginTop: 6 }]}>
+        <View style={[S.row, { alignItems: 'baseline', gap: spacing[3], marginTop: 6 }]}>
           <Text style={[S.earningsAmt, { color: colors.primary }]}>+$142.88</Text>
           <Text style={[S.cardLabel, { color: colors.textTertiary }]}>· 7.24% AVG APY</Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 34, gap: 2, marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 34, gap: 2, marginTop: spacing[3] }}>
           {[28,24,25,20,22,16,18,14,15,10,12,8,10,6,8,4].map((v, i, arr) => (
             <View
               key={i}
@@ -71,18 +71,18 @@ export const YieldPanel = memo(function YieldPanel() {
             {on && (
               <View style={[S.vaultExpanded, { borderTopColor: colors.borderSubtle }]}>
                 {v.deposited && (
-                  <View style={[S.rateRow, { paddingVertical: 8 }]}>
+                  <View style={[S.rateRow, { paddingVertical: spacing[3] }]}>
                     <Text style={[S.rateKey, { color: colors.textSecondary }]}>you&apos;ve deposited</Text>
                     <Text style={[S.rateVal, { color: colors.textPrimary }]}>{v.deposited} {v.asset}</Text>
                   </View>
                 )}
-                <PreviewedActions hint="yield not yet active" style={{ marginTop: 8 }}>
+                <PreviewedActions hint="yield not yet active" style={{ marginTop: spacing[3] }}>
                   <View style={S.row}>
                     <View style={[S.vaultBtn, { backgroundColor: colors.primary, flex: 1 }]}>
                       <Text style={[S.vaultBtnLabel, { color: '#08080A' }]}>DEPOSIT</Text>
                     </View>
                     {v.deposited && (
-                      <View style={[S.vaultBtn, softGlass, { flex: 1, marginLeft: 8 }]}>
+                      <View style={[S.vaultBtn, softGlass, { flex: 1, marginLeft: spacing[3] }]}>
                         <Text style={[S.vaultBtnLabel, { color: colors.textPrimary }]}>WITHDRAW</Text>
                       </View>
                     )}
@@ -98,19 +98,19 @@ export const YieldPanel = memo(function YieldPanel() {
 });
 
 const S = StyleSheet.create({
-  panel:        { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16, gap: 12 },
+  panel:        { paddingHorizontal: spacing[6], paddingTop: 14, paddingBottom: spacing[5], gap: spacing[4] },
   row:          { flexDirection: 'row', alignItems: 'center' },
-  card:         { borderRadius: 16, padding: 12 },
+  card:         { borderRadius: radii.lg, padding: spacing[4] },
   cardLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  earningsAmt:  { fontFamily: fontFamily.sansMd, fontSize: 28, fontWeight: '500', letterSpacing: -0.5 },
-  vaultHeader:  { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  vaultName:    { fontSize: 14, letterSpacing: -0.2 },
+  earningsAmt:  { fontFamily: fontFamily.sansMd, fontSize: fontSize['3xl'], fontWeight: '500', letterSpacing: -0.5 },
+  vaultHeader:  { flexDirection: 'row', alignItems: 'center', gap: spacing[4], padding: 14 },
+  vaultName:    { fontSize: fontSize.md, letterSpacing: -0.2 },
   vaultMeta:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
-  vaultApy:     { fontFamily: fontFamily.sansMd, fontSize: 16, fontWeight: '500', letterSpacing: -0.2 },
+  vaultApy:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, fontWeight: '500', letterSpacing: -0.2 },
   vaultExpanded:{ padding: 14, paddingTop: 2, borderTopWidth: 0.5 },
-  vaultBtn:     { padding: 11, borderRadius: 10, alignItems: 'center' },
-  vaultBtnLabel:{ fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+  vaultBtn:     { padding: 11, borderRadius: radii.md, alignItems: 'center' },
+  vaultBtnLabel:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
   rateRow:      { flexDirection: 'row', justifyContent: 'space-between' },
-  rateKey:      { fontFamily: fontFamily.sansMd, fontSize: 11 },
-  rateVal:      { fontFamily: fontFamily.sansMd, fontSize: 11 },
+  rateKey:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
+  rateVal:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
 });

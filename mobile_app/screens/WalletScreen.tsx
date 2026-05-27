@@ -17,7 +17,7 @@ import { useHideBalance }   from '@/src/hooks/useHideBalance';
 import { useWalletBalance } from '@/src/hooks/useWalletBalance';
 import { useNetworkMode }   from '@/src/hooks/useNetworkMode';
 import type { ActivityEntry, TokenBalance } from '@/src/services/walletData';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { relTime } from '@/src/utils/relTime';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -385,7 +385,7 @@ export default function WalletScreen() {
         animationType="slide"
         onRequestClose={() => setShowReceive(false)}
       >
-        <Pressable style={S.modalBackdrop} onPress={() => setShowReceive(false)} />
+        <Pressable style={[S.modalBackdrop, { backgroundColor: colors.overlay }]} onPress={() => setShowReceive(false)} />
         <View style={[S.modalSheet, { backgroundColor: colors.surface1 }]}>
           <View style={[S.modalHandle, { backgroundColor: colors.border }]} />
           <ReceivePanel />
@@ -401,57 +401,57 @@ const GAP = 10;
 
 const S = StyleSheet.create({
   root:  { flex: 1 },
-  grid:  { flex: 1, paddingHorizontal: 16, paddingTop: 0, gap: GAP, paddingBottom: 16 },
+  grid:  { flex: 1, paddingHorizontal: spacing[5], paddingTop: 0, gap: GAP, paddingBottom: spacing[5] },
 
   // header
-  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, paddingBottom: 6 },
-  kicker:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, marginBottom: 2 },
-  screenTitle: { fontFamily: fontFamily.sansSb, fontSize: 22, letterSpacing: -0.5 },
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing[5], paddingBottom: 6 },
+  kicker:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, marginBottom: 2 },
+  screenTitle: { fontFamily: fontFamily.sansSb, fontSize: fontSize.xl, letterSpacing: -0.5 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 20, borderWidth: 0.5 },
-  chipDot:     { width: 5, height: 5, borderRadius: 3 },
-  chipText:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
-  qrBtn:       { width: 32, height: 32, borderRadius: 16, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  chip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 6, borderRadius: radii.xl, borderWidth: 0.5 },
+  chipDot:     { width: 5, height: 5, borderRadius: radii.full },
+  chipText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1 },
+  qrBtn:       { width: 32, height: 32, borderRadius: radii.full, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
 
   // receive modal
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  modalSheet:    { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12, paddingBottom: 32 },
-  modalHandle:   { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
+  modalBackdrop: { flex: 1 },
+  modalSheet:    { borderTopLeftRadius: radii['2xl'], borderTopRightRadius: radii['2xl'], paddingTop: spacing[4], paddingBottom: spacing[8] },
+  modalHandle:   { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: spacing[3] },
 
-  tile:      { borderRadius: 18, borderWidth: 0.5, padding: 16, overflow: 'hidden' },
-  accentBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderTopLeftRadius: 18, borderTopRightRadius: 18 },
+  tile:      { borderRadius: radii.xl, borderWidth: 0.5, padding: spacing[5], overflow: 'hidden' },
+  accentBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl },
 
   // balance
   balanceTile:     { gap: 10 },
   tileHeaderRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  headerIconBtn:   { padding: 4, alignItems: 'center', justifyContent: 'center' },
+  tileHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[5] },
+  headerIconBtn:   { padding: spacing[2], alignItems: 'center', justifyContent: 'center' },
   tileLabel:       { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   amountRow:       { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   bigNum:          { fontFamily: fontFamily.sansBold, fontSize: 52, letterSpacing: -2, lineHeight: 56, flex: 1 },
-  unit:            { fontFamily: fontFamily.sansMd, fontSize: 14, letterSpacing: 1, marginBottom: 10 },
-  splStrip:        { gap: 8, paddingVertical: 2 },
-  splChip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 0.5 },
-  splDot:          { width: 6, height: 6, borderRadius: 3 },
-  splSymbol:       { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  splAmount:       { fontFamily: fontFamily.sansMd, fontSize: 11 },
+  unit:            { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, letterSpacing: 1, marginBottom: 10 },
+  splStrip:        { gap: spacing[3], paddingVertical: 2 },
+  splChip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.xl, borderWidth: 0.5 },
+  splDot:          { width: 6, height: 6, borderRadius: radii.full },
+  splSymbol:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
+  splAmount:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
 
   // actions
   actionRow:      { flexDirection: 'row', gap: GAP },
-  actionTile:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 20 },
-  actionIconWrap: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  actionLabel:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
+  actionTile:     { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing[3], paddingVertical: spacing[6] },
+  actionIconWrap: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  actionLabel:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1 },
   soonBadge:      { fontFamily: fontFamily.sansMd, fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase' },
 
   // activity
   activityTile:    { flex: 1 },
   activityScroll:  { flexGrow: 1 },
-  center:          { paddingVertical: 24, alignItems: 'center', gap: 4 },
+  center:          { paddingVertical: spacing[7], alignItems: 'center', gap: spacing[2] },
   retryBtn:        { flexDirection: 'row', alignItems: 'center', gap: 6,
-                     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 0.5 },
-  activityRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
-  activityIconWrap:{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  activityLabel:   { fontFamily: fontFamily.sansMd, fontSize: 12, marginBottom: 2 },
-  activityTime:    { fontFamily: fontFamily.sansMd, fontSize: 10 },
-  activityAmount:  { fontFamily: fontFamily.sansSb, fontSize: 13 },
+                     paddingHorizontal: spacing[4], paddingVertical: 7, borderRadius: radii.md, borderWidth: 0.5 },
+  activityRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing[4], paddingVertical: 11 },
+  activityIconWrap:{ width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  activityLabel:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, marginBottom: 2 },
+  activityTime:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
+  activityAmount:  { fontFamily: fontFamily.sansSb, fontSize: fontSize.sm },
 });
