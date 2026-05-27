@@ -29,10 +29,15 @@ import { appMotion } from '@/src/design-system/motion';
 import * as haptics from '@/src/design-system/haptics';
 
 // ── Tab order ─────────────────────────────────────────────────────────────────
-const TABS = ['/', '/wallet', '/nodes', '/settings'] as const;
+const TABS = ['/(tabs)', '/wallet', '/nodes', '/settings'] as const;
 type TabPath = typeof TABS[number];
 
 function tabIdx(path: string): number {
+  // Messages renders at "/" (the (tabs) group is transparent in the URL). The
+  // tab list navigates there via "/(tabs)" so swiping back to Messages doesn't
+  // land on the root "/" route — which is an unconditional Redirect to
+  // onboarding (it would boot the user out of the app shell). Map both forms in.
+  if (path === '/' || path === '/(tabs)') return 0;
   const i = TABS.indexOf(path as TabPath);
   return i === -1 ? 0 : i;
 }
