@@ -3,6 +3,7 @@ import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet,
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { AppBottomSheet } from '@/components/primitives';
 import { Pill } from '@/components/ui/Pill';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
 import { useLxmfContext } from '@/context/LxmfContext';
@@ -38,7 +39,6 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const [stakeAmt, setStakeAmt]   = useState(0.5);
   const [rawAmt, setRawAmt]       = useState('0.5');
   const amtInputRef = useRef<TextInput>(null);
-  const sheetAnim         = useRef(new Animated.Value(0)).current;
   const stakeAnim         = useRef(new Animated.Value(0)).current;
 
   // Auto-activate on first internet was removed per AUDIT T10 / ROADMAP § 0.B.3:
@@ -47,15 +47,11 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   // consumed for UI affordances.
   void hasInternet;
 
-  const openModal = useCallback(() => {
-    setModal(true);
-    Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
-  }, [sheetAnim]);
+  const openModal = useCallback(() => setModal(true), []);
 
-  const dismiss = useCallback(() => {
-    Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true })
-      .start(() => setModal(false));
-  }, [sheetAnim]);
+  // AppBottomSheet owns the slide/dismiss animation; closing is just a state
+  // flip now. handleRegister and the in-sheet controls still call this.
+  const dismiss = useCallback(() => setModal(false), []);
 
   const handleRegister = useCallback(() => {
     setBeaconMode(true);
@@ -78,8 +74,6 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
       .start(() => setStakeModal(false));
   }, [stakeAnim]);
 
-  const sheetY      = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
-  const overlayOp   = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
   const stakeSheetY = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
   const stakeOvOp   = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
 
@@ -170,56 +164,46 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
         </View>
       </View>
 
-      <Modal visible={modal} transparent animationType="none" onRequestClose={dismiss}>
-        <View style={StyleSheet.absoluteFill}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-          </Animated.View>
-
-          <Animated.View style={[S.sheet, { backgroundColor: colors.glass, borderColor: colors.border, transform: [{ translateY: sheetY }] }]}>
-            <View style={[S.grab, { backgroundColor: colors.border }]} />
-
-            <View style={S.sheetHeader}>
-              <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>Become a Beacon</Text>
-              <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]} hitSlop={8}>
-                <Feather name="x" size={14} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={S.feeList}>
-              {[
-                { icon: 'lock'        as const, label: 'Stake (returned on exit)', value: `${STAKE_SOL} SOL`,   dim: false },
-                { icon: 'zap'         as const, label: 'Network fee',              value: `${NETWORK_FEE} SOL`, dim: true  },
-                { icon: 'trending-up' as const, label: 'Earn from co-signs',       value: 'ongoing',            dim: false },
-              ].map(row => (
-                <View key={row.label} style={[S.feeRow, { borderBottomColor: colors.borderSubtle }]}>
-                  <Feather name={row.icon} size={13} color={row.dim ? colors.textTertiary : colors.primary} />
-                  <Text style={[S.feeLabel, { color: colors.textSecondary }]}>{row.label}</Text>
-                  <Text style={[S.feeVal, { color: row.dim ? colors.textTertiary : colors.textPrimary }]}>{row.value}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* CTA flips the local beacon-mode flag. Stake + biometric co-sign
-                flow remains future work; the JS-side opt-in is the consent gate
-                today. */}
-            <Pressable
-              onPress={handleRegister}
-              accessibilityRole="button"
-              accessibilityLabel="Enable beacon mode"
-              style={({ pressed }) => [
-                S.actionBtn,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Text style={[S.actionText, { color: colors.textInverse }]}>Enable Beacon Mode</Text>
-            </Pressable>
-          </Animated.View>
+      <AppBottomSheet visible={modal} onClose={dismiss} backgroundColor={colors.glass}>
+        <View style={S.sheetHeader}>
+          <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>Become a Beacon</Text>
+          <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]} hitSlop={8}>
+            <Feather name="x" size={14} color={colors.textSecondary} />
+          </Pressable>
         </View>
-      </Modal>
+
+        <View style={S.feeList}>
+          {[
+            { icon: 'lock'        as const, label: 'Stake (returned on exit)', value: `${STAKE_SOL} SOL`,   dim: false },
+            { icon: 'zap'         as const, label: 'Network fee',              value: `${NETWORK_FEE} SOL`, dim: true  },
+            { icon: 'trending-up' as const, label: 'Earn from co-signs',       value: 'ongoing',            dim: false },
+          ].map(row => (
+            <View key={row.label} style={[S.feeRow, { borderBottomColor: colors.borderSubtle }]}>
+              <Feather name={row.icon} size={13} color={row.dim ? colors.textTertiary : colors.primary} />
+              <Text style={[S.feeLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+              <Text style={[S.feeVal, { color: row.dim ? colors.textTertiary : colors.textPrimary }]}>{row.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* CTA flips the local beacon-mode flag. Stake + biometric co-sign
+            flow remains future work; the JS-side opt-in is the consent gate
+            today. */}
+        <Pressable
+          onPress={handleRegister}
+          accessibilityRole="button"
+          accessibilityLabel="Enable beacon mode"
+          style={({ pressed }) => [
+            S.actionBtn,
+            {
+              backgroundColor: colors.primary,
+              opacity: pressed ? 0.8 : 1,
+            },
+          ]}
+        >
+          <Text style={[S.actionText, { color: colors.textInverse }]}>Enable Beacon Mode</Text>
+        </Pressable>
+      </AppBottomSheet>
 
       {/* ── Stake Modal ── */}
       <Modal visible={stakeModal} transparent animationType="none" onRequestClose={dismissStake}>
