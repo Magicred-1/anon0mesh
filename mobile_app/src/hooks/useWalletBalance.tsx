@@ -86,12 +86,18 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Snapshot the current generation BEFORE the cooldown gate. The gate can
+    // return early without ever bumping fetchIdRef; if we only stamped the id
+    // after the gate, an in-flight fetch on a now-stale adapter would keep the
+    // latest id and pass isCurrent() when it resolves, committing dead-transport
+    // data. We instead invalidate on adapter/publicKey change (see the effect
+    // below), so a superseded fetch's snapshot here no longer matches.
+    const fetchId = fetchIdRef.current;
+    const isCurrent = () => fetchId === fetchIdRef.current;
+
     const now = Date.now();
     if (lastFetchedRef.current !== null && now - lastFetchedRef.current < COOLDOWN_MS) return;
     lastFetchedRef.current = now;
-
-    const fetchId = ++fetchIdRef.current;
-    const isCurrent = () => fetchId === fetchIdRef.current;
 
     setLoading(true);
     setActivityLoading(true);
@@ -133,6 +139,15 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
 
   // Keep ref current so the effect below never stales without re-running.
   refetchRef.current = refetch;
+
+  // Invalidate any in-flight fetch the instant the transport (adapter) or
+  // wallet changes. Bumping the generation here — not inside refetch, which can
+  // bail at the cooldown gate before bumping — guarantees a stale fetch started
+  // on the previous adapter can never win the isCurrent() check, even if no new
+  // fetch starts (e.g. the new adapter is still inside its 30s cooldown).
+  useEffect(() => {
+    fetchIdRef.current += 1;
+  }, [rpcAdapter, publicKey]);
 
   useEffect(() => {
     const publicKeyString = publicKey?.toBase58() ?? null;
