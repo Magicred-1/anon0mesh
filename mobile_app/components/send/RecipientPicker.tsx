@@ -27,7 +27,7 @@ import {
   splitForHighlight,
   type SuspiciousMatch,
 } from "@/src/services/addressPoisoning";
-import { fontFamily as FF, useTheme } from "@/theme";
+import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -203,7 +203,7 @@ export function RecipientPicker() {
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView edges={["top", "bottom"]} style={S.flex}>
         {/* ── Header ── */}
-        <View style={[S.header, { paddingHorizontal: 16, paddingVertical: 16 }]}>
+        <View style={[S.header, { paddingHorizontal: spacing[5], paddingVertical: spacing[5] }]}>
           <View>
             <Text accessibilityRole="header" style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
             <Text style={[S.screenTitle, { color: colors.textPrimary }]}>send</Text>
@@ -221,7 +221,7 @@ export function RecipientPicker() {
 
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={S.flex}>
           <ScrollView
-            contentContainerStyle={[S.scrollContent, { gap: 10, paddingHorizontal: 16, paddingBottom: 32 }]}
+            contentContainerStyle={[S.scrollContent, { gap: 10, paddingHorizontal: spacing[5], paddingBottom: spacing[8] }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -300,7 +300,7 @@ export function RecipientPicker() {
                       <View
                         style={[
                           S.recentCount,
-                          { backgroundColor: colors.primarySubtle, borderColor: "rgba(0,229,255,0.25)" },
+                          { backgroundColor: colors.primarySubtle, borderColor: colors.borderStrong },
                         ]}
                       >
                         <Text style={[S.recentCountText, { color: colors.primary }]}>
@@ -491,7 +491,7 @@ const S = StyleSheet.create({
   },
   kicker: {
     fontFamily: FF.sansMd,
-    fontSize: 10,
+    fontSize: fontSize.xs,
     letterSpacing: 2,
     textTransform: "uppercase",
     marginBottom: 2,
@@ -503,7 +503,7 @@ const S = StyleSheet.create({
   },
   closeButton: {
     alignItems: "center",
-    borderRadius: 18,
+    borderRadius: radii.full,
     borderWidth: 0.5,
     height: 36,
     justifyContent: "center",
@@ -512,15 +512,15 @@ const S = StyleSheet.create({
 
   // scroll
   scrollContent: {
-    paddingTop: 4,
+    paddingTop: spacing[2],
   },
 
   // shared tile
   tile: {
-    borderRadius: 20,
+    borderRadius: radii.xl,
     borderWidth: 0.5,
     overflow: "hidden",
-    padding: 16,
+    padding: spacing[5],
   },
   tileLabel: {
     fontFamily: FF.sansMd,
@@ -545,21 +545,21 @@ const S = StyleSheet.create({
   },
   tokenSymbol: {
     fontFamily: FF.sansSb,
-    fontSize: 15,
+    fontSize: fontSize.md,
   },
   tokenName: {
     fontFamily: FF.sans,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
   balanceChip: {
-    borderRadius: 10,
+    borderRadius: radii.md,
     borderWidth: 0.5,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: spacing[2],
   },
   balanceChipText: {
     fontFamily: FF.mono,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
 
   // recent recipients
@@ -576,30 +576,30 @@ const S = StyleSheet.create({
   },
   recentEmpty: {
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderStyle: "dashed",
     borderWidth: 0.5,
     flexDirection: "row",
     gap: 10,
     justifyContent: "center",
     paddingHorizontal: 14,
-    paddingVertical: 16,
+    paddingVertical: spacing[5],
   },
   recentEmptyText: {
     fontFamily: FF.sans,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
   recentList: {
-    gap: 8,
+    gap: spacing[3],
   },
   recentRow: {
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 0.5,
     flexDirection: "row",
     gap: 10,
     minHeight: 52,
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing[3],
     paddingVertical: 9,
   },
   recentMeta: {
@@ -609,29 +609,29 @@ const S = StyleSheet.create({
   },
   recentLabel: {
     fontFamily: FF.sansSb,
-    fontSize: 13,
+    fontSize: fontSize.sm,
   },
   recentAddress: {
     fontFamily: FF.mono,
-    fontSize: 11,
+    fontSize: fontSize.xs,
   },
   recentCount: {
     alignItems: "center",
-    borderRadius: 10,
+    borderRadius: radii.md,
     borderWidth: 0.5,
     height: 28,
     justifyContent: "center",
     minWidth: 28,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing[3],
   },
   recentCountText: {
     fontFamily: FF.mono,
-    fontSize: 11,
+    fontSize: fontSize.xs,
   },
 
   // poisoning warning panel
   poisonPanel: {
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 1,
     gap: 10,
     padding: 14,
@@ -639,16 +639,16 @@ const S = StyleSheet.create({
   poisonHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: spacing[3],
   },
   poisonTitle: {
     flex: 1,
     fontFamily: FF.sansSb,
-    fontSize: 13,
+    fontSize: fontSize.sm,
   },
   poisonBody: {
     fontFamily: FF.sans,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     lineHeight: 17,
   },
   poisonRow: {
@@ -659,18 +659,18 @@ const S = StyleSheet.create({
   },
   poisonRowLabel: {
     fontFamily: FF.sansMd,
-    fontSize: 10,
+    fontSize: fontSize.xs,
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
   poisonRowMono: {
     fontFamily: FF.mono,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     lineHeight: 16,
   },
   poisonAck: {
     fontFamily: FF.sansMd,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     textAlign: "right",
   },
 
@@ -683,46 +683,46 @@ const S = StyleSheet.create({
   addressInput: {
     flex: 1,
     fontFamily: FF.mono,
-    fontSize: 13,
+    fontSize: fontSize.sm,
     minHeight: 40,
     paddingVertical: 0,
   },
   pastePill: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 0.5,
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing[3],
     paddingVertical: 6,
   },
   pastePillText: {
     fontFamily: FF.sansMd,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
   addressFeedback: {
     fontFamily: FF.sans,
-    fontSize: 12,
-    marginTop: 8,
+    fontSize: fontSize.sm,
+    marginTop: spacing[3],
   },
 
   // qr tile
   qrTile: {
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 24,
+    gap: spacing[3],
+    paddingVertical: spacing[7],
   },
   qrTitle: {
     fontFamily: FF.sansSb,
-    fontSize: 15,
+    fontSize: fontSize.md,
   },
   qrSub: {
     fontFamily: FF.sans,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     textAlign: "center",
   },
 
   // footer
   footer: {
-    paddingBottom: 20,
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingBottom: spacing[6],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
   },
 });

@@ -26,7 +26,7 @@ import { SendScaffold } from "@/components/send/SendScaffold";
 import * as haptics from "@/src/design-system/haptics";
 import { useGlass } from "@/hooks/useGlass";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
-import { useTheme } from "@/theme";
+import { radii, spacing, useTheme } from "@/theme";
 
 const ICON_SIZE = 88;
 const HALO_PAD = 26;
@@ -384,17 +384,17 @@ const S = StyleSheet.create({
   detailsToggle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: spacing[3],
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: spacing[4],
+    borderRadius: radii.md,
     borderWidth: 1,
   },
   detailsToggleText: {
     flex: 1,
   },
   errorPanel: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 1,
     padding: 14,
     gap: 10,

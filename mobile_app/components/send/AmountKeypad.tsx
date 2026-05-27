@@ -7,7 +7,7 @@ import { DepthButton, NumericKeypad } from "@/components/primitives";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import { tokenByName } from "@/components/send/TokenPicker";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
-import { fontFamily as FF, useTheme } from "@/theme";
+import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 function formatBalance(amount: number, maxDecimals: number): string {
   if (amount === 0) return "0";
@@ -118,7 +118,7 @@ export function AmountKeypad() {
                 {shortAddress(recipient)}
               </Text>
             </View>
-            <View style={[S.availableChip, { backgroundColor: colors.primarySubtle, borderColor: "rgba(0,229,255,0.32)" }]}>
+            <View style={[S.availableChip, { backgroundColor: colors.primarySubtle, borderColor: colors.borderStrong }]}>
               <Text style={[S.availableLabel, { color: colors.textTertiary }]}>Available</Text>
               <Text style={[S.availableAmount, { color: colors.primary }]}>
                 {formatBalance(token.uiAmount, token.maxDecimals)} {token.symbol}
@@ -159,15 +159,15 @@ export function AmountKeypad() {
 const S = StyleSheet.create({
   inner: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing[5],
   },
 
   // recipient info tile
   tile: {
-    borderRadius: 20,
+    borderRadius: radii.xl,
     borderWidth: 0.5,
     overflow: "hidden",
-    padding: 16,
+    padding: spacing[5],
   },
   tileLabel: {
     fontFamily: FF.sansMd,
@@ -179,7 +179,7 @@ const S = StyleSheet.create({
   recipientRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 12,
+    gap: spacing[4],
     justifyContent: "space-between",
   },
   recipientLeft: {
@@ -189,19 +189,19 @@ const S = StyleSheet.create({
   },
   recipientName: {
     fontFamily: FF.sansSb,
-    fontSize: 15,
+    fontSize: fontSize.md,
   },
   recipientAddr: {
     fontFamily: FF.mono,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
   availableChip: {
     alignItems: "flex-end",
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 0.5,
     minWidth: 110,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
   },
   availableLabel: {
     fontFamily: FF.sansMd,
@@ -211,7 +211,7 @@ const S = StyleSheet.create({
   },
   availableAmount: {
     fontFamily: FF.mono,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     marginTop: 2,
   },
 
@@ -219,7 +219,7 @@ const S = StyleSheet.create({
   keypadWrapper: {
     flex: 1,
     justifyContent: "center",
-    paddingTop: 16,
+    paddingTop: spacing[5],
   },
 
   // error
@@ -232,6 +232,6 @@ const S = StyleSheet.create({
   },
   errorText: {
     fontFamily: FF.sans,
-    fontSize: 13,
+    fontSize: fontSize.sm,
   },
 });

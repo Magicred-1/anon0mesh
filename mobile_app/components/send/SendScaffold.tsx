@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { fontFamily as FF, useTheme } from "@/theme";
+import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 interface SendScaffoldProps {
   readonly children: React.ReactNode;
@@ -118,21 +118,21 @@ const S = StyleSheet.create({
     alignItems: "flex-start",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[5],
+    paddingBottom: spacing[3],
   },
   headerLeft: {
     flex: 1,
     gap: 4,
-    paddingRight: 12,
+    paddingRight: spacing[4],
   },
   headerRight: {
     paddingTop: 2,
   },
   kicker: {
     fontFamily: FF.sansMd,
-    fontSize: 10,
+    fontSize: fontSize.xs,
     letterSpacing: 2,
     textTransform: "uppercase",
     marginBottom: 2,
@@ -144,14 +144,14 @@ const S = StyleSheet.create({
   },
   subtitle: {
     fontFamily: FF.sans,
-    fontSize: 14,
+    fontSize: fontSize.md,
     lineHeight: 21,
     maxWidth: 320,
     paddingTop: 4,
   },
   navButton: {
     alignItems: "center",
-    borderRadius: 18,
+    borderRadius: radii.full,
     borderWidth: 0.5,
     height: 36,
     justifyContent: "center",
@@ -165,8 +165,8 @@ const S = StyleSheet.create({
     flex: 1,
   },
   footer: {
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingBottom: spacing[5],
+    paddingHorizontal: spacing[5],
+    paddingTop: spacing[3],
   },
 });
