@@ -3,6 +3,8 @@ export { Input } from './Input';
 export { Pill } from './Pill';
 export { Skeleton, SkeletonGroup } from './Skeleton';
 export { PigeonLoader } from './PigeonLoader';
+export { AppText } from './AppText';
+export { ScreenHeader } from './ScreenHeader';
 export { EmptyState } from './EmptyState';
 export { ErrorState } from './ErrorState';
 export { LoadingState } from './LoadingState';
