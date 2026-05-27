@@ -152,6 +152,7 @@ export default function ContactsScreen() {
       <ScreenHeader
         kicker="LOCAL ONLY"
         title="address book"
+        size="lg"
         style={S.header}
         right={
           <Pressable

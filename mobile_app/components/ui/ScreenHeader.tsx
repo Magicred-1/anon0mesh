@@ -11,6 +11,8 @@ interface ScreenHeaderProps {
   title: string;
   /** Optional right-aligned slot (actions, toggles, status). */
   right?: React.ReactNode;
+  /** Title scale: 'sm' (tab screens · 20px SemiBold) or 'lg' (focal/pushed · 30px Bold). */
+  size?: 'sm' | 'lg';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -21,8 +23,11 @@ interface ScreenHeaderProps {
  * notably, title weight: some used `fontWeight:'600'` instead of the
  * SpaceGrotesk SemiBold *family* (`headingMd`), which renders differently. One
  * component → one masthead everywhere.
+ *
+ * `size` maps to the type scale: 'sm' (tabs) = headingMd 20px SemiBold;
+ * 'lg' (focal/pushed screens like receive, contacts) = displayMd 30px Bold.
  */
-export function ScreenHeader({ kicker = 'ANONMESH', title, right, style }: ScreenHeaderProps) {
+export function ScreenHeader({ kicker = 'ANONMESH', title, right, size = 'sm', style }: ScreenHeaderProps) {
   const { colors, spacing } = useTheme();
   return (
     <View
@@ -49,7 +54,7 @@ export function ScreenHeader({ kicker = 'ANONMESH', title, right, style }: Scree
             {kicker}
           </AppText>
         ) : null}
-        <AppText variant="headingMd" color={colors.textPrimary} style={{ letterSpacing: -0.5 }}>
+        <AppText variant={size === 'lg' ? 'displayMd' : 'headingMd'} color={colors.textPrimary} style={{ letterSpacing: -0.5 }}>
           {title}
         </AppText>
       </View>

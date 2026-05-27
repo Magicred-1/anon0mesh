@@ -26,6 +26,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import QRCodeSvg from "react-native-qrcode-svg";
 
 import { BottomSheetHandleBar, SegmentedControl, TokenLogo } from "@/components/primitives";
+import { ScreenHeader } from "@/components/ui";
 import * as haptics from "@/src/design-system/haptics";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
@@ -198,19 +199,20 @@ export default function ReceiveScreen() {
           <BottomSheetHandleBar />
 
           {/* ── header ── */}
-          <View style={S.header}>
-            <View>
-              <Text accessibilityRole="header" style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
-              <Text style={[S.screenTitle, { color: colors.textPrimary }]}>receive</Text>
-            </View>
-            <Pressable
-              onPress={animateAndDismiss}
-              hitSlop={10}
-              style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-            >
-              <Feather name="x" size={16} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+          <ScreenHeader
+            kicker="ANONMESH"
+            title="receive"
+            size="lg"
+            right={
+              <Pressable
+                onPress={animateAndDismiss}
+                hitSlop={10}
+                style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+              >
+                <Feather name="x" size={16} color={colors.textSecondary} />
+              </Pressable>
+            }
+          />
 
           <View style={S.grid}>
 
@@ -341,9 +343,6 @@ const S = StyleSheet.create({
   fill:         { flex: 1 },
   grid:         { paddingHorizontal: spacing[5], gap: GAP, paddingBottom: spacing[5] },
 
-  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing[5], paddingTop: spacing[3], paddingBottom: spacing[4] },
-  kicker:       { fontFamily: FF.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },
-  screenTitle:  { fontFamily: FF.sansBold, fontSize: fontSize["3xl"], letterSpacing: -0.5 },
   closeBtn:     { width: 36, height: 36, borderRadius: radii.full, borderWidth: 0.5, alignItems: "center", justifyContent: "center" },
 
   tile:         { borderRadius: radii.xl, borderWidth: 0.5, padding: spacing[5], overflow: "hidden" },
