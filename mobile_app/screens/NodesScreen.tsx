@@ -91,11 +91,17 @@ export default function NodesScreen() {
   );
 
   const bleBlocked = !bleActive && (blePerm === 'denied' || blePerm === 'never_ask_again');
+  // Honest empty state: only say "Starting mesh…" while the node is actually
+  // coming up. Once it's running with zero peers (every solo user, and the
+  // common case), say so plainly instead of implying it's still starting — the
+  // same "stop the present-tense lie" pass L4 did for the Messages empty state.
   const emptyStateCopy = !isNativeAvailable
     ? 'Mesh unavailable on this device'
     : bleBlocked
       ? 'Bluetooth permission needed'
-      : 'Starting mesh…';
+      : !isRunning
+        ? 'Starting mesh…'
+        : 'No peers nearby yet';
 
   // Fast lookup by destHash for latency enrichment
   const peerMap = useMemo(
