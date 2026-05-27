@@ -15,7 +15,7 @@ import { DepthButton, Icon } from "@/components/primitives";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
 import { markTutorialCompleted } from "@/src/services/tutorialState";
-import { useTheme } from "@/theme";
+import { fontSize, radii, spacing, useTheme } from "@/theme";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -296,26 +296,26 @@ const S = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[3],
   },
   brand: {
-    fontSize: 17,
+    fontSize: fontSize.lg,
   },
   skip: {
     justifyContent: "center",
     minHeight: 36,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing[3],
   },
   skipText: {
-    fontSize: 13,
+    fontSize: fontSize.sm,
   },
   content: {
     alignItems: "center",
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingHorizontal: spacing[7],
+    paddingTop: spacing[7],
   },
   slideContent: {
     alignItems: "center",
@@ -323,7 +323,7 @@ const S = StyleSheet.create({
   },
   iconGlow: {
     alignItems: "center",
-    borderRadius: 999,
+    borderRadius: radii.full,
     height: 148,
     justifyContent: "center",
     marginBottom: 28,
@@ -331,64 +331,64 @@ const S = StyleSheet.create({
   },
   iconShell: {
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 1,
     height: 96,
     justifyContent: "center",
     width: 96,
   },
   kicker: {
-    fontSize: 12,
+    fontSize: fontSize.sm,
     letterSpacing: 1.5,
-    marginBottom: 8,
+    marginBottom: spacing[3],
     textTransform: "uppercase",
   },
   title: {
-    fontSize: 30,
+    fontSize: fontSize["3xl"],
     lineHeight: 36,
-    marginBottom: 16,
+    marginBottom: spacing[5],
     textAlign: "center",
   },
   body: {
-    fontSize: 17,
+    fontSize: fontSize.lg,
     lineHeight: 26,
     maxWidth: 360,
     textAlign: "center",
   },
   statTile: {
     alignItems: "center",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 0.5,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 24,
+    marginTop: spacing[7],
     maxWidth: 420,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing[5],
     paddingVertical: 14,
     width: "100%",
   },
   statTileLabel: {
-    fontSize: 11,
+    fontSize: fontSize.xs,
     letterSpacing: 1.5,
     textTransform: "uppercase",
   },
   statTileValue: {
-    fontSize: 15,
+    fontSize: fontSize.md,
   },
   dots: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 16,
+    gap: spacing[3],
+    marginTop: spacing[5],
   },
   dot: {
-    borderRadius: 999,
+    borderRadius: radii.full,
     height: 8,
   },
   footer: {
     flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    gap: spacing[4],
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[3],
   },
   footerButton: {
     flex: 1,
