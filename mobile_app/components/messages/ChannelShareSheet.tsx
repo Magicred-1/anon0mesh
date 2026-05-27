@@ -1,13 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
-import {
-  Modal, View, Text, Pressable,
-  StyleSheet, Animated, Platform,
-} from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as ScreenCapture from 'expo-screen-capture';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
+import { AppBottomSheet } from '@/components/primitives';
 import { QRCode } from '@/components/settings/QRCode';
 import type { LxmfGroup } from '@/context/LxmfContext';
 
@@ -28,14 +26,14 @@ export function ChannelShareSheet({ visible, onClose, group }: Props) {
   const softGlass   = useGlass('soft');
 
   const [copied, setCopied] = useState<'addr' | 'key' | 'all' | null>(null);
-  const sheetAnim = useRef(new Animated.Value(0)).current;
   const clipboardClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Reset the copied-state checkmark when the sheet closes so a re-open never
+  // shows a stale "copied" tick. Previously this happened in the local
+  // dismiss() animation callback; AppBottomSheet owns the close animation now.
   useEffect(() => {
-    if (visible) {
-      Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
-    }
-  }, [visible, sheetAnim]);
+    if (!visible) setCopied(null);
+  }, [visible]);
 
   // Block screen capture while the AES key + address are on screen (AUDIT T19).
   // The hex strings are short enough that a single screenshot leaks the channel.
@@ -58,13 +56,6 @@ export function ChannelShareSheet({ visible, onClose, group }: Props) {
     };
   }, []);
 
-  function dismiss() {
-    Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(() => {
-      setCopied(null);
-      onClose();
-    });
-  }
-
   async function copy(text: string, which: 'addr' | 'key' | 'all') {
     await Clipboard.setStringAsync(text);
     setCopied(which);
@@ -79,92 +70,77 @@ export function ChannelShareSheet({ visible, onClose, group }: Props) {
     }, CLIPBOARD_AUTO_CLEAR_MS);
   }
 
-  const sheetY    = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [600, 0], extrapolate: 'clamp' });
-  const overlayOp = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' });
-
   const groupUri = group
     ? `lxmf://group/${group.addrHex}/${group.keyHex}?name=${encodeURIComponent(group.name)}`
     : '';
 
   return (
-    <Modal transparent animationType="none" visible={visible} onRequestClose={dismiss}>
-      <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
-        </Animated.View>
-
-        <Animated.View style={[S.sheet, { backgroundColor: colors.glass, borderColor: colors.border, transform: [{ translateY: sheetY }] }]}>
-          <View style={[S.grab, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
-
-          <View style={S.header}>
-            <View>
-              <Text style={[S.tag,   { color: colors.textTertiary }]}>SHARE CHANNEL</Text>
-              <Text style={[S.title, { color: colors.textPrimary }]}>{group?.name ?? '—'}</Text>
-            </View>
-            <Pressable onPress={dismiss} style={[S.closeBtn, softGlass]}>
-              <Feather name="x" size={14} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-
-          {/* QR code */}
-          <View style={S.qrWrap}>
-            <QRCode size={210} data={groupUri || 'anonmesh'} />
-          </View>
-
-          <Text style={[S.hint, { color: colors.textTertiary }]}>
-            Peer scans this to join — encodes address + key
-          </Text>
-
-          {/* Honesty row (AUDIT T19): clipboard holds the AES-128 key in
-              plaintext after Copy; we wipe it after 60s. */}
-          <View style={S.warnRow}>
-            <Feather name="clock" size={10} color={colors.textTertiary} />
-            <Text style={[S.warnText, { color: colors.textTertiary }]}>
-              key copied to clipboard auto-clears in 60s
-            </Text>
-          </View>
-
-          {/* Copy rows */}
-          <View style={{ gap: 6, marginTop: 6 }}>
-            <Pressable onPress={() => copy(group?.addrHex ?? '', 'addr')} style={[S.copyRow, baseGlass]}>
-              <View style={S.copyLabel}>
-                <Text style={[S.copyTag, { color: colors.textTertiary }]}>ADDRESS</Text>
-                <Text style={[S.mono, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="middle">
-                  {group?.addrHex ?? '—'}
-                </Text>
-              </View>
-              <Feather name={copied === 'addr' ? 'check' : 'copy'} size={13} color={copied === 'addr' ? colors.primary : colors.textTertiary} />
-            </Pressable>
-
-            <Pressable onPress={() => copy(group?.keyHex ?? '', 'key')} style={[S.copyRow, baseGlass]}>
-              <View style={S.copyLabel}>
-                <Text style={[S.copyTag, { color: colors.textTertiary }]}>KEY</Text>
-                <Text style={[S.mono, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="middle">
-                  {group?.keyHex ?? '—'}
-                </Text>
-              </View>
-              <Feather name={copied === 'key' ? 'check' : 'copy'} size={13} color={copied === 'key' ? colors.primary : colors.textTertiary} />
-            </Pressable>
-          </View>
-
-          <Pressable
-            onPress={() => copy(`${group?.addrHex ?? ''}:${group?.keyHex ?? ''}`, 'all')}
-            style={[S.copyAllBtn, { borderColor: colors.border }]}
-          >
-            <Feather name={copied === 'all' ? 'check' : 'link'} size={13} color={copied === 'all' ? colors.primary : colors.textTertiary} />
-            <Text style={[S.copyAllText, { color: copied === 'all' ? colors.primary : colors.textTertiary }]}>
-              {copied === 'all' ? 'COPIED' : 'COPY ADDR:KEY PAIR'}
-            </Text>
-          </Pressable>
-        </Animated.View>
+    <AppBottomSheet visible={visible} onClose={onClose} backgroundColor={colors.glass}>
+      <View style={S.header}>
+        <View>
+          <Text style={[S.tag,   { color: colors.textTertiary }]}>SHARE CHANNEL</Text>
+          <Text style={[S.title, { color: colors.textPrimary }]}>{group?.name ?? '—'}</Text>
+        </View>
+        <Pressable onPress={onClose} style={[S.closeBtn, softGlass]}>
+          <Feather name="x" size={14} color={colors.textSecondary} />
+        </Pressable>
       </View>
-    </Modal>
+
+      {/* QR code */}
+      <View style={S.qrWrap}>
+        <QRCode size={210} data={groupUri || 'anonmesh'} />
+      </View>
+
+      <Text style={[S.hint, { color: colors.textTertiary }]}>
+        Peer scans this to join — encodes address + key
+      </Text>
+
+      {/* Honesty row (AUDIT T19): clipboard holds the AES-128 key in
+          plaintext after Copy; we wipe it after 60s. */}
+      <View style={S.warnRow}>
+        <Feather name="clock" size={10} color={colors.textTertiary} />
+        <Text style={[S.warnText, { color: colors.textTertiary }]}>
+          key copied to clipboard auto-clears in 60s
+        </Text>
+      </View>
+
+      {/* Copy rows */}
+      <View style={{ gap: 6, marginTop: 6 }}>
+        <Pressable onPress={() => copy(group?.addrHex ?? '', 'addr')} style={[S.copyRow, baseGlass]}>
+          <View style={S.copyLabel}>
+            <Text style={[S.copyTag, { color: colors.textTertiary }]}>ADDRESS</Text>
+            <Text style={[S.mono, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="middle">
+              {group?.addrHex ?? '—'}
+            </Text>
+          </View>
+          <Feather name={copied === 'addr' ? 'check' : 'copy'} size={13} color={copied === 'addr' ? colors.primary : colors.textTertiary} />
+        </Pressable>
+
+        <Pressable onPress={() => copy(group?.keyHex ?? '', 'key')} style={[S.copyRow, baseGlass]}>
+          <View style={S.copyLabel}>
+            <Text style={[S.copyTag, { color: colors.textTertiary }]}>KEY</Text>
+            <Text style={[S.mono, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="middle">
+              {group?.keyHex ?? '—'}
+            </Text>
+          </View>
+          <Feather name={copied === 'key' ? 'check' : 'copy'} size={13} color={copied === 'key' ? colors.primary : colors.textTertiary} />
+        </Pressable>
+      </View>
+
+      <Pressable
+        onPress={() => copy(`${group?.addrHex ?? ''}:${group?.keyHex ?? ''}`, 'all')}
+        style={[S.copyAllBtn, { borderColor: colors.border }]}
+      >
+        <Feather name={copied === 'all' ? 'check' : 'link'} size={13} color={copied === 'all' ? colors.primary : colors.textTertiary} />
+        <Text style={[S.copyAllText, { color: copied === 'all' ? colors.primary : colors.textTertiary }]}>
+          {copied === 'all' ? 'COPIED' : 'COPY ADDR:KEY PAIR'}
+        </Text>
+      </Pressable>
+    </AppBottomSheet>
   );
 }
 
 const S = StyleSheet.create({
-  sheet:       { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 24, borderWidth: 0.5 },
-  grab:        { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   tag:         { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   title:       { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
