@@ -213,7 +213,7 @@ export default function ContactsScreen() {
               <Feather name="book-open" size={24} color={colors.textTertiary} />
               <Text style={[S.emptyTitle, { color: colors.textPrimary }]}>No saved recipients</Text>
               <Text style={[S.emptyBody, { color: colors.textTertiary }]}>
-                Successful sends appear here automatically. You can also add a trusted devnet address manually.
+                Successful sends appear here automatically. You can also add a recipient address manually.
               </Text>
             </View>
           ) : (
