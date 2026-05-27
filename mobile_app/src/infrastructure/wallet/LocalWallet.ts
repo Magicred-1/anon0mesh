@@ -3,14 +3,24 @@ import "@/polyfills";
 import { gcm } from '@noble/ciphers/aes.js';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
 import { TurboModuleRegistry, type TurboModule } from 'react-native';
 import {
   SecureKeys, PrefKeys,
-  secureGet, secureSet, secureDeleteAll,
+  secureGet, secureGetStrict, secureSet, secureDeleteAll,
   prefGet,
 } from '@/src/storage';
 import type { IWalletAdapter, WalletMode } from './types';
+
+/**
+ * Result of {@link LocalWallet.isFullyIntact}.
+ *  - `intact` — every key needed to export/sign is present.
+ *  - `absent` — keys are verifiably missing; safe to delete + re-onboard.
+ *  - `error`  — the Keychain read failed; integrity is UNKNOWN, never delete.
+ */
+export type WalletIntegrity =
+  | { status: 'intact' }
+  | { status: 'absent' }
+  | { status: 'error'; error: Error };
 
 interface RNGetRandomValuesModule extends TurboModule {
   getRandomBase64: (n: number) => string;
@@ -57,12 +67,12 @@ async function readAndDecrypt(): Promise<Keypair> {
   });
   if (!auth.success) throw new Error('Authentication cancelled');
 
-  // Call SecureStore directly — secureGet() swallows all errors (returns null),
-  // which makes real keychain failures (e.g. access-group mismatch after
-  // signing-cert change) indistinguishable from "key never stored".
+  // secureGetStrict throws on a real keychain failure (e.g. access-group
+  // mismatch after a signing-cert change) instead of swallowing it to null —
+  // so a failed read can never masquerade as "key never stored".
   let rawPayload: string | null;
   try {
-    rawPayload = await SecureStore.getItemAsync(SecureKeys.WALLET_SECRET);
+    rawPayload = await secureGetStrict(SecureKeys.WALLET_SECRET);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Keychain read failed: ${msg} — try signing out and recreating your wallet`);
@@ -80,7 +90,7 @@ async function readAndDecrypt(): Promise<Keypair> {
 
   let rawAesKey: string | null;
   try {
-    rawAesKey = await SecureStore.getItemAsync(SecureKeys.WALLET_AES_KEY);
+    rawAesKey = await secureGetStrict(SecureKeys.WALLET_AES_KEY);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Keychain read failed (AES key): ${msg}`);
@@ -127,15 +137,32 @@ export class LocalWallet implements IWalletAdapter {
     return (await secureGet(SecureKeys.WALLET_MARKER)) === 'true';
   }
 
-  /** Returns true only when ALL keys needed for export are present. */
-  static async isFullyIntact(): Promise<boolean> {
-    const [marker, pubkey, aesKey, secret] = await Promise.all([
-      secureGet(SecureKeys.WALLET_MARKER),
-      secureGet(SecureKeys.WALLET_PUBKEY),
-      secureGet(SecureKeys.WALLET_AES_KEY),
-      secureGet(SecureKeys.WALLET_SECRET),
-    ]);
-    return marker === 'true' && !!pubkey && !!aesKey && !!secret;
+  /**
+   * Verifies all four key-material entries needed to export/sign.
+   *
+   * Returns a discriminated result rather than a bare boolean so callers can
+   * tell apart "the wallet is genuinely, verifiably gone" from "the Keychain
+   * read failed". Conflating those (as a bare boolean over the error-swallowing
+   * secureGet would) lets a caller delete a real, funded wallet on a transient
+   * read error. We read with secureGetStrict so a failed read throws here and
+   * surfaces as { status: 'error' } — never as a false "absent".
+   */
+  static async isFullyIntact(): Promise<WalletIntegrity> {
+    let marker: string | null, pubkey: string | null, aesKey: string | null, secret: string | null;
+    try {
+      [marker, pubkey, aesKey, secret] = await Promise.all([
+        secureGetStrict(SecureKeys.WALLET_MARKER),
+        secureGetStrict(SecureKeys.WALLET_PUBKEY),
+        secureGetStrict(SecureKeys.WALLET_AES_KEY),
+        secureGetStrict(SecureKeys.WALLET_SECRET),
+      ]);
+    } catch (e) {
+      // Keychain read failed — we do NOT know whether the keys exist. Caller
+      // must treat this as "unknown" and never delete on it.
+      return { status: 'error', error: e instanceof Error ? e : new Error(String(e)) };
+    }
+    if (marker === 'true' && !!pubkey && !!aesKey && !!secret) return { status: 'intact' };
+    return { status: 'absent' };
   }
 
   static async create(): Promise<LocalWallet> {
@@ -163,6 +190,14 @@ export class LocalWallet implements IWalletAdapter {
     await secureSet(SecureKeys.WALLET_PUBKEY, keypair.publicKey.toBase58());
     await secureSet(SecureKeys.WALLET_SECRET, JSON.stringify(payload));
     await secureSet(SecureKeys.WALLET_MARKER, 'true');
+
+    // Zero the transient secret buffers now that they are persisted. The seed
+    // has been fully consumed by Keypair.fromSeed and the AES key by both the
+    // encrypt call and its base64 persist — neither is read again, so wiping
+    // them shrinks the window where raw key material sits in JS heap. We do NOT
+    // touch keypair.secretKey: the returned wallet still needs it to sign.
+    seed.fill(0);
+    aesKey.fill(0);
 
     const w = new LocalWallet();
     w._publicKey = keypair.publicKey;

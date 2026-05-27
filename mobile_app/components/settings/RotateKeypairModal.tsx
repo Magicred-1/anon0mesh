@@ -49,20 +49,34 @@ export function RotateKeypairModal({ onClose }: { onClose: () => void }) {
   };
 
   const confirmRotate = async () => {
-    // Re-auth gate so the irreversible step requires a fresh biometric — the
-    // SIGN OUT / rotate confirm row is otherwise reachable from any unlocked
-    // session.
-    if (biometricEnabled) {
-      const hasHw = await LocalAuthentication.hasHardwareAsync();
-      const enrolled = await LocalAuthentication.isEnrolledAsync();
-      if (hasHw && enrolled) {
-        const auth = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Authenticate to rotate your anonmesh identity',
-          disableDeviceFallback: true,
-          cancelLabel: 'Cancel',
-        });
-        if (!auth.success) return;
-      }
+    // Re-auth gate so this IRREVERSIBLE step (wipes the keypair + LXMF address)
+    // can never run from a merely-unlocked session. Authentication is ALWAYS
+    // required here — the biometric toggle is a UI preference, not a licence to
+    // skip auth on a destructive op. When biometrics are off or unenrolled we
+    // fall back to the device passcode (disableDeviceFallback: false), matching
+    // how onboarding's wallet-create authenticates.
+    const hasHw = await LocalAuthentication.hasHardwareAsync();
+    const enrolled = await LocalAuthentication.isEnrolledAsync();
+    if (hasHw && enrolled) {
+      // Biometric available — disableDeviceFallback honours the user's
+      // biometric-only preference, but still REQUIRES a successful auth.
+      const auth = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to rotate your anonmesh identity',
+        fallbackLabel: 'Use Passcode',
+        cancelLabel: 'Cancel',
+        disableDeviceFallback: biometricEnabled,
+      });
+      if (!auth.success) return;
+    } else {
+      // No enrolled biometric — force the OS passcode/credential prompt so the
+      // rotation still can't proceed without authentication.
+      const auth = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to rotate your anonmesh identity',
+        fallbackLabel: 'Use Passcode',
+        cancelLabel: 'Cancel',
+        disableDeviceFallback: false,
+      });
+      if (!auth.success) return;
     }
     setPhase(1);
     await resetIdentity();
