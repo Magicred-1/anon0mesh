@@ -30,6 +30,10 @@ import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 import { pendingConversationRef }    from '@/hooks/pendingConversation';
 import { useBackgroundService }      from '@/hooks/useBackgroundService';
+import { ErrorBoundary } from '@/src/observability/ErrorBoundary';
+import { installGlobalErrorHandler } from '@/src/observability/errorHandler';
+
+installGlobalErrorHandler();
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -154,20 +158,22 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={R.gestureRoot}>
-      <ThemeProvider>
-        <LxmfProvider>
-          <NetworkModeProvider>
-            <WalletProvider autoInitialize>
-              <WalletBalanceProvider>
-              <HideBalanceProvider>
-                <AppShell />
-              </HideBalanceProvider>
-              </WalletBalanceProvider>
-            </WalletProvider>
-          </NetworkModeProvider>
-        </LxmfProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={R.gestureRoot}>
+        <ThemeProvider>
+          <LxmfProvider>
+            <NetworkModeProvider>
+              <WalletProvider autoInitialize>
+                <WalletBalanceProvider>
+                <HideBalanceProvider>
+                  <AppShell />
+                </HideBalanceProvider>
+                </WalletBalanceProvider>
+              </WalletProvider>
+            </NetworkModeProvider>
+          </LxmfProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
