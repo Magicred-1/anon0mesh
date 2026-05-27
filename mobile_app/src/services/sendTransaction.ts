@@ -3,6 +3,7 @@ import "@/polyfills";
 import {
   Keypair,
   PublicKey,
+  SendTransactionError,
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
@@ -121,21 +122,29 @@ async function submitSignedTransaction(
       "transaction submission",
     );
   } catch (err: unknown) {
-    // CRITICAL — double-send guard. A TimeoutError here does NOT mean the
-    // transaction failed: the RPC accepted the socket and may already have
-    // forwarded the signed tx to the cluster; it just didn't answer within
-    // DIRECT_RPC_TIMEOUT_MS. The broadcast outcome is UNKNOWN. The signature
-    // is deterministic from the already-signed tx, so we return it and let the
-    // caller's confirmation poll establish the real outcome. Throwing here
-    // would surface an inline "Try again" that re-signs with a fresh blockhash
-    // and can land a SECOND transfer. Only a genuine RPC *rejection* (the RPC
-    // responded with an error → tx was NOT accepted) is safe to rethrow for
-    // inline retry.
-    if (err instanceof TimeoutError) {
+    // CRITICAL — double-send guard. Once the serialized tx is handed to
+    // sendRawTransaction, the broadcast outcome is UNKNOWN for almost every
+    // error: a TimeoutError, a dropped socket, or a 5xx from a load-balanced
+    // RPC can each occur AFTER the node already forwarded the signed tx to the
+    // cluster. The signature is deterministic from the already-signed tx, so we
+    // return it and let the caller's confirmation poll establish the real
+    // outcome. Rethrowing would surface an inline "Try again" that re-signs with
+    // a fresh blockhash and can land a SECOND transfer.
+    //
+    // The ONE safe exception is a node-side preflight rejection: with
+    // skipPreflight=false the RPC simulates first and answers with an error
+    // (SendTransactionError) when it REJECTS the tx — proving it was validated
+    // and never broadcast (insufficient funds, bad instruction, stale
+    // blockhash). That is safe, and clearer UX, to surface for inline retry.
+    // (A transport/timeout failure throws a plain Error/TimeoutError, never
+    // SendTransactionError, so it correctly falls into the return-signature
+    // path. Mesh-adapter errors likewise default to the safe no-resubmit path.)
+    const provablyNotBroadcast = err instanceof SendTransactionError;
+    if (!provablyNotBroadcast) {
       const signature = signedTransactionSignature(tx);
       if (signature) return signature;
       // No signature to confirm against (should be unreachable on a signed
-      // tx). Fall through to the rejection path so we don't claim a send.
+      // tx). Fall through so we never claim a send we can't verify.
     }
     const summary = summarizeError(err, "RPC rejected the transaction without returning a reason");
     throw new Error(`Transaction submission failed: ${summary.message}`);
