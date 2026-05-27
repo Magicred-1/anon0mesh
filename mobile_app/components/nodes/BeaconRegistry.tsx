@@ -8,12 +8,6 @@ import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 
-const BEACON_STALE_MS = 120_000;
-const STAKE_SOL       = '0.5';
-const NETWORK_FEE     = '~0.000005';
-const STAKE_NUM       = 0.5;
-const JITO_RATE       = 0.8734;
-const JITO_APY        = 0.085;
 
 interface Props {
   readonly initialActive?: boolean;
@@ -24,15 +18,18 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const { colors } = useTheme();
   const glass     = useGlass();
   const softGlass = useGlass('soft');
-  const { isBeacon, setBeaconMode, beacons, peers } = useLxmfContext();
-  const reachableCount = beacons.filter(b => Date.now() - b.lastAnnounce < BEACON_STALE_MS).length
-    + peers.filter(p => p.online).length;
+  const { isBeacon, setBeaconMode, peers } = useLxmfContext();
+  // peers already includes beacon-nodes via mergeBeacon() in LxmfContext —
+  // counting lxmf.beacons separately would double-count them (QA-55).
+  const reachableCount = peers.filter(p => p.online).length;
   const { mode: networkMode } = useNetworkMode();
   const hasInternet = networkMode === 'online';
 
   const active          = isBeacon;
-  const [cosigns]       = useState(24);
-  const [earned]        = useState(0.000312);
+  // Co-sign count and earned SOL are not wired to real data yet — show zeros
+  // under the PREVIEW label so users aren't misled by illustrative numbers.
+  const cosigns = 0;
+  const earned  = 0;
   const [modal, setModal]         = useState(false);
   const [stakeModal, setStakeModal] = useState(false);
   const [stakeAmt, setStakeAmt]   = useState(0.5);
@@ -83,14 +80,12 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const stakeSheetY = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
   const stakeOvOp   = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
 
-  const jitoAmt   = (STAKE_NUM * JITO_RATE).toFixed(3);
-  const yieldAmt  = (STAKE_NUM * JITO_APY).toFixed(4);
-  const repScore  = Math.round(STAKE_NUM * 200);
-
-  const previewAmt = Math.max(0.5, Number.parseFloat(rawAmt) || stakeAmt);
-  const newTotal = STAKE_NUM + previewAmt;
-  const newYield = (newTotal * JITO_APY).toFixed(4);
-  const newRep   = Math.round(newTotal * 200);
+  // These values are not live — show placeholder dashes under PREVIEW label.
+  const jitoAmt  = '—';
+  const yieldAmt = '—';
+  const repScore = '—';
+  const newRep   = '—';
+  const newYield = '—';
 
   return (
     <>
@@ -98,7 +93,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
         <View style={S.labelRow}>
           <Text accessibilityRole="header" style={[S.sectionLabel, { color: colors.textTertiary }]}>BEACON REGISTRY</Text>
           <View style={S.pillRow}>
-            {active && <Pill label="PREVIEW" variant="default" />}
+            <Pill label="PREVIEW" variant="default" />
             <Pill label={active ? 'ACTIVE' : 'INACTIVE'} variant={active ? 'primary' : 'default'} dot={active} />
           </View>
         </View>
@@ -125,13 +120,11 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 <View style={S.repCell}>
                   <Text style={[S.repNum, { color: colors.textPrimary }]}>{jitoAmt}</Text>
                   <Text style={[S.repLabel, { color: colors.textTertiary }]}>JITOSOL</Text>
-                  <Pressable
-                    onPress={openStake}
-                    style={({ pressed }) => [S.stakeChip, { borderColor: colors.primary + '60', backgroundColor: colors.primary + '18', opacity: pressed ? 0.7 : 1 }]}
-                  >
-                    <Feather name="plus" size={9} color={colors.primary} />
-                    <Text style={[S.stakeChipText, { color: colors.primary }]}>Stake</Text>
-                  </Pressable>
+                  {/* Stake button disabled until staking flow is live */}
+                  <View style={[S.stakeChip, { borderColor: colors.border, backgroundColor: colors.surface2, opacity: 0.4 }]}>
+                    <Feather name="plus" size={9} color={colors.textTertiary} />
+                    <Text style={[S.stakeChipText, { color: colors.textTertiary }]}>Soon</Text>
+                  </View>
                 </View>
                 <View style={[S.repDivider, { backgroundColor: colors.borderSubtle }]} />
                 <View style={S.repCell}>
@@ -157,7 +150,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
           ) : (
             <>
               <Text style={[S.desc, { color: colors.textSecondary }]}>
-                Relay traffic across the mesh, co-sign Solana transactions, earn fees. Stake {STAKE_SOL} SOL — fully returned on exit.
+                Relay traffic across the mesh and help route messages to peers. Co-sign earnings and staking are coming in a future update.
               </Text>
               <Pressable
                 onPress={hasInternet ? openModal : undefined}
@@ -195,9 +188,9 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 
             <View style={S.feeList}>
               {[
-                { icon: 'lock'        as const, label: 'Stake (returned on exit)', value: `${STAKE_SOL} SOL`,   dim: false },
-                { icon: 'zap'         as const, label: 'Network fee',              value: `${NETWORK_FEE} SOL`, dim: true  },
-                { icon: 'trending-up' as const, label: 'Earn from co-signs',       value: 'ongoing',            dim: false },
+                { icon: 'radio'       as const, label: 'Relay mesh traffic',       value: 'enabled',            dim: false },
+                { icon: 'lock'        as const, label: 'Staking (coming soon)',    value: 'preview',            dim: true  },
+                { icon: 'trending-up' as const, label: 'Co-sign earnings',         value: 'coming soon',        dim: true  },
               ].map(row => (
                 <View key={row.label} style={[S.feeRow, { borderBottomColor: colors.borderSubtle }]}>
                   <Feather name={row.icon} size={13} color={row.dim ? colors.textTertiary : colors.primary} />
