@@ -9,6 +9,12 @@
  */
 export const REDACTED = '[redacted]';
 const MAX_DEPTH = 8;
+/**
+ * Shortest length at which an all-numeric array is redacted wholesale: a 16-byte
+ * Reticulum hash, or a 32/64-byte key serialized as `number[]`. Legitimate
+ * crash-payload numeric arrays are short; key material is the long one.
+ */
+const SUSPICIOUS_NUMERIC_LEN = 16;
 
 /**
  * Object keys whose VALUE is dropped regardless of content (lower-cased
@@ -66,11 +72,24 @@ export function scrubString(value: string): string {
 export function scrubDeep<T>(node: T, depth = 0): T {
   if (depth > MAX_DEPTH || node == null) return node;
 
+  // Raw key material travels as BYTES, not strings: a Solana secretKey is a
+  // Uint8Array(64), a seed is randomBytes(32). The string VALUE_PATTERNS never
+  // see these, and under a generic key (data/bytes/args/array index) KEY-name
+  // redaction misses them too — so a crash-frame local could ship a full secret
+  // key. A crash report never legitimately needs raw bytes: redact any binary
+  // buffer, and any long all-numeric array (a key serialized as number[]).
+  if (node instanceof ArrayBuffer || ArrayBuffer.isView(node)) {
+    return REDACTED as unknown as T;
+  }
+
   if (typeof node === 'string') {
     return scrubString(node) as unknown as T;
   }
 
   if (Array.isArray(node)) {
+    if (node.length >= SUSPICIOUS_NUMERIC_LEN && node.every((x) => typeof x === 'number')) {
+      return REDACTED as unknown as T;
+    }
     for (let i = 0; i < node.length; i++) node[i] = scrubDeep(node[i], depth + 1);
     return node;
   }

@@ -105,3 +105,26 @@ test('bounds recursion depth without throwing', () => {
   for (let i = 0; i < 50; i++) deep = { nested: deep };
   assert.doesNotThrow(() => scrubDeep(deep));
 });
+
+test('redacts raw key BYTES under innocuous keys (Uint8Array / numeric array)', () => {
+  // A Solana secretKey is a Uint8Array(64); the string VALUE_PATTERNS never see
+  // bytes, and under a generic key (data/args/index) KEY-name redaction misses
+  // them too. These must still be redacted, or a stack-frame local ships a key.
+  const secretBytes = new Uint8Array(64).fill(7);
+  const out = scrubDeep({
+    data: secretBytes,                       // generic key: string + key rules both miss
+    frame: { localBuf: secretBytes, args: [secretBytes] },
+    serialized: Array.from(secretBytes),     // key serialized as number[]
+    short: [1, 2, 3],                        // legit short numeric array survives
+  });
+  assert.equal(out.data, REDACTED);
+  assert.equal(out.frame.localBuf, REDACTED);
+  assert.equal(out.frame.args[0], REDACTED);
+  assert.equal(out.serialized, REDACTED);
+  assert.deepEqual(out.short, [1, 2, 3]);
+});
+
+test('redacts a bare binary buffer at the root', () => {
+  assert.equal(scrubDeep(new Uint8Array(32)), REDACTED);
+  assert.equal(scrubDeep(Buffer.from('00'.repeat(32), 'hex')), REDACTED);
+});
