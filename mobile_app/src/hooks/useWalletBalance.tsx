@@ -2,6 +2,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 
 import { useWallet } from "@/context/WalletContext";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
+import { DIRECT_RPC_TIMEOUT_MS, withTimeout } from "@/src/services/sendTransaction";
 import {
   ActivityEntry,
   SOL_DECIMALS,
@@ -46,6 +47,12 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const lastPublicKeyRef = useRef<string | null>(null);
   const lastRouteRef = useRef<string | null>(null);
   const refetchRef    = useRef<() => Promise<void>>(() => Promise.resolve());
+  // Monotonic id stamped at the start of each fetch. A mesh↔online adapter
+  // swap (or wallet change) re-runs refetch while a previous Promise.allSettled
+  // is still in flight; without this guard the slower stale fetch can resolve
+  // last and overwrite fresh data with results from the dead transport. Only
+  // the latest request is allowed to commit to state.
+  const fetchIdRef    = useRef(0);
   const COOLDOWN_MS   = 30_000;
 
   function applyBalanceResults(
@@ -83,14 +90,24 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     if (lastFetchedRef.current !== null && now - lastFetchedRef.current < COOLDOWN_MS) return;
     lastFetchedRef.current = now;
 
+    const fetchId = ++fetchIdRef.current;
+    const isCurrent = () => fetchId === fetchIdRef.current;
+
     setLoading(true);
     setActivityLoading(true);
     try {
       const [solResult, splResult, activityResult] = await Promise.allSettled([
-        rpcAdapter.getBalance(publicKey),
+        // Bound the balance read so a degraded RPC can't park the whole
+        // refresh forever (every other RPC in this file is already bounded).
+        withTimeout(rpcAdapter.getBalance(publicKey), DIRECT_RPC_TIMEOUT_MS, "balance"),
         fetchSplTokens(rpcAdapter, publicKey),
         fetchRecentActivity(rpcAdapter, publicKey, 10),
       ]);
+
+      // A newer fetch (adapter swap / wallet change) superseded this one while
+      // it was in flight — drop these results so we never regress fresh data
+      // back to whatever the now-dead transport eventually returned.
+      if (!isCurrent()) return;
 
       applyBalanceResults(solResult, splResult);
       applyActivityResult(activityResult);
@@ -100,11 +117,17 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       // Surfacing a duplicate `error` field here just drifts: nothing reads it.
       setLastFetched(Date.now());
     } catch (err) {
+      if (!isCurrent()) return;
       const msg = err instanceof Error ? err.message : String(err);
       setActivityError(msg.includes("429") ? "Devnet rate-limited" : "Couldn't load activity");
     } finally {
-      setLoading(false);
-      setActivityLoading(false);
+      // Only the latest fetch may clear the loading flags; a superseded fetch
+      // resolving here would otherwise flip loading off while the current one
+      // is still running, flashing a half-loaded state.
+      if (isCurrent()) {
+        setLoading(false);
+        setActivityLoading(false);
+      }
     }
   }, [publicKey, rpcAdapter]);
 
