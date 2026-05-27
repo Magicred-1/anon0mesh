@@ -14,7 +14,12 @@ export function installGlobalErrorHandler(): void {
       error,
     );
 
-    if (__DEV__ && typeof previous === 'function') {
+    // Always chain to the previous handler. In production that is React
+    // Native's native fatal-error path (crash dialog + process teardown);
+    // gating it on __DEV__ would silently swallow fatal errors in release and
+    // leave the app limping with no crash signal. The ErrorBoundary handles
+    // recoverable render throws — this preserves the platform crash path.
+    if (typeof previous === 'function') {
       previous(error, isFatal);
     }
   });
