@@ -1,7 +1,7 @@
 import React, { memo, useState, useRef, useCallback } from 'react';
 import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
@@ -172,7 +172,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 
       <Modal visible={modal} transparent animationType="none" onRequestClose={dismiss}>
         <View style={StyleSheet.absoluteFill}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.75)', opacity: overlayOp }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
           </Animated.View>
 
@@ -215,7 +215,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 },
               ]}
             >
-              <Text style={[S.actionText, { color: '#08080A' }]}>Enable Beacon Mode</Text>
+              <Text style={[S.actionText, { color: colors.textInverse }]}>Enable Beacon Mode</Text>
             </Pressable>
           </Animated.View>
         </View>
@@ -224,7 +224,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
       {/* ── Stake Modal ── */}
       <Modal visible={stakeModal} transparent animationType="none" onRequestClose={dismissStake}>
         <KeyboardAvoidingView style={StyleSheet.absoluteFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.75)', opacity: stakeOvOp }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: stakeOvOp }]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={dismissStake} />
           </Animated.View>
 
@@ -303,62 +303,62 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
 });
 
 const S = StyleSheet.create({
-  wrap:        { paddingHorizontal: 20, marginTop: 16, marginBottom: 16 },
-  labelRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sectionLabel:{ fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
+  wrap:        { paddingHorizontal: spacing[6], marginTop: spacing[5], marginBottom: spacing[5] },
+  labelRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing[3] },
+  sectionLabel:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase' },
 
-  card:        { borderRadius: 18, overflow: 'hidden', borderWidth: 0.5 },
+  card:        { borderRadius: radii.xl, overflow: 'hidden', borderWidth: 0.5 },
   accentBar:   { height: 2 },
 
   hero:        { alignItems: 'center', paddingVertical: 28, gap: 6 },
   heroAmt:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  heroNum:     { fontFamily: fontFamily.sansBold, fontSize: 28, letterSpacing: -1 },
-  heroLabel:   { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase' },
+  heroNum:     { fontFamily: fontFamily.sansBold, fontSize: fontSize['3xl'], letterSpacing: -1 },
+  heroLabel:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2.5, textTransform: 'uppercase' },
 
   repRow:      { flexDirection: 'row', borderTopWidth: 0.5, borderBottomWidth: 0.5, paddingVertical: 14 },
-  repCell:     { flex: 1, alignItems: 'center', gap: 4 },
-  repNum:      { fontFamily: fontFamily.sansBold, fontSize: 16, letterSpacing: -0.5 },
-  repLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
-  repDivider:  { width: 0.5, marginVertical: 4 },
-  stakeChip:     { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 0.5, marginTop: 2 },
-  stakeChipText: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5 },
+  repCell:     { flex: 1, alignItems: 'center', gap: spacing[2] },
+  repNum:      { fontFamily: fontFamily.sansBold, fontSize: fontSize.md, letterSpacing: -0.5 },
+  repLabel:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase' },
+  repDivider:  { width: 0.5, marginVertical: spacing[2] },
+  stakeChip:     { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: spacing[3], paddingVertical: 3, borderRadius: radii.md, borderWidth: 0.5, marginTop: 2 },
+  stakeChipText: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5 },
 
-  footer:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
-  footerStat:  { fontFamily: fontFamily.sansMd, fontSize: 12 },
-  footerNum:   { fontFamily: fontFamily.sansBold, fontSize: 14 },
+  footer:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: spacing[5], paddingVertical: spacing[4] },
+  footerStat:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm },
+  footerNum:   { fontFamily: fontFamily.sansBold, fontSize: fontSize.md },
   footerDot:   { width: 3, height: 3, borderRadius: 2 },
 
-  desc:        { fontFamily: fontFamily.sansMd, fontSize: 12.5, lineHeight: 19, padding: 18, paddingBottom: 14 },
+  desc:        { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, lineHeight: 19, padding: 18, paddingBottom: 14 },
   regBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-                 margin: 14, marginTop: 0, paddingVertical: 14, borderRadius: 13 },
-  regText:     { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600', letterSpacing: 0.3 },
+                 margin: 14, marginTop: 0, paddingVertical: 14, borderRadius: radii.md },
+  regText:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600', letterSpacing: 0.3 },
 
   sheet:       { position: 'absolute', bottom: 0, left: 0, right: 0,
-                 borderTopLeftRadius: 22, borderTopRightRadius: 22,
-                 paddingHorizontal: 20, paddingBottom: 40, paddingTop: 12, borderWidth: 0.5 },
-  grab:        { width: 32, height: 3.5, borderRadius: 99, alignSelf: 'center', marginBottom: 20 },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  sheetTitle:  { fontFamily: fontFamily.sansBold, fontSize: 20, letterSpacing: -0.4 },
-  closeBtn:    { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  feeList:     { gap: 0, marginBottom: 24 },
-  feeRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 0.5 },
-  feeLabel:    { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 13 },
-  feeVal:      { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
-  actionBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                 paddingVertical: 15, borderRadius: 14 },
-  actionText:  { fontFamily: fontFamily.sansMd, fontSize: 14, fontWeight: '600', letterSpacing: 0.2 },
+                 borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl,
+                 paddingHorizontal: spacing[6], paddingBottom: spacing[9], paddingTop: spacing[4], borderWidth: 0.5 },
+  grab:        { width: 32, height: 3.5, borderRadius: radii.full, alignSelf: 'center', marginBottom: spacing[6] },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing[6] },
+  sheetTitle:  { fontFamily: fontFamily.sansBold, fontSize: fontSize.xl, letterSpacing: -0.4 },
+  closeBtn:    { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
+  feeList:     { gap: 0, marginBottom: spacing[7] },
+  feeRow:      { flexDirection: 'row', alignItems: 'center', gap: spacing[4], paddingVertical: 14, borderBottomWidth: 0.5 },
+  feeLabel:    { flex: 1, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm },
+  feeVal:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
+  actionBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[3],
+                 paddingVertical: 15, borderRadius: radii.lg },
+  actionText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, fontWeight: '600', letterSpacing: 0.2 },
 
   stepper:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                borderRadius: 18, borderWidth: 0.5, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 14 },
+                borderRadius: radii.xl, borderWidth: 0.5, paddingHorizontal: spacing[6], paddingVertical: 18, marginBottom: 14 },
   stepBtn:    { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   stepCenter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepAmt:    { fontFamily: fontFamily.sansBold, fontSize: 36, letterSpacing: -1.5 },
-  stepUnit:   { fontFamily: fontFamily.sansMd, fontSize: 14, letterSpacing: 0.5, marginBottom: 2 },
+  stepAmt:    { fontFamily: fontFamily.sansBold, fontSize: fontSize['4xl'], letterSpacing: -1.5 },
+  stepUnit:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, letterSpacing: 0.5, marginBottom: 2 },
 
-  impactBox:      { borderRadius: 14, borderWidth: 0.5, overflow: 'hidden', marginBottom: 20 },
-  impactRow:      { flexDirection: 'row', alignItems: 'center', gap: 8,
+  impactBox:      { borderRadius: radii.lg, borderWidth: 0.5, overflow: 'hidden', marginBottom: spacing[6] },
+  impactRow:      { flexDirection: 'row', alignItems: 'center', gap: spacing[3],
                     paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 0.5 },
-  impactRowLabel: { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 13 },
-  impactRowBefore:{ fontFamily: fontFamily.sansMd, fontSize: 13 },
-  impactRowAfter: { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
+  impactRowLabel: { flex: 1, fontFamily: fontFamily.sansMd, fontSize: fontSize.sm },
+  impactRowBefore:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.sm },
+  impactRowAfter: { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
 });

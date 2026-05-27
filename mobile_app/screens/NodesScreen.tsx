@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
@@ -178,16 +178,16 @@ export default function NodesScreen() {
 
 const S = StyleSheet.create({
   root:          { flex: 1 },
-  header:        { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
-  title:         { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
-  sub:           { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
-  mapWrap:       { position: 'relative', paddingHorizontal: 20, paddingTop: 10 },
-  filterOverlay: { position: 'absolute', bottom: 8, left: 20, right: 20 },
+  header:        { paddingHorizontal: spacing[6], paddingTop: spacing[5], paddingBottom: spacing[2] },
+  title:         { fontSize: fontSize.xl, fontWeight: '600', letterSpacing: -0.5 },
+  sub:           { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
+  mapWrap:       { position: 'relative', paddingHorizontal: spacing[6], paddingTop: 10 },
+  filterOverlay: { position: 'absolute', bottom: 8, left: spacing[6], right: spacing[6] },
   filterRow:     { gap: 6, paddingHorizontal: 2 },
-  chip:          { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: 4 },
-  chipText:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  chipCount:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, opacity: 0.8 },
-  bottomScroll:  { paddingBottom: 24 },
+  chip:          { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: radii.xs },
+  chipText:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase' },
+  chipCount:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, opacity: 0.8 },
+  bottomScroll:  { paddingBottom: spacing[7] },
   emptyState:    { position: 'absolute', left: 0, right: 0, top: 60, alignItems: 'center' },
-  emptyStateText:{ fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' },
+  emptyStateText:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
 });

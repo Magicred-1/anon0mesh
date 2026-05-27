@@ -11,7 +11,7 @@ import Reanimated, {
   useSharedValue, useAnimatedStyle, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import type { NodeData } from './types';
 
 // ── Canvas constants ──────────────────────────────────────────────────────────
@@ -373,7 +373,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
           position: 'absolute',
           left: ME_X - r, top: ME_Y - r,
           width: r * 2, height: r * 2, borderRadius: r,
-          borderWidth: 0.5, borderColor: 'rgba(0,229,255,0.06)',
+          borderWidth: 0.5, borderColor: colors.borderSubtle,
         }} />
       ))}
 
@@ -578,12 +578,12 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
 });
 
 const S = StyleSheet.create({
-  outer:       { borderWidth: 0.5, overflow: 'hidden', borderRadius: 4 },
+  outer:       { borderWidth: 0.5, overflow: 'hidden', borderRadius: radii.xs },
 
   header:      { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.5, paddingRight: 4 },
   headerPress: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
                   paddingHorizontal: 12, paddingVertical: 9 },
-  headerLabel: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.8, textTransform: 'uppercase' },
+  headerLabel: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.8, textTransform: 'uppercase' },
   headerBtns:  { flexDirection: 'row', alignItems: 'center' },
   iconBtn:     { padding: 8 },
   fsBtn:       { paddingHorizontal: 10 },
@@ -600,11 +600,11 @@ const S = StyleSheet.create({
   strip:       { position: 'absolute', bottom: 0, left: 0, right: 0,
                   flexDirection: 'row', alignItems: 'center', gap: 7,
                   paddingHorizontal: 12, paddingVertical: 6, borderTopWidth: 0.5 },
-  stripHandle: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 0.5 },
-  stripMeta:   { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1 },
+  stripHandle: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5 },
+  stripMeta:   { flex: 1, fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1 },
   dmBtn:       { flexDirection: 'row', alignItems: 'center', gap: 4,
-                 paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 0.5 },
-  dmTxt:       { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1, textTransform: 'uppercase' },
+                 paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.sm, borderWidth: 0.5 },
+  dmTxt:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1, textTransform: 'uppercase' },
 
   fsRoot:      { flex: 1 },
   fsHeader:    { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 0.5,
@@ -615,6 +615,6 @@ const S = StyleSheet.create({
   fsExitBtn:   { position: 'absolute', alignSelf: 'center', left: '50%', marginLeft: -44,
                   flexDirection: 'row', alignItems: 'center', gap: 6,
                   paddingVertical: 9, paddingHorizontal: 18,
-                  borderRadius: 22, borderWidth: 0.5 },
-  pillTxt:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2 },
+                  borderRadius: radii.xl, borderWidth: 0.5 },
+  pillTxt:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2 },
 });
