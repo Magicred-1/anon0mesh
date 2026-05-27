@@ -11,6 +11,7 @@ import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { PulseDot }        from '@/components/ui/PulseDot';
+import { ScreenHeader }    from '@/components/ui';
 import { FILTERS }         from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
@@ -121,10 +122,7 @@ export default function NodesScreen() {
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
 
-        <View style={S.header}>
-          <Text accessibilityRole="header" style={[S.sub,   { color: colors.textTertiary }]}>ANONMESH</Text>
-          <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
-        </View>
+        <ScreenHeader kicker="ANONMESH" title="peers" style={S.header} />
 
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
@@ -178,9 +176,8 @@ export default function NodesScreen() {
 
 const S = StyleSheet.create({
   root:          { flex: 1 },
-  header:        { paddingHorizontal: spacing[6], paddingTop: spacing[5], paddingBottom: spacing[2] },
-  title:         { fontSize: fontSize.xl, fontWeight: '600', letterSpacing: -0.5 },
-  sub:           { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
+  // ScreenHeader owns layout + typography; keep this screen's wider spacing[6] gutter.
+  header:        { paddingHorizontal: spacing[6] },
   mapWrap:       { position: 'relative', paddingHorizontal: spacing[6], paddingTop: 10 },
   filterOverlay: { position: 'absolute', bottom: 8, left: spacing[6], right: spacing[6] },
   filterRow:     { gap: 6, paddingHorizontal: 2 },
