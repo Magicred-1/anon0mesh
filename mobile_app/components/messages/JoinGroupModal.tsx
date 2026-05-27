@@ -93,7 +93,12 @@ export function JoinGroupModal({ visible, onClose, onJoin }: Props) {
 
   return (
     <>
-      <Modal transparent animationType="none" visible={visible} onRequestClose={dismiss}>
+      {/* Hide this sheet while the scanner is up. QRScannerModal is itself a
+          core <Modal>; showing it on top of this one stacks two native modal
+          windows, which on iOS yields a black camera + frozen screen (the
+          documented "scanner must not be a nested Modal" failure). Gating on
+          !scanner keeps exactly one modal mounted at a time. */}
+      <Modal transparent animationType="none" visible={visible && !scanner} onRequestClose={dismiss}>
         <View style={StyleSheet.absoluteFill}>
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
