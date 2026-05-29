@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Dimensions, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
 import { useWallet } from '@/context/WalletContext';
 import { useLxmfContext } from '@/context/LxmfContext';
+import { PrefKeys, prefGetJson, prefSetJson, prefRemove } from '@/src/storage';
 import { type Href, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -52,7 +53,7 @@ export default function SettingsScreen() {
 
   const router = useRouter();
   const { disconnect, isLoading: walletLoading, publicKey } = useWallet();
-  const { status, displayName } = useLxmfContext();
+  const { status, displayName, rnodeConnected, unpairNusRNode } = useLxmfContext();
 
   const meshAddress  = status?.addressHex ?? '';
   const shortHash    = meshAddress ? `${meshAddress.slice(0, 6)}..${meshAddress.slice(-6)}` : '——';
@@ -77,7 +78,16 @@ export default function SettingsScreen() {
     setTimeout(() => setCopiedWallet(false), 1400);
   }, [pubkeyStr]);
 
-  const onPaired = useCallback((d: NonNullable<PairedDevice>) => setPaired(d), []);
+  useEffect(() => {
+    prefGetJson<{ id: string; name: string; serial: string }>(PrefKeys.RNODE_LAST_PAIRED).then(saved => {
+      if (saved) setPaired({ id: saved.id, name: saved.name, serial: saved.serial, rssi: 0 });
+    });
+  }, []);
+
+  const onPaired = useCallback((d: NonNullable<PairedDevice>) => {
+    setPaired(d);
+    prefSetJson(PrefKeys.RNODE_LAST_PAIRED, { id: d.id, name: d.name, serial: d.serial }).catch(() => {});
+  }, []);
 
   const swipeTo = (page: number) => {
     Haptics.selectionAsync().catch(() => {});
@@ -197,8 +207,10 @@ export default function SettingsScreen() {
                     <Text style={[S.hwName,   { color: colors.textPrimary }]}>{paired.name}</Text>
                     <Text style={[S.hwSerial, { color: colors.textTertiary }]}>{paired.serial}</Text>
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                      <Pill label="CONNECTED" variant="primary" dot />
-                      <Pill label="LoRa"      variant="default" />
+                      {rnodeConnected
+                        ? <Pill label="CONNECTED"   variant="primary" dot />
+                        : <Pill label="RECONNECTING" variant="warning" dot />}
+                      <Pill label="LoRa" variant="default" />
                       {/* 78% BATT pill removed per AUDIT T11 / ROADMAP § 0.B.5
                           — no battery telemetry from the pairing API today. */}
                     </View>
@@ -216,7 +228,14 @@ export default function SettingsScreen() {
                       </View>
                     </PreviewedActions>
                   ))}
-                  <Pressable onPress={() => setPaired(null)} style={[S.hwActionBtn, softGlass]}>
+                  <Pressable
+                    onPress={() => {
+                      if (paired?.id) { try { unpairNusRNode(paired.id); } catch {} }
+                      prefRemove(PrefKeys.RNODE_LAST_PAIRED).catch(() => {});
+                      setPaired(null);
+                    }}
+                    style={[S.hwActionBtn, softGlass]}
+                  >
                     <Text style={[S.hwActionText, { color: colors.error }]}>UNPAIR</Text>
                   </Pressable>
                 </View>
