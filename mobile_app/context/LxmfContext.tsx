@@ -105,6 +105,14 @@ function sanitizeName(raw: string): string | null {
 type PeerMap  = Map<string, LxmfPeer>;
 type NameDict = Record<string, string>;
 
+// The 0.2.73 .d.ts declares setPropagationNode/syncPropagation, but neither
+// native platform actually registers them — calling the hook wrapper hits an
+// undefined native function and throws. Feature-detect before calling so they
+// no-op now and auto-activate if a future native build adds them.
+function nativeHasFn(name: string): boolean {
+  return typeof (LxmfModule as unknown as Record<string, unknown>)?.[name] === 'function';
+}
+
 type Via = LxmfPeer['via']; // 'ble' | 'reticulum' | 'rnode'
 
 // The native announce/message event reports which interface the packet arrived
@@ -615,8 +623,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
             setBeaconSolanaRpc(process.env.EXPO_PUBLIC_SOLANA_RPC ?? 'https://api.devnet.solana.com');
           }
           // Enable store-and-forward relay so messages to offline peers are
-          // queued at a propagation node. Must be set before start().
-          try { setPropagationNode(true); } catch { /* native not ready */ }
+          // queued at a propagation node. Must be set before start(). Guarded:
+          // not implemented in every native build.
+          if (nativeHasFn('setPropagationNode')) {
+            try { setPropagationNode(true); } catch { /* native not ready */ }
+          }
           return start({
             mode:           LxmfNodeMode.ReticulumAndBle,
             tcpInterfaces:  configuredTcpInterfaces(),
@@ -712,8 +723,9 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
 
   // Pull store-and-forward messages from propagation relays when the app
   // returns to the foreground (offline peers' messages land on next sync).
+  // Guarded: syncPropagation is not implemented in every native build.
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || !nativeHasFn('syncPropagation')) return;
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active') {
         syncPropagation().catch(() => { /* best-effort */ });
@@ -910,7 +922,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const handleStartBLE = useCallback(async () => {
     if (bleActive) return;
     // Store-and-forward relay for offline peers — must be set before start().
-    try { setPropagationNode(true); } catch { /* native not ready */ }
+    // Guarded: not implemented in every native build.
+    if (nativeHasFn('setPropagationNode')) {
+      try { setPropagationNode(true); } catch { /* native not ready */ }
+    }
     const ok = await start({
       mode:           LxmfNodeMode.ReticulumAndBle,
       tcpInterfaces:  configuredTcpInterfaces(),
