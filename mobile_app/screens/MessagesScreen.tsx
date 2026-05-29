@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   View, ScrollView, Text, Image, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Dimensions,
+  StyleSheet, KeyboardAvoidingView, Platform, Dimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -314,15 +314,6 @@ export default function MessagesScreen() {
     activePeerHexRef.current       = activePeerHex;
     activeConversationRef.current  = activePeerHex;
   }, [activePeerHex]);
-
-  // Keyboard-aware safe-area spacer — collapses bottom spacer while keyboard is visible
-  const [kbShown, setKbShown] = useState(false);
-  useEffect(() => {
-    const isIOS = Platform.OS === 'ios';
-    const show = Keyboard.addListener(isIOS ? 'keyboardWillShow' : 'keyboardDidShow',  () => setKbShown(true));
-    const hide = Keyboard.addListener(isIOS ? 'keyboardWillHide' : 'keyboardDidHide', () => setKbShown(false));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
 
   // Cleanup timers on unmount
   useEffect(() => () => { immediateTimers.current.forEach(clearTimeout); }, []);
@@ -759,7 +750,6 @@ export default function MessagesScreen() {
             </View>
           </GestureDetector>
           <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
-          <View style={{ height: kbShown ? 0 : insets.bottom, backgroundColor: colors.surface0 }} />
         </KeyboardAvoidingView>
       </Reanimated.View>
 
