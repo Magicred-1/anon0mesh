@@ -105,14 +105,43 @@ function sanitizeName(raw: string): string | null {
 type PeerMap  = Map<string, LxmfPeer>;
 type NameDict = Record<string, string>;
 
-function resolveVia(hops: number, bleActive: boolean, existing?: LxmfPeer): LxmfPeer['via'] {
-  if (hops === 0 && bleActive) return 'ble';
-  return existing?.via ?? 'reticulum';
+type Via = LxmfPeer['via']; // 'ble' | 'reticulum' | 'rnode'
+
+// The native announce/message event reports which interface the packet arrived
+// on. The field is untyped (LxmfEvent = { type; [k: string]: any }), so probe
+// the likely key names and substring-match the value to a transport.
+const IFACE_KEYS = [
+  'iface', 'interface', 'interfaceName', 'ifaceName',
+  'via', 'transport', 'link', 'receivedOn', 'received_on', 'source_iface',
+] as const;
+
+function ifaceToVia(raw: unknown): Via | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  const s = raw.toLowerCase();
+  if (s.includes('ble') || s.includes('bluetooth') || s.includes('gatt')) return 'ble';
+  if (s.includes('rnode') || s.includes('nus') || s.includes('lora') || s.includes('radio')) return 'rnode';
+  // TCP / Reticulum / Auto / UDP / I2P → mesh
+  return 'reticulum';
+}
+
+// Per-peer transport from the event's interface field, or null if absent.
+function eventVia(e: LxmfEvent): Via | null {
+  for (const k of IFACE_KEYS) {
+    const v = ifaceToVia((e as Record<string, unknown>)[k]);
+    if (v) return v;
+  }
+  return null;
+}
+
+// Transport for a peer: the interface field is authoritative. Fall back to the
+// existing tag, then 'reticulum'. We no longer infer 'ble' from hops — that
+// false-tagged TCP/RNode peers as BLE whenever any BLE peer was connected.
+function resolveVia(e: LxmfEvent, existing?: LxmfPeer): Via {
+  return eventVia(e) ?? existing?.via ?? 'reticulum';
 }
 
 function applyAnnounceEvent(
   e: LxmfEvent, map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
-  bleActive: boolean,
 ): { peerChanged: boolean; nameChanged: boolean } {
   if (e.type !== 'announceReceived') return { peerChanged: false, nameChanged: false };
   const hash = (e.destHash ?? (e as any).dest_hash ?? (e as any).peer ?? e.address ?? e.source) as string | undefined;
@@ -140,7 +169,7 @@ function applyAnnounceEvent(
     hops,
     lastSeen:     now,
     online:       true,
-    via:          resolveVia(hops, bleActive, existing),
+    via:          resolveVia(e, existing),
     isBeaconNode: isBeaconNode || (existing?.isBeaconNode ?? false),
     nameKnown:    !!name || (existing?.nameKnown ?? false),
   });
@@ -149,10 +178,10 @@ function applyAnnounceEvent(
 
 const ANNOUNCE_LOG_RE = /announce from ([0-9a-f]{32}) \((\d+) hops\)/;
 
-// Fallback: parse log events for announces (library compat across versions)
+// Fallback: parse log events for announces (library compat across versions).
+// A log line carries no interface field, so preserve the existing transport tag.
 function applyLogAnnounce(
   e: LxmfEvent, map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
-  bleActive: boolean,
 ): boolean {
   if (e.type !== 'log') return false;
   const msg = typeof e.message === 'string' ? e.message : '';
@@ -167,7 +196,7 @@ function applyLogAnnounce(
     hops,
     lastSeen:     now,
     online:       true,
-    via:          resolveVia(hops, bleActive, existing),
+    via:          existing?.via ?? 'reticulum',
     isBeaconNode: existing?.isBeaconNode ?? false,
     nameKnown:    (existing?.nameKnown ?? false) || !!names[hash],
   });
@@ -182,10 +211,12 @@ function applyMessageReceived(
   const srcHash = (e.source ?? (e as any).src ?? (e as any).destHash) as string | undefined;
   if (!srcHash || srcHash === ownHash) return false;
   const existing = map.get(srcHash);
+  const via = eventVia(e); // interface the message arrived on, if reported
   if (existing) {
     const nameKnown = existing.nameKnown || !!names[srcHash];
-    if (existing.online && existing.nameKnown === nameKnown) return false;
-    map.set(srcHash, { ...existing, online: true, lastSeen: now, nameKnown });
+    const nextVia = via ?? existing.via;
+    if (existing.online && existing.nameKnown === nameKnown && existing.via === nextVia) return false;
+    map.set(srcHash, { ...existing, online: true, lastSeen: now, nameKnown, via: nextVia });
   } else {
     map.set(srcHash, {
       destHash:     srcHash,
@@ -193,11 +224,7 @@ function applyMessageReceived(
       hops:         0,
       lastSeen:     now,
       online:       true,
-      // A received message proves reachability, not the BLE transport. Default
-      // to 'reticulum'; the BLE re-tag effect promotes genuine BLE peers once
-      // blePeerCount > 0. (messageReceived carries no hops, so BLE-vs-TCP can't
-      // be distinguished here — native limitation.)
-      via:          'reticulum',
+      via:          via ?? 'reticulum',
       isBeaconNode: false,
       nameKnown:    !!names[srcHash],
     });
@@ -207,19 +234,23 @@ function applyMessageReceived(
 
 // Dev-only one-shot diagnostic: the native LxmfEvent payload is typed as
 // `{ type; [key: string]: any }`, so the exact key names for announceReceived
-// (peer hash, app_data, hops) are undeclared. Log the key set once for the
-// first announce + message seen so the TCP discovery path can be verified
+// (peer hash, app_data, hops, interface) are undeclared. Log the key set once
+// for the first announce + message seen, plus the matched interface value and
+// the via we mapped it to — so the per-interface labeling can be confirmed
 // against the real shape. Keys only — never the body (avoid logging content).
 let _loggedAnnounceKeys = false;
 let _loggedMessageKeys  = false;
 function logEventShapeOnce(e: LxmfEvent): void {
   if (!__DEV__) return;
+  const rec = e as Record<string, unknown>;
+  const ifaceField = IFACE_KEYS.find(k => typeof rec[k] === 'string');
+  const ifaceInfo = ifaceField ? `${ifaceField}=${String(rec[ifaceField])} → via=${eventVia(e)}` : 'no interface field';
   if (e.type === 'announceReceived' && !_loggedAnnounceKeys) {
     _loggedAnnounceKeys = true;
-    console.log('[Lxmf] announceReceived keys:', Object.keys(e).join(','));
+    console.log('[Lxmf] announceReceived keys:', Object.keys(e).join(','), '|', ifaceInfo);
   } else if (e.type === 'messageReceived' && !_loggedMessageKeys) {
     _loggedMessageKeys = true;
-    console.log('[Lxmf] messageReceived keys:', Object.keys(e).join(','));
+    console.log('[Lxmf] messageReceived keys:', Object.keys(e).join(','), '|', ifaceInfo);
   }
 }
 
@@ -239,16 +270,15 @@ function applyRnodeEvents(evts: LxmfEvent[], setRnodeConnected: (v: boolean) => 
 
 function processNewEvents(
   evts: LxmfEvent[], map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
-  bleActive: boolean,
 ): { peerChanged: boolean; nameChanged: boolean } {
   let peerChanged = false;
   let nameChanged = false;
   for (const e of evts) {
-    const ann = applyAnnounceEvent(e, map, names, now, ownHash, bleActive);
+    const ann = applyAnnounceEvent(e, map, names, now, ownHash);
     if (ann.peerChanged) peerChanged = true;
     if (ann.nameChanged) nameChanged = true;
     if (!ann.peerChanged) {
-      if (applyLogAnnounce(e, map, names, now, ownHash, bleActive)) peerChanged = true;
+      if (applyLogAnnounce(e, map, names, now, ownHash)) peerChanged = true;
       if (applyBeaconDiscovered(e, map, names)) {
         nameChanged = true;
         peerChanged = true;
@@ -667,9 +697,6 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const [bleActive,       setBleActive]       = useState(false);
   const [blePeerCount,    setBlePeerCount]    = useState(0);
   const [rnodeConnected,  setRnodeConnected]  = useState(false);
-  // Updated every render so the 80ms debounce timer always reads current value
-  const bleActiveRef = useRef(bleActive);
-  bleActiveRef.current = bleActive;
 
   useEffect(() => {
     if (!bleActive) { setBlePeerCount(0); setRnodeConnected(false); return; }
@@ -737,7 +764,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         announceTimerRef.current = setTimeout(() => setIsAnnouncing(false), 2500);
       }
 
-      let { peerChanged, nameChanged } = processNewEvents(newEvts, map, names, now, ownHash, bleActiveRef.current);
+      let { peerChanged, nameChanged } = processNewEvents(newEvts, map, names, now, ownHash);
 
       for (const b of lxmf.beacons) {
         if (mergeBeacon(b, map, names, now, ownHash)) peerChanged = true;
@@ -771,21 +798,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     return () => clearInterval(id);
   }, [lxmf.status?.addressHex]);
 
-  // When BLE is active and peers are connected, re-tag 0-hop peers as BLE and
-  // mark them online. Fixes: (a) stale bleActive at startup tags them as
-  // 'reticulum', (b) cache-loaded peers stay offline until next 60s announce.
-  useEffect(() => {
-    if (!bleActive || blePeerCount === 0) return;
-    const map = knownPeersRef.current;
-    let changed = false;
-    for (const [, peer] of map) {
-      if (peer.hops === 0 && (!peer.online || peer.via !== 'ble')) {
-        map.set(peer.destHash, { ...peer, via: 'ble', online: true });
-        changed = true;
-      }
-    }
-    if (changed) startTransition(() => setPeers(Array.from(map.values())));
-  }, [bleActive, blePeerCount]);
+  // NOTE: a previous "re-tag every 0-hop peer as BLE when blePeerCount > 0"
+  // effect lived here. It force-labeled TCP and RNode peers as BLE whenever any
+  // BLE peer was connected. Transport now comes from the event's interface
+  // field (see eventVia / resolveVia), so the blanket re-tag is gone.
 
   // ── Group channels ──────────────────────────────────────────────────────────
   const [groups,    setGroups]  = useState<LxmfGroup[]>([]);
