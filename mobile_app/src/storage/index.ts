@@ -43,6 +43,9 @@ export const PrefKeys = {
   DISPLAY_NAME:     'anonmesh:display_name',
   // Peer metadata cache — social graph metadata, not key material
   PEERS_CACHE:      'anonmesh:peers_cache',
+  // Peers the user has opened a conversation with — persisted so Contacts tab
+  // survives restarts even before any messages are exchanged
+  CONTACTED_PEERS:  'anonmesh:contacted_peers',
   // UI preferences
   BIOMETRIC_ENABLED: 'anonmesh:biometric-enabled',
   HIDE_BALANCE:      'anonmesh:hide-balance',

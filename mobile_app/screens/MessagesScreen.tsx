@@ -1,7 +1,7 @@
 import "@/polyfills";
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   View, ScrollView, Text, Image, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Dimensions,
@@ -24,7 +24,6 @@ import { Composer }              from '@/components/messages/Composer';
 import { ThreadHeader }          from '@/components/messages/ThreadHeader';
 import { PeersDrawer }           from '@/components/messages/PeersDrawer';
 import { CreateGroupModal }      from '@/components/messages/CreateGroupModal';
-import { JoinGroupModal }        from '@/components/messages/JoinGroupModal';
 import { ChannelShareSheet }     from '@/components/messages/ChannelShareSheet';
 import { GroupMembersSheet }     from '@/components/messages/GroupMembersSheet';
 import { type Peer }             from '@/components/messages/constants';
@@ -37,6 +36,7 @@ import type { LxmfPeer, StoredMessage } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
+import { useConversationSummaries } from '@/hooks/useConversationSummaries';
 import { formatAgo }             from '@/utils/time';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
@@ -340,18 +340,20 @@ export default function MessagesScreen() {
   const {
     isRunning, bleActive, displayName, peers: lxmfPeers, events, send,
     getDisplayName, getPeerIdentity, getPeerMessages, myAddress,
-    groups, createGroup, joinGroup, leaveGroup, getGroupMembers,
+    groups, createGroup, leaveGroup, getGroupMembers,
   } = useLxmfContext();
   const insets = useSafeAreaInsets();
 
   const { publicKey } = useWallet();
+
+  const { summaries, markRead, touchPeer } = useConversationSummaries();
+  const [activeTab, setActiveTab] = useState<'contacts' | 'groups' | 'all'>('contacts');
 
   const [msgs,             setMsgs]             = useState<AnyMsg[]>([]);
   const [activePeer,       setActivePeer]        = useState('');
   const [activePeerHex,    setActivePeerHex]     = useState<string | null>(null);
   const [actionGridVisible,  setActionGridVisible]  = useState(false);
   const [createGroupVisible, setCreateGroupVisible] = useState(false);
-  const [joinGroupVisible,   setJoinGroupVisible]   = useState(false);
   const [shareSheetOpen,     setShareSheetOpen]     = useState(false);
   const [membersSheetOpen,   setMembersSheetOpen]   = useState(false);
   const [seqStates, setSeqStates] = useState<Map<number, 'sent' | 'queued' | 'delivered' | 'failed' | 'stale'>>(new Map());
@@ -690,6 +692,7 @@ export default function MessagesScreen() {
     chatTx.value = screenW; // park off-screen before state change so slide-in useEffect animates from there
     setActivePeer(p.handle);
     setActivePeerHex(newHash);
+    if (newHash) touchPeer(newHash);
 
     const cached = newHash ? threadsRef.current.get(newHash) : undefined;
     if (cached) { setMsgs(cached); return; }
@@ -705,7 +708,8 @@ export default function MessagesScreen() {
     }
 
     setMsgs([{ id: nextId(), kind: 'sys', text: `thread with ${p.handle} · ${p.hops} hops via ${p.iface.toLowerCase()}` }]);
-  }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW]);
+    if (newHash) markRead(newHash);
+  }, [getPeerMessages, getDisplayName, myAddress, chatTx, screenW, markRead, touchPeer]);
 
   useFocusEffect(useCallback(() => { requestBLEPermissions(); }, []));
 
@@ -771,7 +775,7 @@ export default function MessagesScreen() {
           colors={colors}
           bottomInset={insets.bottom}
           onCreateGroup={() => setCreateGroupVisible(true)}
-          onJoinGroup={() => setJoinGroupVisible(true)}
+          onJoinGroup={() => router.push('/join-channel')}
           isRunning={isRunning}
           bleActive={bleActive}
         />
@@ -781,6 +785,9 @@ export default function MessagesScreen() {
           onPick={pickPeer}
           syncing={!isRunning}
           peers={livePeers}
+          summaries={summaries}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
           onNewHash={hash => {
             const ident = getPeerIdentity(hash);
             pickPeer({
@@ -797,7 +804,7 @@ export default function MessagesScreen() {
             });
           }}
           onCreateGroup={() => setCreateGroupVisible(true)}
-          onJoinGroup={() => setJoinGroupVisible(true)}
+          onJoinGroup={() => router.push('/join-channel')}
           onLeaveGroup={addrHex => leaveGroup(addrHex)}
         />
       )}
@@ -857,11 +864,6 @@ export default function MessagesScreen() {
         visible={createGroupVisible}
         onClose={() => setCreateGroupVisible(false)}
         onCreate={createGroup}
-      />
-      <JoinGroupModal
-        visible={joinGroupVisible}
-        onClose={() => setJoinGroupVisible(false)}
-        onJoin={joinGroup}
       />
       <ChannelShareSheet
         visible={shareSheetOpen}

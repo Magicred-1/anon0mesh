@@ -105,7 +105,8 @@
       ],
       "@magicred-1/react-native-lxmf",
       "./plugins/withAndroidForegroundService",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
