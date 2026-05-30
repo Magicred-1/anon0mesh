@@ -41,7 +41,7 @@ import { useConversationSummaries } from '@/hooks/useConversationSummaries';
 import { formatAgo }             from '@/utils/time';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
-import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
+import { eventsAfter } from '@/src/utils/eventsAfter';
 import { decodeBody } from '@/src/utils/decodeBody';
 
 let _msgId = Date.now();
@@ -296,8 +296,7 @@ export default function MessagesScreen() {
 
   const scrollRef        = useRef<ScrollView>(null);
   const activePeerHexRef = useRef<string | null>(null);
-  const lastEvtCountRef  = useRef(0);
-  const lastFirstEvtRef  = useRef<(typeof events)[0] | null>(null);
+  const lastSeenIdRef    = useRef(0);
   const idToSeqRef       = useRef<Map<number, number>>(new Map());
   const seqQueuedAt      = useRef<Map<number, number>>(new Map());
   // seq → {dest, bodyB64} for outbound text messages awaiting delivery confirmation.
@@ -389,13 +388,10 @@ export default function MessagesScreen() {
 
   // Incoming messages + queue state events
   useEffect(() => {
-    const prevCount = lastEvtCountRef.current;
-    const prevFirst = lastFirstEvtRef.current;
-    lastEvtCountRef.current  = events.length;
-    lastFirstEvtRef.current  = events[0] ?? null;
-
-    const newEvents = sliceNewEvents(events, prevCount, prevFirst);
+    const newEvents = eventsAfter(events, lastSeenIdRef.current);
     if (newEvents.length === 0) return;
+    const newestId = newEvents.at(-1)?.id;
+    if (newestId != null) lastSeenIdRef.current = newestId;
 
     // Snapshot the active peer once: pickPeer mutates activePeerHexRef synchronously,
     // so reading it per-iteration could misroute the rest of a batch after a tap.

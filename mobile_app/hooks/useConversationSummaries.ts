@@ -2,9 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useLxmfContext, type StoredMessage } from '@/context/LxmfContext';
 import { PrefKeys, prefGet, prefSetJson } from '@/src/storage';
-import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
+import { eventsAfter } from '@/src/utils/eventsAfter';
 import { decodeBody } from '@/src/utils/decodeBody';
-import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 
 export interface ConvSummary {
   lastText:      string;
@@ -68,8 +67,7 @@ export function useConversationSummaries(): {
   const { fetchMessages, events } = useLxmfContext();
   const lastReadAt      = useRef<Map<string, number>>(new Map());
   const contactedRef    = useRef<Set<string>>(new Set());
-  const lastEvtCountRef = useRef(0);
-  const lastFirstEvtRef = useRef<LxmfEvent | null>(null);
+  const lastSeenIdRef = useRef(0);
 
   const [summaries, setSummaries] = useState<Map<string, ConvSummary>>(new Map());
 
@@ -99,12 +97,9 @@ export function useConversationSummaries(): {
 
   // Re-derive only when new messageReceived events arrive
   useEffect(() => {
-    const prevCount = lastEvtCountRef.current;
-    const prevFirst = lastFirstEvtRef.current;
-    lastEvtCountRef.current = events.length;
-    lastFirstEvtRef.current = events[0] ?? null;
-
-    const newEvts = sliceNewEvents(events, prevCount, prevFirst);
+    const newEvts = eventsAfter(events, lastSeenIdRef.current);
+    const newestId = newEvts.at(-1)?.id;
+    if (newestId != null) lastSeenIdRef.current = newestId;
     if (newEvts.some(e => e.type === 'messageReceived')) {
       derive();
     }
