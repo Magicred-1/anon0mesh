@@ -32,9 +32,13 @@ import { pendingConversationRef }    from '@/hooks/pendingConversation';
 import { useBackgroundService }      from '@/hooks/useBackgroundService';
 import { ErrorBoundary }             from '@/src/observability/ErrorBoundary';
 import { initObservability, Sentry } from '@/src/observability/sentry';
+import { installGlobalErrorHandler } from '@/src/observability/errorHandler';
 
 // Crash observability. No-op unless EXPO_PUBLIC_SENTRY_DSN is set and not __DEV__.
+// Sentry catches render throws (via ErrorBoundary); errorHandler catches the
+// async/unhandled rejections Sentry's boundary does not.
 initObservability();
+installGlobalErrorHandler();
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -117,6 +121,14 @@ function AppShell() {
           <Stack.Screen name="send/amount" />
           <Stack.Screen name="send/review" />
           <Stack.Screen name="send/success" options={{ gestureEnabled: false }} />
+          {/* QR scanner — a route, not a <Modal>, so it presents above
+              everything (including bottom-sheet modals) without stacking
+              native windows. Driven by scan() in src/services/qrScan. */}
+          <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+          {/* Join channel — a transparentModal route that owns its slide
+              animation (same pattern as receive), so the scanner route can
+              compose over it without a nested-<Modal> conflict. */}
+          <Stack.Screen name="join-channel" options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }} />
         </Stack>
         <StatusBar style="light" />
       </NavThemeProvider>

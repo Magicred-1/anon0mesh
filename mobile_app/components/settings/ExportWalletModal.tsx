@@ -10,6 +10,12 @@ import { KeyBox } from './KeyBox';
 
 type CaptureBlockState = 'pending' | 'blocked' | 'unavailable';
 
+// Auto-wipe the recovery key from the system clipboard this long after a copy.
+// The clipboard persists (and on some OSes syncs cross-device) until something
+// overwrites it, so leaving a raw private key there indefinitely is a key leak.
+// Mirrors the channel-key auto-clear in ChannelShareSheet / CreateGroupModal.
+const CLIPBOARD_AUTO_CLEAR_MS = 60_000;
+
 export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const { colors } = useTheme();
   const softGlass = useGlass('soft');
@@ -24,6 +30,7 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
   const [copiedAck, setCopiedAck] = useState(false);
   const [captureBlock, setCaptureBlock] = useState<CaptureBlockState>('pending');
   const sheetAnim = useRef(new Animated.Value(0)).current;
+  const clipboardClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     Animated.spring(sheetAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
@@ -101,15 +108,47 @@ export function ExportWalletModal({ onClose }: { onClose: () => void }) {
     setLoading(false);
   }, [exportPrivateKey, captureBlock]);
 
+  // Wipe the clipboard immediately and drop any pending auto-clear timer.
+  const clearClipboardNow = useCallback(() => {
+    if (clipboardClearTimerRef.current) {
+      clearTimeout(clipboardClearTimerRef.current);
+      clipboardClearTimerRef.current = null;
+    }
+    Clipboard.setStringAsync('').catch(() => {});
+  }, []);
+
+  // Cancel only the pending auto-clear timer (without touching clipboard
+  // contents) — used on unmount so we don't fire setState/clipboard writes
+  // after the component is gone, while still wiping the key on the way out.
+  useEffect(() => {
+    return () => {
+      if (clipboardClearTimerRef.current) clearTimeout(clipboardClearTimerRef.current);
+      // Best-effort wipe on unmount: if the user copied and the modal tears
+      // down (navigation, parent unmount) the raw key must not outlive it.
+      Clipboard.setStringAsync('').catch(() => {});
+    };
+  }, []);
+
   const copyKey = useCallback(async () => {
     if (!secretKey) return;
     await Clipboard.setStringAsync(secretKey);
     setKeyCopied(true);
     setTimeout(() => setKeyCopied(false), 1400);
+
+    // Schedule the wipe from THIS copy. Reset on every copy so the window is
+    // measured from the most recent paste action, never cut short by an earlier one.
+    if (clipboardClearTimerRef.current) clearTimeout(clipboardClearTimerRef.current);
+    clipboardClearTimerRef.current = setTimeout(() => {
+      Clipboard.setStringAsync('').catch(() => {});
+      clipboardClearTimerRef.current = null;
+    }, CLIPBOARD_AUTO_CLEAR_MS);
   }, [secretKey]);
 
   const dismiss = () => {
     if (secretKey && !copiedAck) return;
+    // Dismissing means the user is done — wipe the copied key right away rather
+    // than waiting out the auto-clear window.
+    clearClipboardNow();
     Animated.timing(sheetAnim, { toValue: 0, duration: 220, useNativeDriver: true }).start(onClose);
   };
 

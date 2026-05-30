@@ -2,6 +2,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 
 import { useWallet } from "@/context/WalletContext";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
+import { DIRECT_RPC_TIMEOUT_MS, withTimeout } from "@/src/services/sendTransaction";
 import {
   ActivityEntry,
   SOL_DECIMALS,
@@ -16,6 +17,7 @@ interface WalletBalanceState {
   activity: ActivityEntry[];
   activityLoading: boolean;
   activityError: string | null;
+  balanceStale: boolean;
   loading: boolean;
   refetch: () => Promise<void>;
   lastFetched: number | null;
@@ -39,6 +41,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [balanceStale, setBalanceStale] = useState(false);
   const [loading, setLoading] = useState(false);
   const [lastFetched, setLastFetched] = useState<number | null>(null);
 
@@ -46,17 +49,31 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
   const lastPublicKeyRef = useRef<string | null>(null);
   const lastRouteRef = useRef<string | null>(null);
   const refetchRef    = useRef<() => Promise<void>>(() => Promise.resolve());
+  // Monotonic id stamped at the start of each fetch. A mesh↔online adapter
+  // swap (or wallet change) re-runs refetch while a previous Promise.allSettled
+  // is still in flight; without this guard the slower stale fetch can resolve
+  // last and overwrite fresh data with results from the dead transport. Only
+  // the latest request is allowed to commit to state.
+  const fetchIdRef    = useRef(0);
   const COOLDOWN_MS   = 30_000;
 
   function applyBalanceResults(
     solResult: PromiseSettledResult<number>,
     splResult: PromiseSettledResult<TokenBalance[]>,
   ) {
-    if (solResult.status !== "fulfilled") return;
+    if (solResult.status !== "fulfilled") {
+      // Balance read timed out / RPC-rejected on a refresh. Keep the last known
+      // value (blanking it to 0/null would be a worse lie) but mark it stale so
+      // the UI can say "last known" — send decisions ride on this number, so a
+      // stale balance must never be presented as live.
+      setBalanceStale(true);
+      return;
+    }
     const sol = solResult.value;
     const splTokens = splResult.status === "fulfilled" ? splResult.value : [];
     setSolBalance(sol);
     setTokens([{ ...NATIVE_SOL, uiAmount: sol }, ...splTokens]);
+    setBalanceStale(false);
   }
 
   function applyActivityResult(result: PromiseSettledResult<ActivityEntry[]>) {
@@ -76,8 +93,18 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       setSolBalance(null);
       setActivity([]);
       setActivityError(null);
+      setBalanceStale(false);
       return;
     }
+
+    // Snapshot the current generation BEFORE the cooldown gate. The gate can
+    // return early without ever bumping fetchIdRef; if we only stamped the id
+    // after the gate, an in-flight fetch on a now-stale adapter would keep the
+    // latest id and pass isCurrent() when it resolves, committing dead-transport
+    // data. We instead invalidate on adapter/publicKey change (see the effect
+    // below), so a superseded fetch's snapshot here no longer matches.
+    const fetchId = fetchIdRef.current;
+    const isCurrent = () => fetchId === fetchIdRef.current;
 
     const now = Date.now();
     if (lastFetchedRef.current !== null && now - lastFetchedRef.current < COOLDOWN_MS) return;
@@ -87,10 +114,17 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     setActivityLoading(true);
     try {
       const [solResult, splResult, activityResult] = await Promise.allSettled([
-        rpcAdapter.getBalance(publicKey),
+        // Bound the balance read so a degraded RPC can't park the whole
+        // refresh forever (every other RPC in this file is already bounded).
+        withTimeout(rpcAdapter.getBalance(publicKey), DIRECT_RPC_TIMEOUT_MS, "balance"),
         fetchSplTokens(rpcAdapter, publicKey),
         fetchRecentActivity(rpcAdapter, publicKey, 10),
       ]);
+
+      // A newer fetch (adapter swap / wallet change) superseded this one while
+      // it was in flight — drop these results so we never regress fresh data
+      // back to whatever the now-dead transport eventually returned.
+      if (!isCurrent()) return;
 
       applyBalanceResults(solResult, splResult);
       applyActivityResult(activityResult);
@@ -100,16 +134,31 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
       // Surfacing a duplicate `error` field here just drifts: nothing reads it.
       setLastFetched(Date.now());
     } catch (err) {
+      if (!isCurrent()) return;
       const msg = err instanceof Error ? err.message : String(err);
       setActivityError(msg.includes("429") ? "Devnet rate-limited" : "Couldn't load activity");
     } finally {
-      setLoading(false);
-      setActivityLoading(false);
+      // Only the latest fetch may clear the loading flags; a superseded fetch
+      // resolving here would otherwise flip loading off while the current one
+      // is still running, flashing a half-loaded state.
+      if (isCurrent()) {
+        setLoading(false);
+        setActivityLoading(false);
+      }
     }
   }, [publicKey, rpcAdapter]);
 
   // Keep ref current so the effect below never stales without re-running.
   refetchRef.current = refetch;
+
+  // Invalidate any in-flight fetch the instant the transport (adapter) or
+  // wallet changes. Bumping the generation here — not inside refetch, which can
+  // bail at the cooldown gate before bumping — guarantees a stale fetch started
+  // on the previous adapter can never win the isCurrent() check, even if no new
+  // fetch starts (e.g. the new adapter is still inside its 30s cooldown).
+  useEffect(() => {
+    fetchIdRef.current += 1;
+  }, [rpcAdapter, publicKey]);
 
   useEffect(() => {
     const publicKeyString = publicKey?.toBase58() ?? null;
@@ -133,6 +182,7 @@ export function WalletBalanceProvider({ children }: { children: ReactNode }) {
     activity,
     activityLoading,
     activityError,
+    balanceStale,
     loading,
     refetch,
     lastFetched,

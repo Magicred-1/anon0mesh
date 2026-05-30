@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  InteractionManager,
+  InteractionManager, Linking,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,7 +13,7 @@ import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { PulseDot }        from '@/components/ui/PulseDot';
 import { FILTERS }         from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
-import { requestBLEPermissions } from '@/src/utils/blePermissions';
+import { requestBLEPermissions, type BLEPermissionStatus } from '@/src/utils/blePermissions';
 
 // Converts a peer to NodeData WITHOUT latency — stable identity for MeshMap.
 // Latency is added separately for the list so MeshMap topology doesn't re-layout on every timer tick.
@@ -58,9 +58,15 @@ export default function NodesScreen() {
     return () => clearInterval(id);
   }, []));
 
+  // A denied BLE permission must not be a silent dead-end: capture the status so
+  // the UI can explain it and offer a re-enable path. Without this, denying once
+  // silently kills peer discovery forever — the "scanning forever, no one here"
+  // trap with no exit (off-grid #1).
+  const [blePerm, setBlePerm] = useState<BLEPermissionStatus | null>(null);
   const enableBle = useCallback(async () => {
     if (bleActive) return; // already started — don't re-trigger GATT registration
     const permissionStatus = await requestBLEPermissions();
+    setBlePerm(permissionStatus);
     if (permissionStatus !== 'granted' && permissionStatus !== 'not_required') return;
     startBLE();
   }, [bleActive, startBLE]);
@@ -84,9 +90,18 @@ export default function NodesScreen() {
     [peers, isRunning],
   );
 
-  const emptyStateCopy = isNativeAvailable
-    ? 'Starting mesh…'
-    : 'Mesh unavailable on this device';
+  const bleBlocked = !bleActive && (blePerm === 'denied' || blePerm === 'never_ask_again');
+  // Honest empty state: only say "Starting mesh…" while the node is actually
+  // coming up. Once it's running with zero peers (every solo user, and the
+  // common case), say so plainly instead of implying it's still starting — the
+  // same "stop the present-tense lie" pass L4 did for the Messages empty state.
+  const emptyStateCopy = !isNativeAvailable
+    ? 'Mesh unavailable on this device'
+    : bleBlocked
+      ? 'Bluetooth permission needed'
+      : !isRunning
+        ? 'Starting mesh…'
+        : 'No peers nearby yet';
 
   // Fast lookup by destHash for latency enrichment
   const peerMap = useMemo(
@@ -168,6 +183,25 @@ export default function NodesScreen() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.bottomScroll}>
+          {bleBlocked && (
+            <View style={[S.bleCard, { borderColor: colors.border, backgroundColor: colors.glass }]}>
+              <Text style={[S.bleTitle, { color: colors.textPrimary }]}>Bluetooth is off for anonmesh</Text>
+              <Text style={[S.bleBody, { color: colors.textTertiary }]}>
+                anonmesh finds people nearby over Bluetooth. Without it, you can only reach peers over the internet —
+                so the mesh looks empty even when devices are right next to you.
+              </Text>
+              <Pressable
+                onPress={() => { if (blePerm === 'never_ask_again') { Linking.openSettings(); } else { enableBle(); } }}
+                style={[S.bleBtn, { borderColor: colors.primary + '80', backgroundColor: colors.primarySubtle }]}
+                accessibilityRole="button"
+                accessibilityLabel={blePerm === 'never_ask_again' ? 'Open Settings to enable Bluetooth' : 'Grant Bluetooth access'}
+              >
+                <Text style={[S.bleBtnText, { color: colors.primary }]}>
+                  {blePerm === 'never_ask_again' ? 'Open Settings' : 'Grant Bluetooth access'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
           <BeaconRegistry />
         </ScrollView>
 
@@ -190,4 +224,9 @@ const S = StyleSheet.create({
   bottomScroll:  { paddingBottom: 24 },
   emptyState:    { position: 'absolute', left: 0, right: 0, top: 60, alignItems: 'center' },
   emptyStateText:{ fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' },
+  bleCard:       { marginHorizontal: 20, marginBottom: 14, padding: 14, borderWidth: 0.5, borderRadius: 10, gap: 8 },
+  bleTitle:      { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
+  bleBody:       { fontSize: 12, lineHeight: 17 },
+  bleBtn:        { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, borderWidth: 0.5, borderRadius: 8, marginTop: 2 },
+  bleBtnText:    { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
 });
