@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { QRScannerModal } from "@/components/messages/QRScannerModal";
+import { scan } from "@/src/services/qrScan";
 import { DepthButton, TokenLogo } from "@/components/primitives";
 import { TokenPicker, tokenByName } from "@/components/send/TokenPicker";
 import type { TokenOption } from "@/components/send/TokenPicker";
@@ -93,7 +93,6 @@ export function RecipientPicker() {
   const [address, setAddress] = useState(typeof params.to === "string" ? params.to : "");
   const [selectedSymbol, setSelectedSymbol] = useState<string>("SOL");
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [scannerOpen, setScannerOpen] = useState(false);
   const [poisonAck, setPoisonAck] = useState(false);
   const { tokens } = useWalletBalance();
   const { entries: addressBook, deleteRecipient } = useAddressBook();
@@ -138,9 +137,24 @@ export function RecipientPicker() {
     pushToAmount(trimmedAddress);
   }
 
-  function handleScan() {
+  async function handleScan() {
     haptics.tap();
-    setScannerOpen(true);
+    const result = await scan();
+    if (!result) return;
+    if (result.type !== "solana") {
+      Alert.alert(
+        "QR not recognised",
+        "Scan a Solana address or a Solana Pay code.",
+      );
+      return;
+    }
+    haptics.confirm();
+    handleAddressChange(result.address);
+    // SPL send is gated off (TokenPicker.isSendable allows SOL only),
+    // so ignore amount when an spl-token mint was specified.
+    if (result.amount && !result.splToken) {
+      pushToAmount(result.address, result.amount);
+    }
   }
 
   function handleSelectToken(next: TokenOption) {
@@ -452,27 +466,6 @@ export function RecipientPicker() {
         onClose={() => setPickerOpen(false)}
       />
 
-      <QRScannerModal
-        visible={scannerOpen}
-        onClose={() => setScannerOpen(false)}
-        onResult={(result) => {
-          setScannerOpen(false);
-          if (result.type !== "solana") {
-            Alert.alert(
-              "QR not recognised",
-              "Scan a Solana address or a Solana Pay code.",
-            );
-            return;
-          }
-          haptics.confirm();
-          handleAddressChange(result.address);
-          // SPL send is gated off (TokenPicker.isSendable allows SOL only),
-          // so ignore amount when an spl-token mint was specified.
-          if (result.amount && !result.splToken) {
-            pushToAmount(result.address, result.amount);
-          }
-        }}
-      />
     </View>
   );
 }

@@ -38,6 +38,7 @@
     "bs58": "^6.0.0",
     "buffer": "^6.0.3",
     "expo": "~54.0.34",
+    "expo-audio": "~1.1.1",
     "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
