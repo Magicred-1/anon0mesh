@@ -397,6 +397,10 @@ export default function MessagesScreen() {
     const newEvents = sliceNewEvents(events, prevCount, prevFirst);
     if (newEvents.length === 0) return;
 
+    // Snapshot the active peer once: pickPeer mutates activePeerHexRef synchronously,
+    // so reading it per-iteration could misroute the rest of a batch after a tap.
+    const activePeer = activePeerHexRef.current;
+
     for (const e of newEvents) {
       if (e.type === 'messageQueued'   && typeof e.seq === 'number') { resolveSeq(e.seq, 'queued');    continue; }
       if (e.type === 'messageDelivered'&& typeof e.seq === 'number') { resolveSeq(e.seq, 'delivered'); continue; }
@@ -426,7 +430,7 @@ export default function MessagesScreen() {
 
       if (newMsgs.length === 0) continue;
 
-      if (srcHash === activePeerHexRef.current) {
+      if (srcHash === activePeer) {
         setMsgs(m => [...m, ...newMsgs]);
       } else {
         // Route to that peer's thread regardless of whether any peer is active.
