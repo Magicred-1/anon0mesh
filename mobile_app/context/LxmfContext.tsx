@@ -313,8 +313,8 @@ export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net',    port: 4242 
 const _myPcHost = process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST;
 // Dev-only local-PC Reticulum hub. Gated on __DEV__ (not just the env var) so a
 // production bundle never wires a developer's machine as a hub even if the
-// EXPO_PUBLIC_LOCAL_LXMF_* vars are present in the build environment. Per
-// CLAUDE.md: use __DEV__, not EXPO_PUBLIC_*, for dev-only conditionals.
+// EXPO_PUBLIC_LOCAL_LXMF_* vars are present in the build environment. Project
+// convention: use __DEV__, not EXPO_PUBLIC_*, for dev-only conditionals.
 export const MY_PC: TcpInterface | null = __DEV__ && _myPcHost && _myPcHost !== 'localhost'
   ? { host: _myPcHost, port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243) }
   : null;
