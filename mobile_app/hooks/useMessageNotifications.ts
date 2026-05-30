@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useLxmfContext } from '@/context/LxmfContext';
-import { eventsAfter } from '@/src/utils/eventsAfter';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
 import type { NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { activeConversationRef } from './activeConversation';
 import { messagesFocusedRef }    from './messagesFocused';
@@ -36,7 +36,7 @@ export function useMessageNotifications(
   enabled = true,
 ) {
   const { events, getDisplayName } = useLxmfContext();
-  const lastSeenIdRef = useRef(0);
+  const lastSeenIdRef = useRef(-1);
   const appStateRef   = useRef(AppState.currentState);
 
   // Request local notification permission once — no remote/push token requested
@@ -56,8 +56,7 @@ export function useMessageNotifications(
     const newEvents = eventsAfter(events, lastSeenIdRef.current);
     // Advance the watermark unconditionally (even when disabled) so re-enabling
     // doesn't replay a backlog of notifications.
-    const newestId = newEvents.at(-1)?.id;
-    if (newestId != null) lastSeenIdRef.current = newestId;
+    lastSeenIdRef.current = highestEventId(events, lastSeenIdRef.current);
     if (newEvents.length === 0 || !enabled) return;
 
     const toNotify = newEvents.filter(e => e.type === 'messageReceived');

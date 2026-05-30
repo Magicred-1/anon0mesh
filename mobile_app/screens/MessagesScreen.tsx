@@ -41,7 +41,7 @@ import { useConversationSummaries } from '@/hooks/useConversationSummaries';
 import { formatAgo }             from '@/utils/time';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
-import { eventsAfter } from '@/src/utils/eventsAfter';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
 import { decodeBody } from '@/src/utils/decodeBody';
 
 let _msgId = Date.now();
@@ -296,7 +296,7 @@ export default function MessagesScreen() {
 
   const scrollRef        = useRef<ScrollView>(null);
   const activePeerHexRef = useRef<string | null>(null);
-  const lastSeenIdRef    = useRef(0);
+  const lastSeenIdRef    = useRef(-1);
   const idToSeqRef       = useRef<Map<number, number>>(new Map());
   const seqQueuedAt      = useRef<Map<number, number>>(new Map());
   // seq → {dest, bodyB64} for outbound text messages awaiting delivery confirmation.
@@ -390,8 +390,7 @@ export default function MessagesScreen() {
   useEffect(() => {
     const newEvents = eventsAfter(events, lastSeenIdRef.current);
     if (newEvents.length === 0) return;
-    const newestId = newEvents.at(-1)?.id;
-    if (newestId != null) lastSeenIdRef.current = newestId;
+    lastSeenIdRef.current = highestEventId(events, lastSeenIdRef.current);
 
     // Snapshot the active peer once: pickPeer mutates activePeerHexRef synchronously,
     // so reading it per-iteration could misroute the rest of a batch after a tap.

@@ -18,7 +18,7 @@ import {
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
-import { eventsAfter } from '@/src/utils/eventsAfter';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
 import * as ExpoCrypto from 'expo-crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
 
@@ -688,7 +688,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const nameMapRef       = useRef<Record<string, string>>({});
   const storageTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const announceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSeenIdRef    = useRef(0);
+  const lastSeenIdRef    = useRef(-1);
   const [peers,        setPeers]        = useState<LxmfPeer[]>([]);
   const [nameMap,      setNameMap]      = useState<Record<string, string>>({});
   const [isAnnouncing, setIsAnnouncing] = useState(false);
@@ -742,8 +742,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       const ownHash = lxmf.status?.addressHex;
 
       const newEvts = eventsAfter(lxmf.events, lastSeenIdRef.current);
-      const newestId = newEvts.at(-1)?.id;
-      if (newestId != null) lastSeenIdRef.current = newestId;
+      lastSeenIdRef.current = highestEventId(lxmf.events, lastSeenIdRef.current);
 
       if (__DEV__) newEvts.forEach(logEventShapeOnce);
 

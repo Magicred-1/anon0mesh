@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useLxmfContext, type StoredMessage } from '@/context/LxmfContext';
 import { PrefKeys, prefGet, prefSetJson } from '@/src/storage';
-import { eventsAfter } from '@/src/utils/eventsAfter';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
 import { decodeBody } from '@/src/utils/decodeBody';
 
 export interface ConvSummary {
@@ -67,7 +67,7 @@ export function useConversationSummaries(): {
   const { fetchMessages, events } = useLxmfContext();
   const lastReadAt      = useRef<Map<string, number>>(new Map());
   const contactedRef    = useRef<Set<string>>(new Set());
-  const lastSeenIdRef = useRef(0);
+  const lastSeenIdRef = useRef(-1);
 
   const [summaries, setSummaries] = useState<Map<string, ConvSummary>>(new Map());
 
@@ -98,8 +98,7 @@ export function useConversationSummaries(): {
   // Re-derive only when new messageReceived events arrive
   useEffect(() => {
     const newEvts = eventsAfter(events, lastSeenIdRef.current);
-    const newestId = newEvts.at(-1)?.id;
-    if (newestId != null) lastSeenIdRef.current = newestId;
+    lastSeenIdRef.current = highestEventId(events, lastSeenIdRef.current);
     if (newEvts.some(e => e.type === 'messageReceived')) {
       derive();
     }
