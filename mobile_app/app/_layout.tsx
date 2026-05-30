@@ -32,6 +32,10 @@ import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 import { pendingConversationRef }    from '@/hooks/pendingConversation';
 import { useBackgroundService }      from '@/hooks/useBackgroundService';
+import { ErrorBoundary } from '@/src/observability/ErrorBoundary';
+import { installGlobalErrorHandler } from '@/src/observability/errorHandler';
+
+installGlobalErrorHandler();
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -114,6 +118,14 @@ function AppShell() {
           <Stack.Screen name="send/amount" />
           <Stack.Screen name="send/review" />
           <Stack.Screen name="send/success" options={{ gestureEnabled: false }} />
+          {/* QR scanner — a route, not a <Modal>, so it presents above
+              everything (including bottom-sheet modals) without stacking
+              native windows. Driven by scan() in src/services/qrScan. */}
+          <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+          {/* Join channel — a transparentModal route that owns its slide
+              animation (same pattern as receive), so the scanner route can
+              compose over it without a nested-<Modal> conflict. */}
+          <Stack.Screen name="join-channel" options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }} />
         </Stack>
         <StatusBar style="light" />
       </NavThemeProvider>
@@ -159,20 +171,22 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={R.gestureRoot}>
-      <ThemeProvider>
-        <LxmfProvider>
-          <NetworkModeProvider>
-            <WalletProvider autoInitialize>
-              <WalletBalanceProvider>
-              <HideBalanceProvider>
-                <AppShell />
-              </HideBalanceProvider>
-              </WalletBalanceProvider>
-            </WalletProvider>
-          </NetworkModeProvider>
-        </LxmfProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={R.gestureRoot}>
+        <ThemeProvider>
+          <LxmfProvider>
+            <NetworkModeProvider>
+              <WalletProvider autoInitialize>
+                <WalletBalanceProvider>
+                <HideBalanceProvider>
+                  <AppShell />
+                </HideBalanceProvider>
+                </WalletBalanceProvider>
+              </WalletProvider>
+            </NetworkModeProvider>
+          </LxmfProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

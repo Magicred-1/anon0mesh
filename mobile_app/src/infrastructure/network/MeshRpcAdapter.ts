@@ -20,6 +20,21 @@ import type { IRpcAdapter, ParsedTokenAccountsByOwner } from './types';
 
 const MESH_RPC_TIMEOUT_MS = 30_000;
 
+/**
+ * Thrown when a beacon relays back a body that isn't valid JSON (truncated
+ * LXMF frame, half-written buffer, or a non-JSON error string from a
+ * misbehaving relay). Without this, JSON.parse throws a raw SyntaxError that
+ * reads like an app crash to callers; a typed error lets confirmation polling
+ * and balance fetches treat it as a normal transport failure and recover.
+ */
+export class MeshResponseParseError extends Error {
+  constructor(method: string, cause: unknown) {
+    super(`Malformed mesh RPC response for ${method}`);
+    this.name = "MeshResponseParseError";
+    this.cause = cause;
+  }
+}
+
 type BeaconBroadcastRpcFn = (
   method: string,
   params?: unknown,
@@ -39,7 +54,11 @@ export class MeshRpcAdapter implements IRpcAdapter {
 
   private async rpc<T>(method: string, params: unknown[]): Promise<T> {
     const { resultJson } = await this.beaconBroadcastRpc(method, params, MESH_RPC_TIMEOUT_MS);
-    return JSON.parse(resultJson) as T;
+    try {
+      return JSON.parse(resultJson) as T;
+    } catch (err) {
+      throw new MeshResponseParseError(method, err);
+    }
   }
 
   async getBalance(pubkey: PublicKey): Promise<number> {

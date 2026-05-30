@@ -263,11 +263,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
               programId: normalizedProgramId,
             });
 
-      await saveAddressBookRecipient(to);
-
       // Phase 2: poll the chain for real confirmation. Loader stays visible
-      // with sublabel updated to "Confirming on devnet". Cancellable via the
-      // unmount cleanup above.
+      // with sublabel updated to "Confirming". Cancellable via the unmount
+      // cleanup above and the in-footer Cancel button, both of which abort
+      // this controller.
       setTxPhase("confirming");
       const controller = new AbortController();
       confirmAbortRef.current = controller;
@@ -278,11 +277,29 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       confirmAbortRef.current = null;
 
       if (conf.kind === "cancelled") {
-        // Caller already unmounted; nothing to do here.
+        // User cancelled (or screen unmounted) mid-poll. Reset so a remount /
+        // retry lands on a clean Review rather than a stuck loader, and never
+        // route anywhere — cancel must not resurface as a Success/Failure nav.
+        setIsConfirming(false);
+        setTxPhase(null);
+        setSliderResetKey((k) => k + 1);
         return;
       }
 
       if (conf.kind === "confirmed") {
+        // Guard against the race where a status poll resolved 'confirmed' a
+        // tick before the user hit Cancel: honor the abort and don't ghost-nav
+        // to Success after the user explicitly backed out.
+        if (controller.signal.aborted) {
+          setIsConfirming(false);
+          setTxPhase(null);
+          setSliderResetKey((k) => k + 1);
+          return;
+        }
+        // Only persist the recipient once the transfer is actually confirmed.
+        // Saving on submit (before confirmation) lets a failed tx or a poisoned
+        // address leak into the address book and resurface as a suggestion.
+        await saveAddressBookRecipient(to);
         router.replace({
           pathname: "/send/success",
           params: { amount, symbol, txId: result.signature },
@@ -298,6 +315,13 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         signature: conf.signature,
         rawError,
       });
+      // Reset the loader/phase BEFORE navigating. FailureCard's "Try again"
+      // does router.back() onto this still-mounted Review; without this reset
+      // it would land on a frozen loader + "Approve in wallet" footer with the
+      // slider gone, so the retry is unreachable.
+      setIsConfirming(false);
+      setTxPhase(null);
+      setSliderResetKey((k) => k + 1);
       // Use push (not replace) so the failure screen sits ON TOP of Review
       // in the stack. "Try again" on FailureCard does router.back() and the
       // user lands back on Review with form state preserved.
@@ -346,6 +370,21 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     handleConfirm();
   }
 
+  // Loader sublabel. Only the online adapter talks to the app's hard-wired
+  // devnet RPC (src/infrastructure/network/connection.ts), so "on devnet" is
+  // only an honest claim there. In mesh mode the transaction is relayed
+  // through a beacon whose cluster we can't assert from here, so stay neutral
+  // rather than print a cluster we don't actually know. networkMode is the
+  // only network signal already in scope — no extra context dependency.
+  const confirmingSublabel =
+    txPhase === "confirming"
+      ? networkMode === "online"
+        ? "Confirming on devnet"
+        : "Confirming"
+      : txPhase === "submitting"
+        ? "Submitting"
+        : undefined;
+
   return (
     <>
     <SendScaffold
@@ -367,6 +406,13 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
               hitSlop={10}
               onPress={() => {
                 haptics.tap();
+                // Actually abort the in-flight confirmation poll. The poll
+                // checks signal.aborted and resolves { kind: 'cancelled' },
+                // whose handler resets state and skips navigation — so Cancel
+                // can no longer ghost-nav to Success when a late status poll
+                // lands. (During the submit phase no controller exists yet;
+                // the local reset below still tears the loader down.)
+                confirmAbortRef.current?.abort();
                 setIsConfirming(false);
                 setTxPhase(null);
                 setSliderResetKey((k) => k + 1);
@@ -553,7 +599,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     </SendScaffold>
     <PigeonLoader
       visible={isConfirming}
-      sublabel={txPhase === "confirming" ? "Confirming on devnet" : txPhase === "submitting" ? "Submitting" : undefined}
+      sublabel={confirmingSublabel}
     />
     </>
   );

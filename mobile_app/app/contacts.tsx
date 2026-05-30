@@ -217,7 +217,7 @@ export default function ContactsScreen() {
               fill={false}
               icon="book-open"
               title="No saved recipients"
-              description="Successful sends appear here automatically. You can also add a trusted devnet address manually."
+              description="Successful sends appear here automatically. You can also add a recipient address manually."
             />
           ) : (
             <View style={S.list}>

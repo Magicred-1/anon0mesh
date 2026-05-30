@@ -1,6 +1,6 @@
 import React, { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
-import { InteractionManager } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import {
   SecureKeys, LegacySecureKeys, PrefKeys,
   secureGet, secureSet, secureDelete, secureDeleteAll,
@@ -19,6 +19,8 @@ import {
 import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
+import { collectPeerMessages } from '@/src/services/peerMessages';
+import { activeConversationRef } from '@/hooks/activeConversation';
 import * as ExpoCrypto from 'expo-crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
 
@@ -309,7 +311,11 @@ export const G00N_HUB:   TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 
 export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net',    port: 4242 };
 
 const _myPcHost = process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST;
-export const MY_PC: TcpInterface | null = _myPcHost && _myPcHost !== 'localhost'
+// Dev-only local-PC Reticulum hub. Gated on __DEV__ (not just the env var) so a
+// production bundle never wires a developer's machine as a hub even if the
+// EXPO_PUBLIC_LOCAL_LXMF_* vars are present in the build environment. Project
+// convention: use __DEV__, not EXPO_PUBLIC_*, for dev-only conditionals.
+export const MY_PC: TcpInterface | null = __DEV__ && _myPcHost && _myPcHost !== 'localhost'
   ? { host: _myPcHost, port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243) }
   : null;
 
@@ -445,6 +451,7 @@ interface LxmfCtxValue {
   pairNusRNode:           (mac: string) => boolean;
   beaconRpc:              (destHashHex: string, method: string, params?: unknown) => Promise<number>;
   beaconBroadcastRpc:     (method: string, params?: unknown, timeoutMs?: number) => Promise<{ resultJson: string; beaconHash: string }>;
+  beaconRpcWait:          (destHashHex: string, method: string, params?: unknown, timeoutMs?: number) => Promise<{ resultJson: string; isError: boolean }>;
   blePeerCount:           number;
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
@@ -565,6 +572,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon,
       beaconKeypairReady, setBeaconKeypair, setBeaconSolanaRpc]);
 
+  // Surfaced when secure-storage rejects an identity write (off-grid audit §3),
+  // so a failed persist is visible instead of dying in a console.warn.
+  const [identityError, setIdentityError] = useState<string | null>(null);
+
   // Persist identity after node starts (using getIdentityHex() per new API)
   useEffect(() => {
     if (!isRunning) return;
@@ -580,12 +591,16 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       created_at:   new Date().toISOString(),
     };
     secureSet(SecureKeys.LXMF_IDENTITY, JSON.stringify(blob))
-      .then(() => setStoredIdentity(blob))
+      .then(() => {
+        setStoredIdentity(blob);
+        setIdentityError(null);
+      })
       .catch((err) => {
-        // Off-grid audit § 3: identity persist failure silently dropped means
-        // next cold start can spawn a new identity, losing message continuity.
-        // Surface it so we at least know when secure storage rejected.
+        // Off-grid audit § 3: a dropped identity persist means the next cold
+        // start can spawn a new identity, losing the mesh address + history.
+        // Surface it through the error banner instead of swallowing it.
         console.warn('[Lxmf] persist identity failed (next start may re-generate)', err);
+        setIdentityError('Identity not saved — secure storage rejected the write. Your mesh address may reset on next launch.');
       });
   }, [isRunning, lxmf.status?.addressHex, storedIdentity, getIdentityHex]);
 
@@ -604,6 +619,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       secureDelete(SecureKeys.LXMF_IDENTITY),
       prefRemove(PrefKeys.PEERS_CACHE),
     ]);
+    // Clear the active-conversation marker: it holds the *old* identity's peer
+    // hash. Left stale, useMessageNotifications would treat the new identity's
+    // first incoming message as "already in the active thread" and silently
+    // suppress its notification (QA-26).
+    activeConversationRef.current = null;
     setStoredIdentity(null);
   }, [isRunning, stop]);
 
@@ -619,17 +639,51 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [bleActive,    setBleActive]    = useState(false);
   const [blePeerCount, setBlePeerCount] = useState(0);
+  // Gate JS poll loops on foreground (QA-07). Native foreground service keeps the
+  // mesh alive in the background — these are just the UI-facing polls (BLE peer
+  // count, peer-map prune) that have no reason to run while backgrounded.
+  const [appActive,    setAppActive]    = useState(AppState.currentState === 'active');
   // Updated every render so the 80ms debounce timer always reads current value
   const bleActiveRef = useRef(bleActive);
   bleActiveRef.current = bleActive;
 
+  // Inner debounce timers (announce-flag reset, peer-cache persist) outlive the
+  // event effect that schedules them — they're tracked on refs, not the effect's
+  // local timer, so the effect's own cleanup never clears them. On provider
+  // unmount they'd still fire setIsAnnouncing / prefSetJson after teardown.
+  // Clear them here so nothing runs post-unmount (QA-15).
+  useEffect(() => {
+    return () => {
+      if (announceTimerRef.current) {
+        clearTimeout(announceTimerRef.current);
+        announceTimerRef.current = null;
+      }
+      if (storageTimerRef.current) {
+        clearTimeout(storageTimerRef.current);
+        storageTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Track foreground vs background so the poll loops below can pause/resume.
+  // Mirrors the AppState pattern in useMessageNotifications.ts (QA-07).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => { setAppActive(s === 'active'); });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     if (!bleActive) { setBlePeerCount(0); return; }
+    if (!appActive) { return; }
     const tick = () => { try { setBlePeerCount(LxmfModule.blePeerCount()); } catch { /* native not ready */ } };
     tick();
     const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [bleActive]);
+    if (__DEV__) console.log('[Lxmf] blePeerCount poll: running (foreground)');
+    return () => {
+      clearInterval(id);
+      if (__DEV__) console.log('[Lxmf] blePeerCount poll: paused (background/inactive)');
+    };
+  }, [bleActive, appActive]);
 
   useEffect(() => {
     prefGetJson<LxmfPeer[]>(PrefKeys.PEERS_CACHE).then(cached => {
@@ -689,6 +743,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [lxmf.events, lxmf.beacons, lxmf.status, bleActive]);
 
   useEffect(() => {
+    if (!appActive) return;
     const ownHash = lxmf.status?.addressHex;
     const id = setInterval(() => {
       const map = knownPeersRef.current;
@@ -697,8 +752,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         startTransition(() => setPeers(Array.from(map.values())));
       }
     }, 10_000);
-    return () => clearInterval(id);
-  }, [lxmf.status?.addressHex]);
+    if (__DEV__) console.log('[Lxmf] peer-prune poll: running (foreground)');
+    return () => {
+      clearInterval(id);
+      if (__DEV__) console.log('[Lxmf] peer-prune poll: paused (background/inactive)');
+    };
+  }, [lxmf.status?.addressHex, appActive]);
 
   // When BLE is active and peers are connected, re-tag 0-hop peers as BLE and
   // mark them online. Fixes: (a) stale bleActive at startup tags them as
@@ -794,7 +853,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const getGroupMembers = useCallback((addrHex: string): string[] => {
     try {
       const msgs    = lxmf.fetchMessages(500) as StoredMessage[];
-      const ownHash = lxmf.getStatus()?.addressHex ?? storedIdentity?.address_hex;
+      // Read the cached status, not getStatus(): getGroupMembers runs inside a
+      // MessagesScreen useMemo (during render), and getStatus() triggers a
+      // LxmfProvider setState → "Cannot update a component while rendering
+      // another" warning. The cached value is identical for our own addressHex.
+      const ownHash = lxmf.status?.addressHex ?? storedIdentity?.address_hex;
       const seen    = new Set<string>();
       for (const m of msgs) {
         const raw     = m as unknown as Record<string, unknown>;
@@ -808,7 +871,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       return [];
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lxmf.fetchMessages, lxmf.getStatus, storedIdentity]);
+  }, [lxmf.fetchMessages, lxmf.status, storedIdentity]);
 
   // Auto-route send: group addresses → sendGroup, peers → send
   const handleSend = useCallback(async (
@@ -866,10 +929,15 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [isRunning, stop]);
 
   const { fetchMessages: lxmfFetchMessages } = lxmf;
-  const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
-    const all = lxmfFetchMessages(limit * 2) as StoredMessage[];
-    return all.filter(m => m.source === destHash || m.dest === destHash).slice(0, limit);
-  }, [lxmfFetchMessages]);
+  const getPeerMessages = useCallback(
+    // Native fetchMessages(n) is most-recent-N-globally with no peer-scoped
+    // query; collectPeerMessages grows the window until it has `limit` matches
+    // or drains the store, so a peer's older messages aren't silently dropped.
+    // Logic is unit-tested in scripts/validate-tier0-services.mjs.
+    (destHash: string, limit = 200): StoredMessage[] =>
+      collectPeerMessages((n) => lxmfFetchMessages(n) as StoredMessage[], destHash, limit),
+    [lxmfFetchMessages],
+  );
 
   const value = useMemo(() => ({
     isRunning:             lxmf.isRunning,
@@ -879,7 +947,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     status:                lxmf.status,
     beacons:               lxmf.beacons,
     events:                lxmf.events,
-    error:                 lxmf.error,
+    error:                 lxmf.error ?? identityError,
     nameMap,
     displayName:           displayName ?? '',
     myAddress:             lxmf.status?.addressHex ?? storedIdentity?.address_hex ?? null,
@@ -901,6 +969,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     pairNusRNode:           lxmf.pairNusRNode,
     beaconRpc:              lxmf.beaconRpc,
     beaconBroadcastRpc:     lxmf.beaconBroadcastRpc,
+    beaconRpcWait:          lxmf.beaconRpcWait,
     blePeerCount,
     updateDisplayName: async (name: string) => {
       const trimmed = name.trim();
@@ -931,10 +1000,10 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
        isBeacon, setBeaconMode, beaconKeypairReady, beaconPubkeyHex, regenerateBeaconKeypair, getDisplayName, getPeerIdentity, getPeerMessages, lxmfFetchMessages,
        lxmf.partialSignExecutePayment, lxmf.extractNonceBlockhash,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
-       lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
+       lxmf.events, lxmf.error, identityError, lxmf.start, lxmf.stop,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
-       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc, lxmf.beaconBroadcastRpc]);
+       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc, lxmf.beaconBroadcastRpc, lxmf.beaconRpcWait]);
 
   return (
     <LxmfCtx.Provider value={value}>

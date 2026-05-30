@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Dimensions, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Alert, Dimensions, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
@@ -46,12 +46,11 @@ export default function SettingsScreen() {
   const [notifications,  setNotifications]  = useNotificationEnabled();
   const [biometric,      setBiometric]      = useBiometricEnabled();
   const [disableBioOpen, setDisableBioOpen] = useState(false);
-  const [meshOnCell,     setMeshOnCell]     = useState(false);
 
   const cardScrollRef = useRef<ScrollView>(null);
 
   const router = useRouter();
-  const { disconnect, isLoading: walletLoading, publicKey } = useWallet();
+  const { disconnect, isLoading: walletLoading, publicKey, walletMode } = useWallet();
   const { status, displayName } = useLxmfContext();
 
   const meshAddress  = status?.addressHex ?? '';
@@ -60,10 +59,39 @@ export default function SettingsScreen() {
   const shortPubkey  = pubkeyStr ? `${pubkeyStr.slice(0, 4)}…${pubkeyStr.slice(-4)}` : '——';
 
 
-  const handleSignOut = useCallback(async () => {
+  const doDisconnect = useCallback(async () => {
     await disconnect();
     router.replace('/onboarding');
   }, [disconnect, router]);
+
+  const handleSignOut = useCallback(() => {
+    // MWA keys live in the device Seed Vault — disconnect only clears the cached
+    // session token, so there is nothing for the user to back up here.
+    if (walletMode === 'mwa') {
+      Alert.alert(
+        'Disconnect wallet?',
+        'This signs you out of this device. Your keys stay in your Solana Mobile Seed Vault — reconnect any time.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Disconnect', style: 'destructive', onPress: () => { void doDisconnect(); } },
+        ],
+      );
+      return;
+    }
+    // Local wallet: disconnect does NOT erase the key from this device — you can
+    // sign back in with biometrics/passcode. But if this device is lost, reset,
+    // or the app is uninstalled, the key is gone forever unless you exported your
+    // recovery key. Warn honestly and offer the backup path first.
+    Alert.alert(
+      'Disconnect wallet?',
+      'You can sign back in on this device with your biometrics or passcode. But if you lose this device or reinstall the app, your wallet and any funds are unrecoverable without your recovery key. Export it first if you have not already.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Export key first', onPress: () => setExportOpen(true) },
+        { text: 'Disconnect', style: 'destructive', onPress: () => { void doDisconnect(); } },
+      ],
+    );
+  }, [walletMode, doDisconnect]);
 
   const copyHandle = useCallback(async () => {
     if (meshAddress) await Clipboard.setStringAsync(meshAddress);
@@ -250,7 +278,13 @@ export default function SettingsScreen() {
           <SectionLabel>network</SectionLabel>
           <View style={{ paddingHorizontal: 16 }}>
             <View style={[S.section, baseGlass]}>
-              <SettingsRow icon="share-2"        label="cellular fallback"    sub="use 4g/5g when off-mesh or peers unreachable"  right={<Toggle on={meshOnCell}    onChange={setMeshOnCell}    />} />
+              {/* Cellular fallback isn't wired to any transport yet. Wrap it in the
+                  same preview shield as the unbuilt hardware controls so the toggle
+                  reads as 'not yet active' instead of a switch that silently does
+                  nothing. */}
+              <PreviewedActions hint="cellular fallback not yet active" opacity={1}>
+                <SettingsRow icon="share-2"        label="cellular fallback"    sub="use 4g/5g when off-mesh or peers unreachable"  right={<Toggle on={false} onChange={() => {}} />} />
+              </PreviewedActions>
               <SettingsRow icon="message-circle" label="message notifications" sub="encrypted · mesh-delivered"             right={<Toggle on={notifications} onChange={setNotifications} />} last />
             </View>
           </View>
