@@ -15,7 +15,6 @@ import Constants from 'expo-constants';
 import { useNotificationEnabled } from '@/hooks/useNotificationEnabled';
 import { useBiometricEnabled } from '@/hooks/useBiometricEnabled';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
-import { Icon } from '@/components/primitives/Icon';
 import { PreviewedActions } from '@/components/primitives';
 
 import {

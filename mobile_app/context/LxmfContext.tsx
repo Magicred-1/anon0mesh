@@ -417,18 +417,6 @@ export interface StoredMessage {
 
 // TODO: add the program ID as a parameter to the context and enforce it in send() and broadcast() so we don't accidentally send unsupported messages through a beacon that doesn't know how to handle them. This will be important as we add support for more message types (e.g. group channels) that require specific handling by the beacon.
 const LXMF_LOG_LEVEL = Number(process.env.EXPO_PUBLIC_LXMF_LOG_LEVEL ?? 1);
-const PROGRAM_ID_HEX = process.env.EXPO_PUBLIC_PROGRAM_ID_HEX ?? null;
-
-// Local mirrors of useLxmf types — not re-exported from module index
-type ExecutePaymentAccounts = {
-  payer: string; broadcaster: string; nonceAccount: string;
-  payerAta: string; recipient: string; recipientAta: string;
-  broadcasterAta: string; mint: string;
-};
-type ExecutePaymentParams = {
-  compOffset: number; amount: number; encryptedAmount: string;
-  nonce: string; encryptionPubKey: string;
-};
 
 const LXMF_AUTOSTART_DELAY_MS = 1_500;
 
@@ -1034,6 +1022,9 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     isGroup,
     getGroupName,
     getGroupMembers,
+  // Individual lxmf.* members are listed deliberately — `lxmf` is a fresh object
+  // each render, so depending on it whole would defeat the memo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, rnodeConnected, resetIdentity,
        handleStartBLE, handleStopBLE, handleSend, handleCreateGroup, handleJoinGroup, handleLeaveGroup,
        isGroup, getGroupName, getGroupMembers, groups,

@@ -31,7 +31,7 @@ import { type Peer }             from '@/components/messages/constants';
 import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { Feather }               from '@expo/vector-icons';
 import { useWallet }             from '@/context/WalletContext';
-import type { AnyMsg, ChatMsg, MediaMsg } from '@/components/messages/types';
+import type { AnyMsg, ChatMsg } from '@/components/messages/types';
 import type { MediaPayload }     from '@/components/messages/Composer';
 import type { LxmfPeer, StoredMessage } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
