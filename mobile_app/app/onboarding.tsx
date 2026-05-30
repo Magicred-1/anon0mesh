@@ -128,7 +128,7 @@ const overlayOpacity   = useRef(new Animated.Value(0)).current;
         {hydrated && !isConnected && (
           <View style={[S.panel, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
             <Text style={S.title}>Join the Mesh</Text>
-            <Text style={S.subtitle}>Encrypted communication and Confidential Offline Transactions.</Text>
+            <Text style={S.subtitle}>Encrypted communication and off-grid payments.</Text>
 
             <CTAButtons
               isLoading={isLoading}
