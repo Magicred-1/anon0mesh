@@ -32,9 +32,14 @@ import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 import { pendingConversationRef }    from '@/hooks/pendingConversation';
 import { useBackgroundService }      from '@/hooks/useBackgroundService';
-import { ErrorBoundary } from '@/src/observability/ErrorBoundary';
+import { ErrorBoundary }             from '@/src/observability/ErrorBoundary';
+import { initObservability, Sentry } from '@/src/observability/sentry';
 import { installGlobalErrorHandler } from '@/src/observability/errorHandler';
 
+// Crash observability. No-op unless EXPO_PUBLIC_SENTRY_DSN is set and not __DEV__.
+// Sentry catches render throws (via ErrorBoundary); errorHandler catches the
+// async/unhandled rejections Sentry's boundary does not.
+initObservability();
 installGlobalErrorHandler();
 
 export const unstable_settings = {
@@ -159,7 +164,7 @@ const R = StyleSheet.create({
   },
 });
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_300Light,
     SpaceGrotesk_400Regular,
@@ -190,3 +195,7 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+// Sentry.wrap enables native crash context + (disabled here) tracing. It is a
+// transparent pass-through when observability is off.
+export default Sentry.wrap(RootLayout);
