@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 import { useLxmfContext } from '@/context/LxmfContext';
+import { useWallet } from '@/context/WalletContext';
 import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
 import type { NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { activeConversationRef } from './activeConversation';
@@ -37,16 +38,23 @@ export function useMessageNotifications(
   enabled = true,
 ) {
   const { events, getDisplayName } = useLxmfContext();
+  const { isConnected } = useWallet();
   const lastCountRef = useRef(0);
   const lastFirstRef = useRef<LxmfEvent | null>(null);
   const appStateRef  = useRef(AppState.currentState);
+  const permRequestedRef = useRef(false);
 
-  // Request local notification permission once — no remote/push token requested
+  // Request local notification permission once — no remote/push token requested.
+  // Deferred until the user has a wallet (onboarding complete) and notifications
+  // are enabled, so a cold first launch never throws an OS permission prompt
+  // before the user understands the app.
   useEffect(() => {
+    if (!isConnected || !enabled || permRequestedRef.current) return;
+    permRequestedRef.current = true;
     Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowBadge: true, allowSound: true },
     }).catch(() => {});
-  }, []);
+  }, [isConnected, enabled]);
 
   // Track foreground vs background
   useEffect(() => {

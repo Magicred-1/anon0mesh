@@ -14,17 +14,22 @@ export const ShareAddressBubble = memo(function ShareAddressBubble({ m }: Props)
   const { colors } = useTheme();
   const glass     = useGlass(m.me ? 'accent' : 'base');
   const softGlass = useGlass('soft');
-  const color     = ASSET_COLORS[m.asset] ?? colors.primary;
+  // Defense-in-depth: the parse boundary validates these, but a replayed or
+  // future-sourced message could still carry a non-string — coerce so a bad
+  // asset/address can never reach a <Text> child and crash the renderer (QA-18).
+  const asset     = typeof m.asset === 'string' && m.asset.length > 0 ? m.asset : 'SOL';
+  const address   = typeof m.address === 'string' ? m.address : '';
+  const color     = ASSET_COLORS[asset] ?? colors.primary;
   return (
     <View style={[S.wrap, { alignItems: m.me ? 'flex-end' : 'flex-start' }]}>
       <BubbleHeader me={m.me} m={m} label="address shared" />
       <View style={[S.card, glass, { borderBottomRightRadius: m.me ? 4 : 16, borderBottomLeftRadius: m.me ? 16 : 4 }]}>
         <View style={[S.row, { marginBottom: 10 }]}>
           <View style={[S.dot, { backgroundColor: color + '33' }]}>
-            <Text style={[S.dotText, { color }]}>{m.asset[0]}</Text>
+            <Text style={[S.dotText, { color }]}>{asset[0]}</Text>
           </View>
           <Text style={[S.sharedLabel, { color: colors.textTertiary, flex: 1 }]}>
-            {m.me ? 'YOU SHARED YOUR' : 'SHARED THEIR'} {m.asset} ADDRESS
+            {m.me ? 'YOU SHARED YOUR' : 'SHARED THEIR'} {asset} ADDRESS
           </Text>
           <Feather name="lock" size={11} color={colors.primary} />
         </View>
@@ -33,7 +38,7 @@ export const ShareAddressBubble = memo(function ShareAddressBubble({ m }: Props)
             Per AUDIT § preview-pill discipline. */}
         <PreviewedActions hint="copy not yet wired">
           <View style={[S.addrChip, softGlass]}>
-            <Text style={[S.addrText, { color: colors.textPrimary }]} numberOfLines={1}>{m.address}</Text>
+            <Text style={[S.addrText, { color: colors.textPrimary }]} numberOfLines={1}>{address}</Text>
             <Feather name="copy" size={13} color={colors.primary} />
           </View>
         </PreviewedActions>

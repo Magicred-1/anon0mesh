@@ -16,6 +16,7 @@ const { summarizeError } = await import("../src/utils/errors.ts");
 const { buildDevnetExplorerTxUrl } = await import("../src/services/explorer.ts");
 const { isWalletDenial } = await import("../src/utils/walletDenial.ts");
 const { assertSendableSplProgram, UnsupportedTokenProgramError } = await import("../src/services/walletData.ts");
+const { collectPeerMessages } = await import("../src/services/peerMessages.ts");
 
 function key(index) {
   const seed = new Uint8Array(32);
@@ -72,7 +73,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: "0,5",
     }),
-    "solana:11111111111111111111111111111111?amount=0.5&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=0.5&label=anonmesh&message=anonmesh+receive",
     "comma decimal in amount must normalize to dot",
   );
   assert.equal(
@@ -80,7 +81,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: "1,234500",
     }),
-    "solana:11111111111111111111111111111111?amount=1.234500&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=1.234500&label=anonmesh&message=anonmesh+receive",
     "comma decimal with trailing zeros preserved in URI",
   );
   // Whitespace plus comma is the case that locales actually emit.
@@ -89,7 +90,7 @@ function testSolanaPayUri() {
       recipient: "11111111111111111111111111111111",
       amount: " 0,001 ",
     }),
-    "solana:11111111111111111111111111111111?amount=0.001&label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?amount=0.001&label=anonmesh&message=anonmesh+receive",
     "padded comma decimal must trim and normalize",
   );
   // Receive screen feeds a plain decimal string, not a locale-grouped number
@@ -107,7 +108,7 @@ function testSolanaPayUri() {
   // amount= rather than crashing on undefined.
   assert.equal(
     buildSolanaPayUri({ recipient: "11111111111111111111111111111111" }),
-    "solana:11111111111111111111111111111111?label=AnonMesh&message=AnonMesh+receive",
+    "solana:11111111111111111111111111111111?label=anonmesh&message=anonmesh+receive",
     "missing amount must produce a recipient-only URI",
   );
 }
@@ -406,6 +407,33 @@ function testSplProgramGuard() {
   );
 }
 
+function testCollectPeerMessages() {
+  // store[0] is the most-recent message; native fetchMessages(n) returns top n.
+  const makeFetch = (store) => (n) => store.slice(0, n);
+
+  // Filters the most-recent window (limit*2) to the peer, capped at limit.
+  const dense = [];
+  for (let i = 0; i < 500; i++) dense.push({ source: i % 2 === 0 ? "BBB" : "x", dest: "me" });
+  const denseRes = collectPeerMessages(makeFetch(dense), "BBB", 10);
+  assert.equal(denseRes.length, 10, "returns exactly limit (capped)");
+  assert.ok(denseRes.every((m) => m.source === "BBB"), "only the peer's messages returned");
+
+  // dest-side matches count (incoming messages), not just source.
+  const incoming = [{ source: "x", dest: "CCC" }, { source: "x", dest: "y" }];
+  assert.equal(collectPeerMessages(makeFetch(incoming), "CCC", 10).length, 1, "incoming message matched via dest");
+
+  // Single BOUNDED fetch: only the most-recent window (limit*2) is scanned — no
+  // full-store re-scan. A peer whose messages sit entirely beyond that window is
+  // not returned. Deliberate perf tradeoff over the old escalating loop, which
+  // re-fetched the whole store and made opening a thread take seconds.
+  const deep = [];
+  for (let i = 0; i < 200; i++) deep.push(i >= 100 ? { source: "DEEP", dest: "me" } : { source: "x", dest: "y" });
+  assert.equal(collectPeerMessages(makeFetch(deep), "DEEP", 10).length, 0, "peer beyond the window is not fetched (bounded by design)");
+
+  // Absent peer → [].
+  assert.equal(collectPeerMessages(makeFetch(dense), "ZZZ", 10).length, 0, "absent peer -> empty");
+}
+
 testSolanaPayUri();
 testParseSolanaPayUri();
 testAddressBookCore();
@@ -415,4 +443,5 @@ testExplorerUrls();
 testErrorSummaries();
 testWalletDenialPatterns();
 testSplProgramGuard();
+testCollectPeerMessages();
 console.log("Tier 0 service checks passed");

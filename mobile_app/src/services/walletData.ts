@@ -6,6 +6,11 @@ import {
   type PartiallyDecodedInstruction,
 } from "@solana/web3.js";
 import type { IRpcAdapter } from "@/src/infrastructure/network";
+// Relative + explicit .ts: this module is loaded by the raw-node tier0 services
+// validator, which can't resolve the "@/" alias. Importing the timeout helper
+// from the dependency-free util (not sendTransaction.ts) keeps that module's
+// heavy "@/" graph out of the validator. Matches the ./errors.ts pattern.
+import { DIRECT_RPC_TIMEOUT_MS, withTimeout } from "../utils/withTimeout.ts";
 
 export const SOL_DECIMALS = 9;
 
@@ -75,9 +80,11 @@ export async function fetchSplTokens(
   ];
   const results = await Promise.all(
     programs.map(({ id, tag }) =>
-      rpcAdapter
-        .getParsedTokenAccountsByOwner(publicKey, { programId: id })
-        .then((response) => ({ response, tag })),
+      withTimeout(
+        rpcAdapter.getParsedTokenAccountsByOwner(publicKey, { programId: id }),
+        DIRECT_RPC_TIMEOUT_MS,
+        `token accounts (${tag})`,
+      ).then((response) => ({ response, tag })),
     ),
   );
 
@@ -370,7 +377,11 @@ export async function fetchRecentActivity(
 ): Promise<ActivityEntry[]> {
   const walletAddress = publicKey.toBase58();
   const signatures = await withRetry(() =>
-    rpcAdapter.getSignaturesForAddress(publicKey, { limit }),
+    withTimeout(
+      rpcAdapter.getSignaturesForAddress(publicKey, { limit }),
+      DIRECT_RPC_TIMEOUT_MS,
+      "signatures",
+    ),
   );
   if (signatures.length === 0) return [];
 
@@ -378,9 +389,13 @@ export async function fetchRecentActivity(
   // Devnet public endpoint rate-limits aggressively; batching + modest
   // limit + retry-with-backoff keeps us functional under the 429 threshold.
   const parsed = await withRetry(() =>
-    rpcAdapter.getParsedTransactions(
-      signatures.map((s) => s.signature),
-      { maxSupportedTransactionVersion: 0 },
+    withTimeout(
+      rpcAdapter.getParsedTransactions(
+        signatures.map((s) => s.signature),
+        { maxSupportedTransactionVersion: 0 },
+      ),
+      DIRECT_RPC_TIMEOUT_MS,
+      "parsed transactions",
     ),
   );
 

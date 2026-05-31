@@ -47,7 +47,7 @@ const TOKEN_COLOR: Record<string, string> = {
 function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly toggle: () => void }) {
   const { colors } = useTheme();
   const { isConnected, publicKey } = useWallet();
-  const { solBalance, tokens, loading, lastFetched, refetch } = useWalletBalance();
+  const { solBalance, tokens, loading, lastFetched, refetch, balanceStale } = useWalletBalance();
 
   const hasWallet   = isConnected && Boolean(publicKey);
   const initialLoad = hasWallet && solBalance === null && lastFetched === null;
@@ -94,6 +94,11 @@ function BalanceTile({ hidden, toggle }: { readonly hidden: boolean; readonly to
         }
         <Text style={[S.unit, { color: colors.primary }]}>SOL</Text>
       </View>
+      {balanceStale && !hidden && solBalance !== null && (
+        <Text style={{ fontSize: 11, letterSpacing: 0.3, marginTop: 6, color: colors.error }}>
+          Balance may be stale — showing last known
+        </Text>
+      )}
       {splTokens.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={S.splStrip}>
           {splTokens.map((t: TokenBalance) => {
@@ -301,13 +306,9 @@ export default function WalletScreen() {
   const { mode }           = useNetworkMode();
   const [refreshing, setRefreshing] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
-  // Multisig co-sign UI is in preview — items are visual placeholders only,
-  // signing flow is not yet wired (see PendingCosigns: pointerEvents disabled).
-  const pendingCosigns: PendingCosign[] = [
-    { id: '1', txHash: 'A3f9c2e8b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3c2e9b14d76a0f3',  amountSol: 0.25,  feeSol: 0.000312, fromHash: 'B7d2a1f4c9e8b3a7d2a1f4c9e8b3a7d2', requestedAt: Date.now() - 90_000 },
-    { id: '2', txHash: 'C5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1d0b8a34f92c5e1', amountSol: 1.05,  feeSol: 0.000287, fromHash: 'D4b9c3e2a1f8d4b9c3e2a1f8d4b9c3e2', requestedAt: Date.now() - 240_000 },
-    { id: '3', txHash: 'E8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0e8a7f6c4b2d0', amountSol: 0.005, feeSol: 0.000198, fromHash: 'F2c8a7e4b1d0f2c8a7e4b1d0f2c8a7e4', requestedAt: Date.now() - 15_000 },
-  ];
+  // Multisig co-sign data source not yet wired — render honest empty state
+  // until the real co-sign feed exists (see PendingCosigns component).
+  const pendingCosigns: PendingCosign[] = [];
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
