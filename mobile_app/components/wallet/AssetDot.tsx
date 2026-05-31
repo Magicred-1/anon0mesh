@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { View, Text } from 'react-native';
-import { fontFamily } from '@/theme';
+import { fontFamily, radii, useTheme } from '@/theme';
 
 interface Props {
   asset: { sym: string; color: string };
@@ -8,9 +8,10 @@ interface Props {
 }
 
 export const AssetDot = memo(function AssetDot({ asset, size = 28 }: Props) {
+  const { colors } = useTheme();
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: asset.color, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <Text style={{ fontFamily: fontFamily.sansMd, fontSize: size * 0.32, fontWeight: '600', color: '#fff' }}>
+    <View style={{ width: size, height: size, borderRadius: radii.full, backgroundColor: asset.color, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Text style={{ fontFamily: fontFamily.sansMd, fontSize: size * 0.32, fontWeight: '600', color: colors.textPrimary }}>
         {asset.sym[0]}
       </Text>
     </View>

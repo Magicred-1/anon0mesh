@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Animated, Linking, Platform } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { RadarScan } from './RadarScan';
@@ -118,7 +118,7 @@ export function RNodePairModal({ onClose, onPaired }: Props) {
   return (
     <Modal transparent animationType="none" onRequestClose={dismiss}>
       <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         </Animated.View>
 
@@ -218,25 +218,25 @@ export function RNodePairModal({ onClose, onPaired }: Props) {
 }
 
 const S = StyleSheet.create({
-  sheet:        { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 28, borderWidth: 0.5 },
-  grab:         { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
+  sheet:        { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 28, borderWidth: 0.5 },
+  grab:         { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   tag:          { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:        { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
-  closeBtn:     { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  title:        { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
+  closeBtn:     { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   center:       { paddingVertical: 24, alignItems: 'center', gap: 16 },
-  scanSub:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  hint:         { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.2, textAlign: 'center', paddingHorizontal: 12 },
-  settingsBtn:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10, borderWidth: 0.5 },
-  settingsBtnText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  deviceRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14, borderRadius: 14 },
-  deviceIcon:   { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  deviceName:   { fontSize: 14, letterSpacing: -0.2 },
+  scanSub:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase' },
+  hint:         { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.2, textAlign: 'center', paddingHorizontal: 12 },
+  settingsBtn:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9, borderRadius: radii.md, borderWidth: 0.5 },
+  settingsBtnText: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
+  deviceRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14, borderRadius: radii.lg },
+  deviceIcon:   { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  deviceName:   { fontSize: fontSize.md, letterSpacing: -0.2 },
   deviceSerial: { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3 },
-  handshake:    { fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.3 },
-  iconCircle:   { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  successTitle: { fontSize: 17, letterSpacing: -0.3, textAlign: 'center' },
+  handshake:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.3 },
+  iconCircle:   { width: 64, height: 64, borderRadius: radii.xl, alignItems: 'center', justifyContent: 'center' },
+  successTitle: { fontSize: fontSize.lg, letterSpacing: -0.3, textAlign: 'center' },
   successSub:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6 },
-  doneBtn:      { width: '100%', padding: 13, borderRadius: 12, alignItems: 'center', marginTop: 4 },
-  doneBtnText:  { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
+  doneBtn:      { width: '100%', padding: 13, borderRadius: radii.md, alignItems: 'center', marginTop: 4 },
+  doneBtnText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
 });

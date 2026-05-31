@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { Alert, Dimensions, ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
 import { useWallet } from '@/context/WalletContext';
@@ -323,37 +323,37 @@ const S = StyleSheet.create({
   root:         { flex: 1 },
 
   // ── Identity card ────────────────────────────────────────────────────────────
-  identityCard: { borderRadius: 18, overflow: 'hidden' },
-  slide:        { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 4, gap: 14, alignItems: 'center' },
+  identityCard: { borderRadius: radii.xl, overflow: 'hidden' },
+  slide:        { paddingHorizontal: spacing[6], paddingTop: spacing[6], paddingBottom: 4, gap: 14, alignItems: 'center' },
   idLabel:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  qrWrap:       { padding: 8, borderRadius: 12, borderWidth: 0.5, overflow: 'hidden' },
-  idHandle:     { fontFamily: fontFamily.sansMd, fontSize: 16, letterSpacing: 0.3 },
-  idHash:       { fontFamily: fontFamily.sansMd, fontSize: 11, marginTop: 2 },
+  qrWrap:       { padding: spacing[3], borderRadius: radii.md, borderWidth: 0.5, overflow: 'hidden' },
+  idHandle:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, letterSpacing: 0.3 },
+  idHash:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, marginTop: 2 },
 
   // Solana wallet slide
   solLabel:     { flexDirection: 'row', alignItems: 'center', gap: 5 },
 
   // Shared pill buttons
-  pill:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99 },
+  pill:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.full },
   pillText:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.2, textTransform: 'uppercase' },
 
   // Page dots
-  dots:         { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingVertical: 12 },
-  dot:          { height: 6, borderRadius: 3 },
+  dots:         { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingVertical: spacing[4] },
+  dot:          { height: 6, borderRadius: radii.full },
 
   // ── Rest ─────────────────────────────────────────────────────────────────────
   actionText:   { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  section:      { borderRadius: 16, overflow: 'hidden' },
-  valueText:    { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
-  hwCard:       { borderRadius: 16, padding: 14 },
-  hwIcon:       { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  hwName:       { fontSize: 14, letterSpacing: -0.2 },
+  section:      { borderRadius: radii.lg, overflow: 'hidden' },
+  valueText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, textTransform: 'uppercase' },
+  hwCard:       { borderRadius: radii.lg, padding: 14 },
+  hwIcon:       { width: 44, height: 44, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  hwName:       { fontSize: fontSize.md, letterSpacing: -0.2 },
   hwSerial:     { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
-  hwActions:    { flexDirection: 'row', gap: 6, marginTop: 12 },
+  hwActions:    { flexDirection: 'row', gap: 6, marginTop: spacing[4] },
   hwActionWrap: { flex: 1 },
-  hwActionBtn:  { flex: 1, padding: 9, borderRadius: 10, alignItems: 'center' },
+  hwActionBtn:  { flex: 1, padding: 9, borderRadius: radii.md, alignItems: 'center' },
   hwActionText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  addHwBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16 },
-  signOut:      { marginTop: 10, padding: 13, borderRadius: 12, borderWidth: 0.5, alignItems: 'center', backgroundColor: 'transparent' },
-  signOutText:  { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '500', letterSpacing: 3, textTransform: 'uppercase' },
+  addHwBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: spacing[5], borderRadius: radii.lg },
+  signOut:      { marginTop: 10, padding: 13, borderRadius: radii.md, borderWidth: 0.5, alignItems: 'center', backgroundColor: 'transparent' },
+  signOutText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '500', letterSpacing: 3, textTransform: 'uppercase' },
 });

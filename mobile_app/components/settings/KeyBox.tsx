@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { formatRecoveryKey } from '@/src/utils/recoveryKey';
 
 export interface KeyBoxProps {
@@ -93,9 +93,9 @@ export function KeyBox({
 }
 
 const S = StyleSheet.create({
-  box:     { padding: 14, borderRadius: 14, borderWidth: 0.5, alignItems: 'center' },
-  key:     { fontFamily: fontFamily.mono, fontSize: 11, lineHeight: 20, textAlign: 'center' },
-  hint:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1 },
-  detail:  { fontFamily: fontFamily.sansMd, fontSize: 11, lineHeight: 16, marginTop: 6, paddingHorizontal: 4 },
-  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, borderWidth: 0.5 },
+  box:     { padding: 14, borderRadius: radii.lg, borderWidth: 0.5, alignItems: 'center' },
+  key:     { fontFamily: fontFamily.mono, fontSize: fontSize.xs, lineHeight: 20, textAlign: 'center' },
+  hint:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1 },
+  detail:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, lineHeight: 16, marginTop: 6, paddingHorizontal: 4 },
+  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radii.sm, borderWidth: 0.5 },
 });

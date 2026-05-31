@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 
 export interface NotificationPayload {
   id:       number;
@@ -85,14 +85,14 @@ export function InAppNotificationBanner({ notification, onDismiss, onPress }: Pr
 const S = StyleSheet.create({
   banner:   {
     position: 'absolute', left: 12, right: 12, zIndex: 999,
-    borderRadius: 16, borderWidth: 0.5,
+    borderRadius: radii.lg, borderWidth: 0.5,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 10,
   },
   inner:    { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
-  iconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  iconWrap: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   text:     { flex: 1, minWidth: 0 },
-  sender:   { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  sender:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600', marginBottom: 2 },
   body:     { fontFamily: fontFamily.sansMd, fontSize: 11.5, opacity: 0.8 },
   close:    { padding: 4 },
 });

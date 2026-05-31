@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, spacing, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { SignalBars } from './SignalBars';
 import type { NodeData } from './types';
@@ -52,12 +52,12 @@ export const NodeRow = memo(function NodeRow({ n, selected }: Props) {
 });
 
 const S = StyleSheet.create({
-  row:       { flexDirection: 'row', alignItems: 'center', padding: 12, paddingHorizontal: 20, gap: 12, borderBottomWidth: 0.5 },
+  row:       { flexDirection: 'row', alignItems: 'center', padding: spacing[4], paddingHorizontal: spacing[6], gap: spacing[4], borderBottomWidth: 0.5 },
   hopBadge:  { width: 28, height: 28, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  hopNum:    { fontFamily: fontFamily.sansMd, fontSize: 11 },
-  handleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  handle:    { fontFamily: fontFamily.sansMd, fontSize: 13, letterSpacing: 0.2, flexShrink: 1 },
-  meta:      { flexDirection: 'row', gap: 10, marginTop: 4 },
-  metaText:  { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
+  hopNum:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
+  handleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], flexWrap: 'wrap' },
+  handle:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 0.2, flexShrink: 1 },
+  meta:      { flexDirection: 'row', gap: 10, marginTop: spacing[2] },
+  metaText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
   right:     { flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 },
 });

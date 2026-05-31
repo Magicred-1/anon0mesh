@@ -2,7 +2,7 @@ import React, { memo, useState, useRef, useCallback } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { useGlass } from '../../hooks/useGlass';
 import { useLxmfContext } from '@/context/LxmfContext';
@@ -196,7 +196,7 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
         {hasPeer && !isGroup && <PeerInfo peer={peer} hops={hops} iface={iface} online={online} nameKnown={nameKnown} hashShort={hashShort} />}
         {!hasPeer && !editing && (
           <View style={S.nameRow}>
-            <Text style={[S.handle, { color: colors.textPrimary, fontSize: 13 }]}>{selfName ?? 'messages'}</Text>
+            <Text style={[S.handle, { color: colors.textPrimary, fontSize: fontSize.sm }]}>{selfName ?? 'messages'}</Text>
             <EditIcon onPress={startEdit} />
           </View>
         )}
@@ -226,13 +226,13 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
 
 const S = StyleSheet.create({
   header:      { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 0.5 },
-  hamburger:   { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  handle:      { fontFamily: fontFamily.sansMd, fontSize: 14 },
+  hamburger:   { width: 30, height: 30, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' },
+  handle:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.md },
   anonRow:     { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
-  anonHash:    { fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.5 },
+  anonHash:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5 },
   input:       { borderBottomWidth: 1, paddingBottom: 1, paddingHorizontal: 0, minWidth: 80 },
   statusRow:   { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  dot:         { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
+  dot:         { width: 6, height: 6, borderRadius: radii.full, marginRight: 4 },
   meta:        { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5 },
   nameRow:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
   editBtn:     { padding: 4 },

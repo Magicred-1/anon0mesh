@@ -11,7 +11,7 @@ import Reanimated, {
   useReducedMotion, useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, withSequence, withRepeat, withDelay, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, fontFamily } from '@/theme';
+import { useTheme, fontFamily, fontSize, radii } from '@/theme';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { SystemLine }            from '@/components/messages/SystemLine';
 import { MessageBubble }         from '@/components/messages/MessageBubble';
@@ -308,25 +308,25 @@ function NoPeersScreen({
         </View>
       </View>
 
-      <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textPrimary, fontSize: 12, letterSpacing: 3, marginTop: 32 }}>
+      <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textPrimary, fontSize: fontSize.sm, letterSpacing: 3, marginTop: 32 }}>
         {title}
       </Text>
-      <Text style={{ color: colors.textTertiary, fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 48, lineHeight: 18 }}>
+      <Text style={{ color: colors.textTertiary, fontSize: fontSize.sm, textAlign: 'center', marginTop: 8, paddingHorizontal: 48, lineHeight: 18 }}>
         {subtitle}
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 32 }}>
         <TouchableOpacity
           onPress={onCreateGroup}
-          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
+          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border }}
         >
-          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: 11, letterSpacing: 1 }}>NEW GROUP</Text>
+          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: fontSize.xs, letterSpacing: 1 }}>NEW GROUP</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={onJoinGroup}
-          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.border }}
+          style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border }}
         >
-          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: 11, letterSpacing: 1 }}>JOIN GROUP</Text>
+          <Text style={{ fontFamily: fontFamily.sansMd, color: colors.textSecondary, fontSize: fontSize.xs, letterSpacing: 1 }}>JOIN GROUP</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -885,5 +885,5 @@ const S = StyleSheet.create({
   root:            { flex: 1 },
   chatPanel:       { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   queueBanner:     { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 0.5 },
-  queueBannerText: { fontSize: 11, letterSpacing: 0.3, flex: 1 },
+  queueBannerText: { fontSize: fontSize.xs, letterSpacing: 0.3, flex: 1 },
 });

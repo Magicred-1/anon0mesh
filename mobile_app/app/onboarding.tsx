@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { type Href, useRouter } from 'expo-router';
 import { useWallet } from '@/context/WalletContext';
 import { useLxmfContext } from '@/context/LxmfContext';
-import { fontFamily } from '@/theme';
+import { fontFamily, fontSize, spacing } from '@/theme';
 import {
   AsciiBackground,
   CTAButtons,
@@ -171,7 +171,7 @@ const S = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 22,
-    paddingBottom: 20,
+    paddingBottom: spacing[6],
     gap: 10,
   },
   heroLogo: {
@@ -182,21 +182,21 @@ const S = StyleSheet.create({
     marginTop: -50,
   },
   title: {
-    fontSize: 28,
+    fontSize: fontSize['3xl'],
     fontWeight: '700',
     color: '#d8eef4',
     letterSpacing: -0.4,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing[6],
     fontFamily: fontFamily.sansMd,
   },
   subtitle: {
     fontFamily: fontFamily.sansSb,
-    fontSize: 13,
+    fontSize: fontSize.sm,
     color: '#3d6878',
     textAlign: 'center',
     letterSpacing: 0.3,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing[6],
     marginBottom: 2,
   },
   // footer: {

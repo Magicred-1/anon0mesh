@@ -2,7 +2,6 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useEffect } from "react";
 import {
-  Alert,
   Linking,
   Share,
   StyleSheet,
@@ -21,6 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { DepthButton, Icon, Pill } from "@/components/primitives";
+import { showToast } from "@/components/ui/Toast";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import * as haptics from "@/src/design-system/haptics";
 import { useGlass } from "@/hooks/useGlass";
@@ -90,7 +90,7 @@ export function SuccessCard({ txId, amount, symbol }: SuccessCardProps) {
   async function handleCopySignature() {
     haptics.tap();
     await Clipboard.setStringAsync(txId);
-    Alert.alert("Copied", "Transaction signature copied to clipboard.");
+    showToast("Transaction signature copied");
   }
 
   function handleDone() {
