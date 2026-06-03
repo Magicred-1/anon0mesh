@@ -51,6 +51,8 @@ export const PrefKeys = {
   HIDE_BALANCE:      'anonmesh:hide-balance',
   NOTIF_ENABLED:     'anonmesh:notif-enabled',
   BEACON_MODE:       'anonmesh:beacon-mode',
+  // Last paired RNode device — {id, name, serial} JSON, restored on cold start
+  RNODE_LAST_PAIRED: 'anonmesh:rnode_last_paired',
 } as const;
 
 // Legacy keys — kept only for one-time migration reads, then deleted

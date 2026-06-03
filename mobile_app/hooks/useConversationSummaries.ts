@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Buffer } from 'buffer';
 
 import { useLxmfContext, type StoredMessage } from '@/context/LxmfContext';
 import { PrefKeys, prefGet, prefSetJson } from '@/src/storage';
-import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
-import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
+import { decodeBody } from '@/src/utils/decodeBody';
 
 export interface ConvSummary {
   lastText:      string;
@@ -13,20 +12,16 @@ export interface ConvSummary {
 }
 
 function decodePreview(body: string): string {
-  if (!body) return '';
+  const text = decodeBody(body);
+  if (!text) return '';
   try {
-    const text = Buffer.from(body, 'base64').toString('utf-8');
-    try {
-      const j = JSON.parse(text) as unknown;
-      if (j && typeof j === 'object') {
-        const t = (j as Record<string, unknown>).body ?? (j as Record<string, unknown>).text;
-        if (typeof t === 'string' && t) return t.slice(0, 60);
-      }
-    } catch {}
-    return text.slice(0, 60);
-  } catch {
-    return '';
-  }
+    const j = JSON.parse(text) as unknown;
+    if (j && typeof j === 'object') {
+      const t = (j as Record<string, unknown>).body ?? (j as Record<string, unknown>).text;
+      if (typeof t === 'string' && t) return t.slice(0, 60);
+    }
+  } catch {}
+  return text.slice(0, 60);
 }
 
 function buildSummaries(
@@ -72,8 +67,7 @@ export function useConversationSummaries(): {
   const { fetchMessages, events } = useLxmfContext();
   const lastReadAt      = useRef<Map<string, number>>(new Map());
   const contactedRef    = useRef<Set<string>>(new Set());
-  const lastEvtCountRef = useRef(0);
-  const lastFirstEvtRef = useRef<LxmfEvent | null>(null);
+  const lastSeenIdRef = useRef(-1);
 
   const [summaries, setSummaries] = useState<Map<string, ConvSummary>>(new Map());
 
@@ -103,7 +97,8 @@ export function useConversationSummaries(): {
 
   // Re-derive only when new messageReceived events arrive
   useEffect(() => {
-    const newEvts = sliceNewEvents(events, lastEvtCountRef, lastFirstEvtRef);
+    const newEvts = eventsAfter(events, lastSeenIdRef.current);
+    lastSeenIdRef.current = highestEventId(events, lastSeenIdRef.current);
     if (newEvts.some(e => e.type === 'messageReceived')) {
       derive();
     }

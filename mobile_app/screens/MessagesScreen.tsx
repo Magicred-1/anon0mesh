@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   View, ScrollView, Text, Image, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, Keyboard, Dimensions,
+  StyleSheet, KeyboardAvoidingView, Platform, Dimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -30,7 +30,7 @@ import { type Peer }             from '@/components/messages/constants';
 import { ActionGrid, type GridAction } from '@/components/messages/ActionGrid';
 import { Feather }               from '@expo/vector-icons';
 import { useWallet }             from '@/context/WalletContext';
-import type { AnyMsg, ChatMsg, MediaMsg } from '@/components/messages/types';
+import type { AnyMsg, ChatMsg } from '@/components/messages/types';
 import type { MediaPayload }     from '@/components/messages/Composer';
 import type { LxmfPeer, StoredMessage } from '@/context/LxmfContext';
 import { activeConversationRef }  from '@/hooks/activeConversation';
@@ -40,28 +40,8 @@ import { useConversationSummaries } from '@/hooks/useConversationSummaries';
 import { formatAgo }             from '@/utils/time';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 
-function looksReadable(s: string): boolean {
-  if (!s) return false;
-  let bad = 0;
-  const len = Math.min(s.length, 300);
-  for (let i = 0; i < len; i++) {
-    const c = s.charCodeAt(i);
-    if (c === 0xFFFD || (c < 0x20 && c !== 0x09 && c !== 0x0A && c !== 0x0D)) bad++;
-  }
-  return bad / len < 0.1;
-}
-
-function decodeBody(raw: string): string {
-  if (!raw) return '';
-  try {
-    const decoded = Buffer.from(raw, 'base64').toString('utf-8');
-    if (looksReadable(decoded)) return decoded;
-  } catch {}
-  return raw;
-}
-
-import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
-import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
+import { decodeBody } from '@/src/utils/decodeBody';
 
 let _msgId = Date.now();
 const nextId = () => ++_msgId;
@@ -69,6 +49,35 @@ const nextId = () => ++_msgId;
 type GetSendState = (id: number) => 'sent' | 'queued' | 'delivered' | 'failed' | 'stale' | undefined;
 
 const QUEUE_STALE_MS = 45_000;
+
+type SeqState = 'sent' | 'queued' | 'delivered' | 'failed';
+
+// Flip any pending send to 'delivered' once its outbound row shows acked in the
+// native DB. Module-level (not a closure) to keep effect nesting shallow.
+function reconcilePendingSends(
+  pending: Map<number, { dest: string; bodyB64: string }>,
+  getPeerMessages: (destHash: string, limit?: number) => StoredMessage[],
+  resolveSeq: (seq: number, state: SeqState) => void,
+): void {
+  if (pending.size === 0) return;
+  const byDest = new Map<string, { seq: number; bodyB64: string }[]>();
+  pending.forEach((info, seq) => {
+    const arr = byDest.get(info.dest) ?? [];
+    arr.push({ seq, bodyB64: info.bodyB64 });
+    byDest.set(info.dest, arr);
+  });
+  byDest.forEach((list, dest) => {
+    let stored: StoredMessage[];
+    try { stored = getPeerMessages(dest, 100); } catch { return; }
+    const ackedBodies = new Set(
+      stored.filter(m => m.outbound && m.acked && m.body).map(m => m.body),
+    );
+    if (ackedBodies.size === 0) return;
+    for (const { seq, bodyB64 } of list) {
+      if (ackedBodies.has(bodyB64)) resolveSeq(seq, 'delivered');
+    }
+  });
+}
 
 function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
   if (m.kind === 'sys')             return <SystemLine           key={m.id} text={m.text} />;
@@ -366,10 +375,13 @@ export default function MessagesScreen() {
 
   const scrollRef        = useRef<ScrollView>(null);
   const activePeerHexRef = useRef<string | null>(null);
-  const lastEvtCountRef  = useRef(0);
-  const lastFirstEvtRef  = useRef<(typeof events)[0] | null>(null);
+  const lastSeenIdRef    = useRef(-1);
   const idToSeqRef       = useRef<Map<number, number>>(new Map());
   const seqQueuedAt      = useRef<Map<number, number>>(new Map());
+  // seq → {dest, bodyB64} for outbound text messages awaiting delivery confirmation.
+  // Used to reconcile "stuck queued/stale" sends over TCP against the native DB's
+  // acked flag, since a messageDelivered event may never arrive over multi-hop TCP.
+  const pendingSendsRef  = useRef<Map<number, { dest: string; bodyB64: string }>>(new Map());
   const immediateTimers  = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const threadsRef       = useRef<Map<string, AnyMsg[]>>(new Map());
   const msgsRef          = useRef<AnyMsg[]>([]);
@@ -380,15 +392,6 @@ export default function MessagesScreen() {
     activePeerHexRef.current       = activePeerHex;
     activeConversationRef.current  = activePeerHex;
   }, [activePeerHex]);
-
-  // Keyboard-aware safe-area spacer — collapses bottom spacer while keyboard is visible
-  const [kbShown, setKbShown] = useState(false);
-  useEffect(() => {
-    const isIOS = Platform.OS === 'ios';
-    const show = Keyboard.addListener(isIOS ? 'keyboardWillShow' : 'keyboardDidShow',  () => setKbShown(true));
-    const hide = Keyboard.addListener(isIOS ? 'keyboardWillHide' : 'keyboardDidHide', () => setKbShown(false));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
 
   // Cleanup timers on unmount
   useEffect(() => () => { immediateTimers.current.forEach(clearTimeout); }, []);
@@ -421,6 +424,9 @@ export default function MessagesScreen() {
     } else {
       seqQueuedAt.current.delete(seq);
     }
+    if (state === 'delivered' || state === 'failed') {
+      pendingSendsRef.current.delete(seq);
+    }
     setSeqStates(m => new Map(m).set(seq, state));
 
     // Flip enc to true only on confirmed delivery — never before the native
@@ -446,15 +452,28 @@ export default function MessagesScreen() {
     }
   }, []);
 
+  // Reconcile sends stuck "queued"/"stale" over TCP: a messageDelivered proof
+  // may never arrive over multi-hop Reticulum, but the native DB marks the
+  // outbound row acked once stored by the recipient. Poll the DB and flip any
+  // pending send whose body now shows acked. (No-op until acked is set; if the
+  // DB never acks over TCP, that is a native-layer limitation, not app-side.)
+  useEffect(() => {
+    const id = setInterval(
+      () => reconcilePendingSends(pendingSendsRef.current, getPeerMessages, resolveSeq),
+      10_000,
+    );
+    return () => clearInterval(id);
+  }, [getPeerMessages, resolveSeq]);
+
   // Incoming messages + queue state events
   useEffect(() => {
-    const prevCount = lastEvtCountRef.current;
-    const prevFirst = lastFirstEvtRef.current;
-    lastEvtCountRef.current  = events.length;
-    lastFirstEvtRef.current  = events[0] ?? null;
-
-    const newEvents = sliceNewEvents(events, prevCount, prevFirst);
+    const newEvents = eventsAfter(events, lastSeenIdRef.current);
     if (newEvents.length === 0) return;
+    lastSeenIdRef.current = highestEventId(events, lastSeenIdRef.current);
+
+    // Snapshot the active peer once: pickPeer mutates activePeerHexRef synchronously,
+    // so reading it per-iteration could misroute the rest of a batch after a tap.
+    const activePeer = activePeerHexRef.current;
 
     for (const e of newEvents) {
       if (e.type === 'messageQueued'   && typeof e.seq === 'number') { resolveSeq(e.seq, 'queued');    continue; }
@@ -485,7 +504,7 @@ export default function MessagesScreen() {
 
       if (newMsgs.length === 0) continue;
 
-      if (srcHash === activePeerHexRef.current) {
+      if (srcHash === activePeer) {
         setMsgs(m => [...m, ...newMsgs]);
       } else {
         // Route to that peer's thread regardless of whether any peer is active.
@@ -596,7 +615,8 @@ export default function MessagesScreen() {
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
       return;
     }
-    const seq = await send(activePeerHex, utf8ToBase64(text));
+    const bodyB64 = utf8ToBase64(text);
+    const seq = await send(activePeerHex, bodyB64);
     if (seq < 0) {
       const pseudoSeq = -msgId;
       idToSeqRef.current.set(msgId, pseudoSeq);
@@ -604,6 +624,7 @@ export default function MessagesScreen() {
     } else {
       // seq >= 0: queued (not yet delivered) — track it
       idToSeqRef.current.set(msgId, seq);
+      pendingSendsRef.current.set(seq, { dest: activePeerHex, bodyB64 });
       const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
       immediateTimers.current.set(seq, timer);
     }
@@ -849,7 +870,6 @@ export default function MessagesScreen() {
             </View>
           </GestureDetector>
           <Composer onSend={sendMsg} onMedia={handleMedia} onGrid={() => setActionGridVisible(true)} />
-          <View style={{ height: kbShown ? 0 : insets.bottom, backgroundColor: colors.surface0 }} />
         </KeyboardAvoidingView>
       </Reanimated.View>
 
