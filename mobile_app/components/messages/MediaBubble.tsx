@@ -2,7 +2,7 @@ import React, { memo, useState } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import type { MediaMsg } from './types';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -70,11 +70,11 @@ const S = StyleSheet.create({
   meta:       { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   from:       { fontSize: 10, letterSpacing: 0.5 },
   time:       { fontSize: 10, letterSpacing: 0.5, fontFamily: fontFamily.sansMd },
-  bubble:     { borderRadius: 16, overflow: 'hidden', borderWidth: 0.5 },
+  bubble:     { borderRadius: radii.lg, overflow: 'hidden', borderWidth: 0.5 },
   img:        { flex: 1 },
   errorState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  errorText:  { fontFamily: fontFamily.sansMd, fontSize: 11 },
+  errorText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
   overlay:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   fullImg:    { width: '100%', height: '80%' },
-  closeBtn:   { position: 'absolute', top: 56, right: 20, width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
+  closeBtn:   { position: 'absolute', top: 56, right: 20, width: 36, height: 36, borderRadius: radii.full, borderWidth: 0.5, alignItems: 'center', justifyContent: 'center' },
 });

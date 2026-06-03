@@ -22,17 +22,22 @@ import Reanimated, {
 } from 'react-native-reanimated';
 
 import { Feather }            from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { subscribeDrawer }    from '@/hooks/drawerState';
 import { useSafeAreaInsets }  from 'react-native-safe-area-context';
 import { appMotion } from '@/src/design-system/motion';
 import * as haptics from '@/src/design-system/haptics';
 
 // ── Tab order ─────────────────────────────────────────────────────────────────
-const TABS = ['/', '/wallet', '/nodes', '/settings'] as const;
+const TABS = ['/(tabs)', '/wallet', '/nodes', '/settings'] as const;
 type TabPath = typeof TABS[number];
 
 function tabIdx(path: string): number {
+  // Messages renders at "/" (the (tabs) group is transparent in the URL). The
+  // tab list navigates there via "/(tabs)" so swiping back to Messages doesn't
+  // land on the root "/" route — which is an unconditional Redirect to
+  // onboarding (it would boot the user out of the app shell). Map both forms in.
+  if (path === '/' || path === '/(tabs)') return 0;
   const i = TABS.indexOf(path as TabPath);
   return i === -1 ? 0 : i;
 }
@@ -418,11 +423,11 @@ const S = StyleSheet.create({
 
   navWrap: {
     justifyContent: 'flex-end',
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
   },
   navTrack: {
-    borderRadius: 16,
+    borderRadius: radii.lg,
     elevation: 12,
     height: 68,
     justifyContent: 'center',
@@ -433,7 +438,7 @@ const S = StyleSheet.create({
     shadowRadius: 16,
   },
   navBar: {
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 1,
     height: 68,
     overflow: 'hidden',
@@ -449,7 +454,7 @@ const S = StyleSheet.create({
     minHeight: 54,
   },
   activePill: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     bottom: ACTIVE_PILL_INSET,
     left: ACTIVE_PILL_INSET,
     overflow: 'hidden',
@@ -458,12 +463,12 @@ const S = StyleSheet.create({
   },
   tab: {
     alignItems: 'center',
-    borderRadius: 12,
-    gap: 4,
+    borderRadius: radii.md,
+    gap: spacing[2],
     height: '100%',
     justifyContent: 'center',
     minHeight: 54,
-    paddingVertical: 4,
+    paddingVertical: spacing[2],
     width: '100%',
   },
   tabIcon: {
@@ -484,15 +489,15 @@ const S = StyleSheet.create({
     alignSelf:       'center',
     flexDirection:   'row',
     alignItems:      'center',
-    gap:             8,
+    gap:             spacing[3],
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius:    12,
+    paddingHorizontal: spacing[5],
+    borderRadius:    radii.md,
     borderWidth:     0.5,
   },
   toastText: {
     fontFamily: fontFamily.sansMd,
-    fontSize:   12,
+    fontSize:   fontSize.sm,
     letterSpacing: 0.3,
   },
 });

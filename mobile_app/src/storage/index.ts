@@ -43,11 +43,16 @@ export const PrefKeys = {
   DISPLAY_NAME:     'anonmesh:display_name',
   // Peer metadata cache — social graph metadata, not key material
   PEERS_CACHE:      'anonmesh:peers_cache',
+  // Peers the user has opened a conversation with — persisted so Contacts tab
+  // survives restarts even before any messages are exchanged
+  CONTACTED_PEERS:  'anonmesh:contacted_peers',
   // UI preferences
   BIOMETRIC_ENABLED: 'anonmesh:biometric-enabled',
   HIDE_BALANCE:      'anonmesh:hide-balance',
   NOTIF_ENABLED:     'anonmesh:notif-enabled',
   BEACON_MODE:       'anonmesh:beacon-mode',
+  // Last paired RNode device — {id, name, serial} JSON, restored on cold start
+  RNODE_LAST_PAIRED: 'anonmesh:rnode_last_paired',
 } as const;
 
 // Legacy keys — kept only for one-time migration reads, then deleted
@@ -65,6 +70,22 @@ export async function secureGet(key: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Like {@link secureGet}, but does NOT swallow read errors.
+ *
+ * `secureGet` returns `null` both when a key is genuinely absent and when the
+ * Keychain/Keystore read *failed* (transient lock, access-group mismatch after
+ * a signing-cert change, OS hiccup). For most callers that conflation is
+ * harmless. For destructive code paths it is dangerous: a caller that deletes
+ * "missing" key material would wipe a real, funded wallet on a transient read
+ * error. Use this when the difference between "absent" and "errored" must drive
+ * an irreversible decision — it returns `null` only for verified absence and
+ * throws on any underlying read failure.
+ */
+export async function secureGetStrict(key: string): Promise<string | null> {
+  return SecureStore.getItemAsync(key);
 }
 
 export async function secureSet(key: string, value: string): Promise<void> {

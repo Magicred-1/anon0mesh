@@ -166,7 +166,7 @@ export function NearbyPeersCard() {
                     style={{
                       color: colors.textSecondary,
                       fontFamily: fontFamily.sansMd,
-                      fontSize: 12,
+                      fontSize: fontSize.sm,
                     }}
                   >
                     +{extraCount}

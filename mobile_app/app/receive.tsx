@@ -26,11 +26,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import QRCodeSvg from "react-native-qrcode-svg";
 
 import { BottomSheetHandleBar, SegmentedControl, TokenLogo } from "@/components/primitives";
+import { ScreenHeader } from "@/components/ui";
 import * as haptics from "@/src/design-system/haptics";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useWallet } from "@/context/WalletContext";
 import { buildSolanaPayUri } from "@/src/services/solanaPayUri";
-import { fontFamily as FF, useTheme } from "@/theme";
+import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 // Use 'screen' (full device) not 'window' (excludes status bar) so the
 // translate-off animation pushes content fully past system UI on Android
@@ -198,19 +199,20 @@ export default function ReceiveScreen() {
           <BottomSheetHandleBar />
 
           {/* ── header ── */}
-          <View style={S.header}>
-            <View>
-              <Text accessibilityRole="header" style={[S.kicker, { color: colors.textTertiary }]}>ANONMESH</Text>
-              <Text style={[S.screenTitle, { color: colors.textPrimary }]}>receive</Text>
-            </View>
-            <Pressable
-              onPress={animateAndDismiss}
-              hitSlop={10}
-              style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-            >
-              <Feather name="x" size={16} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+          <ScreenHeader
+            kicker="ANONMESH"
+            title="receive"
+            size="lg"
+            right={
+              <Pressable
+                onPress={animateAndDismiss}
+                hitSlop={10}
+                style={[S.closeBtn, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+              >
+                <Feather name="x" size={16} color={colors.textSecondary} />
+              </Pressable>
+            }
+          />
 
           <View style={S.grid}>
 
@@ -232,7 +234,7 @@ export default function ReceiveScreen() {
                 <View style={[S.qrCard, { borderColor: colors.borderSubtle }]}>
                   <QRCodeSvg
                     backgroundColor="#FFFFFF"
-                    color={isStealth ? "#004d66" : "#00080c"}
+                    color={isStealth ? "#004d66" : colors.background}
                     ecl="H"
                     logo={require("@/assets/icons/anonmesh_white_icon.png")}
                     logoBackgroundColor="#0B0C10"
@@ -339,38 +341,35 @@ export default function ReceiveScreen() {
 const S = StyleSheet.create({
   root:         { flex: 1 },
   fill:         { flex: 1 },
-  grid:         { paddingHorizontal: 16, gap: GAP, paddingBottom: 16 },
+  grid:         { paddingHorizontal: spacing[5], gap: GAP, paddingBottom: spacing[5] },
 
-  header:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  kicker:       { fontFamily: FF.sansMd, fontSize: 10, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },
-  screenTitle:  { fontFamily: FF.sansBold, fontSize: 28, letterSpacing: -0.5 },
-  closeBtn:     { width: 36, height: 36, borderRadius: 18, borderWidth: 0.5, alignItems: "center", justifyContent: "center" },
+  closeBtn:     { width: 36, height: 36, borderRadius: radii.full, borderWidth: 0.5, alignItems: "center", justifyContent: "center" },
 
-  tile:         { borderRadius: 20, borderWidth: 0.5, padding: 16, overflow: "hidden" },
+  tile:         { borderRadius: radii.xl, borderWidth: 0.5, padding: spacing[5], overflow: "hidden" },
 
   // QR tile
   qrTile:       { alignItems: "center", gap: 10 },
   tileLabel:    { fontFamily: FF.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: "uppercase", alignSelf: "flex-start" },
   qrWrap:       { paddingVertical: 6 },
-  qrCard:       { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 10, borderWidth: 0.5 },
-  alias:        { fontFamily: FF.sansSb, fontSize: 15 },
-  mono:         { fontFamily: FF.mono, fontSize: 12 },
-  amountBox:    { alignItems: "center", borderRadius: 14, borderWidth: 0.5, flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, width: "100%" },
+  qrCard:       { backgroundColor: "#FFFFFF", borderRadius: radii.lg, padding: 10, borderWidth: 0.5 },
+  alias:        { fontFamily: FF.sansSb, fontSize: fontSize.md },
+  mono:         { fontFamily: FF.mono, fontSize: fontSize.sm },
+  amountBox:    { alignItems: "center", borderRadius: radii.lg, borderWidth: 0.5, flexDirection: "row", gap: 8, minHeight: 44, paddingHorizontal: 12, width: "100%" },
   amountLabel:  { fontFamily: FF.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: "uppercase" },
-  amountInput:  { flex: 1, fontFamily: FF.mono, fontSize: 15, minWidth: 0, paddingVertical: 8, textAlign: "right" },
-  amountUnit:   { fontFamily: FF.sansMd, fontSize: 10, letterSpacing: 1.2 },
+  amountInput:  { flex: 1, fontFamily: FF.mono, fontSize: fontSize.md, minWidth: 0, paddingVertical: 8, textAlign: "right" },
+  amountUnit:   { fontFamily: FF.sansMd, fontSize: fontSize.xs, letterSpacing: 1.2 },
   networkRow:   { flexDirection: "row", alignItems: "center", gap: 6 },
   networkLabel: { fontFamily: FF.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: "uppercase" },
-  stealthNote:  { fontFamily: FF.sansMd, fontSize: 11, letterSpacing: 0.2, textAlign: "center" },
+  stealthNote:  { fontFamily: FF.sansMd, fontSize: fontSize.xs, letterSpacing: 0.2, textAlign: "center" },
 
   // action row
   actionRow:      { flexDirection: "row", gap: GAP },
   actionTileOuter:{ position: "relative" },
   actionTile:     { flex: 1, alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 18 },
   copyGlow:       { position: "absolute", inset: 0 },
-  actionLabel:    { fontFamily: FF.sansMd, fontSize: 11, letterSpacing: 0.5 },
+  actionLabel:    { fontFamily: FF.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5 },
 
   // no-wallet
-  noWalletTitle: { fontFamily: FF.sansBold, fontSize: 18, marginBottom: 8, textAlign: "center" },
-  noWalletSub:   { fontFamily: FF.sans, fontSize: 14, textAlign: "center", paddingHorizontal: 32 },
+  noWalletTitle: { fontFamily: FF.sansBold, fontSize: fontSize.lg, marginBottom: 8, textAlign: "center" },
+  noWalletSub:   { fontFamily: FF.sans, fontSize: fontSize.md, textAlign: "center", paddingHorizontal: spacing[8] },
 });

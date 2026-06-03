@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { View, StyleSheet } from 'react-native';
+import { spacing } from '@/theme';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 export const NodeRowSkeleton = memo(function NodeRowSkeleton() {
@@ -26,9 +27,9 @@ export const NodeRowSkeleton = memo(function NodeRowSkeleton() {
 });
 
 const S = StyleSheet.create({
-  row:  { flexDirection: 'row', alignItems: 'center', padding: 12, paddingHorizontal: 20, gap: 12, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)' },
-  body: { flex: 1, gap: 8 },
-  top:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  meta: { flexDirection: 'row', gap: 8 },
+  row:  { flexDirection: 'row', alignItems: 'center', padding: spacing[4], paddingHorizontal: spacing[6], gap: spacing[4], borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.04)' },
+  body: { flex: 1, gap: spacing[3] },
+  top:  { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  meta: { flexDirection: 'row', gap: spacing[3] },
   right:{ alignItems: 'flex-end', gap: 6 },
 });

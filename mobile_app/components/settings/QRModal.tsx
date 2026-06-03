@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Animated } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
 import { useWallet } from '@/context/WalletContext';
@@ -62,7 +62,7 @@ export function QRModal({ onClose, initialTab = 'anonmesh' }: { readonly onClose
                 <Pressable
                   key={t}
                   onPress={() => setTab(t)}
-                  style={[S.tabBtn, tab === t && accentGlass, tab === t && { borderRadius: 8 }]}
+                  style={[S.tabBtn, tab === t && accentGlass, tab === t && { borderRadius: radii.sm }]}
                 >
                   <Text style={[S.tabText, { color: tab === t ? colors.primary : colors.textTertiary }]}>
                     {t.toUpperCase()}
@@ -100,12 +100,12 @@ export function QRModal({ onClose, initialTab = 'anonmesh' }: { readonly onClose
 }
 
 const S = StyleSheet.create({
-  card:    { borderRadius: 24, padding: 20, alignItems: 'center', marginHorizontal: 32 },
-  tabRow:  { flexDirection: 'row', borderRadius: 10, padding: 3, gap: 2 },
+  card:    { borderRadius: radii['2xl'], padding: 20, alignItems: 'center', marginHorizontal: 32 },
+  tabRow:  { flexDirection: 'row', borderRadius: radii.md, padding: 3, gap: 2 },
   tabBtn:  { paddingHorizontal: 12, paddingVertical: 6 },
-  tabText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  qrWrap:  { padding: 10, borderRadius: 14, borderWidth: 0.5, overflow: 'hidden' },
-  handle:  { fontFamily: fontFamily.sansMd, fontSize: 16, letterSpacing: -0.3 },
+  tabText: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
+  qrWrap:  { padding: 10, borderRadius: radii.lg, borderWidth: 0.5, overflow: 'hidden' },
+  handle:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, letterSpacing: -0.3 },
   hint:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  closeBtn:{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  closeBtn:{ width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
 });

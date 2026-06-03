@@ -18,18 +18,29 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-import { ThemeProvider, useTheme } from '@/theme';
+import { ThemeProvider, useTheme, fontSize, radii, spacing } from '@/theme';
 import { WalletProvider } from '@/context/WalletContext';
 import { LxmfProvider, useLxmfContext } from '@/context/LxmfContext';
 import { NetworkModeProvider } from '@/context/NetworkModeContext';
 import { HideBalanceProvider } from '@/src/hooks/useHideBalance';
 import { WalletBalanceProvider } from '@/src/hooks/useWalletBalance';
 import { InAppNotificationBanner, type NotificationPayload } from '@/components/ui/InAppNotificationBanner';
+import { ToastHost } from '@/components/ui/Toast';
+import { ConfirmHost } from '@/components/ui/ConfirmSheet';
 import { useMessageNotifications }  from '@/hooks/useMessageNotifications';
 import { usePeerCountNotification }  from '@/hooks/usePeerCountNotification';
 import { useNotificationEnabled }    from '@/hooks/useNotificationEnabled';
 import { pendingConversationRef }    from '@/hooks/pendingConversation';
 import { useBackgroundService }      from '@/hooks/useBackgroundService';
+import { ErrorBoundary }             from '@/src/observability/ErrorBoundary';
+import { initObservability, Sentry } from '@/src/observability/sentry';
+import { installGlobalErrorHandler } from '@/src/observability/errorHandler';
+
+// Crash observability. No-op unless EXPO_PUBLIC_SENTRY_DSN is set and not __DEV__.
+// Sentry catches render throws (via ErrorBoundary); errorHandler catches the
+// async/unhandled rejections Sentry's boundary does not.
+initObservability();
+installGlobalErrorHandler();
 
 export const unstable_settings = {
   anchor: 'onboarding',
@@ -54,9 +65,9 @@ function LxmfErrorBanner() {
 }
 
 const E = StyleSheet.create({
-  bar:  { position: 'absolute', bottom: 90, left: 16, right: 16, flexDirection: 'row', alignItems: 'center',
-          gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 0.5, zIndex: 99 },
-  text: { flex: 1, fontSize: 12, lineHeight: 17 },
+  bar:  { position: 'absolute', bottom: 90, left: spacing[5], right: spacing[5], flexDirection: 'row', alignItems: 'center',
+          gap: spacing[3], paddingHorizontal: 14, paddingVertical: 10, borderRadius: radii.md, borderWidth: 0.5, zIndex: 99 },
+  text: { flex: 1, fontSize: fontSize.sm, lineHeight: 17 },
 });
 
 function NotificationBridge({ onInApp }: { readonly onInApp: (n: NotificationPayload) => void }) {
@@ -112,6 +123,14 @@ function AppShell() {
           <Stack.Screen name="send/amount" />
           <Stack.Screen name="send/review" />
           <Stack.Screen name="send/success" options={{ gestureEnabled: false }} />
+          {/* QR scanner — a route, not a <Modal>, so it presents above
+              everything (including bottom-sheet modals) without stacking
+              native windows. Driven by scan() in src/services/qrScan. */}
+          <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+          {/* Join channel — a transparentModal route that owns its slide
+              animation (same pattern as receive), so the scanner route can
+              compose over it without a nested-<Modal> conflict. */}
+          <Stack.Screen name="join-channel" options={{ presentation: 'transparentModal', animation: 'none', contentStyle: { backgroundColor: 'transparent' } }} />
         </Stack>
         <StatusBar style="light" />
       </NavThemeProvider>
@@ -128,6 +147,9 @@ function AppShell() {
           router.push('/(tabs)');
         }}
       />
+
+      <ToastHost />
+      <ConfirmHost />
     </View>
   );
 }
@@ -142,7 +164,7 @@ const R = StyleSheet.create({
   },
 });
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_300Light,
     SpaceGrotesk_400Regular,
@@ -154,20 +176,26 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={R.gestureRoot}>
-      <ThemeProvider>
-        <LxmfProvider>
-          <NetworkModeProvider>
-            <WalletProvider autoInitialize>
-              <WalletBalanceProvider>
-              <HideBalanceProvider>
-                <AppShell />
-              </HideBalanceProvider>
-              </WalletBalanceProvider>
-            </WalletProvider>
-          </NetworkModeProvider>
-        </LxmfProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={R.gestureRoot}>
+        <ThemeProvider>
+          <LxmfProvider>
+            <NetworkModeProvider>
+              <WalletProvider autoInitialize>
+                <WalletBalanceProvider>
+                <HideBalanceProvider>
+                  <AppShell />
+                </HideBalanceProvider>
+                </WalletBalanceProvider>
+              </WalletProvider>
+            </NetworkModeProvider>
+          </LxmfProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
+
+// Sentry.wrap enables native crash context + (disabled here) tracing. It is a
+// transparent pass-through when observability is off.
+export default Sentry.wrap(RootLayout);

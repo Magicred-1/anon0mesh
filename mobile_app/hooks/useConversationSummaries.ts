@@ -1,0 +1,128 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { useLxmfContext, type StoredMessage } from '@/context/LxmfContext';
+import { PrefKeys, prefGet, prefSetJson } from '@/src/storage';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
+import { decodeBody } from '@/src/utils/decodeBody';
+
+export interface ConvSummary {
+  lastText:      string;
+  lastTimestamp: number;
+  unreadCount:   number;
+}
+
+function decodePreview(body: string): string {
+  const text = decodeBody(body);
+  if (!text) return '';
+  try {
+    const j = JSON.parse(text) as unknown;
+    if (j && typeof j === 'object') {
+      const t = (j as Record<string, unknown>).body ?? (j as Record<string, unknown>).text;
+      if (typeof t === 'string' && t) return t.slice(0, 60);
+    }
+  } catch {}
+  return text.slice(0, 60);
+}
+
+function buildSummaries(
+  messages: StoredMessage[],
+  lastReadAt: Map<string, number>,
+  contacted: Set<string>,
+): Map<string, ConvSummary> {
+  // Sort ascending so the newest message overwrites earlier ones
+  const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp);
+  const map = new Map<string, ConvSummary>();
+
+  for (const m of sorted) {
+    const partner = m.outbound ? m.dest : m.source;
+    if (!partner || partner.length !== 32) continue;
+
+    const readAt   = lastReadAt.get(partner) ?? 0;
+    const isUnread = !m.outbound && m.timestamp > readAt;
+    const existing = map.get(partner);
+
+    map.set(partner, {
+      lastText:      decodePreview(m.body ?? ''),
+      lastTimestamp: m.timestamp,
+      unreadCount:   (existing?.unreadCount ?? 0) + (isUnread ? 1 : 0),
+    });
+  }
+
+  // Add stub entries for peers the user has opened without any messages yet
+  for (const hash of contacted) {
+    if (!map.has(hash)) {
+      map.set(hash, { lastText: '', lastTimestamp: 0, unreadCount: 0 });
+    }
+  }
+
+  return map;
+}
+
+export function useConversationSummaries(): {
+  summaries:       Map<string, ConvSummary>;
+  markRead:        (destHash: string) => void;
+  touchPeer:       (destHash: string) => void;
+  hasConversation: (destHash: string) => boolean;
+} {
+  const { fetchMessages, events } = useLxmfContext();
+  const lastReadAt      = useRef<Map<string, number>>(new Map());
+  const contactedRef    = useRef<Set<string>>(new Set());
+  const lastSeenIdRef = useRef(-1);
+
+  const [summaries, setSummaries] = useState<Map<string, ConvSummary>>(new Map());
+
+  const derive = useCallback(() => {
+    const msgs = fetchMessages(500) as StoredMessage[];
+    setSummaries(buildSummaries(msgs, lastReadAt.current, contactedRef.current));
+  }, [fetchMessages]);
+
+  // Load persisted contacted peers on mount
+  useEffect(() => {
+    prefGet(PrefKeys.CONTACTED_PEERS).then(raw => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          contactedRef.current = new Set(parsed.filter((h): h is string => typeof h === 'string'));
+        }
+      } catch {}
+      derive();
+    });
+  // derive is stable — only run this once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Initial derive on mount (before storage load resolves — runs immediately)
+  useEffect(() => { derive(); }, [derive]);
+
+  // Re-derive only when new messageReceived events arrive
+  useEffect(() => {
+    const newEvts = eventsAfter(events, lastSeenIdRef.current);
+    lastSeenIdRef.current = highestEventId(events, lastSeenIdRef.current);
+    if (newEvts.some(e => e.type === 'messageReceived')) {
+      derive();
+    }
+  }, [events, derive]);
+
+  const markRead = useCallback((destHash: string) => {
+    lastReadAt.current.set(destHash, Math.floor(Date.now() / 1000));
+    derive();
+  }, [derive]);
+
+  // Record that the user opened a conversation with this peer. Persisted so
+  // the Contacts tab shows them even after an app restart, before any
+  // messages are exchanged.
+  const touchPeer = useCallback((destHash: string) => {
+    if (contactedRef.current.has(destHash)) return;
+    contactedRef.current.add(destHash);
+    prefSetJson(PrefKeys.CONTACTED_PEERS, [...contactedRef.current]).catch(() => {});
+    derive();
+  }, [derive]);
+
+  const hasConversation = useCallback(
+    (destHash: string) => summaries.has(destHash),
+    [summaries],
+  );
+
+  return { summaries, markRead, touchPeer, hasConversation };
+}

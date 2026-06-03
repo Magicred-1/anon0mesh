@@ -1,19 +1,20 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
-  InteractionManager,
+  InteractionManager, Linking,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
 import { PulseDot }        from '@/components/ui/PulseDot';
+import { ScreenHeader }    from '@/components/ui';
 import { FILTERS }         from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
-import { requestBLEPermissions } from '@/src/utils/blePermissions';
+import { requestBLEPermissions, type BLEPermissionStatus } from '@/src/utils/blePermissions';
 
 // Converts a peer to NodeData WITHOUT latency — stable identity for MeshMap.
 // Latency is added separately for the list so MeshMap topology doesn't re-layout on every timer tick.
@@ -58,9 +59,15 @@ export default function NodesScreen() {
     return () => clearInterval(id);
   }, []));
 
+  // A denied BLE permission must not be a silent dead-end: capture the status so
+  // the UI can explain it and offer a re-enable path. Without this, denying once
+  // silently kills peer discovery forever — the "scanning forever, no one here"
+  // trap with no exit (off-grid #1).
+  const [blePerm, setBlePerm] = useState<BLEPermissionStatus | null>(null);
   const enableBle = useCallback(async () => {
     if (bleActive) return; // already started — don't re-trigger GATT registration
     const permissionStatus = await requestBLEPermissions();
+    setBlePerm(permissionStatus);
     if (permissionStatus !== 'granted' && permissionStatus !== 'not_required') return;
     startBLE();
   }, [bleActive, startBLE]);
@@ -84,9 +91,18 @@ export default function NodesScreen() {
     [peers, isRunning],
   );
 
-  const emptyStateCopy = isNativeAvailable
-    ? 'Starting mesh…'
-    : 'Mesh unavailable on this device';
+  const bleBlocked = !bleActive && (blePerm === 'denied' || blePerm === 'never_ask_again');
+  // Honest empty state: only say "Starting mesh…" while the node is actually
+  // coming up. Once it's running with zero peers (every solo user, and the
+  // common case), say so plainly instead of implying it's still starting — the
+  // same "stop the present-tense lie" pass L4 did for the Messages empty state.
+  const emptyStateCopy = !isNativeAvailable
+    ? 'Mesh unavailable on this device'
+    : bleBlocked
+      ? 'Bluetooth permission needed'
+      : !isRunning
+        ? 'Starting mesh…'
+        : 'No peers nearby yet';
 
   // Fast lookup by destHash for latency enrichment
   const peerMap = useMemo(
@@ -121,10 +137,7 @@ export default function NodesScreen() {
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
 
-        <View style={S.header}>
-          <Text accessibilityRole="header" style={[S.sub,   { color: colors.textTertiary }]}>ANONMESH</Text>
-          <Text style={[S.title, { color: colors.textPrimary }]}>peers</Text>
-        </View>
+        <ScreenHeader kicker="ANONMESH" title="peers" style={S.header} />
 
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
@@ -168,6 +181,25 @@ export default function NodesScreen() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={S.bottomScroll}>
+          {bleBlocked && (
+            <View style={[S.bleCard, { borderColor: colors.border, backgroundColor: colors.glass }]}>
+              <Text style={[S.bleTitle, { color: colors.textPrimary }]}>Bluetooth is off for anonmesh</Text>
+              <Text style={[S.bleBody, { color: colors.textTertiary }]}>
+                anonmesh finds people nearby over Bluetooth. Without it, you can only reach peers over the internet —
+                so the mesh looks empty even when devices are right next to you.
+              </Text>
+              <Pressable
+                onPress={() => { if (blePerm === 'never_ask_again') { Linking.openSettings(); } else { enableBle(); } }}
+                style={[S.bleBtn, { borderColor: colors.primary + '80', backgroundColor: colors.primarySubtle }]}
+                accessibilityRole="button"
+                accessibilityLabel={blePerm === 'never_ask_again' ? 'Open Settings to enable Bluetooth' : 'Grant Bluetooth access'}
+              >
+                <Text style={[S.bleBtnText, { color: colors.primary }]}>
+                  {blePerm === 'never_ask_again' ? 'Open Settings' : 'Grant Bluetooth access'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
           <BeaconRegistry />
         </ScrollView>
 
@@ -178,16 +210,20 @@ export default function NodesScreen() {
 
 const S = StyleSheet.create({
   root:          { flex: 1 },
-  header:        { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 },
-  title:         { fontSize: 22, fontWeight: '600', letterSpacing: -0.5 },
-  sub:           { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 },
-  mapWrap:       { position: 'relative', paddingHorizontal: 20, paddingTop: 10 },
-  filterOverlay: { position: 'absolute', bottom: 8, left: 20, right: 20 },
+  // ScreenHeader owns layout + typography; keep this screen's wider spacing[6] gutter.
+  header:        { paddingHorizontal: spacing[6] },
+  mapWrap:       { position: 'relative', paddingHorizontal: spacing[6], paddingTop: 10 },
+  filterOverlay: { position: 'absolute', bottom: 8, left: spacing[6], right: spacing[6] },
   filterRow:     { gap: 6, paddingHorizontal: 2 },
-  chip:          { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: 4 },
-  chipText:      { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  chipCount:     { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, opacity: 0.8 },
-  bottomScroll:  { paddingBottom: 24 },
+  chip:          { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 0.5, borderRadius: radii.xs },
+  chipText:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase' },
+  chipCount:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, opacity: 0.8 },
+  bottomScroll:  { paddingBottom: spacing[7] },
   emptyState:    { position: 'absolute', left: 0, right: 0, top: 60, alignItems: 'center' },
-  emptyStateText:{ fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' },
+  emptyStateText:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
+  bleCard:       { marginHorizontal: 20, marginBottom: 14, padding: 14, borderWidth: 0.5, borderRadius: 10, gap: 8 },
+  bleTitle:      { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
+  bleBody:       { fontSize: 12, lineHeight: 17 },
+  bleBtn:        { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, borderWidth: 0.5, borderRadius: 8, marginTop: 2 },
+  bleBtnText:    { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
 });

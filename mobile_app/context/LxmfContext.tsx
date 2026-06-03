@@ -1,6 +1,6 @@
 import React, { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
-import { InteractionManager } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import {
   SecureKeys, LegacySecureKeys, PrefKeys,
   secureGet, secureSet, secureDelete, secureDeleteAll,
@@ -18,7 +18,9 @@ import {
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
-import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
+import { collectPeerMessages } from '@/src/services/peerMessages';
+import { activeConversationRef } from '@/hooks/activeConversation';
 import * as ExpoCrypto from 'expo-crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
 
@@ -105,14 +107,51 @@ function sanitizeName(raw: string): string | null {
 type PeerMap  = Map<string, LxmfPeer>;
 type NameDict = Record<string, string>;
 
-function resolveVia(hops: number, bleActive: boolean, existing?: LxmfPeer): LxmfPeer['via'] {
-  if (hops === 0 && bleActive) return 'ble';
-  return existing?.via ?? 'reticulum';
+// The 0.2.73 .d.ts declares setPropagationNode/syncPropagation, but neither
+// native platform actually registers them — calling the hook wrapper hits an
+// undefined native function and throws. Feature-detect before calling so they
+// no-op now and auto-activate if a future native build adds them.
+function nativeHasFn(name: string): boolean {
+  return typeof (LxmfModule as unknown as Record<string, unknown>)?.[name] === 'function';
+}
+
+type Via = LxmfPeer['via']; // 'ble' | 'reticulum' | 'rnode'
+
+// The native announce/message event reports which interface the packet arrived
+// on. The field is untyped (LxmfEvent = { type; [k: string]: any }), so probe
+// the likely key names and substring-match the value to a transport.
+const IFACE_KEYS = [
+  'iface', 'interface', 'interfaceName', 'ifaceName',
+  'via', 'transport', 'link', 'receivedOn', 'received_on', 'source_iface',
+] as const;
+
+function ifaceToVia(raw: unknown): Via | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  const s = raw.toLowerCase();
+  if (s.includes('ble') || s.includes('bluetooth') || s.includes('gatt')) return 'ble';
+  if (s.includes('rnode') || s.includes('nus') || s.includes('lora') || s.includes('radio')) return 'rnode';
+  // TCP / Reticulum / Auto / UDP / I2P → mesh
+  return 'reticulum';
+}
+
+// Per-peer transport from the event's interface field, or null if absent.
+function eventVia(e: LxmfEvent): Via | null {
+  for (const k of IFACE_KEYS) {
+    const v = ifaceToVia((e as Record<string, unknown>)[k]);
+    if (v) return v;
+  }
+  return null;
+}
+
+// Transport for a peer: the interface field is authoritative. Fall back to the
+// existing tag, then 'reticulum'. We no longer infer 'ble' from hops — that
+// false-tagged TCP/RNode peers as BLE whenever any BLE peer was connected.
+function resolveVia(e: LxmfEvent, existing?: LxmfPeer): Via {
+  return eventVia(e) ?? existing?.via ?? 'reticulum';
 }
 
 function applyAnnounceEvent(
   e: LxmfEvent, map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
-  bleActive: boolean,
 ): { peerChanged: boolean; nameChanged: boolean } {
   if (e.type !== 'announceReceived') return { peerChanged: false, nameChanged: false };
   const hash = (e.destHash ?? (e as any).dest_hash ?? (e as any).peer ?? e.address ?? e.source) as string | undefined;
@@ -140,7 +179,7 @@ function applyAnnounceEvent(
     hops,
     lastSeen:     now,
     online:       true,
-    via:          resolveVia(hops, bleActive, existing),
+    via:          resolveVia(e, existing),
     isBeaconNode: isBeaconNode || (existing?.isBeaconNode ?? false),
     nameKnown:    !!name || (existing?.nameKnown ?? false),
   });
@@ -149,10 +188,10 @@ function applyAnnounceEvent(
 
 const ANNOUNCE_LOG_RE = /announce from ([0-9a-f]{32}) \((\d+) hops\)/;
 
-// Fallback: parse log events for announces (library compat across versions)
+// Fallback: parse log events for announces (library compat across versions).
+// A log line carries no interface field, so preserve the existing transport tag.
 function applyLogAnnounce(
   e: LxmfEvent, map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
-  bleActive: boolean,
 ): boolean {
   if (e.type !== 'log') return false;
   const msg = typeof e.message === 'string' ? e.message : '';
@@ -167,7 +206,7 @@ function applyLogAnnounce(
     hops,
     lastSeen:     now,
     online:       true,
-    via:          resolveVia(hops, bleActive, existing),
+    via:          existing?.via ?? 'reticulum',
     isBeaconNode: existing?.isBeaconNode ?? false,
     nameKnown:    (existing?.nameKnown ?? false) || !!names[hash],
   });
@@ -177,16 +216,17 @@ function applyLogAnnounce(
 // A received message proves the sender is reachable — mark online.
 function applyMessageReceived(
   e: LxmfEvent, map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
-  bleActive: boolean,
 ): boolean {
   if (e.type !== 'messageReceived') return false;
   const srcHash = (e.source ?? (e as any).src ?? (e as any).destHash) as string | undefined;
   if (!srcHash || srcHash === ownHash) return false;
   const existing = map.get(srcHash);
+  const via = eventVia(e); // interface the message arrived on, if reported
   if (existing) {
     const nameKnown = existing.nameKnown || !!names[srcHash];
-    if (existing.online && existing.nameKnown === nameKnown) return false;
-    map.set(srcHash, { ...existing, online: true, lastSeen: now, nameKnown });
+    const nextVia = via ?? existing.via;
+    if (existing.online && existing.nameKnown === nameKnown && existing.via === nextVia) return false;
+    map.set(srcHash, { ...existing, online: true, lastSeen: now, nameKnown, via: nextVia });
   } else {
     map.set(srcHash, {
       destHash:     srcHash,
@@ -194,7 +234,7 @@ function applyMessageReceived(
       hops:         0,
       lastSeen:     now,
       online:       true,
-      via:          bleActive ? 'ble' : 'reticulum',
+      via:          via ?? 'reticulum',
       isBeaconNode: false,
       nameKnown:    !!names[srcHash],
     });
@@ -202,24 +242,59 @@ function applyMessageReceived(
   return true;
 }
 
+// Dev-only one-shot diagnostic: the native LxmfEvent payload is typed as
+// `{ type; [key: string]: any }`, so the exact key names for announceReceived
+// (peer hash, app_data, hops, interface) are undeclared. Log the key set once
+// for the first announce + message seen, plus the matched interface value and
+// the via we mapped it to — so the per-interface labeling can be confirmed
+// against the real shape. Keys only — never the body (avoid logging content).
+let _loggedAnnounceKeys = false;
+let _loggedMessageKeys  = false;
+function logEventShapeOnce(e: LxmfEvent): void {
+  if (!__DEV__) return;
+  const rec = e as Record<string, unknown>;
+  const ifaceField = IFACE_KEYS.find(k => typeof rec[k] === 'string');
+  const ifaceInfo = ifaceField ? `${ifaceField}=${String(rec[ifaceField])} → via=${eventVia(e)}` : 'no interface field';
+  if (e.type === 'announceReceived' && !_loggedAnnounceKeys) {
+    _loggedAnnounceKeys = true;
+    console.log('[Lxmf] announceReceived keys:', Object.keys(e).join(','), '|', ifaceInfo);
+  } else if (e.type === 'messageReceived' && !_loggedMessageKeys) {
+    _loggedMessageKeys = true;
+    console.log('[Lxmf] messageReceived keys:', Object.keys(e).join(','), '|', ifaceInfo);
+  }
+}
+
+// RNode link state from native onRNodeConnected/onRNodeDisconnected events.
+// On disconnect, recompute via connectedRNodeCount() so multiple RNodes are
+// handled correctly (one dropping while another stays connected).
+function applyRnodeEvents(evts: LxmfEvent[], setRnodeConnected: (v: boolean) => void): void {
+  for (const e of evts) {
+    if (e.type === 'rnodeConnected') {
+      setRnodeConnected(true);
+    } else if (e.type === 'rnodeDisconnected') {
+      try { setRnodeConnected(LxmfModule.connectedRNodeCount() > 0); }
+      catch { setRnodeConnected(false); }
+    }
+  }
+}
+
 function processNewEvents(
   evts: LxmfEvent[], map: PeerMap, names: NameDict, now: number, ownHash: string | undefined,
-  bleActive: boolean,
 ): { peerChanged: boolean; nameChanged: boolean } {
   let peerChanged = false;
   let nameChanged = false;
   for (const e of evts) {
-    const ann = applyAnnounceEvent(e, map, names, now, ownHash, bleActive);
+    const ann = applyAnnounceEvent(e, map, names, now, ownHash);
     if (ann.peerChanged) peerChanged = true;
     if (ann.nameChanged) nameChanged = true;
     if (!ann.peerChanged) {
-      if (applyLogAnnounce(e, map, names, now, ownHash, bleActive)) peerChanged = true;
+      if (applyLogAnnounce(e, map, names, now, ownHash)) peerChanged = true;
       if (applyBeaconDiscovered(e, map, names)) {
         nameChanged = true;
         peerChanged = true;
       }
     }
-    if (applyMessageReceived(e, map, names, now, ownHash, bleActive)) peerChanged = true;
+    if (applyMessageReceived(e, map, names, now, ownHash)) peerChanged = true;
   }
   return { peerChanged, nameChanged };
 }
@@ -309,7 +384,11 @@ export const G00N_HUB:   TcpInterface = { host: 'dfw.us.g00n.cloud', port: 6969 
 export const BELETH_HUB: TcpInterface = { host: 'rns.beleth.net',    port: 4242 };
 
 const _myPcHost = process.env.EXPO_PUBLIC_LOCAL_LXMF_HOST;
-export const MY_PC: TcpInterface | null = _myPcHost && _myPcHost !== 'localhost'
+// Dev-only local-PC Reticulum hub. Gated on __DEV__ (not just the env var) so a
+// production bundle never wires a developer's machine as a hub even if the
+// EXPO_PUBLIC_LOCAL_LXMF_* vars are present in the build environment. Project
+// convention: use __DEV__, not EXPO_PUBLIC_*, for dev-only conditionals.
+export const MY_PC: TcpInterface | null = __DEV__ && _myPcHost && _myPcHost !== 'localhost'
   ? { host: _myPcHost, port: Number(process.env.EXPO_PUBLIC_LOCAL_LXMF_PORT ?? 4243) }
   : null;
 
@@ -344,18 +423,7 @@ export interface StoredMessage {
 
 // TODO: add the program ID as a parameter to the context and enforce it in send() and broadcast() so we don't accidentally send unsupported messages through a beacon that doesn't know how to handle them. This will be important as we add support for more message types (e.g. group channels) that require specific handling by the beacon.
 const LXMF_LOG_LEVEL = Number(process.env.EXPO_PUBLIC_LXMF_LOG_LEVEL ?? 1);
-const PROGRAM_ID_HEX = process.env.EXPO_PUBLIC_PROGRAM_ID_HEX ?? null;
 
-// Local mirrors of useLxmf types — not re-exported from module index
-type ExecutePaymentAccounts = {
-  payer: string; broadcaster: string; nonceAccount: string;
-  payerAta: string; recipient: string; recipientAta: string;
-  broadcasterAta: string; mint: string;
-};
-type ExecutePaymentParams = {
-  compOffset: number; amount: number; encryptedAmount: string;
-  nonce: string; encryptionPubKey: string;
-};
 const LXMF_AUTOSTART_DELAY_MS = 1_500;
 
 function isUsableTcpHost(host: string): boolean {
@@ -443,10 +511,16 @@ interface LxmfCtxValue {
   bleUnpairedRNodeCount:  () => number;
   getNusUnpairedRNodes:   () => { mac: string; name: string }[];
   pairNusRNode:           (mac: string) => boolean;
+  /** Connected RNodes. `id` is a MAC on Android, a CoreBluetooth UUID on iOS — keep opaque. */
+  getConnectedRNodes:     () => { id: string; name: string; rssi?: number }[];
+  unpairNusRNode:         (id: string) => boolean;
+  /** Pull store-and-forward messages from propagation relays. */
+  syncPropagation:        () => Promise<boolean>;
   beaconRpc:              (destHashHex: string, method: string, params?: unknown) => Promise<number>;
   beaconBroadcastRpc:     (method: string, params?: unknown, timeoutMs?: number) => Promise<{ resultJson: string; beaconHash: string }>;
   beaconRpcWait:          (destHashHex: string, method: string, params?: unknown, timeoutMs?: number) => Promise<{ resultJson: string; isError: boolean }>;
   blePeerCount:           number;
+  rnodeConnected:         boolean;
   updateDisplayName:    (name: string) => Promise<void>;
   isBeacon:             boolean;
   setBeaconMode:        (enabled: boolean) => Promise<void>;
@@ -523,7 +597,8 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     dbPath:   LXMF_DB_PATH,
   });
 
-  const { isNativeAvailable, isRunning, start, stop, getIdentityHex, setBeaconKeypair, setBeaconSolanaRpc } = lxmf;
+  const { isNativeAvailable, isRunning, start, stop, getIdentityHex, setBeaconKeypair, setBeaconSolanaRpc,
+          setPropagationNode, syncPropagation } = lxmf;
   const startingRef = useRef(false);
   const autostartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -540,6 +615,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
             const keypairHex = await secureGet(SecureKeys.BEACON_KEYPAIR_HEX);
             if (keypairHex) setBeaconKeypair(keypairHex);
             setBeaconSolanaRpc(process.env.EXPO_PUBLIC_SOLANA_RPC ?? 'https://api.devnet.solana.com');
+          }
+          // Enable store-and-forward relay so messages to offline peers are
+          // queued at a propagation node. Must be set before start(). Guarded:
+          // not implemented in every native build.
+          if (nativeHasFn('setPropagationNode')) {
+            try { setPropagationNode(true); } catch { /* native not ready */ }
           }
           return start({
             mode:           LxmfNodeMode.ReticulumAndBle,
@@ -564,7 +645,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       interaction.cancel();
     };
   }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon,
-      beaconKeypairReady, setBeaconKeypair, setBeaconSolanaRpc]);
+      beaconKeypairReady, setBeaconKeypair, setBeaconSolanaRpc, setPropagationNode]);
+
+  // Surfaced when secure-storage rejects an identity write (off-grid audit §3),
+  // so a failed persist is visible instead of dying in a console.warn.
+  const [identityError, setIdentityError] = useState<string | null>(null);
 
   // Persist identity after node starts (using getIdentityHex() per new API)
   useEffect(() => {
@@ -581,12 +666,16 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       created_at:   new Date().toISOString(),
     };
     secureSet(SecureKeys.LXMF_IDENTITY, JSON.stringify(blob))
-      .then(() => setStoredIdentity(blob))
+      .then(() => {
+        setStoredIdentity(blob);
+        setIdentityError(null);
+      })
       .catch((err) => {
-        // Off-grid audit § 3: identity persist failure silently dropped means
-        // next cold start can spawn a new identity, losing message continuity.
-        // Surface it so we at least know when secure storage rejected.
+        // Off-grid audit § 3: a dropped identity persist means the next cold
+        // start can spawn a new identity, losing the mesh address + history.
+        // Surface it through the error banner instead of swallowing it.
         console.warn('[Lxmf] persist identity failed (next start may re-generate)', err);
+        setIdentityError('Identity not saved — secure storage rejected the write. Your mesh address may reset on next launch.');
       });
   }, [isRunning, lxmf.status?.addressHex, storedIdentity, getIdentityHex]);
 
@@ -605,6 +694,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       secureDelete(SecureKeys.LXMF_IDENTITY),
       prefRemove(PrefKeys.PEERS_CACHE),
     ]);
+    // Clear the active-conversation marker: it holds the *old* identity's peer
+    // hash. Left stale, useMessageNotifications would treat the new identity's
+    // first incoming message as "already in the active thread" and silently
+    // suppress its notification (QA-26).
+    activeConversationRef.current = null;
     setStoredIdentity(null);
   }, [isRunning, stop]);
 
@@ -613,24 +707,73 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const nameMapRef       = useRef<Record<string, string>>({});
   const storageTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const announceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastEvtCountRef  = useRef(0);
-  const lastFirstEvtRef  = useRef<LxmfEvent | null>(null);
+  const lastSeenIdRef    = useRef(-1);
   const [peers,        setPeers]        = useState<LxmfPeer[]>([]);
   const [nameMap,      setNameMap]      = useState<Record<string, string>>({});
   const [isAnnouncing, setIsAnnouncing] = useState(false);
-  const [bleActive,    setBleActive]    = useState(false);
-  const [blePeerCount, setBlePeerCount] = useState(0);
+  const [bleActive,       setBleActive]       = useState(false);
+  const [blePeerCount,    setBlePeerCount]    = useState(0);
+  const [rnodeConnected,  setRnodeConnected]  = useState(false);
+  // Gate JS poll loops on foreground (QA-07). Native foreground service keeps the
+  // mesh alive in the background — these are just the UI-facing polls (BLE peer
+  // count, peer-map prune) that have no reason to run while backgrounded.
+  const [appActive,    setAppActive]    = useState(AppState.currentState === 'active');
   // Updated every render so the 80ms debounce timer always reads current value
   const bleActiveRef = useRef(bleActive);
   bleActiveRef.current = bleActive;
 
+  // Inner debounce timers (announce-flag reset, peer-cache persist) outlive the
+  // event effect that schedules them — they're tracked on refs, not the effect's
+  // local timer, so the effect's own cleanup never clears them. On provider
+  // unmount they'd still fire setIsAnnouncing / prefSetJson after teardown.
+  // Clear them here so nothing runs post-unmount (QA-15).
   useEffect(() => {
-    if (!bleActive) { setBlePeerCount(0); return; }
+    return () => {
+      if (announceTimerRef.current) {
+        clearTimeout(announceTimerRef.current);
+        announceTimerRef.current = null;
+      }
+      if (storageTimerRef.current) {
+        clearTimeout(storageTimerRef.current);
+        storageTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Track foreground vs background so the poll loops below can pause/resume.
+  // Mirrors the AppState pattern in useMessageNotifications.ts (QA-07).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => { setAppActive(s === 'active'); });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!bleActive) { setBlePeerCount(0); setRnodeConnected(false); return; }
+    if (!appActive) { return; }
+    // Seed RNode state once; live updates arrive via rnodeConnected/rnodeDisconnected events.
+    try { setRnodeConnected(LxmfModule.connectedRNodeCount() > 0); } catch { /* native not ready */ }
     const tick = () => { try { setBlePeerCount(LxmfModule.blePeerCount()); } catch { /* native not ready */ } };
     tick();
     const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [bleActive]);
+    if (__DEV__) console.log('[Lxmf] blePeerCount poll: running (foreground)');
+    return () => {
+      clearInterval(id);
+      if (__DEV__) console.log('[Lxmf] blePeerCount poll: paused (background/inactive)');
+    };
+  }, [bleActive, appActive]);
+
+  // Pull store-and-forward messages from propagation relays when the app
+  // returns to the foreground (offline peers' messages land on next sync).
+  // Guarded: syncPropagation is not implemented in every native build.
+  useEffect(() => {
+    if (!isRunning || !nativeHasFn('syncPropagation')) return;
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        syncPropagation().catch(() => { /* best-effort */ });
+      }
+    });
+    return () => sub.remove();
+  }, [isRunning, syncPropagation]);
 
   useEffect(() => {
     prefGetJson<LxmfPeer[]>(PrefKeys.PEERS_CACHE).then(cached => {
@@ -652,11 +795,15 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       const now     = Date.now() / 1000;
       const ownHash = lxmf.status?.addressHex;
 
-      const prevCount = lastEvtCountRef.current;
-      const prevFirst = lastFirstEvtRef.current;
-      lastEvtCountRef.current = lxmf.events.length;
-      lastFirstEvtRef.current = lxmf.events[0] ?? null;
-      const newEvts = sliceNewEvents(lxmf.events, prevCount, prevFirst);
+      const newEvts = eventsAfter(lxmf.events, lastSeenIdRef.current);
+      lastSeenIdRef.current = highestEventId(lxmf.events, lastSeenIdRef.current);
+
+      if (__DEV__) newEvts.forEach(logEventShapeOnce);
+
+      // RNode link state — driven by native onRNodeConnected/onRNodeDisconnected
+      // events (seeded once in the bleActive effect).
+      applyRnodeEvents(newEvts, setRnodeConnected);
+
       const hasAnnounce = newEvts.some(e =>
         e.type === 'announceReceived' ||
         (e.type === 'log' && typeof e.message === 'string' && ANNOUNCE_LOG_RE.test(e.message)),
@@ -667,7 +814,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         announceTimerRef.current = setTimeout(() => setIsAnnouncing(false), 2500);
       }
 
-      let { peerChanged, nameChanged } = processNewEvents(newEvts, map, names, now, ownHash, bleActiveRef.current);
+      let { peerChanged, nameChanged } = processNewEvents(newEvts, map, names, now, ownHash);
 
       for (const b of lxmf.beacons) {
         if (mergeBeacon(b, map, names, now, ownHash)) peerChanged = true;
@@ -690,6 +837,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [lxmf.events, lxmf.beacons, lxmf.status, bleActive]);
 
   useEffect(() => {
+    if (!appActive) return;
     const ownHash = lxmf.status?.addressHex;
     const id = setInterval(() => {
       const map = knownPeersRef.current;
@@ -698,24 +846,17 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
         startTransition(() => setPeers(Array.from(map.values())));
       }
     }, 10_000);
-    return () => clearInterval(id);
-  }, [lxmf.status?.addressHex]);
+    if (__DEV__) console.log('[Lxmf] peer-prune poll: running (foreground)');
+    return () => {
+      clearInterval(id);
+      if (__DEV__) console.log('[Lxmf] peer-prune poll: paused (background/inactive)');
+    };
+  }, [lxmf.status?.addressHex, appActive]);
 
-  // When BLE is active and peers are connected, re-tag 0-hop peers as BLE and
-  // mark them online. Fixes: (a) stale bleActive at startup tags them as
-  // 'reticulum', (b) cache-loaded peers stay offline until next 60s announce.
-  useEffect(() => {
-    if (!bleActive || blePeerCount === 0) return;
-    const map = knownPeersRef.current;
-    let changed = false;
-    for (const [, peer] of map) {
-      if (peer.hops === 0 && (!peer.online || peer.via !== 'ble')) {
-        map.set(peer.destHash, { ...peer, via: 'ble', online: true });
-        changed = true;
-      }
-    }
-    if (changed) startTransition(() => setPeers(Array.from(map.values())));
-  }, [bleActive, blePeerCount]);
+  // NOTE: a previous "re-tag every 0-hop peer as BLE when blePeerCount > 0"
+  // effect lived here. It force-labeled TCP and RNode peers as BLE whenever any
+  // BLE peer was connected. Transport now comes from the event's interface
+  // field (see eventVia / resolveVia), so the blanket re-tag is gone.
 
   // ── Group channels ──────────────────────────────────────────────────────────
   const [groups,    setGroups]  = useState<LxmfGroup[]>([]);
@@ -795,7 +936,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const getGroupMembers = useCallback((addrHex: string): string[] => {
     try {
       const msgs    = lxmf.fetchMessages(500) as StoredMessage[];
-      const ownHash = lxmf.getStatus()?.addressHex ?? storedIdentity?.address_hex;
+      // Read the cached status, not getStatus(): getGroupMembers runs inside a
+      // MessagesScreen useMemo (during render), and getStatus() triggers a
+      // LxmfProvider setState → "Cannot update a component while rendering
+      // another" warning. The cached value is identical for our own addressHex.
+      const ownHash = lxmf.status?.addressHex ?? storedIdentity?.address_hex;
       const seen    = new Set<string>();
       for (const m of msgs) {
         const raw     = m as unknown as Record<string, unknown>;
@@ -809,7 +954,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       return [];
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lxmf.fetchMessages, lxmf.getStatus, storedIdentity]);
+  }, [lxmf.fetchMessages, lxmf.status, storedIdentity]);
 
   // Auto-route send: group addresses → sendGroup, peers → send
   const handleSend = useCallback(async (
@@ -823,6 +968,11 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   // start() auto-activates BLE hardware — no manual startBLE()/stopBLE() needed
   const handleStartBLE = useCallback(async () => {
     if (bleActive) return;
+    // Store-and-forward relay for offline peers — must be set before start().
+    // Guarded: not implemented in every native build.
+    if (nativeHasFn('setPropagationNode')) {
+      try { setPropagationNode(true); } catch { /* native not ready */ }
+    }
     const ok = await start({
       mode:           LxmfNodeMode.ReticulumAndBle,
       tcpInterfaces:  configuredTcpInterfaces(),
@@ -831,7 +981,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       lxmfAddressHex: storedIdentity?.address_hex  ?? 'new',
     });
     if (ok) setBleActive(true);
-  }, [bleActive, start, displayName, storedIdentity]);
+  }, [bleActive, start, displayName, storedIdentity, setPropagationNode]);
 
   const handleStopBLE = useCallback(async () => {
     await stop();
@@ -867,10 +1017,15 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   }, [isRunning, stop]);
 
   const { fetchMessages: lxmfFetchMessages } = lxmf;
-  const getPeerMessages = useCallback((destHash: string, limit = 200): StoredMessage[] => {
-    const all = lxmfFetchMessages(limit * 2) as StoredMessage[];
-    return all.filter(m => m.source === destHash || m.dest === destHash).slice(0, limit);
-  }, [lxmfFetchMessages]);
+  const getPeerMessages = useCallback(
+    // Native fetchMessages(n) is most-recent-N-globally with no peer-scoped
+    // query; collectPeerMessages grows the window until it has `limit` matches
+    // or drains the store, so a peer's older messages aren't silently dropped.
+    // Logic is unit-tested in scripts/validate-tier0-services.mjs.
+    (destHash: string, limit = 200): StoredMessage[] =>
+      collectPeerMessages((n) => lxmfFetchMessages(n) as StoredMessage[], destHash, limit),
+    [lxmfFetchMessages],
+  );
 
   const value = useMemo(() => ({
     isRunning:             lxmf.isRunning,
@@ -880,7 +1035,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     status:                lxmf.status,
     beacons:               lxmf.beacons,
     events:                lxmf.events,
-    error:                 lxmf.error,
+    error:                 lxmf.error ?? identityError,
     nameMap,
     displayName:           displayName ?? '',
     myAddress:             lxmf.status?.addressHex ?? storedIdentity?.address_hex ?? null,
@@ -900,10 +1055,14 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     bleUnpairedRNodeCount:  lxmf.bleUnpairedRNodeCount,
     getNusUnpairedRNodes:   lxmf.getNusUnpairedRNodes,
     pairNusRNode:           lxmf.pairNusRNode,
+    getConnectedRNodes:     lxmf.getConnectedRNodes,
+    unpairNusRNode:         lxmf.unpairNusRNode,
+    syncPropagation,
     beaconRpc:              lxmf.beaconRpc,
     beaconBroadcastRpc:     lxmf.beaconBroadcastRpc,
     beaconRpcWait:          lxmf.beaconRpcWait,
     blePeerCount,
+    rnodeConnected,
     updateDisplayName: async (name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
@@ -927,16 +1086,20 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     isGroup,
     getGroupName,
     getGroupMembers,
-  }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, resetIdentity,
+  // Individual lxmf.* members are listed deliberately — `lxmf` is a fresh object
+  // each render, so depending on it whole would defeat the memo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [displayName, storedIdentity, nameMap, peers, isAnnouncing, bleActive, blePeerCount, rnodeConnected, resetIdentity,
        handleStartBLE, handleStopBLE, handleSend, handleCreateGroup, handleJoinGroup, handleLeaveGroup,
        isGroup, getGroupName, getGroupMembers, groups,
        isBeacon, setBeaconMode, beaconKeypairReady, beaconPubkeyHex, regenerateBeaconKeypair, getDisplayName, getPeerIdentity, getPeerMessages, lxmfFetchMessages,
        lxmf.partialSignExecutePayment, lxmf.extractNonceBlockhash,
        lxmf.isRunning, lxmf.isNativeAvailable, lxmf.status, lxmf.beacons,
-       lxmf.events, lxmf.error, lxmf.start, lxmf.stop,
+       lxmf.events, lxmf.error, identityError, lxmf.start, lxmf.stop,
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
-       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.beaconRpc, lxmf.beaconBroadcastRpc, lxmf.beaconRpcWait]);
+       lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.getConnectedRNodes, lxmf.unpairNusRNode, syncPropagation,
+       lxmf.beaconRpc, lxmf.beaconBroadcastRpc, lxmf.beaconRpcWait]);
 
   return (
     <LxmfCtx.Provider value={value}>

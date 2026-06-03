@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useCallback, useMemo } from 'react';
 import { Alert, View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -6,12 +6,16 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation,
 } from 'react-native-reanimated';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { confirm } from '@/components/ui/ConfirmSheet';
 import { useGlass } from '../../hooks/useGlass';
-import { QRScannerModal } from './QRScannerModal';
+import { scan } from '@/src/services/qrScan';
 import { type Peer } from './constants';
+import type { ConvSummary } from '@/hooks/useConversationSummaries';
+
+type Tab = 'contacts' | 'groups' | 'all';
 
 interface Props {
   readonly active:          string;
@@ -22,6 +26,18 @@ interface Props {
   readonly onCreateGroup?:  () => void;
   readonly onJoinGroup?:    () => void;
   readonly onLeaveGroup?:   (addrHex: string) => void;
+  readonly summaries:       Map<string, ConvSummary>;
+  readonly activeTab:       Tab;
+  readonly onTabChange:     (tab: Tab) => void;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function overlayFromSummary(p: Peer, summaries: Map<string, ConvSummary>): Peer {
+  if (!p.destHash) return p;
+  const s = summaries.get(p.destHash);
+  if (!s) return p;
+  return { ...p, last: s.lastText || p.last, unread: s.unreadCount };
 }
 
 // ── Swipeable wrapper for channel rows ───────────────────────────────────────
@@ -50,17 +66,19 @@ function SwipeableGroupRow({ groupName, onLeave, children }: { readonly groupNam
     opacity: interpolate(tx.value, [-REVEAL, -REVEAL * 0.3, 0], [1, 0.9, 0.5], Extrapolation.CLAMP),
   }));
 
-  const confirmLeave = useCallback(() => {
+  const confirmLeave = useCallback(async () => {
     // Channel keys are unrecoverable from local state once we leave. Block on
     // explicit confirm so a fat-finger swipe doesn't destroy access.
-    Alert.alert(
-      `Leave ${groupName}?`,
-      'You will need the address + key to re-join. Keys live only with members of this channel.',
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); } },
-        { text: 'Leave',  style: 'destructive', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); onLeave(); } },
-      ],
-    );
+    const ok = await confirm({
+      title: `Leave ${groupName}?`,
+      message: 'You will need the address + key to re-join. Keys live only with members of this channel.',
+      confirmLabel: 'Leave',
+      destructive: true,
+    });
+    // Snap the swiped row back to rest regardless of the decision (both the
+    // old cancel and leave branches did this).
+    tx.value = withSpring(0, { damping: 18, stiffness: 240 });
+    if (ok) onLeave();
   }, [groupName, onLeave, tx]);
 
   return (
@@ -131,34 +149,220 @@ function PeerAvatar({ p, online, borderColor, bg, textColor }: {
   );
 }
 
+// ── Tab bar ───────────────────────────────────────────────────────────────────
+
+const TAB_LABELS: Record<Tab, string> = {
+  contacts: 'CONTACTS',
+  groups:   'GROUPS',
+  all:      'ALL PEERS',
+};
+
+function TabBar({ active, onChange, colors }: {
+  readonly active: Tab;
+  readonly onChange: (tab: Tab) => void;
+  readonly colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <View style={[S.tabBar, { borderBottomColor: colors.border }]}>
+      {(['contacts', 'groups', 'all'] as const).map(tab => (
+        <Pressable key={tab} onPress={() => onChange(tab)} style={S.tabItem} hitSlop={6}>
+          <Text style={[S.tabLabel, { color: active === tab ? colors.primary : colors.textTertiary }]}>
+            {TAB_LABELS[tab]}
+          </Text>
+          {active === tab && (
+            <View style={[S.tabIndicator, { backgroundColor: colors.primary }]} />
+          )}
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+function EmptyState({ tab, hasInput, colors }: {
+  readonly tab: Tab;
+  readonly hasInput: boolean;
+  readonly colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  if (hasInput) {
+    return (
+      <Text style={[S.emptyNote, { color: colors.textTertiary }]}>
+        No matches — paste an LXMF hash or scan a QR
+      </Text>
+    );
+  }
+  const messages: Record<Tab, string> = {
+    contacts: 'No conversations yet\nPick a peer from All Peers to start',
+    groups:   'No groups joined\nUse CREATE or JOIN above',
+    all:      'No peers available\nMake sure the node is running',
+  };
+  return (
+    <Text style={[S.emptyNote, { color: colors.textTertiary }]}>{messages[tab]}</Text>
+  );
+}
+
+// ── Row renderer ──────────────────────────────────────────────────────────────
+
+function PeerRow({
+  p, isActive, colors, onPick, onLeaveGroup,
+}: {
+  readonly p: Peer;
+  readonly isActive: boolean;
+  readonly colors: ReturnType<typeof useTheme>['colors'];
+  readonly onPick: (p: Peer) => void;
+  readonly onLeaveGroup?: (addrHex: string) => void;
+}) {
+  const id        = p.destHash ?? p.handle;
+  const activeBg  = isActive ? colors.primarySubtle : 'transparent';
+  const activeBorder = isActive ? colors.primary + '33' : 'transparent';
+
+  if (p.isGroup) {
+    return (
+      <SwipeableGroupRow key={id} groupName={p.handle} onLeave={() => onLeaveGroup?.(id)}>
+        <Pressable
+          onPress={() => onPick(p)}
+          style={({ pressed }) => [
+            S.row,
+            { backgroundColor: pressed ? colors.surface1 : activeBg, borderColor: activeBorder },
+          ]}
+        >
+          <GroupAvatar />
+          <View style={S.info}>
+            <View style={S.infoTop}>
+              <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{p.handle}</Text>
+              <Text style={[S.time, { color: colors.textTertiary }]}>{p.time}</Text>
+            </View>
+            <View style={S.infoBottom}>
+              <Text style={[S.last, { color: colors.textSecondary }]} numberOfLines={1}>{p.last}</Text>
+              {p.unread > 0 && <Pill label={String(p.unread)} variant="primary" />}
+            </View>
+          </View>
+        </Pressable>
+      </SwipeableGroupRow>
+    );
+  }
+
+  const showAnon  = p.nameKnown === false;
+  const hashShort = p.destHash ? p.destHash.slice(0, 8) : '';
+  return (
+    <Pressable
+      key={id}
+      onPress={() => onPick(p)}
+      style={({ pressed }) => [
+        S.row,
+        { backgroundColor: pressed ? colors.surface1 : activeBg, borderColor: activeBorder },
+      ]}
+    >
+      <PeerAvatar
+        p={p}
+        online={p.online}
+        bg={colors.surface2}
+        borderColor={colors.border}
+        textColor={colors.textSecondary}
+      />
+      <View style={S.info}>
+        <View style={S.infoTop}>
+          {showAnon ? (
+            <View style={S.anonRow}>
+              <Text style={[S.handle, S.anonLabel, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>Anonymous</Text>
+              <Text style={[S.anonHash, { color: colors.textTertiary }]} numberOfLines={1}>· {hashShort}</Text>
+            </View>
+          ) : (
+            <Text style={[S.handle, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>{p.handle}</Text>
+          )}
+          <Text style={[S.time, { color: colors.textTertiary }]}>{p.time}</Text>
+        </View>
+        <View style={S.infoBottom}>
+          <Text
+            style={[S.last, { color: p.unread > 0 ? colors.textPrimary : colors.textSecondary, fontWeight: p.unread > 0 ? '500' : '400' }]}
+            numberOfLines={1}
+          >{p.last}</Text>
+          {p.unread > 0 && <Pill label={String(p.unread)} variant="primary" />}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 // ── Main drawer ───────────────────────────────────────────────────────────────
 
 export const PeersDrawer = memo(function PeersDrawer({
-  active, onPick, syncing, onNewHash, peers: peersProp, onCreateGroup, onJoinGroup, onLeaveGroup,
+  active, onPick, syncing, onNewHash, peers: peersProp,
+  onCreateGroup, onJoinGroup, onLeaveGroup,
+  summaries, activeTab, onTabChange,
 }: Props) {
   const { colors } = useTheme();
   const softGlass  = useGlass('soft');
 
-  const peers    = peersProp ?? [];
-  const groups   = peers.filter(p => p.isGroup);
-  const dmPeers  = peers.filter(p => !p.isGroup);
+  const allPeers = peersProp ?? [];
+  const groups   = allPeers.filter(p => p.isGroup);
+  const dmPeers  = allPeers.filter(p => !p.isGroup);
   const online   = dmPeers.filter(p => p.online).length;
 
-  const [input,       setInput]       = useState('');
-  const [scannerOpen, setScannerOpen] = useState(false);
+  const [input, setInput] = useState('');
+
+  const handleScan = useCallback(async () => {
+    const result = await scan();
+    if (!result) return;
+    if (__DEV__) console.log('[QR scan/PeersDrawer]', JSON.stringify(result));
+    if (result.type === 'lxmf') {
+      onNewHash?.(result.hash);
+    } else if (result.type === 'lxmf-group') {
+      // Group QR scanned in peer-finder flow — route to join modal instead.
+      Alert.alert(
+        'Looks like a channel QR',
+        'Open "Join channel" and scan the same QR to join the channel.',
+      );
+    } else if (result.type === 'solana') {
+      Alert.alert(
+        'Solana address scanned',
+        'This is a wallet address. Use the Send screen to send funds.',
+      );
+    } else {
+      // unknown — surface the raw payload so the user can debug what they scanned
+      const preview = result.raw.length > 64 ? result.raw.slice(0, 64) + '…' : result.raw;
+      Alert.alert(
+        'Unrecognized QR',
+        `Not a peer or channel QR. Scanned content:\n\n${preview}`,
+      );
+    }
+  }, [onNewHash]);
 
   const isHash   = /^[0-9a-fA-F]{16,}$/.test(input.trim());
   const canStart = isHash;
 
-  // Unified list: unread first, then preserve arrival order
-  const allConvos = [...groups, ...dmPeers].sort((a, b) => {
-    if (b.unread !== a.unread) return b.unread - a.unread;
-    return 0;
-  });
+  const contactList = useMemo(() =>
+    dmPeers
+      .filter(p => p.destHash && summaries.has(p.destHash))
+      .map(p => overlayFromSummary(p, summaries))
+      .sort((a, b) => {
+        const ta = a.destHash ? (summaries.get(a.destHash)?.lastTimestamp ?? 0) : 0;
+        const tb = b.destHash ? (summaries.get(b.destHash)?.lastTimestamp ?? 0) : 0;
+        return tb - ta;
+      }),
+  [dmPeers, summaries]);
 
-  const filtered = (!isHash && input.trim().length > 0)
-    ? allConvos.filter(p => p.handle.toLowerCase().includes(input.toLowerCase()))
-    : allConvos;
+  const groupList = useMemo(() =>
+    groups.map(p => overlayFromSummary(p, summaries)),
+  [groups, summaries]);
+
+  const allList = useMemo(() =>
+    dmPeers
+      .map(p => overlayFromSummary(p, summaries))
+      .sort((a, b) => (b.unread - a.unread) || 0),
+  [dmPeers, summaries]);
+
+  let baseList: Peer[];
+  if (activeTab === 'contacts')    baseList = contactList;
+  else if (activeTab === 'groups') baseList = groupList;
+  else                             baseList = allList;
+
+  const filtered = useMemo(() =>
+    (!isHash && input.trim().length > 0)
+      ? baseList.filter(p => p.handle.toLowerCase().includes(input.toLowerCase()))
+      : baseList,
+  [baseList, input, isHash]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -176,7 +380,7 @@ export const PeersDrawer = memo(function PeersDrawer({
         </View>
       </SafeAreaView>
 
-      {/* ── Unified search / hash input ──────────────────────────────────── */}
+      {/* ── Search / hash input ──────────────────────────────────────────── */}
       <View style={S.composePanel}>
         <View style={[S.hashRow, softGlass, isHash && { borderColor: colors.primary + '60', borderWidth: 0.5 }]}>
           <Feather
@@ -198,7 +402,7 @@ export const PeersDrawer = memo(function PeersDrawer({
               <Feather name="x" size={13} color={colors.textTertiary} />
             </Pressable>
           )}
-          <Pressable onPress={() => setScannerOpen(true)} hitSlop={8}>
+          <Pressable onPress={handleScan} hitSlop={8}>
             <Feather name="camera" size={15} color={colors.primary} />
           </Pressable>
         </View>
@@ -207,22 +411,25 @@ export const PeersDrawer = memo(function PeersDrawer({
             onPress={() => { onNewHash?.(input.trim()); setInput(''); }}
             style={[S.startBtn, { backgroundColor: colors.primary }]}
           >
-            <Text style={[S.startBtnText, { color: '#08080A' }]}>OPEN CONVERSATION</Text>
+            <Text style={[S.startBtnText, { color: colors.background }]}>OPEN CONVERSATION</Text>
           </Pressable>
         )}
       </View>
 
-      {/* ── Channel actions — always visible ────────────────────────────── */}
+      {/* ── Channel actions ──────────────────────────────────────────────── */}
       <View style={S.channelBtnRow}>
         <Pressable onPress={onJoinGroup} style={[S.channelActionBtn, { backgroundColor: colors.surface1, borderWidth: 0.5, borderColor: colors.border }]}>
           <Feather name="log-in" size={13} color={colors.textPrimary} />
           <Text style={[S.channelActionText, { color: colors.textPrimary }]}>JOIN</Text>
         </Pressable>
         <Pressable onPress={onCreateGroup} style={[S.channelActionBtn, { backgroundColor: colors.primary }]}>
-          <Feather name="plus" size={13} color="#08080A" />
-          <Text style={[S.channelActionText, { color: '#08080A' }]}>CREATE</Text>
+          <Feather name="plus" size={13} color={colors.background} />
+          <Text style={[S.channelActionText, { color: colors.background }]}>CREATE</Text>
         </Pressable>
       </View>
+
+      {/* ── Tab bar ──────────────────────────────────────────────────────── */}
+      <TabBar active={activeTab} onChange={onTabChange} colors={colors} />
 
       {/* ── Conversation list ────────────────────────────────────────────── */}
       <ScrollView
@@ -236,98 +443,24 @@ export const PeersDrawer = memo(function PeersDrawer({
           : filtered.map(p => {
               const id       = p.destHash ?? p.handle;
               const isActive = active === id || active === p.handle;
-
-              const activeBg = isActive ? colors.primarySubtle : 'transparent';
-              const activeBorder = isActive ? colors.primary + '33' : 'transparent';
-
-              if (p.isGroup) {
-                return (
-                  <SwipeableGroupRow key={id} groupName={p.handle} onLeave={() => onLeaveGroup?.(id)}>
-                    <Pressable
-                      onPress={() => onPick(p)}
-                      style={({ pressed }) => [
-                        S.row,
-                        { backgroundColor: pressed ? colors.surface1 : activeBg, borderColor: activeBorder },
-                      ]}
-                    >
-                      <GroupAvatar />
-                      <View style={S.info}>
-                        <View style={S.infoTop}>
-                          <Text style={[S.handle, { color: colors.textPrimary }]} numberOfLines={1}>{p.handle}</Text>
-                          <Text style={[S.time, { color: colors.textTertiary }]}>{p.time}</Text>
-                        </View>
-                        <View style={S.infoBottom}>
-                          <Text style={[S.last, { color: colors.textSecondary }]} numberOfLines={1}>{p.last}</Text>
-                          {p.unread > 0 && <Pill label={String(p.unread)} variant="primary" />}
-                        </View>
-                      </View>
-                    </Pressable>
-                  </SwipeableGroupRow>
-                );
-              }
-
-              const showAnon = p.nameKnown === false;
-              const hashShort = p.destHash ? p.destHash.slice(0, 8) : '';
               return (
-                <Pressable
+                <PeerRow
                   key={id}
-                  onPress={() => onPick(p)}
-                  style={({ pressed }) => [
-                    S.row,
-                    { backgroundColor: pressed ? colors.surface1 : activeBg, borderColor: activeBorder },
-                  ]}
-                >
-                  <PeerAvatar
-                    p={p}
-                    online={p.online}
-                    bg={colors.surface2}
-                    borderColor={colors.border}
-                    textColor={colors.textSecondary}
-                  />
-                  <View style={S.info}>
-                    <View style={S.infoTop}>
-                      {showAnon ? (
-                        <View style={S.anonRow}>
-                          <Text style={[S.handle, S.anonLabel, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>Anonymous</Text>
-                          <Text style={[S.anonHash, { color: colors.textTertiary }]} numberOfLines={1}>· {hashShort}</Text>
-                        </View>
-                      ) : (
-                        <Text style={[S.handle, { color: colors.textPrimary, fontWeight: p.unread > 0 ? '700' : '500' }]} numberOfLines={1}>{p.handle}</Text>
-                      )}
-                      <Text style={[S.time, { color: colors.textTertiary }]}>{p.time}</Text>
-                    </View>
-                    <View style={S.infoBottom}>
-                      <Text
-                        style={[S.last, { color: p.unread > 0 ? colors.textPrimary : colors.textSecondary, fontWeight: p.unread > 0 ? '500' : '400' }]}
-                        numberOfLines={1}
-                      >{p.last}</Text>
-                      {p.unread > 0 && <Pill label={String(p.unread)} variant="primary" />}
-                    </View>
-                  </View>
-                </Pressable>
+                  p={p}
+                  isActive={isActive}
+                  colors={colors}
+                  onPick={onPick}
+                  onLeaveGroup={onLeaveGroup}
+                />
               );
             })
         }
 
         {!syncing && filtered.length === 0 && (
-          <Text style={[S.emptyNote, { color: colors.textTertiary }]}>
-            {input && !isHash
-              ? 'No matches — paste an LXMF hash or scan a QR'
-              : 'Scan a contact QR to start your first conversation'}
-          </Text>
+          <EmptyState tab={activeTab} hasInput={!isHash && input.trim().length > 0} colors={colors} />
         )}
       </ScrollView>
 
-      <QRScannerModal
-        visible={scannerOpen}
-        onClose={() => setScannerOpen(false)}
-        onResult={result => {
-          setScannerOpen(false);
-          if (result.type === 'lxmf') {
-            onNewHash?.(result.hash);
-          }
-        }}
-      />
     </View>
   );
 });
@@ -338,46 +471,51 @@ const S = StyleSheet.create({
   headerLeft: { gap: 2 },
   appLabel:   { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2.5, textTransform: 'uppercase' },
   titleRow:   { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  title:      { fontFamily: fontFamily.sansMd, fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
+  title:      { fontFamily: fontFamily.sansMd, fontSize: fontSize['2xl'], fontWeight: '700', letterSpacing: -0.5 },
   onlineCount:{ fontFamily: fontFamily.sansMd, fontSize: 10.5 },
 
   // ── Compose panel ────────────────────────────────────────────────────────────
-  composePanel:    { paddingHorizontal: 14, paddingBottom: 10, gap: 8 },
-  hashRow:         { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
-  hashInput:       { fontFamily: fontFamily.sansMd, fontSize: 14, padding: 0, flex: 1 },
-  startBtn:        { padding: 13, borderRadius: 14, alignItems: 'center' },
-  startBtnText:    { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
+  composePanel:    { paddingHorizontal: 14, paddingBottom: 10, gap: spacing[3] },
+  hashRow:         { flexDirection: 'row', alignItems: 'center', borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
+  hashInput:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, padding: 0, flex: 1 },
+  startBtn:        { padding: 13, borderRadius: radii.lg, alignItems: 'center' },
+  startBtnText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
   channelBtnRow:   { flexDirection: 'row', gap: 6, paddingHorizontal: 14, paddingBottom: 10 },
-  channelActionBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14 },
+  channelActionBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: radii.lg },
   channelActionText:{ fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase' },
 
+  // ── Tab bar ──────────────────────────────────────────────────────────────────
+  tabBar:      { flexDirection: 'row', paddingHorizontal: 14, paddingBottom: 2, borderBottomWidth: StyleSheet.hairlineWidth },
+  tabItem:     { flex: 1, alignItems: 'center', paddingVertical: 8, position: 'relative' },
+  tabLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9.5, fontWeight: '600', letterSpacing: 1.5, textTransform: 'uppercase' },
+  tabIndicator:{ position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 1.5, borderRadius: 1 },
 
   // ── List ─────────────────────────────────────────────────────────────────────
-  listContent:  { paddingBottom: 28, paddingHorizontal: 6 },
-  emptyNote:    { fontFamily: fontFamily.sansMd, fontSize: 12, textAlign: 'center', paddingTop: 32, opacity: 0.5 },
+  listContent:  { paddingBottom: 28, paddingHorizontal: 6, paddingTop: 6 },
+  emptyNote:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, textAlign: 'center', paddingTop: spacing[8], opacity: 0.5, lineHeight: 20 },
 
   // ── Row ──────────────────────────────────────────────────────────────────────
-  row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 14, borderWidth: 0.5 },
-  swipeWrap:    { borderRadius: 14, overflow: 'hidden', marginHorizontal: 0 },
-  leaveAction:  { position: 'absolute', right: 0, top: 0, bottom: 0, width: REVEAL, alignItems: 'center', justifyContent: 'center', backgroundColor: '#c0392b', borderRadius: 14 },
+  row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11, borderRadius: radii.lg, borderWidth: 0.5 },
+  swipeWrap:    { borderRadius: radii.lg, overflow: 'hidden', marginHorizontal: 0 },
+  leaveAction:  { position: 'absolute', right: 0, top: 0, bottom: 0, width: REVEAL, alignItems: 'center', justifyContent: 'center', backgroundColor: '#c0392b', borderRadius: radii.lg },
   leaveInner:   { alignItems: 'center', gap: 3 },
   leaveText:    { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 1.5, color: '#fff' },
 
   // ── Avatar ───────────────────────────────────────────────────────────────────
   avatarWrap:  { position: 'relative', width: 44, height: 44 },
-  avatar:      { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
-  avatarText:  { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600' },
-  groupHash:   { fontFamily: fontFamily.sansMd, fontSize: 18, fontWeight: '700', color: '#4ecdc4' },
-  statusDot:   { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: 5.5, borderWidth: 2, borderColor: '#060f16' },
+  avatar:      { width: 44, height: 44, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
+  avatarText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
+  groupHash:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.lg, fontWeight: '700', color: '#4ecdc4' },
+  statusDot:   { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: radii.full, borderWidth: 2, borderColor: '#060f16' },
 
   // ── Row info ─────────────────────────────────────────────────────────────────
   info:         { flex: 1, minWidth: 0, gap: 3 },
   infoTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 4 },
   infoBottom:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
-  handle:       { fontFamily: fontFamily.sansMd, fontSize: 14, flex: 1, letterSpacing: 0.1 },
+  handle:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, flex: 1, letterSpacing: 0.1 },
   anonRow:      { flexDirection: 'row', alignItems: 'baseline', flex: 1, gap: 5, minWidth: 0 },
   anonLabel:    { flex: 0 },
-  anonHash:     { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, flex: 1, minWidth: 0 },
+  anonHash:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, flex: 1, minWidth: 0 },
   time:         { fontFamily: fontFamily.sansMd, fontSize: 10 },
   last:         { fontSize: 12.5, flex: 1, fontFamily: fontFamily.sansMd },
 });

@@ -2,7 +2,6 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Linking,
   Pressable,
   StyleSheet,
@@ -22,11 +21,12 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { DepthButton, Pill } from "@/components/primitives";
+import { showToast } from "@/components/ui/Toast";
 import { SendScaffold } from "@/components/send/SendScaffold";
 import * as haptics from "@/src/design-system/haptics";
 import { useGlass } from "@/hooks/useGlass";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
-import { useTheme } from "@/theme";
+import { radii, spacing, useTheme } from "@/theme";
 
 const ICON_SIZE = 88;
 const HALO_PAD = 26;
@@ -110,13 +110,13 @@ export function FailureCard({
     if (!txId) return;
     haptics.tap();
     await Clipboard.setStringAsync(txId);
-    Alert.alert("Copied", "Transaction signature copied to clipboard.");
+    showToast("Transaction signature copied");
   }
 
   async function handleCopyError() {
     haptics.tap();
     await Clipboard.setStringAsync(rawError);
-    Alert.alert("Copied", "Error details copied to clipboard.");
+    showToast("Error details copied");
   }
 
   function handleTryAgain() {
@@ -384,17 +384,17 @@ const S = StyleSheet.create({
   detailsToggle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: spacing[3],
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: spacing[4],
+    borderRadius: radii.md,
     borderWidth: 1,
   },
   detailsToggleText: {
     flex: 1,
   },
   errorPanel: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 1,
     padding: 14,
     gap: 10,

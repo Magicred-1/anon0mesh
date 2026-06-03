@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Pressable, Animated, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '@/theme';
+import { radii, useTheme } from '@/theme';
 
 export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   const { colors } = useTheme();
@@ -30,6 +30,6 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) =
 }
 
 const S = StyleSheet.create({
-  track: { width: 40, height: 24, borderRadius: 12, borderWidth: 0.5, overflow: 'hidden', justifyContent: 'center' },
-  thumb: { position: 'absolute', width: 20, height: 20, borderRadius: 10 },
+  track: { width: 40, height: 24, borderRadius: radii.full, borderWidth: 0.5, overflow: 'hidden', justifyContent: 'center' },
+  thumb: { position: 'absolute', width: 20, height: 20, borderRadius: radii.full },
 });

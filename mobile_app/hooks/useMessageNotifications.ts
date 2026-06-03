@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import type { LxmfEvent } from '@magicred-1/react-native-lxmf';
 import { useLxmfContext } from '@/context/LxmfContext';
-import { sliceNewEvents } from '@/src/utils/sliceNewEvents';
+import { useWallet } from '@/context/WalletContext';
+import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
 import type { NotificationPayload } from '@/components/ui/InAppNotificationBanner';
 import { activeConversationRef } from './activeConversation';
 import { messagesFocusedRef }    from './messagesFocused';
@@ -37,16 +37,22 @@ export function useMessageNotifications(
   enabled = true,
 ) {
   const { events, getDisplayName } = useLxmfContext();
-  const lastCountRef = useRef(0);
-  const lastFirstRef = useRef<LxmfEvent | null>(null);
-  const appStateRef  = useRef(AppState.currentState);
+  const { isConnected } = useWallet();
+  const lastSeenIdRef = useRef(-1);
+  const appStateRef   = useRef(AppState.currentState);
+  const permRequestedRef = useRef(false);
 
-  // Request local notification permission once — no remote/push token requested
+  // Request local notification permission once — no remote/push token requested.
+  // Deferred until the user has a wallet (onboarding complete) and notifications
+  // are enabled, so a cold first launch never throws an OS permission prompt
+  // before the user understands the app.
   useEffect(() => {
+    if (!isConnected || !enabled || permRequestedRef.current) return;
+    permRequestedRef.current = true;
     Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowBadge: true, allowSound: true },
     }).catch(() => {});
-  }, []);
+  }, [isConnected, enabled]);
 
   // Track foreground vs background
   useEffect(() => {
@@ -55,12 +61,10 @@ export function useMessageNotifications(
   }, []);
 
   useEffect(() => {
-    const prevCount = lastCountRef.current;
-    const prevFirst = lastFirstRef.current;
-    lastCountRef.current = events.length;
-    lastFirstRef.current = events[0] ?? null;
-
-    const newEvents = sliceNewEvents(events, prevCount, prevFirst);
+    const newEvents = eventsAfter(events, lastSeenIdRef.current);
+    // Advance the watermark unconditionally (even when disabled) so re-enabling
+    // doesn't replay a backlog of notifications.
+    lastSeenIdRef.current = highestEventId(events, lastSeenIdRef.current);
     if (newEvents.length === 0 || !enabled) return;
 
     const toNotify = newEvents.filter(e => e.type === 'messageReceived');

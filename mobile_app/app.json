@@ -2,7 +2,7 @@
   "expo": {
     "name": "anonmesh",
     "slug": "anonmesh",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "anonmesh",
@@ -10,6 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "magicred1.anonmesh.app",
+      "buildNumber": "3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app requires camera access to scan QR codes for connecting with peers and sharing content.",
@@ -31,6 +32,7 @@
     },
     "android": {
       "package": "magicred1.anonmesh.app",
+      "versionCode": 3,
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
@@ -105,7 +107,16 @@
       ],
       "@magicred-1/react-native-lxmf",
       "./plugins/withAndroidForegroundService",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "anonmesh",
+          "project": "react-native",
+          "url": "https://sentry.io/"
+        }
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

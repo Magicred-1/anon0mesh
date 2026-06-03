@@ -4,7 +4,7 @@
 import React, { memo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import type { Tab } from './types';
 
@@ -42,7 +42,7 @@ export const WalletTabs = memo(function WalletTabs({ tab, onTab }: Props) {
 });
 
 const S = StyleSheet.create({
-  row:   { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginTop: 4 },
-  btn:   { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center', gap: 5 },
+  row:   { flexDirection: 'row', paddingHorizontal: spacing[6], gap: spacing[3], marginTop: 4 },
+  btn:   { flex: 1, paddingVertical: spacing[4], borderRadius: radii.lg, alignItems: 'center', gap: 5 },
   label: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
 });

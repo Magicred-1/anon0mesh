@@ -4,7 +4,7 @@ import {
   ScrollView, StyleSheet, Text, View, useWindowDimensions,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { relTime } from '@/src/utils/relTime';
 
@@ -163,46 +163,46 @@ const CosignCard = memo(function CosignCard({
 
 const S = StyleSheet.create({
   wrap:         { marginBottom: 0 },
-  labelRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  sectionLabel: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' },
-  badge:        { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, borderWidth: 0.5 },
-  badgeText:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1 },
+  labelRow:     { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginBottom: 10 },
+  sectionLabel: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2, textTransform: 'uppercase' },
+  badge:        { paddingHorizontal: 7, paddingVertical: 2, borderRadius: radii.md, borderWidth: 0.5 },
+  badgeText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1 },
 
-  emptyCard:    { borderRadius: 14, borderWidth: 0.5, padding: 14,
+  emptyCard:    { borderRadius: radii.lg, borderWidth: 0.5, padding: 14,
                   flexDirection: 'row', alignItems: 'center', gap: 10 },
-  emptyText:    { fontFamily: fontFamily.sansMd, fontSize: 12 },
+  emptyText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm },
 
   list:         { paddingRight: PEEK },
 
   dots:         { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
-  dot:          { width: 4, height: 4, borderRadius: 2 },
+  dot:          { width: 4, height: 4, borderRadius: radii.full },
   dotActive:    { width: 14 },
 
-  card:         { borderRadius: 16, borderWidth: 0.5, overflow: 'hidden', padding: 14, gap: 10 },
+  card:         { borderRadius: radii.lg, borderWidth: 0.5, overflow: 'hidden', padding: 14, gap: 10 },
   cardAccent:   { position: 'absolute', top: 0, left: 0, right: 0, height: 2 },
 
   cardTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   fromPill:     { flexDirection: 'row', alignItems: 'center', gap: 4,
-                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 0.5 },
-  fromHash:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.3 },
-  timeAgo:      { fontFamily: fontFamily.sansMd, fontSize: 10 },
+                  paddingHorizontal: 8, paddingVertical: 3, borderRadius: radii.xl, borderWidth: 0.5 },
+  fromHash:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.3 },
+  timeAgo:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
 
   amountBlock:  { gap: 2 },
   amountRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
-  amount:       { fontFamily: fontFamily.sansBold, fontSize: 26, letterSpacing: -1, lineHeight: 30 },
-  amountUnit:   { fontFamily: fontFamily.sansMd, fontSize: 13, letterSpacing: 0.5, marginBottom: 2 },
-  txHash:       { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5, opacity: 0.5 },
+  amount:       { fontFamily: fontFamily.sansBold, fontSize: fontSize['2xl'], letterSpacing: -1, lineHeight: 30 },
+  amountUnit:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 0.5, marginBottom: 2 },
+  txHash:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, opacity: 0.5 },
 
-  feeRow:       { flexDirection: 'row', alignItems: 'center', gap: 8,
+  feeRow:       { flexDirection: 'row', alignItems: 'center', gap: spacing[3],
                   borderTopWidth: 0.5, paddingTop: 10 },
-  feeIcon:      { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  feeLabel:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 11 },
-  feeVal:       { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600' },
+  feeIcon:      { width: 20, height: 20, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' },
+  feeLabel:     { flex: 1, fontFamily: fontFamily.sansMd, fontSize: fontSize.xs },
+  feeVal:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600' },
 
-  actions:      { flexDirection: 'row', gap: 8 },
-  rejectBtn:    { width: 40, height: 40, borderRadius: 12, borderWidth: 0.5,
+  actions:      { flexDirection: 'row', gap: spacing[3] },
+  rejectBtn:    { width: 40, height: 40, borderRadius: radii.md, borderWidth: 0.5,
                   alignItems: 'center', justifyContent: 'center' },
   signBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                  gap: 7, height: 40, borderRadius: 12 },
-  signText:     { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600' },
+                  gap: 7, height: 40, borderRadius: radii.md },
+  signText:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
 });
