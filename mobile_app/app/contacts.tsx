@@ -3,7 +3,6 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,7 +18,8 @@ import { DepthButton } from "@/components/primitives";
 import * as haptics from "@/src/design-system/haptics";
 import type { AddressBookEntry } from "@/src/services/addressBook";
 import { useAddressBook } from "@/src/services/addressBook";
-import { fontFamily as FF, useTheme } from "@/theme";
+import { confirm, EmptyState, ScreenHeader } from "@/components/ui";
+import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 function shortAddress(addr: string): string {
   if (addr.length <= 16) return addr;
@@ -61,16 +61,18 @@ function ContactRow({
     setEditing(false);
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     haptics.warning();
-    Alert.alert("Delete recipient?", shortAddress(entry.pubkey), [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => onDelete(entry.pubkey),
-      },
-    ]);
+    if (
+      await confirm({
+        title: "Delete recipient?",
+        message: shortAddress(entry.pubkey),
+        confirmLabel: "Delete",
+        destructive: true,
+      })
+    ) {
+      onDelete(entry.pubkey);
+    }
   }
 
   return (
@@ -147,20 +149,22 @@ export default function ContactsScreen() {
 
   return (
     <SafeAreaView style={[S.root, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <View style={S.header}>
-        <View>
-          <Text style={[S.kicker, { color: colors.textTertiary }]}>LOCAL ONLY</Text>
-          <Text style={[S.title, { color: colors.textPrimary }]}>address book</Text>
-        </View>
-        <Pressable
-          accessibilityLabel="Close address book"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
-        >
-          <Feather name="x" size={18} color={colors.textPrimary} />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        kicker="LOCAL ONLY"
+        title="address book"
+        size="lg"
+        style={S.header}
+        right={
+          <Pressable
+            accessibilityLabel="Close address book"
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={[S.closeButton, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+          >
+            <Feather name="x" size={18} color={colors.textPrimary} />
+          </Pressable>
+        }
+      />
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={S.flex}>
         <ScrollView
@@ -209,13 +213,12 @@ export default function ContactsScreen() {
           </View>
 
           {sortedEntries.length === 0 ? (
-            <View style={[S.empty, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
-              <Feather name="book-open" size={24} color={colors.textTertiary} />
-              <Text style={[S.emptyTitle, { color: colors.textPrimary }]}>No saved recipients</Text>
-              <Text style={[S.emptyBody, { color: colors.textTertiary }]}>
-                Successful sends appear here automatically. You can also add a trusted devnet address manually.
-              </Text>
-            </View>
+            <EmptyState
+              fill={false}
+              icon="book-open"
+              title="No saved recipients"
+              description="Successful sends appear here automatically. You can also add a recipient address manually."
+            />
           ) : (
             <View style={S.list}>
               {sortedEntries.map((entry) => (
@@ -241,64 +244,49 @@ const S = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  // ScreenHeader owns layout + typography; keep this screen's wider spacing[6] gutter.
   header: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  kicker: {
-    fontFamily: FF.sansMd,
-    fontSize: 10,
-    letterSpacing: 2,
-    marginBottom: 2,
-    textTransform: "uppercase",
-  },
-  title: {
-    fontFamily: FF.sansBold,
-    fontSize: 28,
-    letterSpacing: -0.5,
+    paddingHorizontal: spacing[6],
   },
   closeButton: {
     alignItems: "center",
-    borderRadius: 18,
+    borderRadius: radii.full,
     borderWidth: 0.5,
     height: 36,
     justifyContent: "center",
     width: 36,
   },
   content: {
-    gap: 16,
-    paddingHorizontal: 16,
+    gap: spacing[5],
+    paddingHorizontal: spacing[5],
   },
   addCard: {
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 0.5,
     gap: 10,
     padding: 14,
   },
   sectionLabel: {
     fontFamily: FF.sansMd,
-    fontSize: 10,
+    fontSize: fontSize.xs,
     letterSpacing: 2,
     textTransform: "uppercase",
   },
   input: {
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 0.5,
     fontFamily: FF.sans,
-    fontSize: 15,
+    fontSize: fontSize.md,
     minHeight: 48,
     paddingHorizontal: 12,
   },
   pubkeyInput: {
     fontFamily: FF.mono,
-    fontSize: 13,
+    fontSize: fontSize.sm,
   },
   errorText: {
     fontFamily: FF.sansMd,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
   listHeader: {
     alignItems: "center",
@@ -307,30 +295,13 @@ const S = StyleSheet.create({
   },
   count: {
     fontFamily: FF.mono,
-    fontSize: 12,
-  },
-  empty: {
-    alignItems: "center",
-    borderRadius: 16,
-    borderWidth: 0.5,
-    gap: 8,
-    padding: 24,
-  },
-  emptyTitle: {
-    fontFamily: FF.sansMd,
-    fontSize: 16,
-  },
-  emptyBody: {
-    fontFamily: FF.sans,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: "center",
+    fontSize: fontSize.sm,
   },
   list: {
     gap: 10,
   },
   row: {
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 0.5,
     gap: 12,
     padding: 14,
@@ -342,7 +313,7 @@ const S = StyleSheet.create({
   },
   avatar: {
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: radii.md,
     borderWidth: 0.5,
     height: 44,
     justifyContent: "center",
@@ -355,19 +326,19 @@ const S = StyleSheet.create({
   },
   label: {
     fontFamily: FF.sansMd,
-    fontSize: 16,
+    fontSize: fontSize.md,
   },
   labelInput: {
-    borderRadius: 10,
+    borderRadius: radii.md,
     borderWidth: 0.5,
     fontFamily: FF.sansMd,
-    fontSize: 16,
+    fontSize: fontSize.md,
     minHeight: 40,
     paddingHorizontal: 10,
   },
   address: {
     fontFamily: FF.mono,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
   rowFooter: {
     alignItems: "center",
@@ -376,7 +347,7 @@ const S = StyleSheet.create({
   },
   metaText: {
     fontFamily: FF.sans,
-    fontSize: 12,
+    fontSize: fontSize.sm,
   },
   actions: {
     flexDirection: "row",

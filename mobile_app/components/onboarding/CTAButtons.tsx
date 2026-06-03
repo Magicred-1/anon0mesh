@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { fontFamily } from '@/theme';
+import { fontFamily, fontSize, radii, spacing } from '@/theme';
 import { SolanaIcon } from './SolanaIcon';
 
 interface Props {
@@ -45,29 +45,29 @@ export const CTAButtons = memo(function CTAButtons({ isLoading, onConnect, onCre
 });
 
 const S = StyleSheet.create({
-  wrap: { paddingHorizontal: 24, gap: 14 },
+  wrap: { paddingHorizontal: spacing[7], gap: 14 },
 
   // Primary CTA — flat solid cyan, no gradient, no shadow glow.
   primary: {
-    height: 60, borderRadius: 32,
+    height: 60, borderRadius: radii.full,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#00c8e0',
   },
   primaryText: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 14, fontWeight: '800',
+    fontSize: fontSize.md, fontWeight: '800',
     color: '#001820', letterSpacing: 3,
   },
 
   secondary: {
-    height: 54, borderRadius: 27,
+    height: 54, borderRadius: radii.full,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: 'rgba(0,229,255,0.05)',
     borderWidth: 1, borderColor: 'rgba(0,229,255,0.22)',
   },
   secondaryText: {
     fontFamily: fontFamily.sansMd,
-    fontSize: 13, fontWeight: '600',
+    fontSize: fontSize.sm, fontWeight: '600',
     color: 'rgba(0,229,255,0.65)', letterSpacing: 2.5,
   },
 

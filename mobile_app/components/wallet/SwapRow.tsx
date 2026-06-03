@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { AssetDot } from './AssetDot';
 import type { Asset } from './types';
@@ -42,11 +42,11 @@ export const SwapRow = memo(function SwapRow({ label, asset, value, onValue, rea
 });
 
 const S = StyleSheet.create({
-  card:          { borderRadius: 16, padding: 12 },
+  card:          { borderRadius: radii.lg, padding: 12 },
   row:           { flexDirection: 'row', alignItems: 'center' },
   cardLabel:     { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
-  swapInput:     { fontSize: 30, fontWeight: '500', letterSpacing: -0.5, padding: 0 },
-  assetPill:     { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, paddingHorizontal: 11, borderRadius: 99 },
-  assetPillLabel:{ fontFamily: fontFamily.sansMd, fontSize: 12, letterSpacing: 0.5 },
+  swapInput:     { fontSize: fontSize['3xl'], fontWeight: '500', letterSpacing: -0.5, padding: 0 },
+  assetPill:     { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 7, paddingHorizontal: 11, borderRadius: radii.full },
+  assetPillLabel:{ fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 0.5 },
   balHint:       { fontFamily: fontFamily.sansMd, fontSize: 10.5, marginTop: 4 },
 });

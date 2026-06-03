@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 
 export type RowProps = Readonly<{
@@ -41,8 +41,8 @@ export function SettingsRow({ icon, label, sub, right, onPress, danger, last }: 
 }
 
 const S = StyleSheet.create({
-  base:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14 },
-  iconBox: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  label:   { fontSize: 13.5, letterSpacing: -0.2 },
-  sub:     { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5, marginTop: 2 },
+  base:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: spacing[4], paddingHorizontal: 14 },
+  iconBox: { width: 32, height: 32, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  label:   { fontSize: fontSize.sm, letterSpacing: -0.2 },
+  sub:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, marginTop: 2 },
 });

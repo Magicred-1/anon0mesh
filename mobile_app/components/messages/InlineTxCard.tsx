@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { useGlass } from '../../hooks/useGlass';
 import { BLUE } from './constants';
@@ -39,15 +39,15 @@ export const InlineTxCard = memo(function InlineTxCard({ m }: Props) {
 
 const S = StyleSheet.create({
   wrap:       { paddingHorizontal: 16, paddingBottom: 14 },
-  card:       { padding: 12, paddingHorizontal: 14, borderRadius: 14 },
+  card:       { padding: 12, paddingHorizontal: 14, borderRadius: radii.lg },
   header:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   confText:   { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase' },
   amountRow:  { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 10 },
-  amount:     { fontFamily: fontFamily.sansMd, fontSize: 26, fontWeight: '500' },
-  asset:      { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
+  amount:     { fontFamily: fontFamily.sansMd, fontSize: fontSize['2xl'], fontWeight: '500' },
+  asset:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1, textTransform: 'uppercase' },
   routingRow: { flexDirection: 'row', gap: 6 },
-  routingKey: { fontFamily: fontFamily.sansMd, fontSize: 11, width: 52 },
-  routingVal: { fontFamily: fontFamily.sansMd, fontSize: 11, flex: 1 },
+  routingKey: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, width: 52 },
+  routingVal: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, flex: 1 },
   footer:     { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 0.5 },
   footerText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 0.5 },
 });

@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { darkColors, lightColors, type AppColors } from './colors';
+import { darkColors, type AppColors } from './colors';
 import { spacing, radii, shadows } from './spacing';
 import { textVariants, fontFamily, fontSize, fontWeight } from './typography';
 
@@ -15,8 +15,8 @@ export type Theme = {
   isDark: boolean;
 };
 
-const buildTheme = (isDark: boolean): Theme => ({
-  colors: isDark ? darkColors : lightColors,
+const DARK_THEME: Theme = {
+  colors: darkColors,
   spacing,
   radii,
   shadows,
@@ -24,12 +24,10 @@ const buildTheme = (isDark: boolean): Theme => ({
   fontFamily,
   fontSize,
   fontWeight,
-  isDark,
-});
+  isDark: true,
+};
 
-const ThemeContext = createContext<Theme>(buildTheme(true));
-
-const DARK_THEME = buildTheme(true);
+const ThemeContext = createContext<Theme>(DARK_THEME);
 
 export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   return <ThemeContext.Provider value={DARK_THEME}>{children}</ThemeContext.Provider>;

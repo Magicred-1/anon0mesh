@@ -3,9 +3,11 @@ import "@/polyfills";
 import {
   Keypair,
   PublicKey,
+  SendTransactionError,
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
+import bs58 from "bs58";
 import {
   createAssociatedTokenAccountInstruction,
   createTransferInstruction,
@@ -22,52 +24,20 @@ import { SecureKeys, secureGet, secureSet } from "@/src/storage";
 import { parseBaseUnits } from "@/src/utils/amount";
 import { summarizeError } from "@/src/utils/errors";
 import { isWalletDenial } from "@/src/utils/walletDenial";
+// Timeout primitive lives in a dependency-free util (src/utils/withTimeout.ts)
+// so walletData.ts can import it without dragging this module's heavy "@/"
+// graph into the raw-node tier0 services validator.
+import { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS } from "@/src/utils/withTimeout";
+
+// Re-exported so the existing call sites (ReviewCard, useWalletBalance) keep
+// importing the timeout primitive from this module unchanged.
+export { TimeoutError, withTimeout, DIRECT_RPC_TIMEOUT_MS };
+
 const APP_IDENTITY = {
   name: "anonmesh",
   uri: "https://anonme.sh",
   icon: "/favicon.ico",
 };
-
-// ── Timeout primitive ────────────────────────────────────────────────────────
-// past the 60s confirmation budget, so the user sees a frozen review screen
-// with no recovery path. We wrap every direct RPC site in withTimeout(...) and
-// throw a typed TimeoutError so callers can render an inline "request timed
-// out — retry?" affordance instead of bubbling a generic error. See
-// OFFGRID_FALLBACK_AUDIT.md (13-site unbounded-await audit).
-
-export class TimeoutError extends Error {
-  constructor(label: string, ms: number) {
-    super(`${label} timed out after ${ms}ms`);
-    this.name = "TimeoutError";
-  }
-}
-
-export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new TimeoutError(label, ms));
-    }, ms);
-    promise.then(
-      (value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err: unknown) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
-}
-
-const DIRECT_RPC_TIMEOUT_MS = 10_000;
 
 export interface SendSolParams {
   walletAdapter: IWalletAdapter;
@@ -130,13 +100,52 @@ function normalizeWalletError(err: unknown, fallback?: string): never {
   throw err;
 }
 
+/**
+ * The signed transaction's signature, base58-encoded — i.e. the exact string
+ * `sendRawTransaction` returns on success. Known the instant the tx is signed,
+ * so we can hand it to confirmation polling even if the *submit* call never
+ * returns a value (timeout). Returns null only if the tx isn't signed yet,
+ * which never happens on the submit paths below.
+ */
+function signedTransactionSignature(tx: Transaction): string | null {
+  return tx.signature ? bs58.encode(tx.signature) : null;
+}
+
 async function submitSignedTransaction(
   rpcAdapter: IRpcAdapter,
   tx: Transaction,
 ): Promise<string> {
   try {
-    return await rpcAdapter.sendRawTransaction(tx.serialize());
+    return await withTimeout(
+      rpcAdapter.sendRawTransaction(tx.serialize()),
+      DIRECT_RPC_TIMEOUT_MS,
+      "transaction submission",
+    );
   } catch (err: unknown) {
+    // CRITICAL — double-send guard. Once the serialized tx is handed to
+    // sendRawTransaction, the broadcast outcome is UNKNOWN for almost every
+    // error: a TimeoutError, a dropped socket, or a 5xx from a load-balanced
+    // RPC can each occur AFTER the node already forwarded the signed tx to the
+    // cluster. The signature is deterministic from the already-signed tx, so we
+    // return it and let the caller's confirmation poll establish the real
+    // outcome. Rethrowing would surface an inline "Try again" that re-signs with
+    // a fresh blockhash and can land a SECOND transfer.
+    //
+    // The ONE safe exception is a node-side preflight rejection: with
+    // skipPreflight=false the RPC simulates first and answers with an error
+    // (SendTransactionError) when it REJECTS the tx — proving it was validated
+    // and never broadcast (insufficient funds, bad instruction, stale
+    // blockhash). That is safe, and clearer UX, to surface for inline retry.
+    // (A transport/timeout failure throws a plain Error/TimeoutError, never
+    // SendTransactionError, so it correctly falls into the return-signature
+    // path. Mesh-adapter errors likewise default to the safe no-resubmit path.)
+    const provablyNotBroadcast = err instanceof SendTransactionError;
+    if (!provablyNotBroadcast) {
+      const signature = signedTransactionSignature(tx);
+      if (signature) return signature;
+      // No signature to confirm against (should be unreachable on a signed
+      // tx). Fall through so we never claim a send we can't verify.
+    }
     const summary = summarizeError(err, "RPC rejected the transaction without returning a reason");
     throw new Error(`Transaction submission failed: ${summary.message}`);
   }
@@ -231,7 +240,17 @@ export async function confirmTransaction(
       }
     }
     try {
-      const status = await rpcAdapter.getSignatureStatus(signature);
+      // Bound each status read so one hung getSignatureStatus can't stall the
+      // poll loop past its deadline. Without this, a degraded RPC that accepts
+      // the connection but never responds parks the await forever and the
+      // `while (Date.now() < deadline)` guard never re-evaluates — the user
+      // sees a permanent "Confirming" spinner with no timeout. A rejection
+      // here is swallowed below and we simply poll again next cycle.
+      const status = await withTimeout(
+        rpcAdapter.getSignatureStatus(signature),
+        DIRECT_RPC_TIMEOUT_MS,
+        "confirmation status",
+      );
       if (status) {
         if (status.err !== null && status.err !== undefined) {
           return { kind: 'failed', signature, err: status.err, reason: 'on-chain' };
@@ -361,7 +380,11 @@ async function signAndSubmitTransaction({
   tx: Transaction;
   expectedPubkey: PublicKey;
 }): Promise<SendResult> {
-  const { blockhash } = await rpcAdapter.getLatestBlockhash();
+  const { blockhash } = await withTimeout(
+    rpcAdapter.getLatestBlockhash(),
+    DIRECT_RPC_TIMEOUT_MS,
+    "blockhash",
+  );
   tx.recentBlockhash = blockhash;
   tx.feePayer = expectedPubkey;
 

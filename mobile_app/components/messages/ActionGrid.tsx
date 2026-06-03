@@ -4,7 +4,7 @@ import {
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { ASSET_COLORS, BLUE } from './constants';
 
@@ -172,22 +172,22 @@ const S = StyleSheet.create({
   backdrop:     { justifyContent: 'flex-end' },
   sheet:        {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl,
     paddingBottom: 32, paddingTop: 6,
   },
   row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 14 },
-  icon:         { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  rowTitle:     { fontFamily: fontFamily.sansMd, fontSize: 13.5, marginBottom: 2 },
-  rowSub:       { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.2 },
+  icon:         { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  rowTitle:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, marginBottom: 2 },
+  rowSub:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.2 },
   sep:          { height: 0.5, marginHorizontal: 18 },
 
-  moneyExpand:  { marginHorizontal: 18, marginTop: 4, borderRadius: 14, padding: 14, gap: 10 },
+  moneyExpand:  { marginHorizontal: 18, marginTop: 4, borderRadius: radii.lg, padding: 14, gap: 10 },
   assetRow:     { flexDirection: 'row', gap: 8 },
-  assetBtn:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, borderWidth: 0.5 },
-  assetText:    { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase' },
-  amountRow:    { flexDirection: 'row', alignItems: 'center', borderWidth: 0.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  amountInput:  { flex: 1, fontSize: 22, fontFamily: fontFamily.sansMd },
-  assetLabel:   { fontFamily: fontFamily.sansMd, fontSize: 13, letterSpacing: 1 },
-  sendBtn:      { padding: 12, borderRadius: 10, alignItems: 'center' },
-  sendText:     { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+  assetBtn:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: radii.sm, borderWidth: 0.5 },
+  assetText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
+  amountRow:    { flexDirection: 'row', alignItems: 'center', borderWidth: 0.5, borderRadius: radii.md, paddingHorizontal: 12, paddingVertical: 10 },
+  amountInput:  { flex: 1, fontSize: fontSize.xl, fontFamily: fontFamily.sansMd },
+  assetLabel:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 1 },
+  sendBtn:      { padding: 12, borderRadius: radii.md, alignItems: 'center' },
+  sendText:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
 });

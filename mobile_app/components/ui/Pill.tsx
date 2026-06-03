@@ -46,7 +46,7 @@ export function Pill({ label, variant = 'default', dot = false, style }: Props) 
           style={{
             width: 6,
             height: 6,
-            borderRadius: 3,
+            borderRadius: radii.full,
             backgroundColor: dotColor,
           }}
         />

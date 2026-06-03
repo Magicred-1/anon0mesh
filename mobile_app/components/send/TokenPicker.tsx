@@ -11,7 +11,7 @@ import * as haptics from "@/src/design-system/haptics";
 import { useWalletBalance } from "@/src/hooks/useWalletBalance";
 import type { TokenBalance } from "@/src/services/walletData";
 import { SOL_DECIMALS, getTokenDecimals } from "@/src/services/walletData";
-import { useTheme } from "@/theme";
+import { spacing, useTheme } from "@/theme";
 
 export type TokenOption = TokenBalance;
 
@@ -106,7 +106,7 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
                 {
                   alignItems: "center",
                   backgroundColor: isSelected ? colors.primarySubtle : colors.surface0,
-                  borderColor: isSelected ? "rgba(0,229,255,0.32)" : colors.border,
+                  borderColor: isSelected ? colors.borderStrong : colors.border,
                   borderRadius: radii.lg,
                   borderWidth: 1,
                   flexDirection: "row",
@@ -183,8 +183,8 @@ const S = StyleSheet.create({
   footer: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: spacing[3],
     justifyContent: "center",
-    paddingTop: 12,
+    paddingTop: spacing[4],
   },
 });

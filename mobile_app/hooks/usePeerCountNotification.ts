@@ -2,17 +2,23 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useLxmfContext } from '@/context/LxmfContext';
+import { useWallet } from '@/context/WalletContext';
 
 const NOTIF_ID = 'anonmesh-peer-count';
 
 export function usePeerCountNotification(enabled = true) {
   const { peers } = useLxmfContext();
+  const { isConnected } = useWallet();
   const prevOnlineRef    = useRef(-1);
   const prevTotalRef     = useRef(-1);
   const prevHadPeersRef  = useRef<boolean | null>(null);
 
   useEffect(() => {
-    if (!enabled) {
+    // Gate on isConnected (identity created) as well as `enabled`: scheduling a
+    // notification triggers the iOS permission prompt, and the mesh autostarts
+    // and finds peers ~1.5s in — without this gate that prompt fires
+    // mid-onboarding, defeating the deferred-permission choreography (SU-D).
+    if (!enabled || !isConnected) {
       Notifications.dismissNotificationAsync(NOTIF_ID).catch(() => {});
       prevOnlineRef.current   = -1;
       prevTotalRef.current    = -1;
@@ -72,5 +78,5 @@ export function usePeerCountNotification(enabled = true) {
       },
       trigger: null,
     }).catch(() => {});
-  }, [enabled, peers]);
+  }, [enabled, isConnected, peers]);
 }

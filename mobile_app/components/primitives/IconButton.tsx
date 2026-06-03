@@ -51,7 +51,7 @@ export function IconButton({
   hapticOnPressIn = true,
   variant = "plain",
 }: IconButtonProps) {
-  const { colors } = useTheme();
+  const { colors, radii } = useTheme();
 
   // `purple` is a legacy tone from the stealth-branded preview;
   // routed through `accent` (neon) until a dedicated stealth key lands.
@@ -126,6 +126,7 @@ export function IconButton({
           {
             width: sizeConfig.target,
             height: sizeConfig.target,
+            borderRadius: radii.full,
             backgroundColor: variant === "contained" ? containedBg : "transparent",
           },
           disabled && { opacity: stateTokens.feedback.disabledOpacity },
@@ -137,7 +138,7 @@ export function IconButton({
           pointerEvents="none"
           style={[
             styles.tint,
-            { backgroundColor: stateTokens.feedback.iconPressTint },
+            { backgroundColor: stateTokens.feedback.iconPressTint, borderRadius: radii.full },
             tintStyle,
           ]}
         />
@@ -149,13 +150,11 @@ export function IconButton({
 const styles = StyleSheet.create({
   shell: {
     alignItems: "center",
-    borderRadius: 999,
     justifyContent: "center",
     overflow: "hidden",
     position: "relative",
   },
   tint: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
   },
 });

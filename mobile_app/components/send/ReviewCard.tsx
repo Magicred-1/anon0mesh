@@ -23,7 +23,7 @@ import {
   withTimeout,
 } from "@/src/services/sendTransaction";
 import { summarizeError } from "@/src/utils/errors";
-import { fontFamily as FF, useTheme } from "@/theme";
+import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 type TxPhase = "submitting" | "confirming" | null;
 
@@ -263,11 +263,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
               programId: normalizedProgramId,
             });
 
-      await saveAddressBookRecipient(to);
-
       // Phase 2: poll the chain for real confirmation. Loader stays visible
-      // with sublabel updated to "Confirming on devnet". Cancellable via the
-      // unmount cleanup above.
+      // with sublabel updated to "Confirming". Cancellable via the unmount
+      // cleanup above and the in-footer Cancel button, both of which abort
+      // this controller.
       setTxPhase("confirming");
       const controller = new AbortController();
       confirmAbortRef.current = controller;
@@ -278,11 +277,29 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       confirmAbortRef.current = null;
 
       if (conf.kind === "cancelled") {
-        // Caller already unmounted; nothing to do here.
+        // User cancelled (or screen unmounted) mid-poll. Reset so a remount /
+        // retry lands on a clean Review rather than a stuck loader, and never
+        // route anywhere — cancel must not resurface as a Success/Failure nav.
+        setIsConfirming(false);
+        setTxPhase(null);
+        setSliderResetKey((k) => k + 1);
         return;
       }
 
       if (conf.kind === "confirmed") {
+        // Guard against the race where a status poll resolved 'confirmed' a
+        // tick before the user hit Cancel: honor the abort and don't ghost-nav
+        // to Success after the user explicitly backed out.
+        if (controller.signal.aborted) {
+          setIsConfirming(false);
+          setTxPhase(null);
+          setSliderResetKey((k) => k + 1);
+          return;
+        }
+        // Only persist the recipient once the transfer is actually confirmed.
+        // Saving on submit (before confirmation) lets a failed tx or a poisoned
+        // address leak into the address book and resurface as a suggestion.
+        await saveAddressBookRecipient(to);
         router.replace({
           pathname: "/send/success",
           params: { amount, symbol, txId: result.signature },
@@ -298,6 +315,13 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
         signature: conf.signature,
         rawError,
       });
+      // Reset the loader/phase BEFORE navigating. FailureCard's "Try again"
+      // does router.back() onto this still-mounted Review; without this reset
+      // it would land on a frozen loader + "Approve in wallet" footer with the
+      // slider gone, so the retry is unreachable.
+      setIsConfirming(false);
+      setTxPhase(null);
+      setSliderResetKey((k) => k + 1);
       // Use push (not replace) so the failure screen sits ON TOP of Review
       // in the stack. "Try again" on FailureCard does router.back() and the
       // user lands back on Review with form state preserved.
@@ -346,6 +370,21 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     handleConfirm();
   }
 
+  // Loader sublabel. Only the online adapter talks to the app's hard-wired
+  // devnet RPC (src/infrastructure/network/connection.ts), so "on devnet" is
+  // only an honest claim there. In mesh mode the transaction is relayed
+  // through a beacon whose cluster we can't assert from here, so stay neutral
+  // rather than print a cluster we don't actually know. networkMode is the
+  // only network signal already in scope — no extra context dependency.
+  const confirmingSublabel =
+    txPhase === "confirming"
+      ? networkMode === "online"
+        ? "Confirming on devnet"
+        : "Confirming"
+      : txPhase === "submitting"
+        ? "Submitting"
+        : undefined;
+
   return (
     <>
     <SendScaffold
@@ -367,6 +406,13 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
               hitSlop={10}
               onPress={() => {
                 haptics.tap();
+                // Actually abort the in-flight confirmation poll. The poll
+                // checks signal.aborted and resolves { kind: 'cancelled' },
+                // whose handler resets state and skips navigation — so Cancel
+                // can no longer ghost-nav to Success when a late status poll
+                // lands. (During the submit phase no controller exists yet;
+                // the local reset below still tears the loader down.)
+                confirmAbortRef.current?.abort();
                 setIsConfirming(false);
                 setTxPhase(null);
                 setSliderResetKey((k) => k + 1);
@@ -553,7 +599,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     </SendScaffold>
     <PigeonLoader
       visible={isConfirming}
-      sublabel={txPhase === "confirming" ? "Confirming on devnet" : txPhase === "submitting" ? "Submitting" : undefined}
+      sublabel={confirmingSublabel}
     />
     </>
   );
@@ -569,10 +615,10 @@ const S = StyleSheet.create({
 
   // shared tile
   tile: {
-    borderRadius: 20,
+    borderRadius: radii.xl,
     borderWidth: 0.5,
     overflow: "hidden",
-    padding: 16,
+    padding: spacing[5],
   },
   tileLabel: {
     fontFamily: FF.sansMd,
@@ -585,12 +631,12 @@ const S = StyleSheet.create({
   // amount tile
   amountBig: {
     fontFamily: FF.sansBold,
-    fontSize: 38,
+    fontSize: fontSize["4xl"],
     letterSpacing: -1.4,
   },
   amountUnit: {
     fontFamily: FF.sansSb,
-    fontSize: 17,
+    fontSize: fontSize.lg,
   },
 
   // detail rows
@@ -607,29 +653,29 @@ const S = StyleSheet.create({
   },
   detailLabel: {
     fontFamily: FF.sans,
-    fontSize: 15,
+    fontSize: fontSize.md,
   },
   detailRight: {
     alignItems: "flex-end",
     flexShrink: 1,
     gap: 2,
-    marginLeft: 16,
+    marginLeft: spacing[5],
   },
   detailValue: {
     fontFamily: FF.sansMd,
-    fontSize: 15,
+    fontSize: fontSize.md,
     maxWidth: 180,
     textAlign: "right",
   },
   detailSecondary: {
     fontFamily: FF.sans,
-    fontSize: 11,
+    fontSize: fontSize.xs,
     maxWidth: 220,
     textAlign: "right",
   },
   detailMono: {
     fontFamily: FF.mono,
-    fontSize: 15,
+    fontSize: fontSize.md,
     maxWidth: 160,
     textAlign: "right",
   },
@@ -652,16 +698,16 @@ const S = StyleSheet.create({
   },
   stealthLabel: {
     fontFamily: FF.sansMd,
-    fontSize: 15,
+    fontSize: fontSize.md,
   },
 
   // first-send / poisoning banner
   firstSendPanel: {
     alignItems: "flex-start",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 12,
+    gap: spacing[4],
     padding: 14,
   },
   firstSendBody: {
@@ -670,34 +716,34 @@ const S = StyleSheet.create({
   },
   firstSendTitle: {
     fontFamily: FF.sansSb,
-    fontSize: 13,
+    fontSize: fontSize.sm,
   },
   firstSendText: {
     fontFamily: FF.sans,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     lineHeight: 17,
   },
 
   // isolated-mode disabled footer
   disabledFooter: {
     alignItems: "center",
-    borderRadius: 32,
+    borderRadius: radii.full,
     borderWidth: 0.5,
     flexDirection: "row",
     gap: 10,
     height: 62,
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing[7],
   },
   disabledFooterText: {
     fontFamily: FF.sansMd,
-    fontSize: 14,
+    fontSize: fontSize.md,
     textAlign: "center",
   },
 
   waitingFooter: {
     alignItems: "center",
-    borderRadius: 32,
+    borderRadius: radii.full,
     borderWidth: 0.5,
     flexDirection: "row",
     gap: 10,
@@ -707,12 +753,12 @@ const S = StyleSheet.create({
 
   // Render-time gate footers (audit T20).
   sliderStack: {
-    gap: 8,
+    gap: spacing[3],
   },
   meshChip: {
     alignItems: "center",
     alignSelf: "center",
-    borderRadius: 999,
+    borderRadius: radii.full,
     borderWidth: 0.5,
     flexDirection: "row",
     gap: 6,
@@ -721,17 +767,17 @@ const S = StyleSheet.create({
   },
   meshChipText: {
     fontFamily: FF.sans,
-    fontSize: 11,
+    fontSize: fontSize.xs,
     letterSpacing: 0.2,
   },
   disabledSliderStack: {
     alignItems: "center",
-    gap: 8,
+    gap: spacing[3],
   },
   disabledSlider: {
     alignItems: "center",
     alignSelf: "stretch",
-    borderRadius: 32,
+    borderRadius: radii.full,
     borderWidth: 0.5,
     flexDirection: "row",
     gap: 10,
@@ -741,70 +787,70 @@ const S = StyleSheet.create({
   },
   disabledSliderText: {
     fontFamily: FF.sansMd,
-    fontSize: 15,
+    fontSize: fontSize.md,
     letterSpacing: 0.2,
   },
   disabledSliderHint: {
     fontFamily: FF.sans,
-    fontSize: 12,
-    paddingHorizontal: 12,
+    fontSize: fontSize.sm,
+    paddingHorizontal: spacing[3],
     textAlign: "center",
   },
   waitingFooterText: {
     fontFamily: FF.sansMd,
-    fontSize: 16,
+    fontSize: fontSize.md,
   },
   waitingFooterStack: {
     alignItems: "center",
     gap: 6,
   },
   waitingCancelBtn: {
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing[3],
     paddingVertical: 4,
   },
   waitingCancelText: {
     fontFamily: FF.sansMd,
-    fontSize: 13,
+    fontSize: fontSize.sm,
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
 
   // error
   errorPanel: {
-    borderRadius: 14,
+    borderRadius: radii.lg,
     borderWidth: 0.5,
-    gap: 8,
+    gap: spacing[3],
     padding: 14,
   },
   errorHeader: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: spacing[3],
   },
   errorTitle: {
     fontFamily: FF.sansSb,
-    fontSize: 14,
+    fontSize: fontSize.md,
   },
   errorText: {
     fontFamily: FF.sans,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     lineHeight: 17,
   },
   retryButton: {
     alignItems: "center",
     alignSelf: "stretch",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 0.5,
     flexDirection: "row",
-    gap: 8,
+    gap: spacing[3],
     justifyContent: "center",
     marginTop: 6,
     minHeight: 48,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[4],
   },
   retryText: {
     fontFamily: FF.sansSb,
-    fontSize: 15,
+    fontSize: fontSize.md,
   },
 });

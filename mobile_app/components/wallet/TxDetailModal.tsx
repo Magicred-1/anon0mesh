@@ -6,7 +6,7 @@ import { AppBottomSheet, Icon, Pill } from "@/components/primitives";
 import type { ActivityEntry } from "@/src/services/walletData";
 import * as haptics from "@/src/design-system/haptics";
 import { buildDevnetExplorerTxUrl } from "@/src/services/explorer";
-import { fontFamily as FF, useTheme } from "@/theme";
+import { fontFamily as FF, fontSize, radii, spacing, useTheme } from "@/theme";
 
 const COPY_FEEDBACK_MS = 1400;
 
@@ -168,17 +168,17 @@ export function TxDetailModal({ tx, visible, onClose }: TxDetailModalProps) {
 
 const S = StyleSheet.create({
   content: {
-    gap: 16,
-    paddingBottom: 24,
+    gap: spacing[5],
+    paddingBottom: spacing[7],
   },
   header: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 12,
+    gap: spacing[4],
   },
   iconWrap: {
     alignItems: "center",
-    borderRadius: 18,
+    borderRadius: radii.xl,
     height: 44,
     justifyContent: "center",
     width: 44,
@@ -190,14 +190,14 @@ const S = StyleSheet.create({
   },
   title: {
     fontFamily: FF.sansBold,
-    fontSize: 22,
+    fontSize: fontSize.xl,
   },
   subtitle: {
     fontFamily: FF.sans,
-    fontSize: 13,
+    fontSize: fontSize.sm,
   },
   details: {
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 1,
     overflow: "hidden",
   },
@@ -213,7 +213,7 @@ const S = StyleSheet.create({
   },
   detailLabel: {
     fontFamily: FF.sansMd,
-    fontSize: 10,
+    fontSize: fontSize.xs,
     letterSpacing: 1.5,
     textTransform: "uppercase",
   },
@@ -228,7 +228,7 @@ const S = StyleSheet.create({
   detailValue: {
     flexShrink: 1,
     fontFamily: FF.mono,
-    fontSize: 12,
+    fontSize: fontSize.sm,
     textAlign: "right",
   },
   actions: {
@@ -237,19 +237,19 @@ const S = StyleSheet.create({
   },
   actionBtn: {
     alignItems: "center",
-    borderRadius: 12,
+    borderRadius: radii.md,
     flex: 1,
     justifyContent: "center",
     minHeight: 44,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[4],
   },
   actionBtnSecondary: {
     borderWidth: 1,
   },
   actionBtnText: {
     fontFamily: FF.sansSb,
-    fontSize: 14,
+    fontSize: fontSize.md,
     letterSpacing: 0.3,
   },
 });

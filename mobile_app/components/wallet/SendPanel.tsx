@@ -2,7 +2,7 @@
 import React, { memo, useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { Pill } from '@/components/ui';
 import { useGlass } from '@/hooks/useGlass';
 import { PreviewBadge } from '@/components/primitives/PreviewBadge';
@@ -100,7 +100,7 @@ export const SendPanel = memo(function SendPanel() {
         <Feather name="lock" size={14} color={colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={[S.privLabel, { color: colors.primary }]}>PRIVATE · MPC 3/3</Text>
-          <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>amount + recipient hidden on-chain</Text>
+          <Text style={{ fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 }}>amount + recipient hidden on-chain</Text>
         </View>
         <Pill
           label={statusLabel}
@@ -154,24 +154,24 @@ export const SendPanel = memo(function SendPanel() {
 });
 
 const S = StyleSheet.create({
-  panel:         { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 16, gap: 12 },
+  panel:         { paddingHorizontal: spacing[6], paddingTop: 14, paddingBottom: spacing[5], gap: spacing[4] },
   row:           { flexDirection: 'row', alignItems: 'center' },
-  card:          { borderRadius: 16, padding: 12 },
+  card:          { borderRadius: radii.lg, padding: spacing[4] },
   cardLabel:     { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
   privLabel:     { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  assetBtn:      { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, paddingHorizontal: 11, borderRadius: 10, borderWidth: 0.5, borderColor: 'transparent' },
-  assetSym:      { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5 },
+  assetBtn:      { flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[3], paddingHorizontal: 11, borderRadius: radii.md, borderWidth: 0.5, borderColor: 'transparent' },
+  assetSym:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5 },
   assetBal:      { fontFamily: fontFamily.sansMd, fontSize: 9 },
-  privDot:       { width: 5, height: 5, borderRadius: 3 },
-  textField:     { fontSize: 14, fontFamily: fontFamily.sansMd, letterSpacing: 0.5, padding: 0 },
+  privDot:       { width: 5, height: 5, borderRadius: radii.full },
+  textField:     { fontSize: fontSize.md, fontFamily: fontFamily.sansMd, letterSpacing: 0.5, padding: 0 },
   resolvedBadge: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2 },
   amountHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   maxBtn:        { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
   amountInput:   { fontSize: 40, fontWeight: '500', letterSpacing: -1.5, padding: 0 },
-  amountSym:     { fontFamily: fontFamily.sansMd, fontSize: 13, letterSpacing: 1.5 },
-  usdHint:       { fontFamily: fontFamily.sansMd, fontSize: 11, marginTop: 4 },
+  amountSym:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 1.5 },
+  usdHint:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, marginTop: 4 },
   progressLine:  { flexDirection: 'row', gap: 10, paddingVertical: 3 },
-  progressText:  { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, flex: 1 },
-  actionBtn:     { padding: 15, borderRadius: 14, alignItems: 'center' },
-  actionLabel:   { fontFamily: fontFamily.sansMd, fontSize: 12, letterSpacing: 3.5, textTransform: 'uppercase', fontWeight: '600' },
+  progressText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, flex: 1 },
+  actionBtn:     { padding: 15, borderRadius: radii.lg, alignItems: 'center' },
+  actionLabel:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 3.5, textTransform: 'uppercase', fontWeight: '600' },
 });

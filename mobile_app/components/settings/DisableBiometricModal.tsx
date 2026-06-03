@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 
 const DISABLE_LINES = [
@@ -53,7 +53,7 @@ export function DisableBiometricModal({
   return (
     <Modal transparent animationType="none" onRequestClose={dismiss}>
       <View style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.72)', opacity: overlayOp }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay, opacity: overlayOp }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={phase === 1 ? undefined : dismiss} />
         </Animated.View>
 
@@ -89,8 +89,8 @@ export function DisableBiometricModal({
                   <Text style={[S.cancelText, { color: colors.textSecondary }]}>CANCEL</Text>
                 </Pressable>
                 <Pressable onPress={handleConfirm} style={[S.disableBtn, { backgroundColor: colors.error }]}>
-                  <Feather name="shield-off" size={13} color="#fff" />
-                  <Text style={S.disableBtnText}>DISABLE</Text>
+                  <Feather name="shield-off" size={13} color={colors.textPrimary} />
+                  <Text style={[S.disableBtnText, { color: colors.textPrimary }]}>DISABLE</Text>
                 </Pressable>
               </View>
             </View>
@@ -134,29 +134,29 @@ export function DisableBiometricModal({
 }
 
 const S = StyleSheet.create({
-  sheet:        { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: 20, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 36, borderWidth: 0.5 },
-  grab:         { width: 36, height: 4, borderRadius: 99, alignSelf: 'center', marginBottom: 14 },
+  sheet:        { position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: radii.xl, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 14, paddingBottom: 36, borderWidth: 0.5 },
+  grab:         { width: 36, height: 4, borderRadius: radii.full, alignSelf: 'center', marginBottom: 14 },
   header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   tag:          { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase' },
-  title:        { fontSize: 18, marginTop: 4, letterSpacing: -0.3 },
-  closeBtn:     { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  title:        { fontSize: fontSize.lg, marginTop: 4, letterSpacing: -0.3 },
+  closeBtn:     { width: 30, height: 30, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
 
   body:         { gap: 16, paddingBottom: 4 },
-  warnBox:      { borderRadius: 14, borderWidth: 0.5, padding: 16, alignItems: 'center', gap: 2 },
-  warnTitle:    { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 6 },
-  warnText:     { fontFamily: fontFamily.sansMd, fontSize: 12.5, lineHeight: 19, textAlign: 'center' },
+  warnBox:      { borderRadius: radii.lg, borderWidth: 0.5, padding: 16, alignItems: 'center', gap: 2 },
+  warnTitle:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 6 },
+  warnText:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, lineHeight: 19, textAlign: 'center' },
   btnRow:       { flexDirection: 'row', gap: 8 },
-  cancelBtn:    { flex: 1, padding: 13, borderRadius: 12, alignItems: 'center' },
-  cancelText:   { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
-  disableBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 13, borderRadius: 12 },
-  disableBtnText: { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase', color: '#fff' },
+  cancelBtn:    { flex: 1, padding: 13, borderRadius: radii.md, alignItems: 'center' },
+  cancelText:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
+  disableBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 13, borderRadius: radii.md },
+  disableBtnText: { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
 
-  logLine:      { fontFamily: fontFamily.sansMd, fontSize: 11.5, letterSpacing: 0.3 },
+  logLine:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.3 },
 
   center:       { paddingVertical: 24, alignItems: 'center', gap: 16 },
-  iconCircle:   { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  doneTitle:    { fontSize: 17, letterSpacing: -0.3 },
+  iconCircle:   { width: 64, height: 64, borderRadius: radii.xl, alignItems: 'center', justifyContent: 'center' },
+  doneTitle:    { fontSize: fontSize.lg, letterSpacing: -0.3 },
   doneSub:      { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', textAlign: 'center', marginTop: 2, paddingHorizontal: 20 },
-  doneBtn:      { width: '100%', padding: 13, borderRadius: 12, alignItems: 'center', marginTop: 4 },
-  doneBtnText:  { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
+  doneBtn:      { width: '100%', padding: 13, borderRadius: radii.md, alignItems: 'center', marginTop: 4 },
+  doneBtnText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 3, textTransform: 'uppercase' },
 });

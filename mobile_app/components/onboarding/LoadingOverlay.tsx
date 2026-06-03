@@ -1,11 +1,12 @@
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
-import { fontFamily } from '@/theme';
-import { CYAN, BG } from './constants';
+import { darkColors, fontFamily, fontSize, radii, spacing } from '@/theme';
 
+const CYAN   = darkColors.primary;
+const BG     = darkColors.background;
 const DIM    = 'rgba(0,229,255,0.35)';
-const BORDER = 'rgba(0,229,255,0.13)';
+const BORDER = darkColors.border;
 
 interface Props {
   isLoading:       boolean;
@@ -116,15 +117,15 @@ export const LoadingOverlay = memo(function LoadingOverlay({
 const S = StyleSheet.create({
   bg:        { ...StyleSheet.absoluteFillObject, backgroundColor: BG, zIndex: 50 },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  card:      { width: '100%', backgroundColor: '#071520', borderRadius: 24, borderWidth: 1, borderColor: BORDER, paddingVertical: 44, paddingHorizontal: 32, alignItems: 'center', gap: 16 },
-  label:     { fontFamily: fontFamily.sansMd, fontSize: 10, color: DIM, letterSpacing: 4, textTransform: 'uppercase' },
-  status:    { fontFamily: fontFamily.sansMd, fontSize: 10, color: CYAN, letterSpacing: 4, opacity: 0.5 },
-  handleRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 4, maxWidth: '100%', flexShrink: 1 },
-  nickname:  { fontFamily: fontFamily.sansMd, fontSize: 28, color: CYAN, letterSpacing: 2, fontWeight: '700', flexShrink: 1, minWidth: 0 },
-  cursor:    { fontFamily: fontFamily.sansMd, fontSize: 28, color: CYAN, fontWeight: '700', marginBottom: 3 },
-  divider:   { width: 40, height: 0.5, backgroundColor: 'rgba(0,229,255,0.28)', marginVertical: 4 },
+  card:      { width: '100%', backgroundColor: darkColors.surface1, borderRadius: radii['2xl'], borderWidth: 1, borderColor: BORDER, paddingVertical: 44, paddingHorizontal: spacing[8], alignItems: 'center', gap: spacing[5] },
+  label:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, color: DIM, letterSpacing: 4, textTransform: 'uppercase' },
+  status:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, color: CYAN, letterSpacing: 4, opacity: 0.5 },
+  handleRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: spacing[2], maxWidth: '100%', flexShrink: 1 },
+  nickname:  { fontFamily: fontFamily.sansMd, fontSize: fontSize['3xl'], color: CYAN, letterSpacing: 2, fontWeight: '700', flexShrink: 1, minWidth: 0 },
+  cursor:    { fontFamily: fontFamily.sansMd, fontSize: fontSize['3xl'], color: CYAN, fontWeight: '700', marginBottom: 3 },
+  divider:   { width: 40, height: 0.5, backgroundColor: darkColors.borderStrong, marginVertical: spacing[2] },
   bottomRow: { alignItems: 'center', gap: 14 },
   dotsRow:   { flexDirection: 'row', gap: 10 },
-  dot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: CYAN },
-  detail:    { fontFamily: fontFamily.sansMd, fontSize: 10, color: DIM, letterSpacing: 2.5, textAlign: 'center' },
+  dot:       { width: 6, height: 6, borderRadius: radii.full, backgroundColor: CYAN },
+  detail:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, color: DIM, letterSpacing: 2.5, textAlign: 'center' },
 });

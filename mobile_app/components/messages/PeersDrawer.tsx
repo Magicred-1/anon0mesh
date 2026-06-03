@@ -6,11 +6,12 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation,
 } from 'react-native-reanimated';
-import { fontFamily, useTheme } from '@/theme';
+import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { Pill } from '@/components/ui/Pill';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { confirm } from '@/components/ui/ConfirmSheet';
 import { useGlass } from '../../hooks/useGlass';
-import { QRScannerModal } from './QRScannerModal';
+import { scan } from '@/src/services/qrScan';
 import { type Peer } from './constants';
 import type { ConvSummary } from '@/hooks/useConversationSummaries';
 
@@ -65,15 +66,19 @@ function SwipeableGroupRow({ groupName, onLeave, children }: { readonly groupNam
     opacity: interpolate(tx.value, [-REVEAL, -REVEAL * 0.3, 0], [1, 0.9, 0.5], Extrapolation.CLAMP),
   }));
 
-  const confirmLeave = useCallback(() => {
-    Alert.alert(
-      `Leave ${groupName}?`,
-      'You will need the address + key to re-join. Keys live only with members of this channel.',
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); } },
-        { text: 'Leave',  style: 'destructive', onPress: () => { tx.value = withSpring(0, { damping: 18, stiffness: 240 }); onLeave(); } },
-      ],
-    );
+  const confirmLeave = useCallback(async () => {
+    // Channel keys are unrecoverable from local state once we leave. Block on
+    // explicit confirm so a fat-finger swipe doesn't destroy access.
+    const ok = await confirm({
+      title: `Leave ${groupName}?`,
+      message: 'You will need the address + key to re-join. Keys live only with members of this channel.',
+      confirmLabel: 'Leave',
+      destructive: true,
+    });
+    // Snap the swiped row back to rest regardless of the decision (both the
+    // old cancel and leave branches did this).
+    tx.value = withSpring(0, { damping: 18, stiffness: 240 });
+    if (ok) onLeave();
   }, [groupName, onLeave, tx]);
 
   return (
@@ -295,8 +300,34 @@ export const PeersDrawer = memo(function PeersDrawer({
   const dmPeers  = allPeers.filter(p => !p.isGroup);
   const online   = dmPeers.filter(p => p.online).length;
 
-  const [input,       setInput]       = useState('');
-  const [scannerOpen, setScannerOpen] = useState(false);
+  const [input, setInput] = useState('');
+
+  const handleScan = useCallback(async () => {
+    const result = await scan();
+    if (!result) return;
+    if (__DEV__) console.log('[QR scan/PeersDrawer]', JSON.stringify(result));
+    if (result.type === 'lxmf') {
+      onNewHash?.(result.hash);
+    } else if (result.type === 'lxmf-group') {
+      // Group QR scanned in peer-finder flow — route to join modal instead.
+      Alert.alert(
+        'Looks like a channel QR',
+        'Open "Join channel" and scan the same QR to join the channel.',
+      );
+    } else if (result.type === 'solana') {
+      Alert.alert(
+        'Solana address scanned',
+        'This is a wallet address. Use the Send screen to send funds.',
+      );
+    } else {
+      // unknown — surface the raw payload so the user can debug what they scanned
+      const preview = result.raw.length > 64 ? result.raw.slice(0, 64) + '…' : result.raw;
+      Alert.alert(
+        'Unrecognized QR',
+        `Not a peer or channel QR. Scanned content:\n\n${preview}`,
+      );
+    }
+  }, [onNewHash]);
 
   const isHash   = /^[0-9a-fA-F]{16,}$/.test(input.trim());
   const canStart = isHash;
@@ -371,7 +402,7 @@ export const PeersDrawer = memo(function PeersDrawer({
               <Feather name="x" size={13} color={colors.textTertiary} />
             </Pressable>
           )}
-          <Pressable onPress={() => setScannerOpen(true)} hitSlop={8}>
+          <Pressable onPress={handleScan} hitSlop={8}>
             <Feather name="camera" size={15} color={colors.primary} />
           </Pressable>
         </View>
@@ -380,7 +411,7 @@ export const PeersDrawer = memo(function PeersDrawer({
             onPress={() => { onNewHash?.(input.trim()); setInput(''); }}
             style={[S.startBtn, { backgroundColor: colors.primary }]}
           >
-            <Text style={[S.startBtnText, { color: '#08080A' }]}>OPEN CONVERSATION</Text>
+            <Text style={[S.startBtnText, { color: colors.background }]}>OPEN CONVERSATION</Text>
           </Pressable>
         )}
       </View>
@@ -392,8 +423,8 @@ export const PeersDrawer = memo(function PeersDrawer({
           <Text style={[S.channelActionText, { color: colors.textPrimary }]}>JOIN</Text>
         </Pressable>
         <Pressable onPress={onCreateGroup} style={[S.channelActionBtn, { backgroundColor: colors.primary }]}>
-          <Feather name="plus" size={13} color="#08080A" />
-          <Text style={[S.channelActionText, { color: '#08080A' }]}>CREATE</Text>
+          <Feather name="plus" size={13} color={colors.background} />
+          <Text style={[S.channelActionText, { color: colors.background }]}>CREATE</Text>
         </Pressable>
       </View>
 
@@ -430,16 +461,6 @@ export const PeersDrawer = memo(function PeersDrawer({
         )}
       </ScrollView>
 
-      <QRScannerModal
-        visible={scannerOpen}
-        onClose={() => setScannerOpen(false)}
-        onResult={result => {
-          setScannerOpen(false);
-          if (result.type === 'lxmf') {
-            onNewHash?.(result.hash);
-          }
-        }}
-      />
     </View>
   );
 });
@@ -450,17 +471,17 @@ const S = StyleSheet.create({
   headerLeft: { gap: 2 },
   appLabel:   { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2.5, textTransform: 'uppercase' },
   titleRow:   { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  title:      { fontFamily: fontFamily.sansMd, fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
+  title:      { fontFamily: fontFamily.sansMd, fontSize: fontSize['2xl'], fontWeight: '700', letterSpacing: -0.5 },
   onlineCount:{ fontFamily: fontFamily.sansMd, fontSize: 10.5 },
 
   // ── Compose panel ────────────────────────────────────────────────────────────
-  composePanel:    { paddingHorizontal: 14, paddingBottom: 10, gap: 8 },
-  hashRow:         { flexDirection: 'row', alignItems: 'center', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
-  hashInput:       { fontFamily: fontFamily.sansMd, fontSize: 14, padding: 0, flex: 1 },
-  startBtn:        { padding: 13, borderRadius: 14, alignItems: 'center' },
-  startBtnText:    { fontFamily: fontFamily.sansMd, fontSize: 11, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
+  composePanel:    { paddingHorizontal: 14, paddingBottom: 10, gap: spacing[3] },
+  hashRow:         { flexDirection: 'row', alignItems: 'center', borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
+  hashInput:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, padding: 0, flex: 1 },
+  startBtn:        { padding: 13, borderRadius: radii.lg, alignItems: 'center' },
+  startBtnText:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
   channelBtnRow:   { flexDirection: 'row', gap: 6, paddingHorizontal: 14, paddingBottom: 10 },
-  channelActionBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14 },
+  channelActionBtn:{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: radii.lg },
   channelActionText:{ fontFamily: fontFamily.sansMd, fontSize: 10.5, fontWeight: '600', letterSpacing: 1.2, textTransform: 'uppercase' },
 
   // ── Tab bar ──────────────────────────────────────────────────────────────────
@@ -471,30 +492,30 @@ const S = StyleSheet.create({
 
   // ── List ─────────────────────────────────────────────────────────────────────
   listContent:  { paddingBottom: 28, paddingHorizontal: 6, paddingTop: 6 },
-  emptyNote:    { fontFamily: fontFamily.sansMd, fontSize: 12, textAlign: 'center', paddingTop: 32, opacity: 0.5, lineHeight: 20 },
+  emptyNote:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, textAlign: 'center', paddingTop: spacing[8], opacity: 0.5, lineHeight: 20 },
 
   // ── Row ──────────────────────────────────────────────────────────────────────
-  row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 14, borderWidth: 0.5 },
-  swipeWrap:    { borderRadius: 14, overflow: 'hidden', marginHorizontal: 0 },
-  leaveAction:  { position: 'absolute', right: 0, top: 0, bottom: 0, width: REVEAL, alignItems: 'center', justifyContent: 'center', backgroundColor: '#c0392b', borderRadius: 14 },
+  row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11, borderRadius: radii.lg, borderWidth: 0.5 },
+  swipeWrap:    { borderRadius: radii.lg, overflow: 'hidden', marginHorizontal: 0 },
+  leaveAction:  { position: 'absolute', right: 0, top: 0, bottom: 0, width: REVEAL, alignItems: 'center', justifyContent: 'center', backgroundColor: '#c0392b', borderRadius: radii.lg },
   leaveInner:   { alignItems: 'center', gap: 3 },
   leaveText:    { fontFamily: fontFamily.sansMd, fontSize: 8.5, letterSpacing: 1.5, color: '#fff' },
 
   // ── Avatar ───────────────────────────────────────────────────────────────────
   avatarWrap:  { position: 'relative', width: 44, height: 44 },
-  avatar:      { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
-  avatarText:  { fontFamily: fontFamily.sansMd, fontSize: 12, fontWeight: '600' },
-  groupHash:   { fontFamily: fontFamily.sansMd, fontSize: 18, fontWeight: '700', color: '#4ecdc4' },
-  statusDot:   { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: 5.5, borderWidth: 2, borderColor: '#060f16' },
+  avatar:      { width: 44, height: 44, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
+  avatarText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
+  groupHash:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.lg, fontWeight: '700', color: '#4ecdc4' },
+  statusDot:   { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: radii.full, borderWidth: 2, borderColor: '#060f16' },
 
   // ── Row info ─────────────────────────────────────────────────────────────────
   info:         { flex: 1, minWidth: 0, gap: 3 },
   infoTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 4 },
   infoBottom:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4 },
-  handle:       { fontFamily: fontFamily.sansMd, fontSize: 14, flex: 1, letterSpacing: 0.1 },
+  handle:       { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, flex: 1, letterSpacing: 0.1 },
   anonRow:      { flexDirection: 'row', alignItems: 'baseline', flex: 1, gap: 5, minWidth: 0 },
   anonLabel:    { flex: 0 },
-  anonHash:     { fontFamily: fontFamily.sansMd, fontSize: 11, letterSpacing: 0.5, flex: 1, minWidth: 0 },
+  anonHash:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, letterSpacing: 0.5, flex: 1, minWidth: 0 },
   time:         { fontFamily: fontFamily.sansMd, fontSize: 10 },
   last:         { fontSize: 12.5, flex: 1, fontFamily: fontFamily.sansMd },
 });
