@@ -39,7 +39,9 @@
         "track": "internal"
       },
       "ios": {
-        "appleId": "djasongadiou@gmail.com"
+        "appleId": "djasongadiou@gmail.com",
+        "ascAppId": "6764791271",
+        "appleTeamId": "LZT8Q7UY42"
       }
     }
   }
