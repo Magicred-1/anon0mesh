@@ -1,60 +1,30 @@
 /**
- * Crash/error observability — Sentry, crash-only, privacy-scrubbed.
+ * Crash/error observability — Sentry removed.
  *
- * Scope is deliberately narrow: unhandled JS/native crashes + handled React
- * errors. NO product analytics, NO user identity, NO performance tracing.
- * See AI Briefs/Anonmesh/telemetry.md for the rationale.
- *
- * KILL SWITCH: this is a no-op unless EXPO_PUBLIC_SENTRY_DSN is set AND the
- * build is not __DEV__. Unset the env var (or delete this module's call site in
- * app/_layout.tsx) and the app sends nothing. Nothing here runs in development.
+ * @sentry/react-native was removed: its native Gradle/Xcode steps (source-map
+ * upload via sentry-cli) require an auth token and break CI builds.
+ * This no-op shim preserves the import surface so app/_layout.tsx and
+ * ErrorBoundary.tsx compile and run unchanged. The ErrorBoundary still renders
+ * its fallback UI — it just no longer reports to Sentry. The global
+ * errorHandler (console.error + native crash path) remains the crash signal.
  */
-import * as Sentry from '@sentry/react-native';
-import type { ErrorEvent, Breadcrumb } from '@sentry/react-native';
 
-import { scrubDeep } from './scrub';
-
-const DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
-
-/**
- * Telemetry is OFF in development and OFF whenever no DSN is configured. A
- * release build with no DSN ships completely inert — this is the removal path.
- */
-export const observabilityEnabled = Boolean(DSN) && !__DEV__;
-
-function beforeSend(event: ErrorEvent): ErrorEvent {
-  // Belt-and-suspenders: never attach a user even if something tries to.
-  delete event.user;
-  return scrubDeep(event);
+interface NoopScope {
+  setTag(key: string, value: string): void;
+  setContext(key: string, value: Record<string, unknown> | null): void;
 }
 
-function beforeBreadcrumb(crumb: Breadcrumb): Breadcrumb | null {
-  // Navigation breadcrumbs can carry route params (e.g. ?to=<address>) — drop
-  // their data and keep only the scrubbed message text.
-  if (crumb.data) crumb.data = {};
-  return scrubDeep(crumb);
-}
+const noopScope: NoopScope = { setTag: () => {}, setContext: () => {} };
 
-/**
- * Initialise crash observability. Safe to call unconditionally — it no-ops
- * unless {@link observabilityEnabled}. Call once at app entry, before render.
- */
-export function initObservability(): void {
-  if (!observabilityEnabled) return;
+/** Always false — Sentry is gone. */
+export const observabilityEnabled = false;
 
-  Sentry.init({
-    dsn: DSN,
-    enabled: true,
-    // Crash-only: no performance/tracing spans, no profiling.
-    tracesSampleRate: 0,
-    // Never collect IP, cookies, or default request PII.
-    sendDefaultPii: false,
-    // Keep breadcrumb history short; they are scrubbed but fewer is safer.
-    maxBreadcrumbs: 30,
-    attachStacktrace: true,
-    beforeSend,
-    beforeBreadcrumb,
-  });
-}
+/** No-op. */
+export function initObservability(): void { /* no-op */ }
 
-export { Sentry };
+/** No-op stand-in for @sentry/react-native. */
+export const Sentry = {
+  wrap<T>(component: T): T { return component; },
+  withScope(callback: (scope: NoopScope) => void): void { callback(noopScope); },
+  captureException(_error: unknown): void { /* no-op */ },
+};
