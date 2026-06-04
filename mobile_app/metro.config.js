@@ -1,10 +1,9 @@
-// getSentryExpoConfig wraps Expo's default Metro config to enable source-map
-// upload for crash symbolication. It is a drop-in for getDefaultConfig; if the
-// Sentry integration is ever removed, swap this line back to getDefaultConfig.
-const { getSentryExpoConfig } = require('@sentry/react-native/metro');
+// Plain Expo Metro config. (Sentry's getSentryExpoConfig wrapper was removed
+// along with @sentry/react-native.)
+const { getDefaultConfig } = require('expo/metro-config');
 const path = require('node:path');
 
-const config = getSentryExpoConfig(__dirname);
+const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 config.resolver.unstable_conditionNames = [
