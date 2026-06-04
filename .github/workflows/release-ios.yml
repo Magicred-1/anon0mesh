@@ -1,0 +1,42 @@
+name: Release iOS (TestFlight)
+
+# Builds the iOS app on EAS cloud and auto-submits to TestFlight.
+#
+# Prerequisites (one-time, see PR description / plan):
+#   - Apple Developer Program + app created in App Store Connect (TestFlight)
+#   - EAS iOS credentials set up: `eas credentials -p ios` (dist cert + profile)
+#   - App Store Connect API key uploaded to EAS (or passed via secrets)
+#   - GitHub secret: EXPO_TOKEN (expo.dev access token)
+#   - Fill submit.production.ios.ascAppId + appleTeamId in mobile_app/eas.json
+
+on:
+  workflow_dispatch:        # manual trigger — safest for TestFlight
+  push:
+    tags: ['v*']            # optional: push a v* tag to ship a build
+
+jobs:
+  testflight:
+    runs-on: ubuntu-latest  # EAS builds on Expo's macOS cloud — no macOS runner needed
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile_app/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: mobile_app
+
+      # Cloud build, then submit to TestFlight using submit.production.ios.
+      # --auto-submit chains the submit step; no separate eas submit needed.
+      - name: EAS build + submit to TestFlight
+        run: eas build --platform ios --profile production --non-interactive --auto-submit
+        working-directory: mobile_app
