@@ -38,6 +38,7 @@ import type { NetworkMode }      from '@/src/infrastructure/network/types';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
+import { closeThreadRef }         from '@/hooks/closeThread';
 import { useConversationSummaries } from '@/hooks/useConversationSummaries';
 import { formatAgo }             from '@/utils/time';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
@@ -639,6 +640,14 @@ export default function MessagesScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePeerHex]);
+
+  // Hardware back must close an open thread before the (tabs) layout's
+  // exit-toast handler gets a say. The thread is component state, not a route,
+  // so back can't pop it — expose the animated close while a thread is open.
+  useEffect(() => {
+    closeThreadRef.current = activePeerHex !== null ? goBack : null;
+    return () => { closeThreadRef.current = null; };
+  }, [activePeerHex, goBack]);
 
   const chatAnim = useAnimatedStyle(() => ({ transform: [{ translateX: chatTx.value }] }));
 

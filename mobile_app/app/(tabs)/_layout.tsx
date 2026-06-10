@@ -24,6 +24,8 @@ import Reanimated, {
 import { Feather }            from '@expo/vector-icons';
 import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
 import { subscribeDrawer }    from '@/hooks/drawerState';
+import { closeThreadRef }     from '@/hooks/closeThread';
+import { messagesFocusedRef } from '@/hooks/messagesFocused';
 import { useSafeAreaInsets }  from 'react-native-safe-area-context';
 import { appMotion } from '@/src/design-system/motion';
 import * as haptics from '@/src/design-system/haptics';
@@ -341,6 +343,13 @@ export default function TabLayout() {
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // An open chat thread is MessagesScreen state, not a route — back must
+      // close it first. Gate on focus so a thread left open on the (frozen)
+      // Messages tab doesn't swallow back presses made from other tabs.
+      if (messagesFocusedRef.current && closeThreadRef.current) {
+        closeThreadRef.current();
+        return true;
+      }
       if (exitWindowRef.current) {
         BackHandler.exitApp();
         return true;
