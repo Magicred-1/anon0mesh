@@ -6,7 +6,9 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
-import { useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
+import { isPeerReachable, useLxmfContext, type LxmfPeer } from '@/context/LxmfContext';
+import { useNetworkMode } from '@/src/hooks/useNetworkMode';
+import type { NetworkMode } from '@/src/infrastructure/network/types';
 import { MeshMap }         from '@/components/nodes/MeshMap';
 import { formatAgo }       from '@/utils/time';
 import { BeaconRegistry }  from '@/components/nodes/BeaconRegistry';
@@ -24,14 +26,16 @@ function viaToIface(via: LxmfPeer['via']): 'BLE' | 'TCP' | 'RNode' {
   return 'TCP';
 }
 
-function peerToMapNode(p: LxmfPeer): NodeData {
+function peerToMapNode(p: LxmfPeer, mode: NetworkMode): NodeData {
+  // Off-grid, hub-sourced peers are stale announces, not live nodes — dim them.
+  const reachable = isPeerReachable(p, mode);
   return {
     handle:   p.displayName.slice(0, 16),
     hops:     p.hops,
     iface:    viaToIface(p.via),
-    signal:   p.online ? 4 : 2,
+    signal:   reachable ? 4 : 2,
     latency:  '—',
-    online:   p.online,
+    online:   reachable,
     weak:     false,
     destHash: p.destHash,
     beacon:   p.isBeaconNode,
@@ -41,6 +45,7 @@ function peerToMapNode(p: LxmfPeer): NodeData {
 export default function NodesScreen() {
   const { colors } = useTheme();
   const { isRunning, isNativeAvailable, isAnnouncing, bleActive, peers, startBLE } = useLxmfContext();
+  const { mode } = useNetworkMode();
 
   const router = useRouter();
 
@@ -87,8 +92,8 @@ export default function NodesScreen() {
   // wouldn't look empty. That was a present-tense lie about the live mesh.
   // Now we return [] and let the empty-state below speak for itself.
   const meshNodes = useMemo<NodeData[]>(
-    () => isRunning ? peers.map(peerToMapNode) : [],
-    [peers, isRunning],
+    () => isRunning ? peers.map(p => peerToMapNode(p, mode)) : [],
+    [peers, isRunning, mode],
   );
 
   const bleBlocked = !bleActive && (blePerm === 'denied' || blePerm === 'never_ask_again');
@@ -141,7 +146,7 @@ export default function NodesScreen() {
 
         {/* Map with filter chips overlaid at bottom */}
         <View style={S.mapWrap}>
-          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} selStripBottom={36} onExpandChange={setMapExpanded} onDirectMessage={handleDirectMessage} />
+          <MeshMap nodes={filtered} selected={selectedHandle} onSelect={setSelectedHandle} syncing={loading} isAnnouncing={isAnnouncing} offGrid={mode !== 'online'} selStripBottom={36} onExpandChange={setMapExpanded} onDirectMessage={handleDirectMessage} />
           {meshNodes.length === 0 && (
             <View pointerEvents="none" style={S.emptyState}>
               <Text style={[S.emptyStateText, { color: colors.textTertiary }]}>

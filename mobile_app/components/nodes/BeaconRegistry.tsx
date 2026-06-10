@@ -5,7 +5,7 @@ import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
 import { Pill } from '@/components/ui/Pill';
 import { SolanaIcon } from '@/components/onboarding/SolanaIcon';
-import { useLxmfContext } from '@/context/LxmfContext';
+import { isPeerReachable, useLxmfContext } from '@/context/LxmfContext';
 import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 
 
@@ -19,10 +19,12 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const glass     = useGlass();
   const softGlass = useGlass('soft');
   const { isBeacon, setBeaconMode, peers } = useLxmfContext();
+  const { mode: networkMode } = useNetworkMode();
   // peers already includes beacon-nodes via mergeBeacon() in LxmfContext —
   // counting lxmf.beacons separately would double-count them (QA-55).
-  const reachableCount = peers.filter(p => p.online).length;
-  const { mode: networkMode } = useNetworkMode();
+  // isPeerReachable, not p.online: the disclaimer below promises this count is
+  // real, and a stale hub announce is not reachable without an internet route.
+  const reachableCount = peers.filter(p => isPeerReachable(p, networkMode)).length;
   const hasInternet = networkMode === 'online';
 
   const active          = isBeacon;

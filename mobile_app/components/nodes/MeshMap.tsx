@@ -36,6 +36,8 @@ interface Props {
   onSelect:            (h: string | null) => void;
   syncing?:            boolean;
   isAnnouncing?:       boolean;
+  /** No internet route — hub-sourced topology is a snapshot, not live. */
+  offGrid?:            boolean;
   selStripBottom?:     number;
   filterRow?:          React.ReactNode;
   onExpandChange?:     (expanded: boolean) => void;
@@ -191,7 +193,7 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, selStripBottom = 0, filterRow, onExpandChange, onDirectMessage }: Props) {
+export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncing, isAnnouncing, offGrid, selStripBottom = 0, filterRow, onExpandChange, onDirectMessage }: Props) {
   const { colors } = useTheme();
   const insets     = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -486,6 +488,12 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
     </View>
   ) : null;
 
+  // Header status: only claim LIVE while an internet route exists — off-grid,
+  // hub-sourced nodes are a last-known snapshot (radio-local peers stay bright).
+  let status: { label: string; color: string } = { label: '  ● LIVE', color: colors.primary };
+  if (syncing && nodes.length === 0) status = { label: '  ◌ SYNCING', color: colors.primary };
+  else if (offGrid)                  status = { label: '  ◌ LAST KNOWN', color: colors.textTertiary };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={[S.outer, { borderColor: colors.border, backgroundColor: colors.surface0 }]}>
@@ -496,7 +504,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
           <Text accessibilityRole="header" style={[S.headerLabel, { color: colors.textTertiary }]}>
             MESH TOPOLOGY
             <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
-            <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
+            <Text style={{ color: status.color }}>{status.label}</Text>
           </Text>
           <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textSecondary} />
         </View>
@@ -536,7 +544,7 @@ export const MeshMap = memo(function MeshMap({ nodes, selected, onSelect, syncin
               <Text style={[S.headerLabel, { flex: 1, color: colors.textTertiary }]}>
                 ANONMESH TOPOLOGY
                 <Text style={{ color: colors.textTertiary }}>{`  ·  ${nodes.length} NODE${nodes.length === 1 ? '' : 'S'}`}</Text>
-                <Text style={{ color: colors.primary }}>{syncing && nodes.length === 0 ? '  ◌ SYNCING' : '  ● LIVE'}</Text>
+                <Text style={{ color: status.color }}>{status.label}</Text>
               </Text>
               {isAnnouncing && <PulseDot size={5} />}
               <Pressable onPress={exitFullscreen} style={[S.iconBtn, { paddingRight: 14 }]} hitSlop={8}>
