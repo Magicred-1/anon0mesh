@@ -2,18 +2,13 @@ import { useRouter } from "expo-router";
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { Icon, Pill, PressSurface } from "@/components/primitives";
+import { Icon, PeerIdenticon, Pill, PressSurface } from "@/components/primitives";
 import type { PillTone } from "@/components/primitives";
 import { useLxmfContext } from "@/context/LxmfContext";
 import { useTheme } from "@/theme";
 
 const AVATAR_PREVIEW_COUNT = 3;
 const FRESH_WINDOW_SEC = 120; // peers announce-heard within 2 min count as "nearby"
-
-function initialOf(alias: string | undefined): string {
-  if (!alias) return "?";
-  return alias.trim().charAt(0).toUpperCase() || "?";
-}
 
 // Peer presence strip above Recent.
 //
@@ -79,19 +74,6 @@ export function NearbyPeersCard() {
       ? "green"
       : "amber";
 
-  const avatarPaletteBg = [
-    colors.primarySubtle,
-    colors.successSubtle,
-    colors.accentSubtle,
-    colors.warningSubtle,
-  ];
-  const avatarPaletteFg = [
-    colors.primary,
-    colors.success,
-    colors.accent,
-    colors.warning,
-  ];
-
   return (
     <PressSurface
       accessibilityLabel="Open mesh map"
@@ -127,28 +109,16 @@ export function NearbyPeersCard() {
           {previewPeers.length > 0 ? (
             <View style={styles.avatarStack}>
               {previewPeers.map((peer, index) => (
-                <View
+                // Identity-keyed constellation mark — the 2px background ring
+                // keeps the overlapped-stack separation the initials had.
+                <PeerIdenticon
+                  borderColor={colors.background}
+                  borderWidth={2}
                   key={peer.destHash}
-                  style={[
-                    styles.avatar,
-                    {
-                      backgroundColor: avatarPaletteBg[index % avatarPaletteBg.length],
-                      borderColor: colors.background,
-                      borderRadius: radii.full,
-                      marginLeft: index === 0 ? 0 : -10,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      color: avatarPaletteFg[index % avatarPaletteFg.length],
-                      fontFamily: fontFamily.sansBold,
-                      fontSize: fontSize.sm,
-                    }}
-                  >
-                    {initialOf(peer.displayName)}
-                  </Text>
-                </View>
+                  seed={peer.destHash}
+                  size={32}
+                  style={{ marginLeft: index === 0 ? 0 : -10 }}
+                />
               ))}
               {extraCount > 0 ? (
                 <View

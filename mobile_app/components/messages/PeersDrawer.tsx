@@ -7,6 +7,7 @@ import Reanimated, {
   useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation,
 } from 'react-native-reanimated';
 import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
+import { PeerIdenticon } from '@/components/primitives';
 import { Pill } from '@/components/ui/Pill';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { confirm } from '@/components/ui/ConfirmSheet';
@@ -140,20 +141,23 @@ function GroupAvatar() {
   );
 }
 
-function PeerAvatar({ p, online, borderColor, bg, textColor }: {
-  readonly p: Peer; readonly online: boolean; readonly borderColor: string; readonly bg: string; readonly textColor: string;
+function PeerAvatar({ p, online, borderColor, bg }: {
+  readonly p: Peer; readonly online: boolean; readonly borderColor: string; readonly bg: string;
 }) {
-  return (
-    <View style={S.avatarWrap}>
-      <View style={[S.avatar, { backgroundColor: bg, borderColor }]}>
-        {p.beacon
-          ? <Feather name="radio" size={17} color="#00e5ff" />
-          : <Text style={[S.avatarText, { color: textColor }]}>{p.handle.slice(5, 9)}</Text>
-        }
+  // Beacons are infrastructure, not pseudonymous people — keep the radio mark.
+  if (p.beacon) {
+    return (
+      <View style={S.avatarWrap}>
+        <View style={[S.avatar, { backgroundColor: bg, borderColor }]}>
+          <Feather name="radio" size={17} color="#00e5ff" />
+        </View>
+        <View style={[S.statusDot, { backgroundColor: online ? '#00e5ff' : '#3a4a54' }]} />
       </View>
-      <View style={[S.statusDot, { backgroundColor: online ? '#00e5ff' : '#3a4a54' }]} />
-    </View>
-  );
+    );
+  }
+  // The dest hash is the identity — render its deterministic constellation
+  // mark so "same peer as before" is recognizable at a glance.
+  return <PeerIdenticon seed={p.destHash ?? p.handle} size={44} online={online} />;
 }
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
@@ -266,7 +270,6 @@ function PeerRow({
         online={p.online}
         bg={colors.surface2}
         borderColor={colors.border}
-        textColor={colors.textSecondary}
       />
       <View style={S.info}>
         <View style={S.infoTop}>
@@ -514,7 +517,6 @@ const S = StyleSheet.create({
   // ── Avatar ───────────────────────────────────────────────────────────────────
   avatarWrap:  { position: 'relative', width: 44, height: 44 },
   avatar:      { width: 44, height: 44, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
-  avatarText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
   groupHash:   { fontFamily: fontFamily.sansMd, fontSize: fontSize.lg, fontWeight: '700', color: '#4ecdc4' },
   statusDot:   { position: 'absolute', bottom: 0, right: 0, width: 11, height: 11, borderRadius: radii.full, borderWidth: 2, borderColor: '#060f16' },
 

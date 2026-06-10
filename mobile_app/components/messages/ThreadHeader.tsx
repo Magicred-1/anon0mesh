@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, fontSize, radii, useTheme } from '@/theme';
+import { PeerIdenticon } from '@/components/primitives';
 import { Pill } from '@/components/ui/Pill';
 import { useGlass } from '../../hooks/useGlass';
 import { useLxmfContext } from '@/context/LxmfContext';
@@ -19,6 +20,9 @@ interface Props {
   nameKnown?:     boolean;
   /** 8-char hash prefix for anonymous-peer display. */
   hashShort?:     string;
+  /** Full dest hash — seeds the identicon so the header mark matches the
+   *  drawer row for the same peer. */
+  destHash?:      string;
   onOpen:         () => void;
   onShareQR?:     () => void;
   onShowMembers?: () => void;
@@ -113,7 +117,7 @@ function EditIcon({ onPress }: { readonly onPress: () => void }) {
 
 // ── ThreadHeader ──────────────────────────────────────────────────────────────
 
-export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, isGroup, memberCount, nameKnown, hashShort, onOpen, onShareQR, onShowMembers }: Props) {
+export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, iface, online, isGroup, memberCount, nameKnown, hashShort, destHash, onOpen, onShareQR, onShowMembers }: Props) {
   const { colors }            = useTheme();
   const baseGlass             = useGlass();
   const { updateDisplayName } = useLxmfContext();
@@ -190,6 +194,11 @@ export const ThreadHeader = memo(function ThreadHeader({ peer, selfName, hops, i
       <Pressable onPress={onOpen} style={[S.hamburger, baseGlass]}>
         <Feather name={hasPeer ? 'arrow-left' : 'menu'} size={16} color={colors.textSecondary} />
       </Pressable>
+
+      {/* Same constellation mark as the drawer row — confirms "same peer" even
+          when the thread shows Anonymous · prefix. Presence already has its own
+          dot in the status row, so the identicon renders without one. */}
+      {hasPeer && !isGroup && !!destHash && <PeerIdenticon seed={destHash} size={30} />}
 
       <View style={{ flex: 1 }}>
         {hasPeer && isGroup && <GroupInfo peer={peer} memberCount={memberCount} />}

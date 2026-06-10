@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
-import { AppBottomSheet } from '@/components/primitives';
+import { AppBottomSheet, PeerIdenticon } from '@/components/primitives';
 import { EmptyState } from '@/components/ui';
 import type { LxmfGroup } from '@/context/LxmfContext';
 
@@ -21,13 +21,10 @@ function MemberRow({ hash, getDisplayName, colors, baseGlass }: {
   colors: ReturnType<typeof useTheme>['colors'];
   baseGlass: object;
 }) {
-  const name    = getDisplayName(hash);
-  const initials = name.slice(0, 2).toUpperCase();
+  const name = getDisplayName(hash);
   return (
     <View style={[S.memberRow, baseGlass]}>
-      <View style={[S.avatar, { backgroundColor: '#0d2f2a', borderColor: '#1a5c4f' }]}>
-        <Text style={[S.avatarText, { color: '#4ecdc4' }]}>{initials}</Text>
-      </View>
+      <PeerIdenticon seed={hash} size={34} />
       <View style={S.memberInfo}>
         <Text style={[S.memberName, { color: colors.textPrimary }]} numberOfLines={1}>{name}</Text>
         <Text style={[S.memberHash, { color: colors.textTertiary }]}>{hash}</Text>
@@ -103,8 +100,6 @@ const S = StyleSheet.create({
   countText:       { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
   list:            { flexGrow: 0 },
   memberRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: radii.md },
-  avatar:          { width: 34, height: 34, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5 },
-  avatarText:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, fontWeight: '600' },
   memberInfo:      { flex: 1, minWidth: 0 },
   memberName:      { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, letterSpacing: 0.2 },
   memberHash:      { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5, marginTop: 2, opacity: 0.6 },
