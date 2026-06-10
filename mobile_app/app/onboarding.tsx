@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Href, useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useWallet } from '@/context/WalletContext';
 import { useLxmfContext } from '@/context/LxmfContext';
 import { fontFamily, fontSize, spacing } from '@/theme';
@@ -18,6 +19,7 @@ const TUTORIAL_ROUTE = '/tutorial' as Href;
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const { createWallet, connectMWA, isSolanaMobile, isLoading, isConnected, isInitialized, publicKey, walletMode } = useWallet();
   const { displayName: nickname } = useLxmfContext();
   const insets = useSafeAreaInsets();
@@ -73,6 +75,12 @@ const overlayOpacity   = useRef(new Animated.Value(0)).current;
   }, [router]);
 
   useEffect(() => {
+    // Only auto-proceed while onboarding is the focused route. unstable_settings
+    // anchor mounts onboarding BENEATH a deep-linked route (anonmesh://tutorial),
+    // and router.replace targets the focused route — without this gate, wallet
+    // hydration replaced the just-opened tutorial with /(tabs), so the deep link
+    // appeared to do nothing on devices that already have a wallet.
+    if (!isFocused) return;
     if (!isConnected || !publicKey) return;
     // Freshly created local wallet → offer the recovery-key backup before the
     // user reaches the app. One honest line: the key is device-local, here's the
@@ -95,7 +103,7 @@ const overlayOpacity   = useRef(new Animated.Value(0)).current;
       cancelled = true;
       clearTimeout(t);
     };
-  }, [isConnected, publicKey, walletMode, proceed]);
+  }, [isFocused, isConnected, publicKey, walletMode, proceed]);
 
   const handleCreate = useCallback(async () => {
     if (isLoading) return;
