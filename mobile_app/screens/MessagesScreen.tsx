@@ -32,7 +32,9 @@ import { Feather }               from '@expo/vector-icons';
 import { useWallet }             from '@/context/WalletContext';
 import type { AnyMsg, ChatMsg } from '@/components/messages/types';
 import type { MediaPayload }     from '@/components/messages/Composer';
-import type { LxmfPeer, StoredMessage } from '@/context/LxmfContext';
+import { isPeerReachable, type LxmfPeer, type StoredMessage } from '@/context/LxmfContext';
+import { useNetworkMode }        from '@/src/hooks/useNetworkMode';
+import type { NetworkMode }      from '@/src/infrastructure/network/types';
 import { activeConversationRef }  from '@/hooks/activeConversation';
 import { pendingConversationRef } from '@/hooks/pendingConversation';
 import { messagesFocusedRef }     from '@/hooks/messagesFocused';
@@ -125,16 +127,22 @@ function viaToIface(via: LxmfPeer['via']): 'BLE' | 'TCP' | 'RNode' {
   return 'TCP';
 }
 
-function lxmfPeerToPeer(p: LxmfPeer): Peer {
+function lxmfPeerToPeer(p: LxmfPeer, mode: NetworkMode): Peer {
   const now = Math.floor(Date.now() / 1000);
   const ago = p.lastSeen > 0 ? formatAgo(now - p.lastSeen) : '—';
+  const reachable = isPeerReachable(p, mode);
+  // Stale-announce honesty: off-grid, a hub peer still inside the fresh window
+  // (online=true) is not "active" — say when it was last heard instead.
+  let last = `${p.via} · offline`;
+  if (reachable)     last = `${p.via} · active`;
+  else if (p.online) last = `${p.via} · last seen ${ago}`;
   return {
     handle:    p.nameKnown ? p.displayName : p.destHash.slice(0, 8),
     hops:      p.hops,
     iface:     viaToIface(p.via),
-    online:    p.online,
+    online:    reachable,
     unread:    0,
-    last:      `${p.via} · ${p.online ? 'active' : 'offline'}`,
+    last,
     time:      ago,
     beacon:    false,
     destHash:  p.destHash,
@@ -352,6 +360,7 @@ export default function MessagesScreen() {
     groups, createGroup, leaveGroup, getGroupMembers,
   } = useLxmfContext();
   const insets = useSafeAreaInsets();
+  const { mode } = useNetworkMode();
 
   const { publicKey } = useWallet();
 
@@ -577,7 +586,7 @@ export default function MessagesScreen() {
   }, [seqStates]);
 
   const livePeers: Peer[] = useMemo(() => {
-    const dms = lxmfPeers.map(lxmfPeerToPeer);
+    const dms = lxmfPeers.map(p => lxmfPeerToPeer(p, mode));
     const groupPeers: Peer[] = groups.map(g => ({
       handle:    g.name,
       destHash:  g.addrHex,
@@ -592,7 +601,7 @@ export default function MessagesScreen() {
       nameKnown: true,
     }));
     return [...groupPeers, ...dms];
-  }, [lxmfPeers, groups]);
+  }, [lxmfPeers, groups, mode]);
 
   const activePeerObj = useMemo(
     () => livePeers.find(p => p.destHash === activePeerHex) ?? null,
@@ -808,7 +817,7 @@ export default function MessagesScreen() {
       if (hash === activePeerHexRef.current) return;
       const peer = lxmfPeers.find(p => p.destHash === hash);
       const ident = getPeerIdentity(hash);
-      pickPeer(peer ? lxmfPeerToPeer(peer) : {
+      pickPeer(peer ? lxmfPeerToPeer(peer, mode) : {
         handle:    ident.nameKnown ? ident.name : hash.slice(0, 8),
         hops:      0,
         iface:     'TCP',
@@ -822,7 +831,7 @@ export default function MessagesScreen() {
       });
     }
     return () => { messagesFocusedRef.current = false; };
-  }, [lxmfPeers, pickPeer, getPeerIdentity]));
+  }, [lxmfPeers, pickPeer, getPeerIdentity, mode]));
 
   // Open a thread when navigated from another screen (e.g. Nodes DM button)
   useFocusEffect(useCallback(() => {
@@ -834,7 +843,7 @@ export default function MessagesScreen() {
     handledDeepLinkRef.current = paramDestHash;
     const lxmfPeer = lxmfPeers.find(p => p.destHash === paramDestHash);
     const ident = getPeerIdentity(paramDestHash);
-    pickPeer(lxmfPeer ? lxmfPeerToPeer(lxmfPeer) : {
+    pickPeer(lxmfPeer ? lxmfPeerToPeer(lxmfPeer, mode) : {
       handle:    ident.nameKnown ? ident.name : (paramHandle || paramDestHash.slice(0, 8)),
       hops:      0,
       iface:     'TCP',
@@ -846,7 +855,7 @@ export default function MessagesScreen() {
       destHash:  paramDestHash,
       nameKnown: ident.nameKnown,
     });
-  }, [paramDestHash, paramHandle, lxmfPeers, pickPeer, getPeerIdentity]));
+  }, [paramDestHash, paramHandle, lxmfPeers, pickPeer, getPeerIdentity, mode]));
 
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
