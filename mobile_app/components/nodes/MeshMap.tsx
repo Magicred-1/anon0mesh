@@ -11,6 +11,7 @@ import Reanimated, {
   useSharedValue, useAnimatedStyle, runOnJS,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PeerIdenticon } from '@/components/primitives';
 import { fontFamily, fontSize, radii, useTheme } from '@/theme';
 import type { NodeData } from './types';
 
@@ -117,27 +118,6 @@ function edges(placed: Placed[]): Edge[] {
 
 const IFACE_COLOR_KEY = { TCP: 'primary', BLE: 'accent', RNode: 'textSecondary' } as const;
 
-// ── Avatar ────────────────────────────────────────────────────────────────────
-const AVATAR_PALETTE = [
-  '#FF6B6B', '#FF9F43', '#FECA57', '#48DBFB', '#FF9FF3',
-  '#54A0FF', '#5F27CD', '#00D2D3', '#10AC84', '#EE5A24',
-  '#C8D6E5', '#01ABC6',
-];
-
-function hashCode(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-function nodeAvatar(handle: string | null | undefined): { initial: string; color: string } {
-  const clean = (handle ?? '').replace('@', '');
-  return {
-    initial: clean.slice(0, 1).toUpperCase() || '?',
-    color:   AVATAR_PALETTE[hashCode(clean) % AVATAR_PALETTE.length]!,
-  };
-}
-
 // ── PeerNode — memo so only the 2 selection-changing nodes re-render on tap ──
 interface PeerNodeProps {
   node:         NodeData;
@@ -157,7 +137,6 @@ const IFACE_ICON: Record<string, React.ComponentProps<typeof MaterialCommunityIc
 
 const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, textTertiary }: PeerNodeProps) {
   const online     = n.online !== false;
-  const avatar     = nodeAvatar(n.handle);
   const D          = r * 2;
   let borderW = 0.5;
   if (isSelected) borderW = 1.5;
@@ -165,17 +144,15 @@ const PeerNode = memo(function PeerNode({ node: n, x, y, r, isSelected, ifcClr, 
   const borderClr  = isSelected || online ? ifcClr : 'rgba(255,255,255,0.10)';
   return (
     <View style={{ position: 'absolute', left: x - r - 6, top: y - r - 6, padding: 6, opacity: online ? 1 : 0.32 }}>
-      <View style={{
-        width: D, height: D, borderRadius: r,
-        backgroundColor: avatar.color,
-        borderWidth: borderW,
-        borderColor: borderClr,
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Text style={{ fontSize: r * 0.9, color: '#fff', fontWeight: '700', includeFontPadding: false }}>
-          {avatar.initial}
-        </Text>
-      </View>
+      {/* Same destHash-seeded mark as the drawer/thread surfaces — the map node
+          for a peer matches their row. Online reads via opacity + iface border
+          (no status dot at 24px). Seed falls back to handle like nodeId(). */}
+      <PeerIdenticon
+        seed={n.destHash ?? n.handle}
+        size={D}
+        borderColor={borderClr}
+        borderWidth={borderW}
+      />
       {/* Interface type badge — top-right corner */}
       <View style={{
         position: 'absolute', right: 2, top: 2,
