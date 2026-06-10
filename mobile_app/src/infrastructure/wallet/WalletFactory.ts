@@ -14,7 +14,17 @@ export const WalletFactory = {
 
   async hasLocalWallet(): Promise<boolean> {
     if (DeviceDetector.isSolanaMobileDevice()) return MWAWallet.hasCachedToken();
-    if (!await LocalWallet.exists()) return false;
+    let exists: boolean;
+    try {
+      exists = await LocalWallet.exists();
+    } catch {
+      // Marker read FAILED — wallet presence is unknown, which must never be
+      // reported as "no wallet": that routes the user to onboarding, where
+      // create() would overwrite a real, funded keypair (QA-20's last hole).
+      // Report "present" and let connect() surface the retryable read error.
+      return true;
+    }
+    if (!exists) return false;
     const integrity = await LocalWallet.isFullyIntact();
     // ONLY delete when the keys are verifiably absent (marker present but
     // secret/AES key genuinely gone — e.g. cross-build keychain access-group
@@ -45,7 +55,17 @@ export const WalletFactory = {
 
   async createLocal(): Promise<LocalWallet> {
     // Guard: reconnect if wallet already exists rather than overwriting keypair.
-    if (await LocalWallet.exists()) {
+    // exists() throws on a keychain read failure — when we cannot VERIFY there
+    // is no wallet, creating one would overwrite the stored secret of a wallet
+    // that may well exist. Fail the create instead; nothing is written.
+    let exists: boolean;
+    try {
+      exists = await LocalWallet.exists();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Keychain read failed: ${msg} — can't verify whether a wallet already exists, so nothing was created or changed. Try again in a moment.`);
+    }
+    if (exists) {
       const integrity = await LocalWallet.isFullyIntact();
       // Only recreate when storage is verifiably partial — otherwise the
       // wallet cannot export or sign and re-onboarding is the only fix.
