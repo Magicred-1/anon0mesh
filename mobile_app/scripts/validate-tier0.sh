@@ -6,6 +6,13 @@ EXPORT_DIR="${EXPORT_DIR:-/tmp/anonmesh-tier0-export}"
 
 cd "$ROOT_DIR"
 
+# The fake-money and secret scans below use rg inside `if` conditions, so a
+# missing binary reads as "no matches" and the scans pass vacuously.
+command -v rg >/dev/null 2>&1 || {
+  printf 'ripgrep (rg) is required for the tier-0 scans.\n' >&2
+  exit 1
+}
+
 section() {
   printf '\n==> %s\n' "$1"
 }
