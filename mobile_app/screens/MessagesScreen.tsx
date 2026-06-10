@@ -407,9 +407,14 @@ export default function MessagesScreen() {
       if (staleSeqs.length === 0) return;
       staleSeqs.forEach(seq => seqQueuedAt.current.delete(seq));
       setSeqStates(m => {
+        // Only a send still 'queued' may go stale — a delivery/failure that
+        // landed between sweeps must not be rolled back to "Waiting for peer…".
         const next = new Map(m);
-        staleSeqs.forEach(seq => next.set(seq, 'stale'));
-        return next;
+        let changed = false;
+        staleSeqs.forEach(seq => {
+          if (next.get(seq) === 'queued') { next.set(seq, 'stale'); changed = true; }
+        });
+        return changed ? next : m;
       });
     }, 10_000);
     return () => clearInterval(id);
@@ -427,7 +432,13 @@ export default function MessagesScreen() {
     if (state === 'delivered' || state === 'failed') {
       pendingSendsRef.current.delete(seq);
     }
-    setSeqStates(m => new Map(m).set(seq, state));
+    setSeqStates(m => {
+      // delivered/failed are terminal. A late presume-'sent' timer or queued
+      // signal must never roll a confirmed outcome back to a weaker one.
+      const prev = m.get(seq);
+      if ((prev === 'delivered' || prev === 'failed') && (state === 'sent' || state === 'queued')) return m;
+      return new Map(m).set(seq, state);
+    });
 
     // Flip enc to true only on confirmed delivery — never before the native
     // module reports messageDelivered. AUDIT T9.
@@ -451,6 +462,43 @@ export default function MessagesScreen() {
       }
     }
   }, []);
+
+  // Every outbound bubble must show an honest state from the moment it exists.
+  // Register a pseudo-seq (negative msgId — same trick the failed path uses) as
+  // 'queued' BEFORE awaiting the native send: with no route to the peer the
+  // bridge promise can stall indefinitely (the known send-hang), and a state
+  // assigned only after `await send()` resolves would leave the bubble
+  // status-less forever. The pseudo entry feeds seqQueuedAt too, so the stale
+  // sweep flips a never-acked send to "Waiting for peer…" after QUEUE_STALE_MS.
+  const beginOutbound = useCallback((msgId: number): number => {
+    const pseudoSeq = -msgId;
+    idToSeqRef.current.set(msgId, pseudoSeq);
+    seqQueuedAt.current.set(pseudoSeq, Date.now());
+    setSeqStates(m => new Map(m).set(pseudoSeq, 'queued'));
+    return pseudoSeq;
+  }, []);
+
+  // Native accepted the send and returned its real seq — move the bookkeeping
+  // from the pseudo key to the real one so messageQueued/Delivered/Failed
+  // events and DB reconciliation (all keyed by real seq) resolve this message.
+  // Never clobber a state a native event already set for the real seq.
+  const adoptSeq = useCallback((msgId: number, pseudoSeq: number, seq: number) => {
+    idToSeqRef.current.set(msgId, seq);
+    const queuedAt = seqQueuedAt.current.get(pseudoSeq);
+    seqQueuedAt.current.delete(pseudoSeq);
+    if (queuedAt !== undefined && !seqQueuedAt.current.has(seq)) seqQueuedAt.current.set(seq, queuedAt);
+    setSeqStates(m => {
+      const next = new Map(m);
+      const carried = next.get(pseudoSeq) ?? 'queued';
+      next.delete(pseudoSeq);
+      if (!next.has(seq)) next.set(seq, carried);
+      return next;
+    });
+    // Presume 'sent' if the native layer stays silent for 2s — a messageQueued
+    // event (no path to peer) cancels this and keeps the honest 'queued'.
+    const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
+    immediateTimers.current.set(seq, timer);
+  }, [resolveSeq]);
 
   // Reconcile sends stuck "queued"/"stale" over TCP: a messageDelivered proof
   // may never arrive over multi-hop Reticulum, but the native DB marks the
@@ -607,46 +655,59 @@ export default function MessagesScreen() {
     // a lock icon on a still-queued (or eventually failed) send is a false
     // present-tense claim per AUDIT T9 / ROADMAP § 0.3.
     setMsgs(m => [...m, { id: msgId, from: 'me', me: true, time: now, text, enc: false }]);
+    const pseudoSeq = beginOutbound(msgId);
     if (!activePeerHex) {
+      resolveSeq(pseudoSeq, 'failed');
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
       return;
     }
     if (!isRunning) {
+      resolveSeq(pseudoSeq, 'failed');
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
       return;
     }
     const bodyB64 = utf8ToBase64(text);
-    const seq = await send(activePeerHex, bodyB64);
-    if (seq < 0) {
-      const pseudoSeq = -msgId;
-      idToSeqRef.current.set(msgId, pseudoSeq);
-      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
-    } else {
-      // seq >= 0: queued (not yet delivered) — track it
-      idToSeqRef.current.set(msgId, seq);
-      pendingSendsRef.current.set(seq, { dest: activePeerHex, bodyB64 });
-      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
-      immediateTimers.current.set(seq, timer);
+    let seq: number;
+    try {
+      seq = await send(activePeerHex, bodyB64);
+    } catch (err) {
+      // A native-bridge / transport throw must not surface as an unhandled
+      // rejection — it is a failed send, mark it so (mirrors handleGridAction).
+      console.warn('[messages] send threw', err);
+      seq = -1;
     }
-  }, [activePeerHex, isRunning, send, resolveSeq]);
+    if (seq < 0) {
+      resolveSeq(pseudoSeq, 'failed');
+      return;
+    }
+    // seq >= 0: accepted by native (not yet delivered) — track it
+    pendingSendsRef.current.set(seq, { dest: activePeerHex, bodyB64 });
+    adoptSeq(msgId, pseudoSeq, seq);
+  }, [activePeerHex, isRunning, send, resolveSeq, beginOutbound, adoptSeq]);
 
   const handleMedia = useCallback(async (media: MediaPayload) => {
     const now   = new Date().toTimeString().slice(0, 8);
     const msgId = nextId();
     setMsgs(m => [...m, { id: msgId, kind: 'media' as const, from: 'me', me: true, time: now,
       uri: media.uri, mimeType: media.mimeType, width: media.width, height: media.height }]);
-    if (!activePeerHex || !isRunning) return;
-    const seq = await send(activePeerHex, utf8ToBase64(''), { image: { mimeType: media.mimeType, data: media.base64 } });
-    if (seq < 0) {
-      const pseudoSeq = -msgId;
-      idToSeqRef.current.set(msgId, pseudoSeq);
-      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
-    } else {
-      idToSeqRef.current.set(msgId, seq);
-      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
-      immediateTimers.current.set(seq, timer);
+    const pseudoSeq = beginOutbound(msgId);
+    if (!activePeerHex || !isRunning) {
+      resolveSeq(pseudoSeq, 'failed');
+      return;
     }
-  }, [activePeerHex, isRunning, send, resolveSeq]);
+    let seq: number;
+    try {
+      seq = await send(activePeerHex, utf8ToBase64(''), { image: { mimeType: media.mimeType, data: media.base64 } });
+    } catch (err) {
+      console.warn('[messages] media send threw', err);
+      seq = -1;
+    }
+    if (seq < 0) {
+      resolveSeq(pseudoSeq, 'failed');
+      return;
+    }
+    adoptSeq(msgId, pseudoSeq, seq);
+  }, [activePeerHex, isRunning, send, resolveSeq, beginOutbound, adoptSeq]);
 
   const handleGridAction = useCallback(async (a: GridAction) => {
     const now   = new Date().toTimeString().slice(0, 8);
@@ -673,11 +734,14 @@ export default function MessagesScreen() {
     // grid action was fire-and-forget — no peer check, no node-up check, the
     // promise unawaited, and no queued/failed signal. A user could tap "request
     // 2 SOL" with the node down and see the bubble appear as if it sent.
+    const pseudoSeq = beginOutbound(msgId);
     if (!activePeerHex) {
+      resolveSeq(pseudoSeq, 'failed');
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'no peer selected — open drawer and pick one' }]);
       return;
     }
     if (!isRunning) {
+      resolveSeq(pseudoSeq, 'failed');
       setMsgs(m => [...m, { id: nextId(), kind: 'sys' as const, text: 'node not running yet — wait a moment' }]);
       return;
     }
@@ -694,15 +758,11 @@ export default function MessagesScreen() {
     // Track the seq so the queued/stale banner reflects this send too, exactly
     // like a text message.
     if (seq < 0) {
-      const pseudoSeq = -msgId;
-      idToSeqRef.current.set(msgId, pseudoSeq);
-      setSeqStates(m => new Map(m).set(pseudoSeq, 'failed'));
-    } else {
-      idToSeqRef.current.set(msgId, seq);
-      const timer = setTimeout(() => resolveSeq(seq, 'sent'), 2000);
-      immediateTimers.current.set(seq, timer);
+      resolveSeq(pseudoSeq, 'failed');
+      return;
     }
-  }, [publicKey, activePeerHex, isRunning, send, resolveSeq]);
+    adoptSeq(msgId, pseudoSeq, seq);
+  }, [publicKey, activePeerHex, isRunning, send, resolveSeq, beginOutbound, adoptSeq]);
 
   const pickPeer = useCallback((p: Peer) => {
     const prevHash = activePeerHexRef.current;
