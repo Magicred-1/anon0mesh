@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback, useMemo } from 'react';
-import { Alert, View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Alert, Share, View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -7,6 +7,7 @@ import Reanimated, {
   useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation,
 } from 'react-native-reanimated';
 import { fontFamily, fontSize, radii, spacing, useTheme } from '@/theme';
+import { useLxmfContext } from '@/context/LxmfContext';
 import { PeerIdenticon } from '@/components/primitives';
 import { Pill } from '@/components/ui/Pill';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -191,10 +192,59 @@ function TabBar({ active, onChange, colors }: {
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyState({ tab, hasInput, colors }: {
+// The contacts tab's empty state is every new user's landing screen — it must
+// hand them a live next step (cold-start brief: the lone user's first session
+// has no possible "aha" unless this screen manufactures one), never a dead end.
+function FirstRunCard({ peerCount, isOnline, onInvite, onBrowsePeers, colors }: {
+  readonly peerCount: number;
+  readonly isOnline: boolean;
+  readonly onInvite: () => void;
+  readonly onBrowsePeers: () => void;
+  readonly colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const reachable = isOnline && peerCount > 0;
+  return (
+    <View style={[S.frCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+      <Text style={[S.frTitle, { color: colors.textPrimary }]}>
+        {reachable
+          ? `${peerCount} ${peerCount === 1 ? 'person is' : 'people are'} on the mesh right now`
+          : "You're off-grid"}
+      </Text>
+      <Text style={[S.frBody, { color: colors.textSecondary }]}>
+        {reachable
+          ? 'Say hi to anyone under ALL PEERS — or bring a friend onto the mesh.'
+          : 'The radio looks for phones nearby. anonmesh really shines once a friend has it too.'}
+      </Text>
+      <View style={S.frButtons}>
+        <Pressable
+          onPress={onInvite}
+          style={({ pressed }) => [S.frPrimary, { backgroundColor: colors.primary }, pressed && S.frPressed]}
+          accessibilityRole="button"
+        >
+          <Text style={S.frPrimaryText}>INVITE A FRIEND</Text>
+        </Pressable>
+        {reachable && (
+          <Pressable
+            onPress={onBrowsePeers}
+            style={({ pressed }) => [S.frSecondary, { borderColor: colors.border }, pressed && S.frPressed]}
+            accessibilityRole="button"
+          >
+            <Text style={[S.frSecondaryText, { color: colors.textPrimary }]}>BROWSE PEERS</Text>
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function EmptyState({ tab, hasInput, colors, peerCount, isOnline, onInvite, onBrowsePeers }: {
   readonly tab: Tab;
   readonly hasInput: boolean;
   readonly colors: ReturnType<typeof useTheme>['colors'];
+  readonly peerCount: number;
+  readonly isOnline: boolean;
+  readonly onInvite: () => void;
+  readonly onBrowsePeers: () => void;
 }) {
   if (hasInput) {
     return (
@@ -203,8 +253,19 @@ function EmptyState({ tab, hasInput, colors }: {
       </Text>
     );
   }
+  if (tab === 'contacts') {
+    return (
+      <FirstRunCard
+        peerCount={peerCount}
+        isOnline={isOnline}
+        onInvite={onInvite}
+        onBrowsePeers={onBrowsePeers}
+        colors={colors}
+      />
+    );
+  }
   const messages: Record<Tab, string> = {
-    contacts: 'No conversations yet\nPick a peer from All Peers to start',
+    contacts: '',
     groups:   'No groups joined\nUse CREATE or JOIN above',
     all:      'No peers available\nMake sure the node is running',
   };
@@ -305,6 +366,7 @@ export const PeersDrawer = memo(function PeersDrawer({
   const { colors } = useTheme();
   const softGlass  = useGlass('soft');
   const { mode }   = useNetworkMode();
+  const { myAddress } = useLxmfContext();
 
   const allPeers = peersProp ?? [];
   const groups   = allPeers.filter(p => p.isGroup);
@@ -312,6 +374,13 @@ export const PeersDrawer = memo(function PeersDrawer({
   // p.online is reachability-honest (isPeerReachable upstream), so off-grid
   // this counts only radio-local peers — known-but-unreachable peers stay out.
   const online   = dmPeers.filter(p => p.online).length;
+
+  const invite = useCallback(() => {
+    const id = myAddress ? `\nMy mesh id: ${myAddress}` : '';
+    Share.share({
+      message: `Join me on anonmesh — messages that work with no internet. https://anonme.sh${id}`,
+    }).catch(() => {});
+  }, [myAddress]);
 
   const [input, setInput] = useState('');
 
@@ -470,7 +539,15 @@ export const PeersDrawer = memo(function PeersDrawer({
         }
 
         {!syncing && filtered.length === 0 && (
-          <EmptyState tab={activeTab} hasInput={!isHash && input.trim().length > 0} colors={colors} />
+          <EmptyState
+            tab={activeTab}
+            hasInput={!isHash && input.trim().length > 0}
+            colors={colors}
+            peerCount={online}
+            isOnline={mode === 'online'}
+            onInvite={invite}
+            onBrowsePeers={() => onTabChange('all')}
+          />
         )}
       </ScrollView>
 
@@ -506,6 +583,54 @@ const S = StyleSheet.create({
   // ── List ─────────────────────────────────────────────────────────────────────
   listContent:  { paddingBottom: 28, paddingHorizontal: 6, paddingTop: 6 },
   emptyNote:    { fontFamily: fontFamily.sansMd, fontSize: fontSize.sm, textAlign: 'center', paddingTop: spacing[8], opacity: 0.5, lineHeight: 20 },
+
+  // ── First-run card (contacts tab, zero conversations) ───────────────────────
+  frCard: {
+    marginTop: spacing[7],
+    marginHorizontal: spacing[2],
+    borderRadius: radii.lg,
+    borderWidth: 0.5,
+    padding: spacing[6],
+    gap: spacing[3],
+  },
+  frTitle: {
+    fontFamily: fontFamily.sansBold,
+    fontSize: fontSize.lg,
+    lineHeight: 24,
+  },
+  frBody: {
+    fontFamily: fontFamily.sans,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+  },
+  frButtons: { gap: spacing[3], marginTop: spacing[2] },
+  frPrimary: {
+    height: 46,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  frPrimaryText: {
+    fontFamily: fontFamily.sansMd,
+    fontSize: fontSize.sm,
+    fontWeight: '800',
+    color: '#001820',
+    letterSpacing: 1.5,
+  },
+  frSecondary: {
+    height: 46,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  frSecondaryText: {
+    fontFamily: fontFamily.sansMd,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  frPressed: { opacity: 0.85 },
 
   // ── Row ──────────────────────────────────────────────────────────────────────
   row:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11, borderRadius: radii.lg, borderWidth: 0.5 },
