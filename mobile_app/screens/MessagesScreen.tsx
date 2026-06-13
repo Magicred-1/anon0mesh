@@ -921,6 +921,7 @@ export default function MessagesScreen() {
             memberCount={activeGroupMembers.length}
             nameKnown={activePeerObj?.nameKnown ?? true}
             hashShort={activePeerHex ? activePeerHex.slice(0, 8) : undefined}
+            destHash={activePeerHex ?? undefined}
             onOpen={goBack}
             onShareQR={activePeerObj?.isGroup ? () => setShareSheetOpen(true) : undefined}
             onShowMembers={activePeerObj?.isGroup ? () => setMembersSheetOpen(true) : undefined}

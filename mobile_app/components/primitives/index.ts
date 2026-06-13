@@ -17,6 +17,9 @@ export type { AppBottomSheetProps } from "./BottomSheet";
 
 export { default as NumericKeypad } from "./NumericKeypad";
 
+export { PeerIdenticon } from "./PeerIdenticon";
+export type { PeerIdenticonProps } from "./PeerIdenticon";
+
 export { Pill } from "./Pill";
 export type { PillTone } from "./Pill";
 
