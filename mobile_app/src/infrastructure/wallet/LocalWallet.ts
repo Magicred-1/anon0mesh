@@ -6,7 +6,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { TurboModuleRegistry, type TurboModule } from 'react-native';
 import {
   SecureKeys, PrefKeys,
-  secureGet, secureGetStrict, secureSet, secureDeleteAll,
+  secureGetStrict, secureSet, secureDeleteAll,
   prefGet,
 } from '@/src/storage';
 import type { IWalletAdapter, WalletMode } from './types';
@@ -120,7 +120,16 @@ export class LocalWallet implements IWalletAdapter {
       if (!auth.success) throw new Error('Authentication cancelled');
     }
 
-    const stored = await secureGet(SecureKeys.WALLET_PUBKEY);
+    // Strict read: a transient keystore failure must surface as a retryable
+    // error, NOT as "no wallet" — the absent message tells the user to
+    // recreate, which is exactly the wrong advice while their keys are intact.
+    let stored: string | null;
+    try {
+      stored = await secureGetStrict(SecureKeys.WALLET_PUBKEY);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Keychain read failed: ${msg} — your wallet is still on this device. Try again in a moment.`);
+    }
     if (!stored) throw new Error('No local wallet found — please recreate your wallet');
     this._publicKey = new PublicKey(stored);
   }
@@ -133,8 +142,18 @@ export class LocalWallet implements IWalletAdapter {
     return (await readAndDecrypt()).secretKey;
   }
 
+  /**
+   * True when the wallet marker is verifiably present.
+   *
+   * Reads with secureGetStrict, so a Keychain/Keystore read FAILURE throws
+   * instead of returning false. The conflation was the last QA-20 hole: a
+   * transient keystore outage (device just unlocked, cross-process lock) made
+   * exists() report "no wallet", which routed the user to onboarding where
+   * create() would overwrite the real, funded keypair. Callers must treat a
+   * throw as "unknown — wallet may exist" and never create/delete on it.
+   */
   static async exists(): Promise<boolean> {
-    return (await secureGet(SecureKeys.WALLET_MARKER)) === 'true';
+    return (await secureGetStrict(SecureKeys.WALLET_MARKER)) === 'true';
   }
 
   /**
