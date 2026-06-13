@@ -107,9 +107,9 @@ export function NetworkModeProvider({ children }: { readonly children: ReactNode
 
   const adapter = useMemo<IRpcAdapter>(() => {
     if (mode === "online") return new DirectRpcAdapter(solanaConnection);
-    if (mode === "mesh")   return new MeshRpcAdapter(meshHash, beaconRpcWait);
+    if (mode === "mesh")   return new MeshRpcAdapter(meshHash, beaconBroadcastRpc);
     return new IsolatedRpcAdapter();
-  }, [mode, meshHash, beaconRpcWait]);
+  }, [mode, meshHash, beaconBroadcastRpc]);
 
   const value = useMemo<NetworkState>(
     () => ({ mode, adapter, relayHash: adapter.relayHash }),
