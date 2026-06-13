@@ -10,8 +10,13 @@ import { PigeonLoader } from "@/components/ui/PigeonLoader";
 import { useWallet } from "@/context/WalletContext";
 import * as haptics from "@/src/design-system/haptics";
 import { useNetworkMode } from "@/src/hooks/useNetworkMode";
+import { showToast } from "@/components/ui/Toast";
 import { saveAddressBookRecipient, useAddressBook } from "@/src/services/addressBook";
-import { describeSendFailure, formatRawError } from "@/src/services/sendErrorMessages";
+import {
+  describeSendFailure,
+  describeSubmitFailure,
+  formatRawError,
+} from "@/src/services/sendErrorMessages";
 import {
   confirmTransaction,
   estimateSplTransferFeeLamports,
@@ -54,7 +59,9 @@ type ReviewError =
   | { kind: "approval"; message: string }
   | { kind: "unsupported"; message: string }
   | { kind: "route"; message: string }
-  | { kind: "send"; message: string };
+  // `detail` carries the raw technical error text, rendered as a demoted
+  // monospace sub-line under the human headline — never as the headline.
+  | { kind: "send"; message: string; detail?: string };
 
 interface ReviewCardProps {
   readonly to: string;
@@ -310,7 +317,9 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       // conf.kind === "failed"
       const { subtitle, pillLabel } = describeSendFailure(conf, rpcAdapter.mode);
       const rawError = formatRawError(conf.err);
-      console.error("[send/ReviewCard] confirmation failed", {
+      // console.warn, not console.error — the dev client toasts console.error
+      // over the FailureCard that is about to present this same information.
+      console.warn("[send/ReviewCard] confirmation failed", {
         reason: conf.reason,
         signature: conf.signature,
         rawError,
@@ -341,8 +350,16 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     } catch (err: unknown) {
       const summary = summarizeError(err, "Transaction failed before the wallet returned a reason");
       const isUserCancel = err instanceof TransactionNotApprovedError;
-      const logFn = isUserCancel ? console.warn : console.error;
-      logFn("[send/ReviewCard] transfer failed", {
+      // Every throw reaching this catch happened before the tx was broadcast
+      // (submitSignedTransaction returns the signature instead of throwing for
+      // ambiguous submit errors), so "nothing was sent" copy is honest here.
+      const failure = describeSubmitFailure(err, rpcAdapter.mode);
+      // console.warn, not console.error: the dev client renders console.error
+      // as an on-screen toast, which is how the raw JSON dump ended up in a
+      // consumer surface. The failure is fully surfaced in UI below; this log
+      // is diagnostics for Metro/logcat.
+      console.warn("[send/ReviewCard] transfer failed", {
+        kind: failure.kind,
         message: summary.message,
         name: summary.name ?? null,
         code: summary.code ?? null,
@@ -357,7 +374,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
       // 2026-05-13) — the wallet popup is the consent surface, an inline banner
       // double-prompts and reads like an error.
       if (!isUserCancel) {
-        setError({ kind: "send", message: summary.message });
+        setError({ kind: "send", message: failure.message, detail: failure.detail });
+        // The inline panel sits at the bottom of a scroll view and can be off
+        // screen; the toast guarantees immediate, human-readable feedback.
+        showToast(failure.message);
       }
       setSliderResetKey((k) => k + 1);
       setIsConfirming(false);
@@ -578,6 +598,11 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
               </Text>
             </View>
             <Text style={[S.errorText, { color: colors.textSecondary }]}>{error.message}</Text>
+            {error.kind === "send" && error.detail ? (
+              <Text selectable style={[S.errorDetail, { color: colors.textTertiary }]}>
+                {error.detail}
+              </Text>
+            ) : null}
             {error.kind === "approval" || error.kind === "send" || error.kind === "route" ? (
               <Pressable
                 accessibilityLabel="Try transaction again"
@@ -835,6 +860,11 @@ const S = StyleSheet.create({
     fontFamily: FF.sans,
     fontSize: fontSize.sm,
     lineHeight: 17,
+  },
+  errorDetail: {
+    fontFamily: FF.mono,
+    fontSize: fontSize.xs,
+    lineHeight: 15,
   },
   retryButton: {
     alignItems: "center",
