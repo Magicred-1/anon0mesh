@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
@@ -30,6 +30,7 @@ export default function DevIndexScreen() {
 
       <Text style={[S.section, { color: colors.textTertiary }]}>SCREENS</Text>
       <Row colors={colors} icon="image" label="Pigeon loader" onPress={() => router.push('/dev/pigeon-loader')} />
+      <Row colors={colors} icon="cpu" label="Contract spike (anonbeta1)" onPress={() => router.push('/dev/contract-spike' as Href)} />
 
       <Text style={[S.section, { color: colors.textTertiary }]}>FIRST-RUN STATE</Text>
       <Row colors={colors} icon="rotate-ccw" label="Reset tutorial flag" onPress={handleResetTutorial} />
