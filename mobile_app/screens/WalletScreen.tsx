@@ -211,10 +211,10 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
         {!initialLoad && activityError && (
           <View style={S.center}>
             <Feather name="wifi-off" size={20} color={colors.textTertiary} style={{ marginBottom: 6 }} />
-            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: spacing[2] }]}>
               Couldn&apos;t load activity
             </Text>
-            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center', marginBottom: 12 }]} numberOfLines={2}>
+            <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center', marginBottom: spacing[4] }]} numberOfLines={2}>
               {activityError}
             </Text>
             <Pressable
@@ -236,7 +236,7 @@ function ActivityTile({ refreshing, onRefresh }: { readonly refreshing: boolean;
         {!initialLoad && !activityError && activity.length === 0 && (
           <View style={S.center}>
             <MaterialCommunityIcons name="bird" size={26} color={colors.textTertiary} style={{ marginBottom: 6 }} />
-            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: 4 }]}>
+            <Text style={[S.activityLabel, { color: colors.textPrimary, marginBottom: spacing[2] }]}>
               No transactions yet
             </Text>
             <Text style={[S.activityTime, { color: colors.textTertiary, textAlign: 'center' }]}>

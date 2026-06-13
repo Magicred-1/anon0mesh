@@ -82,7 +82,13 @@ function reconcilePendingSends(
   });
 }
 
-function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
+interface BubbleActions {
+  getSendState: GetSendState;
+  onResend: (msgId: number) => void;
+  onDiscard: (msgId: number) => void;
+}
+
+function renderMsg(m: AnyMsg, actions: BubbleActions): React.ReactElement {
   if (m.kind === 'sys')             return <SystemLine           key={m.id} text={m.text} />;
   if (m.kind === 'tx')              return <InlineTxCard         key={m.id} m={m} />;
   if (m.kind === 'request-money')   return <RequestMoneyBubble   key={m.id} m={m} />;
@@ -90,7 +96,15 @@ function renderMsg(m: AnyMsg, getSendState: GetSendState): React.ReactElement {
   if (m.kind === 'share-address')   return <ShareAddressBubble   key={m.id} m={m} />;
   if (m.kind === 'media')           return <MediaBubble          key={m.id} m={m} />;
   const chat: ChatMsg = m;
-  return <MessageBubble key={m.id} m={chat} sendState={getSendState(m.id)} />;
+  return (
+    <MessageBubble
+      key={m.id}
+      m={chat}
+      sendState={actions.getSendState(m.id)}
+      onResend={actions.onResend}
+      onDiscard={actions.onDiscard}
+    />
+  );
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -666,13 +680,11 @@ export default function MessagesScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   []);
 
-  const sendMsg = useCallback(async (text: string) => {
-    const now   = new Date().toTimeString().slice(0, 8);
-    const msgId = nextId();
-    // enc:false until the native module emits messageDelivered for this seq —
-    // a lock icon on a still-queued (or eventually failed) send is a false
-    // present-tense claim per AUDIT T9 / ROADMAP § 0.3.
-    setMsgs(m => [...m, { id: msgId, from: 'me', me: true, time: now, text, enc: false }]);
+  // Dispatch the native send for an already-rendered outbound text bubble and
+  // wire up its queued/sent/failed bookkeeping. Shared by the first send
+  // (sendMsg) and a manual resend of a stuck bubble (onResendMsg), so a retry
+  // walks the exact same path instead of forging delivery state.
+  const dispatchTextSend = useCallback(async (msgId: number, text: string) => {
     const pseudoSeq = beginOutbound(msgId);
     if (!activePeerHex) {
       resolveSeq(pseudoSeq, 'failed');
@@ -702,6 +714,72 @@ export default function MessagesScreen() {
     pendingSendsRef.current.set(seq, { dest: activePeerHex, bodyB64 });
     adoptSeq(msgId, pseudoSeq, seq);
   }, [activePeerHex, isRunning, send, resolveSeq, beginOutbound, adoptSeq]);
+
+  const sendMsg = useCallback(async (text: string) => {
+    const now   = new Date().toTimeString().slice(0, 8);
+    const msgId = nextId();
+    // enc:false until the native module emits messageDelivered for this seq —
+    // a lock icon on a still-queued (or eventually failed) send is a false
+    // present-tense claim per AUDIT T9 / ROADMAP § 0.3.
+    setMsgs(m => [...m, { id: msgId, from: 'me', me: true, time: now, text, enc: false }]);
+    await dispatchTextSend(msgId, text);
+  }, [dispatchTextSend]);
+
+  // Resend a stuck (stale/failed) outbound text bubble. Re-runs the original
+  // send under the SAME bubble id so its status updates in place rather than
+  // spawning a duplicate. Clears the old seq bookkeeping first so the prior
+  // pseudo/real seq can't keep reporting the dead attempt's state.
+  const onResendMsg = useCallback((msgId: number) => {
+    const target = msgsRef.current.find(x => x.id === msgId);
+    if (!target || target.kind !== undefined || !target.me) return;
+    const text = target.text;
+    if (!text) return;
+    const prevSeq = idToSeqRef.current.get(msgId);
+    if (prevSeq !== undefined) {
+      clearTimeout(immediateTimers.current.get(prevSeq));
+      immediateTimers.current.delete(prevSeq);
+      seqQueuedAt.current.delete(prevSeq);
+      pendingSendsRef.current.delete(prevSeq);
+      idToSeqRef.current.delete(msgId);
+      setSeqStates(m => {
+        if (!m.has(prevSeq)) return m;
+        const next = new Map(m);
+        next.delete(prevSeq);
+        return next;
+      });
+    }
+    void dispatchTextSend(msgId, text);
+  }, [dispatchTextSend]);
+
+  // Discard a stuck outbound bubble: drop it from the visible thread and any
+  // cached thread, and forget its seq bookkeeping so a late native event can't
+  // resurrect a status for a message the user removed.
+  const onDiscardMsg = useCallback((msgId: number) => {
+    const prevSeq = idToSeqRef.current.get(msgId);
+    if (prevSeq !== undefined) {
+      clearTimeout(immediateTimers.current.get(prevSeq));
+      immediateTimers.current.delete(prevSeq);
+      seqQueuedAt.current.delete(prevSeq);
+      pendingSendsRef.current.delete(prevSeq);
+      idToSeqRef.current.delete(msgId);
+      setSeqStates(m => {
+        if (!m.has(prevSeq)) return m;
+        const next = new Map(m);
+        next.delete(prevSeq);
+        return next;
+      });
+    }
+    const drop = (list: AnyMsg[]) => list.filter(x => x.id !== msgId);
+    setMsgs(prev => drop(prev));
+    threadsRef.current.forEach((thread, peerHash) => {
+      if (thread.some(x => x.id === msgId)) threadsRef.current.set(peerHash, drop(thread));
+    });
+  }, []);
+
+  const bubbleActions = useMemo<BubbleActions>(
+    () => ({ getSendState, onResend: onResendMsg, onDiscard: onDiscardMsg }),
+    [getSendState, onResendMsg, onDiscardMsg],
+  );
 
   const handleMedia = useCallback(async (media: MediaPayload) => {
     const now   = new Date().toTimeString().slice(0, 8);
@@ -943,7 +1021,7 @@ export default function MessagesScreen() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
-                {msgs.map(m => renderMsg(m, getSendState))}
+                {msgs.map(m => renderMsg(m, bubbleActions))}
                 <View style={{ height: 4 }} />
               </ScrollView>
             </View>

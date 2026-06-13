@@ -166,7 +166,7 @@ export function TokenPicker({ visible, selected, onSelect, onClose }: TokenPicke
           }}
         >
           {hiddenSplCount > 0
-            ? "Token sends temporarily SOL-only — coming soon"
+            ? "Sends are SOL-only on devnet right now. SPL tokens are view-only — you can hold and receive them."
             : "Balances pulled live from devnet"}
         </Text>
       </View>

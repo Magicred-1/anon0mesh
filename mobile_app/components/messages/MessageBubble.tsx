@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react';
-import { View, Text, Pressable, Alert, StyleSheet } from 'react-native';
+import { Alert, View, Text, Pressable, StyleSheet } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Feather } from '@expo/vector-icons';
 import { useTheme, fontFamily, fontSize, radii } from '@/theme';
@@ -13,6 +13,11 @@ type SendState = 'sent' | 'queued' | 'delivered' | 'failed' | 'stale';
 interface Props {
   readonly m: ChatMsg;
   readonly sendState?: SendState;
+  // Resend / discard an outbound bubble that's stuck. Only wired for the
+  // sender's own messages; passed down from MessagesScreen which owns the
+  // send + seq bookkeeping.
+  readonly onResend?: (msgId: number) => void;
+  readonly onDiscard?: (msgId: number) => void;
 }
 
 const STATE_META: Record<SendState, { icon: React.ComponentProps<typeof Feather>['name']; label: string }> = {
@@ -46,26 +51,30 @@ function FileRow({ file, colors }: {
   readonly colors: ReturnType<typeof useTheme>['colors'];
 }) {
   const sizeKb = Math.round((file.data.length * 3) / 4 / 1024);
+  // Saving attachments to disk isn't wired up yet, so this is a static info
+  // row — not a Pressable. A tap-handler that only popped a "coming soon"
+  // alert was a button that lied; better to not look tappable at all.
   return (
-    <Pressable
-      onPress={() => Alert.alert(file.name, `${sizeKb} KB — file saving coming soon`)}
-      style={({ pressed }) => [S.fileRow, { backgroundColor: pressed ? colors.surface2 : colors.surface1, borderColor: colors.border }]}
-    >
+    <View style={[S.fileRow, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
       <Feather name="file" size={13} color={colors.textSecondary} />
       <Text style={[S.fileName, { color: colors.textPrimary }]} numberOfLines={1}>{file.name}</Text>
       <Text style={[S.fileSize, { color: colors.textTertiary }]}>{sizeKb} KB</Text>
-      <Feather name="download" size={12} color={colors.textTertiary} />
-    </Pressable>
+    </View>
   );
 }
 
-export const MessageBubble = memo(function MessageBubble({ m, sendState }: Props) {
+export const MessageBubble = memo(function MessageBubble({ m, sendState, onResend, onDiscard }: Props) {
   const { colors } = useTheme();
   const glass      = useGlass(m.me ? 'accent' : 'base');
   const hasText    = m.text.length > 0;
 
+  // A stuck outbound bubble — either it never left the queue past the stale
+  // window, or the send failed outright. These are the only states where
+  // resend/discard makes sense; a delivered/sent message offers copy only.
+  const isStuck    = m.me && (sendState === 'stale' || sendState === 'failed');
+  const canManage  = isStuck && (!!onResend || !!onDiscard);
+
   const copyText = useCallback(async () => {
-    haptics.lightPress();
     try {
       await Clipboard.setStringAsync(m.text);
       showToast('Message copied');
@@ -76,6 +85,26 @@ export const MessageBubble = memo(function MessageBubble({ m, sendState }: Props
     }
   }, [m.text]);
 
+  // Long-press menu for a stuck send: resend re-runs the original send,
+  // discard drops the bubble. Copy stays available when there's text.
+  const showStuckMenu = useCallback(() => {
+    haptics.lightPress();
+    const verb = sendState === 'failed' ? 'failed to send' : 'still waiting for the peer';
+    const options: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
+      { text: 'Resend', onPress: onResend ? () => onResend(m.id) : undefined },
+      ...(hasText ? [{ text: 'Copy text', onPress: () => { void copyText(); } }] : []),
+      { text: 'Discard', style: 'destructive' as const, onPress: onDiscard ? () => onDiscard(m.id) : undefined },
+      { text: 'Cancel', style: 'cancel' as const },
+    ];
+    Alert.alert('Message ' + verb, undefined, options, { cancelable: true });
+  }, [m.id, sendState, hasText, onResend, onDiscard, copyText]);
+
+  const handleLongPress = canManage
+    ? showStuckMenu
+    : hasText
+      ? () => { haptics.lightPress(); void copyText(); }
+      : undefined;
+
   return (
     <View style={[S.wrap, { alignItems: m.me ? 'flex-end' : 'flex-start' }]}>
       <View style={[S.meta, { justifyContent: m.me ? 'flex-end' : 'flex-start' }]}>
@@ -84,13 +113,19 @@ export const MessageBubble = memo(function MessageBubble({ m, sendState }: Props
         {m.enc && <Feather name="lock" size={10} color={colors.primary} style={{ marginLeft: 4 }} />}
       </View>
       <Pressable
-        onLongPress={hasText ? copyText : undefined}
+        onLongPress={handleLongPress}
         delayLongPress={350}
-        accessibilityHint={hasText ? 'long press to copy message text' : undefined}
+        accessibilityHint={
+          canManage
+            ? 'long press to resend or discard this message'
+            : hasText
+              ? 'long press to copy message text'
+              : undefined
+        }
         style={({ pressed }) => [
           S.bubble, glass,
           { borderBottomRightRadius: m.me ? 4 : 16, borderBottomLeftRadius: m.me ? 16 : 4 },
-          pressed && hasText && S.bubblePressed,
+          pressed && !!handleLongPress && S.bubblePressed,
         ]}
       >
         {hasText && (
