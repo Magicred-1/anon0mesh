@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { confirm } from '@/components/ui/ConfirmSheet';
 import { useGlass } from '../../hooks/useGlass';
 import { scan } from '@/src/services/qrScan';
+import { useNetworkMode } from '@/src/hooks/useNetworkMode';
 import { type Peer } from './constants';
 import type { ConvSummary } from '@/hooks/useConversationSummaries';
 
@@ -294,10 +295,13 @@ export const PeersDrawer = memo(function PeersDrawer({
 }: Props) {
   const { colors } = useTheme();
   const softGlass  = useGlass('soft');
+  const { mode }   = useNetworkMode();
 
   const allPeers = peersProp ?? [];
   const groups   = allPeers.filter(p => p.isGroup);
   const dmPeers  = allPeers.filter(p => !p.isGroup);
+  // p.online is reachability-honest (isPeerReachable upstream), so off-grid
+  // this counts only radio-local peers — known-but-unreachable peers stay out.
   const online   = dmPeers.filter(p => p.online).length;
 
   const [input, setInput] = useState('');
@@ -373,7 +377,7 @@ export const PeersDrawer = memo(function PeersDrawer({
             <View style={S.titleRow}>
               <Text style={[S.title, { color: colors.textPrimary }]}>messages</Text>
               <Text style={[S.onlineCount, { color: colors.textTertiary }]}>
-                {online} online
+                {mode === 'online' ? `${online} online` : `off-grid · ${online} reachable`}
               </Text>
             </View>
           </View>

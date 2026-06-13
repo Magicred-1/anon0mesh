@@ -17,6 +17,7 @@ import {
   type TcpInterface,
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
+import type { NetworkMode } from '@/src/infrastructure/network/types';
 import { requestBLEPermissions } from '@/src/utils/blePermissions';
 import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
 import { collectPeerMessages } from '@/src/services/peerMessages';
@@ -473,6 +474,16 @@ export interface LxmfPeer {
   isBeaconNode: boolean;
   /** True iff displayName came from an announce/beacon name field, not a hash-prefix fallback. */
   nameKnown:    boolean;
+}
+
+// `online` records "announced within the fresh window", not "reachable right
+// now" — it sticks true for up to PEER_FRESH_WINDOW_SEC after the last hub
+// announce. Hub-sourced ('reticulum'/TCP) peers are only reachable while this
+// device holds an internet route; BLE and RNode links are radio-local and
+// survive off-grid. UI must not claim "active" past what this returns.
+export function isPeerReachable(p: LxmfPeer, mode: NetworkMode): boolean {
+  if (!p.online) return false;
+  return mode === 'online' || p.via !== 'reticulum';
 }
 
 interface LxmfCtxValue {
