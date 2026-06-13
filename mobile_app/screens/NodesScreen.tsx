@@ -16,7 +16,7 @@ import { PulseDot }        from '@/components/ui/PulseDot';
 import { ScreenHeader }    from '@/components/ui';
 import { FILTERS }         from '@/components/nodes/constants';
 import type { NodeData, Filter } from '@/components/nodes/types';
-import { requestBLEPermissions, type BLEPermissionStatus } from '@/src/utils/blePermissions';
+import { checkBLEPermissions, requestBLEPermissions, type BLEPermissionStatus } from '@/src/utils/blePermissions';
 
 // Converts a peer to NodeData WITHOUT latency — stable identity for MeshMap.
 // Latency is added separately for the list so MeshMap topology doesn't re-layout on every timer tick.
@@ -44,7 +44,7 @@ function peerToMapNode(p: LxmfPeer, mode: NetworkMode): NodeData {
 
 export default function NodesScreen() {
   const { colors } = useTheme();
-  const { isRunning, isNativeAvailable, isAnnouncing, bleActive, peers, startBLE } = useLxmfContext();
+  const { isRunning, isNativeAvailable, isAnnouncing, bleActive, peers, startBLE, grantRadioConsent } = useLxmfContext();
   const { mode } = useNetworkMode();
 
   const router = useRouter();
@@ -69,21 +69,40 @@ export default function NodesScreen() {
   // silently kills peer discovery forever — the "scanning forever, no one here"
   // trap with no exit (off-grid #1).
   const [blePerm, setBlePerm] = useState<BLEPermissionStatus | null>(null);
+
+  // Shared post-permission path: if the node is already up, flip the radio on;
+  // if it parked at the permission gate (check-only autostart), nudge it.
+  const bringRadioUp = useCallback(() => {
+    if (isRunning) startBLE();
+    else grantRadioConsent();
+  }, [isRunning, startBLE, grantRadioConsent]);
+
+  // Explicit affordance — the only place this screen may show the OS dialogs.
   const enableBle = useCallback(async () => {
     if (bleActive) return; // already started — don't re-trigger GATT registration
     const permissionStatus = await requestBLEPermissions();
     setBlePerm(permissionStatus);
     if (permissionStatus !== 'granted' && permissionStatus !== 'not_required') return;
-    startBLE();
-  }, [bleActive, startBLE]);
+    bringRadioUp();
+  }, [bleActive, bringRadioUp]);
+
+  // Focus path is check-only: users who already granted get the radio back
+  // without ever seeing a prompt; users who haven't keep the explicit button.
+  const ensureBleIfPermitted = useCallback(async () => {
+    if (bleActive) return;
+    const permissionStatus = await checkBLEPermissions();
+    setBlePerm(permissionStatus);
+    if (permissionStatus !== 'granted' && permissionStatus !== 'not_required') return;
+    bringRadioUp();
+  }, [bleActive, bringRadioUp]);
 
   useFocusEffect(useCallback(() => {
     if (!isNativeAvailable) return undefined;
     const task = InteractionManager.runAfterInteractions(() => {
-      enableBle();
+      ensureBleIfPermitted();
     });
     return () => task.cancel();
-  }, [isNativeAvailable, enableBle]));
+  }, [isNativeAvailable, ensureBleIfPermitted]));
 
   // Stable node identity: only re-creates when peers change, not on timer ticks.
   // MeshMap receives this — topology layout only runs when peer set actually changes.

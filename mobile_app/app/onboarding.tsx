@@ -1,72 +1,45 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Image, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, View } from 'react-native';
 import { type Href, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useWallet } from '@/context/WalletContext';
 import { useLxmfContext } from '@/context/LxmfContext';
-import { fontFamily, fontSize, spacing } from '@/theme';
 import {
-  AsciiBackground,
-  CTAButtons,
-  LoadingOverlay,
+  BackupStep,
+  IntroHero,
+  RadioStep,
+  ScreenFade,
 } from '@/components/onboarding';
-import { ExportWalletModal } from '@/components/settings';
+import { PigeonLoader } from '@/components/ui';
 import { BG } from '@/components/onboarding/constants';
-import { hasCompletedTutorial } from '@/src/services/tutorialState';
+import { hasCompletedTutorial, markTutorialCompleted } from '@/src/services/tutorialState';
 
 const TUTORIAL_ROUTE = '/tutorial' as Href;
+
+// First run: intro (looping pigeon montage + wallet buttons) → backup (local
+// only) → radio. A returning user whose wallet hydrates back in skips straight
+// through.
+type Stage = 'intro' | 'backup' | 'radio';
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const { createWallet, connectMWA, isSolanaMobile, isLoading, isConnected, isInitialized, publicKey, walletMode } = useWallet();
-  const { displayName: nickname } = useLxmfContext();
-  const insets = useSafeAreaInsets();
+  const { createWallet, connectMWA, isLoading, isConnected, publicKey, walletMode } = useWallet();
+  const { displayName: nickname, grantRadioConsent } = useLxmfContext();
+
+  const [stage, setStage] = useState<Stage>('intro');
 
   // Set only when THIS session created a fresh local wallet — distinguishes a
-  // new identity (offer recovery-key backup) from a back-nav into an already
+  // new identity (recovery-key backup step) from a back-nav into an already
   // connected wallet or an MWA connect (Seed Vault, nothing to export here).
   const justCreatedRef = useRef(false);
-  const [backupOpen, setBackupOpen] = useState(false);
+  // Set when the user taps either CTA this session. Lets us tell a fresh
+  // connect (walk the remaining steps) from a wallet that auto-restored
+  // (returning user — skip everything).
+  const actedRef = useRef(false);
 
-  // QA-13: gate the CTA panel until wallet hydration settles, so returning users
-  // (whose wallet auto-restores) don't see the onboarding panel flash on every
-  // cold start. WalletProvider.initialize() always flips isLoading true→false on
-  // mount — even the no-wallet path — so once we've seen that round-trip (or a
-  // connected/initialized wallet) it's safe to paint the panel. The brief hidden
-  // window is exactly the previous flash window.
-  const sawLoadingRef = useRef(false);
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
-    if (isLoading) { sawLoadingRef.current = true; return; }
-    if (sawLoadingRef.current || isConnected || isInitialized) setHydrated(true);
-  }, [isLoading, isConnected, isInitialized]);
-
-  // If already connected when screen mounts (back-nav from tabs), skip animation delay.
-const overlayOpacity   = useRef(new Animated.Value(0)).current;
-  const enteringOpacity  = useRef(new Animated.Value(0)).current;
-  const statusOpacity    = useRef(new Animated.Value(0)).current;
-  const nicknameOpacity  = useRef(new Animated.Value(0)).current;
-  const btnOpacity       = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (isLoading) {
-      Animated.sequence([
-        Animated.timing(overlayOpacity,  { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.timing(enteringOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.timing(statusOpacity,   { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.timing(nicknameOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.timing(btnOpacity,      { toValue: 1, duration: 300, useNativeDriver: true }),
-      ]).start();
-    } else {
-      overlayOpacity .setValue(0);
-      enteringOpacity.setValue(0);
-      statusOpacity  .setValue(0);
-      nicknameOpacity.setValue(0);
-      btnOpacity     .setValue(0);
-    }
-  }, [isLoading, overlayOpacity, enteringOpacity, statusOpacity, nicknameOpacity, btnOpacity]);
+  // Which action put us in the loading state — drives the pigeon loader copy.
+  const [loadingReason, setLoadingReason] = useState<'create' | 'connect' | null>(null);
 
   const proceed = useCallback(() => {
     hasCompletedTutorial()
@@ -74,36 +47,42 @@ const overlayOpacity   = useRef(new Animated.Value(0)).current;
       .catch(() => router.replace(TUTORIAL_ROUTE));
   }, [router]);
 
+  // Mark the intro seen and land in the app. /tutorial stays for manual replay.
+  const finish = useCallback(() => {
+    markTutorialCompleted()
+      .catch(() => undefined)
+      .finally(() => router.replace('/(tabs)'));
+  }, [router]);
+
   useEffect(() => {
-    // Only auto-proceed while onboarding is the focused route. unstable_settings
-    // anchor mounts onboarding BENEATH a deep-linked route (anonmesh://tutorial),
-    // and router.replace targets the focused route — without this gate, wallet
-    // hydration replaced the just-opened tutorial with /(tabs), so the deep link
-    // appeared to do nothing on devices that already have a wallet.
+    // Only self-navigate while onboarding is the focused route. The
+    // unstable_settings anchor mounts onboarding BENEATH a deep-linked route
+    // (e.g. anonmesh://tutorial), and router.replace targets the focused
+    // route — without this gate, wallet hydration would replace the route the
+    // user just deep-linked into.
     if (!isFocused) return;
     if (!isConnected || !publicKey) return;
-    // Freshly created local wallet → offer the recovery-key backup before the
-    // user reaches the app. One honest line: the key is device-local, here's the
-    // export path. Non-blocking — "Later" continues straight through.
-    if (justCreatedRef.current && walletMode === 'local') {
-      justCreatedRef.current = false;
-      Alert.alert(
-        'Back up your wallet',
-        'Your wallet key is stored only on this device — anonmesh keeps no copy. Export your recovery key now and store it offline so you can restore your wallet if you lose this device.',
-        [
-          { text: 'Later', style: 'cancel', onPress: proceed },
-          { text: 'Back up now', onPress: () => setBackupOpen(true) },
-        ],
-      );
+    if (stage === 'backup' || stage === 'radio') return;
+
+    if (actedRef.current) {
+      // Wallet just connected from a CTA tap this session.
+      if (justCreatedRef.current && walletMode === 'local') {
+        justCreatedRef.current = false;
+        setStage('backup');
+      } else {
+        setStage('radio');
+      }
       return;
     }
+
+    // Auto-restored wallet (back-nav or returning user) — skip the intro.
     let cancelled = false;
     const t = setTimeout(() => { if (!cancelled) proceed(); }, 0);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [isFocused, isConnected, publicKey, walletMode, proceed]);
+  }, [isFocused, isConnected, publicKey, walletMode, stage, proceed]);
 
   const handleCreate = useCallback(async () => {
     if (isLoading) return;
@@ -111,108 +90,68 @@ const overlayOpacity   = useRef(new Animated.Value(0)).current;
     // a device passcode when no biometric is enrolled. Prompting here too caused
     // a double prompt, and on PIN-only devices the second (biometric-only) prompt
     // failed silently, leaving the button dead.
+    actedRef.current = true;
     justCreatedRef.current = true;
+    setLoadingReason('create');
     await createWallet();
   }, [isLoading, createWallet]);
-  const handleConnect = useCallback(async () => { if (!isLoading) await connectMWA();   }, [isLoading, connectMWA]);
+  const handleConnect = useCallback(async () => {
+    if (isLoading) return;
+    actedRef.current = true;
+    setLoadingReason('connect');
+    await connectMWA();
+  }, [isLoading, connectMWA]);
 
+  if (stage === 'backup') {
+    return (
+      <ScreenFade style={S.fill}>
+        <BackupStep onDone={() => setStage('radio')} />
+      </ScreenFade>
+    );
+  }
+
+  if (stage === 'radio') {
+    return (
+      <ScreenFade style={S.fill}>
+        <RadioStep
+          onDone={(granted) => {
+            if (granted) grantRadioConsent();
+            finish();
+          }}
+        />
+      </ScreenFade>
+    );
+  }
+
+  // intro — the real pigeon power-blur flyover looping as an animated image
+  // (no video decoder, can't freeze) with the wallet buttons. The pigeon loader
+  // flies over it while the wallet is created / connected.
+  const connecting = loadingReason === 'connect';
   return (
     <View style={S.root}>
-      <SafeAreaView style={S.safe} edges={['top']}>
-
-        {/* ASCII animated hero */}
-        <View style={S.hero}>
-          <AsciiBackground />
-          <Image
-            source={require('@/assets/images/logos/anonmesh_logo.png')}
-            style={S.heroLogo}
-            resizeMode="contain"
-          />
-        </View>
-
-        {/* Bottom panel — extends behind home indicator, padding absorbs inset.
-            Held back until hydration settles (QA-13) so a returning user whose
-            wallet auto-restores never sees this panel flash before the redirect. */}
-        {hydrated && !isConnected && (
-          <View style={[S.panel, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
-            <Text style={S.title}>Join the Mesh</Text>
-            <Text style={S.subtitle}>Encrypted communication and off-grid payments.</Text>
-
-            <CTAButtons
-              isLoading={isLoading}
-              onConnect={handleConnect}
-              onCreate={handleCreate}
-            />
-
-          </View>
-        )}
-
-      </SafeAreaView>
-
-      <LoadingOverlay
+      <IntroHero
         isLoading={isLoading}
-        isSolanaMobile={!!isSolanaMobile}
-        nickname={nickname}
-        overlayOpacity={overlayOpacity}
-        enteringOpacity={enteringOpacity}
-        statusOpacity={statusOpacity}
-        nicknameOpacity={nicknameOpacity}
-        btnOpacity={btnOpacity}
+        onCreate={handleCreate}
+        onConnect={handleConnect}
       />
 
-      {backupOpen && (
-        <ExportWalletModal
-          onClose={() => { setBackupOpen(false); proceed(); }}
-        />
-      )}
+      <PigeonLoader
+        visible={isLoading}
+        status="loading"
+        label={connecting ? 'Connecting wallet' : 'Creating your identity'}
+        sublabel={
+          connecting
+            ? 'Approve the connection in your wallet'
+            : nickname
+              ? `Generating a secure key for @${nickname}`
+              : 'Generating a secure key on this device'
+        }
+      />
     </View>
   );
 }
 
 const S = StyleSheet.create({
-  root:  { flex: 1, backgroundColor: BG },
-  safe:  { flex: 1 },
-  hero:  { flex: 1 },
-
-  panel: {
-    backgroundColor: '#08111a',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 22,
-    paddingBottom: spacing[6],
-    gap: 10,
-  },
-  heroLogo: {
-    position: 'absolute',
-    width: 500, height: 100,
-    alignSelf: 'center',
-    top: '50%',
-    marginTop: -50,
-  },
-  title: {
-    fontSize: fontSize['3xl'],
-    fontWeight: '700',
-    color: '#d8eef4',
-    letterSpacing: -0.4,
-    textAlign: 'center',
-    paddingHorizontal: spacing[6],
-    fontFamily: fontFamily.sansMd,
-  },
-  subtitle: {
-    fontFamily: fontFamily.sansSb,
-    fontSize: fontSize.sm,
-    color: '#3d6878',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-    paddingHorizontal: spacing[6],
-    marginBottom: 2,
-  },
-  // footer: {
-  //   fontFamily: fontFamily.sansSb,
-  //   fontSize: 10,
-  //   color: '#ffffffbe',
-  //   letterSpacing: 1.5,
-  //   textAlign: 'center',
-  //   marginTop: 4,
-  // },
+  root: { flex: 1, backgroundColor: BG },
+  fill: { flex: 1 },
 });

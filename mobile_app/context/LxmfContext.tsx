@@ -18,7 +18,7 @@ import {
 } from '@magicred-1/react-native-lxmf';
 import { generateNickname } from '@/components/onboarding/constants';
 import type { NetworkMode } from '@/src/infrastructure/network/types';
-import { requestBLEPermissions } from '@/src/utils/blePermissions';
+import { checkBLEPermissions } from '@/src/utils/blePermissions';
 import { eventsAfter, highestEventId } from '@/src/utils/eventsAfter';
 import { collectPeerMessages } from '@/src/services/peerMessages';
 import { activeConversationRef } from '@/hooks/activeConversation';
@@ -513,6 +513,8 @@ interface LxmfCtxValue {
   /** Start BLE radio. For LoRa: pair RNode in OS BT settings first, then call this. */
   startBLE:             () => Promise<void>;
   stopBLE:              () => Promise<void>;
+  /** Call after a surface wins the BLE permission prompt — retries node autostart. */
+  grantRadioConsent:    () => void;
   getStatus:            () => LxmfNodeStatus | null;
   getBeacons:           () => Beacon[];
   fetchMessages:        (limit?: number) => StoredMessage[];
@@ -613,6 +615,12 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
   const startingRef = useRef(false);
   const autostartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Bumped by the surfaces that own the BLE permission prompt (onboarding's
+  // RadioStep, NodesScreen's enable affordance) right after a grant, so the
+  // check-only autostart below gets another pass and brings the node up.
+  const [radioConsentTick, setRadioConsentTick] = useState(0);
+  const grantRadioConsent = useCallback(() => setRadioConsentTick(t => t + 1), []);
+
   useEffect(() => {
     if (!isNativeAvailable || isRunning || startingRef.current || displayName === null || !identityHydrated) return;
     let cancelled = false;
@@ -620,7 +628,13 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       autostartTimerRef.current = setTimeout(() => {
         if (cancelled || isRunning || startingRef.current) return;
         startingRef.current = true;
-        requestBLEPermissions().then(async perm => {
+        // Check-only: autostart never triggers the OS permission dialogs. The
+        // first prompt belongs to a rationale surface (onboarding's RadioStep,
+        // or the Peers tab's enable affordance) — a fresh install's first
+        // impression must not be Android's location dialog with zero context.
+        // Those surfaces call grantRadioConsent() after a grant, which bumps
+        // radioConsentTick and re-runs this effect.
+        checkBLEPermissions().then(async perm => {
           if (cancelled || (perm !== 'granted' && perm !== 'not_required')) return false;
           if (isBeacon) {
             const keypairHex = await secureGet(SecureKeys.BEACON_KEYPAIR_HEX);
@@ -656,7 +670,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
       interaction.cancel();
     };
   }, [isNativeAvailable, isRunning, start, displayName, identityHydrated, storedIdentity, isBeacon,
-      beaconKeypairReady, setBeaconKeypair, setBeaconSolanaRpc, setPropagationNode]);
+      beaconKeypairReady, setBeaconKeypair, setBeaconSolanaRpc, setPropagationNode, radioConsentTick]);
 
   // Surfaced when secure-storage rejects an identity write (off-grid audit §3),
   // so a failed persist is visible instead of dying in a console.warn.
@@ -1057,6 +1071,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
     send:                  handleSend,
     broadcast:             lxmf.broadcast,
     startBLE:              handleStartBLE,
+    grantRadioConsent,
     stopBLE:               handleStopBLE,
     getStatus:             lxmf.getStatus,
     getBeacons:            lxmf.getBeacons,
@@ -1110,7 +1125,7 @@ export function LxmfProvider({ children }: { readonly children: React.ReactNode 
        lxmf.broadcast, lxmf.getStatus, lxmf.getBeacons,
        lxmf.setLogLevel, lxmf.bleUnpairedRNodeCount,
        lxmf.getNusUnpairedRNodes, lxmf.pairNusRNode, lxmf.getConnectedRNodes, lxmf.unpairNusRNode, syncPropagation,
-       lxmf.beaconRpc, lxmf.beaconBroadcastRpc, lxmf.beaconRpcWait]);
+       lxmf.beaconRpc, lxmf.beaconBroadcastRpc, lxmf.beaconRpcWait, grantRadioConsent]);
 
   return (
     <LxmfCtx.Provider value={value}>
