@@ -60,6 +60,12 @@ function SwipeableGroupRow({ groupName, onLeave, children }: { readonly groupNam
     });
 
   const rowAnim    = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }] }));
+  // The row over the action strip is transparent at rest (activeBg falls back
+  // to 'transparent'), so the strip can't rely on being occluded — it must
+  // hide itself. Fade the whole strip in from the first pixels of swipe.
+  const revealAnim = useAnimatedStyle(() => ({
+    opacity: interpolate(tx.value, [-REVEAL * 0.15, 0], [1, 0], Extrapolation.CLAMP),
+  }));
   const actionAnim = useAnimatedStyle(() => ({
     transform: [{
       scale: interpolate(tx.value, [-REVEAL, -REVEAL * 0.4, 0], [1, 0.82, 0.64], Extrapolation.CLAMP),
@@ -84,7 +90,7 @@ function SwipeableGroupRow({ groupName, onLeave, children }: { readonly groupNam
 
   return (
     <View style={S.swipeWrap}>
-      <View style={S.leaveAction}>
+      <Reanimated.View style={[S.leaveAction, revealAnim]}>
         <Reanimated.View style={actionAnim}>
           <Pressable
             onPress={confirmLeave}
@@ -97,7 +103,7 @@ function SwipeableGroupRow({ groupName, onLeave, children }: { readonly groupNam
             <Text style={S.leaveText}>LEAVE</Text>
           </Pressable>
         </Reanimated.View>
-      </View>
+      </Reanimated.View>
       <GestureDetector gesture={pan}>
         <Reanimated.View style={rowAnim}>
           {children}
