@@ -125,10 +125,10 @@ export default function SettingsScreen() {
   return (
     <View style={[S.root, { backgroundColor: colors.background }]}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing[9] }}>
 
           {/* ── Swipeable identity card ── */}
-          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+          <View style={{ paddingHorizontal: spacing[5], paddingTop: spacing[5], paddingBottom: spacing[3] }}>
             <View
               style={[S.identityCard, baseGlass]}
               onLayout={e => setCardWidth(e.nativeEvent.layout.width)}
@@ -215,7 +215,7 @@ export default function SettingsScreen() {
 
           {/* ── Paired hardware ── */}
           <SectionLabel right={
-            <Pressable onPress={() => setPairOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Pressable onPress={() => setPairOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
               <Feather name="plus" size={11} color={colors.primary} />
               <Text style={[S.actionText, { color: colors.primary }]}>ADD</Text>
             </Pressable>
@@ -223,10 +223,10 @@ export default function SettingsScreen() {
             hardware radio
           </SectionLabel>
 
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: spacing[5] }}>
             {paired ? (
               <View style={[S.hwCard, baseGlass]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[4] }}>
                   <View style={[S.hwIcon, accentGlass]}>
                     <Feather name="radio" size={22} color={colors.primary} />
                   </View>
@@ -283,7 +283,7 @@ export default function SettingsScreen() {
 
           {/* ── Privacy & security ── */}
           <SectionLabel>privacy & security</SectionLabel>
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: spacing[5] }}>
             <View style={[S.section, baseGlass]}>
               <SettingsRow icon="lock" label="biometric lock" sub="face id / touch id · required for transactions" right={<Toggle on={biometric} onChange={v => { if (v) setBiometric(true); else setDisableBioOpen(true); }} />} />
               <SettingsRow icon="book-open" label="address book" sub="local recipients · labels never sync" right={<Feather name="chevron-right" size={12} color={colors.textTertiary} />} onPress={() => router.push(CONTACTS_ROUTE)} />
@@ -294,7 +294,7 @@ export default function SettingsScreen() {
 
           {/* ── Network ── */}
           <SectionLabel>network</SectionLabel>
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: spacing[5] }}>
             <View style={[S.section, baseGlass]}>
               {/* Cellular fallback isn't wired to any transport yet. Wrap it in the
                   same preview shield as the unbuilt hardware controls so the toggle
@@ -309,7 +309,7 @@ export default function SettingsScreen() {
 
           {/* ── About ── */}
           <SectionLabel>about</SectionLabel>
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={{ paddingHorizontal: spacing[5] }}>
             <View style={[S.section, baseGlass]}>
               <SettingsRow label="app version" right={<Text style={[S.valueText, { color: colors.textSecondary }]}>{Constants.expoConfig?.version ?? '—'}</Text>} last />
             </View>
@@ -342,7 +342,7 @@ const S = StyleSheet.create({
 
   // ── Identity card ────────────────────────────────────────────────────────────
   identityCard: { borderRadius: radii.xl, overflow: 'hidden' },
-  slide:        { paddingHorizontal: spacing[6], paddingTop: spacing[6], paddingBottom: 4, gap: 14, alignItems: 'center' },
+  slide:        { paddingHorizontal: spacing[6], paddingTop: spacing[6], paddingBottom: spacing[2], gap: 14, alignItems: 'center' },
   idLabel:      { fontFamily: fontFamily.sansMd, fontSize: 9.5, letterSpacing: 2.5, textTransform: 'uppercase' },
   qrWrap:       { padding: spacing[3], borderRadius: radii.md, borderWidth: 0.5, overflow: 'hidden' },
   idHandle:     { fontFamily: fontFamily.sansMd, fontSize: fontSize.md, letterSpacing: 0.3 },
@@ -371,7 +371,7 @@ const S = StyleSheet.create({
   hwActionWrap: { flex: 1 },
   hwActionBtn:  { flex: 1, padding: 9, borderRadius: radii.md, alignItems: 'center' },
   hwActionText: { fontFamily: fontFamily.sansMd, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
-  addHwBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: spacing[5], borderRadius: radii.lg },
+  addHwBtn:     { flexDirection: 'row', alignItems: 'center', gap: spacing[4], padding: spacing[5], borderRadius: radii.lg },
   signOut:      { marginTop: 10, padding: 13, borderRadius: radii.md, borderWidth: 0.5, alignItems: 'center', backgroundColor: 'transparent' },
   signOutText:  { fontFamily: fontFamily.sansMd, fontSize: fontSize.xs, fontWeight: '500', letterSpacing: 3, textTransform: 'uppercase' },
 });

@@ -132,6 +132,10 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
 
   const [error, setError] = useState<ReviewError | null>(null);
   const [feeLabel, setFeeLabel] = useState("Calculating...");
+  // Bumped to re-run the best-effort fee estimate after it fell back to
+  // "Fee unavailable" (timeout / RPC reject). The retry affordance next to the
+  // fee row increments this; the estimate effect lists it as a dependency.
+  const [feeNonce, setFeeNonce] = useState(0);
   const [isConfirming, setIsConfirming] = useState(false);
   const [txPhase, setTxPhase] = useState<TxPhase>(null);
   const [sliderResetKey, setSliderResetKey] = useState(0);
@@ -206,7 +210,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     return () => {
       cancelled = true;
     };
-  }, [amount, normalizedMint, normalizedProgramId, symbol, to, tokenDecimals, wallet]);
+  }, [amount, feeNonce, normalizedMint, normalizedProgramId, symbol, to, tokenDecimals, wallet]);
 
   async function handleConfirm() {
     if (isConfirming) return;
@@ -223,7 +227,7 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     if (symbol !== "SOL" && isToken2022) {
       setError({
         kind: "unsupported",
-        message: `${symbol} is a Token-2022 mint. Token-2022 sends are not supported yet — coming soon.`,
+        message: `${symbol} uses the Token-2022 program. anonmesh can send SOL only right now — Token-2022 mints can carry transfer-fee and confidential-transfer extensions the standard transfer path can't safely handle. You can still receive and hold it.`,
       });
       setSliderResetKey((k) => k + 1);
       return;
@@ -389,6 +393,16 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
     haptics.tap();
     handleConfirm();
   }
+
+  // Re-run the best-effort fee estimate. The fee read is non-blocking — sending
+  // never depends on it — so this only refreshes the displayed label after a
+  // timeout/RPC reject left it on "Fee unavailable".
+  function handleRetryFee() {
+    haptics.tap();
+    setFeeNonce((n) => n + 1);
+  }
+
+  const feeUnavailable = feeLabel === "Fee unavailable";
 
   // Loader sublabel. Only the online adapter talks to the app's hard-wired
   // devnet RPC (src/infrastructure/network/connection.ts), so "on devnet" is
@@ -559,7 +573,23 @@ export function ReviewCard({ to, amount, symbol, mintAddress, decimals, programI
             icon="zap"
             label="Fee"
             secondary="Estimated from network RPC"
-            value={feeLabel}
+            value={feeUnavailable ? undefined : feeLabel}
+            valueComponent={
+              feeUnavailable ? (
+                <Pressable
+                  accessibilityLabel="Retry fee estimate"
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={handleRetryFee}
+                  style={S.feeRetryRow}
+                >
+                  <Text style={[S.detailValue, { color: colors.textTertiary }]}>
+                    Fee unavailable
+                  </Text>
+                  <Feather name="rotate-ccw" size={13} color={colors.primary} />
+                </Pressable>
+              ) : undefined
+            }
           />
         </View>
 
@@ -705,6 +735,11 @@ const S = StyleSheet.create({
     textAlign: "right",
   },
   copyRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  feeRetryRow: {
     alignItems: "center",
     flexDirection: "row",
     gap: 6,

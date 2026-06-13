@@ -1,5 +1,5 @@
 import React, { memo, useState, useRef, useCallback } from 'react';
-import { Animated, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { fontFamily, useTheme } from '@/theme';
 import { useGlass } from '@/hooks/useGlass';
@@ -33,12 +33,7 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
   const cosigns = 0;
   const earned  = 0;
   const [modal, setModal]         = useState(false);
-  const [stakeModal, setStakeModal] = useState(false);
-  const [stakeAmt, setStakeAmt]   = useState(0.5);
-  const [rawAmt, setRawAmt]       = useState('0.5');
-  const amtInputRef = useRef<TextInput>(null);
   const sheetAnim         = useRef(new Animated.Value(0)).current;
-  const stakeAnim         = useRef(new Animated.Value(0)).current;
 
   // Auto-activate on first internet was removed per AUDIT T10 / ROADMAP § 0.B.3:
   // beacon mode carries trust implications (relaying others' traffic) so the
@@ -61,33 +56,13 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
     dismiss();
   }, [setBeaconMode, dismiss]);
 
-  const commitAmt = useCallback((v: number) => {
-    const n = Math.max(0.5, Number.parseFloat(Math.max(0.5, v).toFixed(1)));
-    setStakeAmt(n);
-    setRawAmt(n.toFixed(1));
-  }, []);
-
-  const openStake = useCallback(() => {
-    setStakeModal(true);
-    Animated.spring(stakeAnim, { toValue: 1, useNativeDriver: true, bounciness: 4 }).start();
-  }, [stakeAnim]);
-
-  const dismissStake = useCallback(() => {
-    Animated.timing(stakeAnim, { toValue: 0, duration: 220, useNativeDriver: true })
-      .start(() => setStakeModal(false));
-  }, [stakeAnim]);
-
   const sheetY      = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
   const overlayOp   = sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
-  const stakeSheetY = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0], extrapolate: 'clamp' });
-  const stakeOvOp   = stakeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1],   extrapolate: 'clamp' });
 
   // These values are not live — show placeholder dashes under PREVIEW label.
   const jitoAmt  = '—';
   const yieldAmt = '—';
   const repScore = '—';
-  const newRep   = '—';
-  const newYield = '—';
 
   return (
     <>
@@ -122,11 +97,11 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
                 <View style={S.repCell}>
                   <Text style={[S.repNum, { color: colors.textPrimary }]}>{jitoAmt}</Text>
                   <Text style={[S.repLabel, { color: colors.textTertiary }]}>JITOSOL</Text>
-                  {/* Stake button disabled until staking flow is live */}
-                  <View style={[S.stakeChip, { borderColor: colors.border, backgroundColor: colors.surface2, opacity: 0.4 }]}>
-                    <Feather name="plus" size={9} color={colors.textTertiary} />
-                    <Text style={[S.stakeChipText, { color: colors.textTertiary }]}>Soon</Text>
-                  </View>
+                  {/* Staking isn't live yet. A dimmed-out fake button read as
+                      broken; the canonical PREVIEW/SOON Pill reads as an
+                      intentional roadmap marker instead. No handler — there's
+                      nothing real to wire to. */}
+                  <Pill label="SOON" variant="default" style={S.stakePill} />
                 </View>
                 <View style={[S.repDivider, { backgroundColor: colors.borderSubtle }]} />
                 <View style={S.repCell}>
@@ -222,84 +197,6 @@ export const BeaconRegistry = memo(function BeaconRegistry({ initialActive: _ini
           </Animated.View>
         </View>
       </Modal>
-
-      {/* ── Stake Modal ── */}
-      <Modal visible={stakeModal} transparent animationType="none" onRequestClose={dismissStake}>
-        <KeyboardAvoidingView style={StyleSheet.absoluteFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,4,6,0.75)', opacity: stakeOvOp }]}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={dismissStake} />
-          </Animated.View>
-
-          <Animated.View style={[S.sheet, { backgroundColor: colors.glass, borderColor: colors.border, transform: [{ translateY: stakeSheetY }] }]}>
-            <View style={[S.grab, { backgroundColor: colors.border }]} />
-
-            <View style={S.sheetHeader}>
-              <Text style={[S.sheetTitle, { color: colors.textPrimary }]}>Stake More SOL</Text>
-              <Pressable onPress={dismissStake} style={[S.closeBtn, softGlass]} hitSlop={8}>
-                <Feather name="x" size={14} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-
-            {/* Stepper */}
-            <View style={[S.stepper, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-              <Pressable
-                onPress={() => setStakeAmt(a => Math.max(0.5, Number.parseFloat((a - 0.5).toFixed(1))))}
-                hitSlop={16}
-                style={({ pressed }) => [S.stepBtn, { opacity: pressed || stakeAmt <= 0.5 ? 0.35 : 1 }]}
-              >
-                <Feather name="minus" size={20} color={colors.textPrimary} />
-              </Pressable>
-              <View style={S.stepCenter}>
-                <SolanaIcon size={28} color={colors.primary} />
-                <TextInput
-                  ref={amtInputRef}
-                  style={[S.stepAmt, { color: colors.textPrimary }]}
-                  value={rawAmt}
-                  onChangeText={setRawAmt}
-                  onBlur={() => commitAmt(Number.parseFloat(rawAmt) || 0.5)}
-                  onSubmitEditing={() => commitAmt(Number.parseFloat(rawAmt) || 0.5)}
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  selectTextOnFocus
-                />
-                <Text style={[S.stepUnit, { color: colors.textTertiary }]}>SOL</Text>
-              </View>
-              <Pressable
-                onPress={() => commitAmt(stakeAmt + 0.5)}
-                hitSlop={16}
-                style={({ pressed }) => [S.stepBtn, { opacity: pressed ? 0.35 : 1 }]}
-              >
-                <Feather name="plus" size={20} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-
-            {/* Impact rows */}
-            <View style={[S.impactBox, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-              <View style={[S.impactRow, { borderBottomColor: colors.borderSubtle }]}>
-                <Feather name="shield" size={14} color={colors.primary} />
-                <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Rep score</Text>
-                <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>{repScore}</Text>
-                <Feather name="arrow-right" size={10} color={colors.textTertiary} />
-                <Text style={[S.impactRowAfter, { color: colors.primary }]}>{newRep}</Text>
-              </View>
-              <View style={S.impactRow}>
-                <Feather name="trending-up" size={14} color={colors.primary} />
-                <Text style={[S.impactRowLabel, { color: colors.textSecondary }]}>Yield / yr</Text>
-                <Text style={[S.impactRowBefore, { color: colors.textTertiary }]}>+{yieldAmt}</Text>
-                <Feather name="arrow-right" size={10} color={colors.textTertiary} />
-                <Text style={[S.impactRowAfter, { color: colors.primary }]}>+{newYield} SOL</Text>
-              </View>
-            </View>
-
-            <View
-              style={[S.actionBtn, { backgroundColor: colors.surface2, borderWidth: 0.5, borderColor: colors.border, opacity: 0.6 }]}
-              pointerEvents="none"
-            >
-              <Text style={[S.actionText, { color: colors.textTertiary }]}>Preview — not yet active</Text>
-            </View>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Modal>
     </>
   );
 });
@@ -323,8 +220,7 @@ const S = StyleSheet.create({
   repNum:      { fontFamily: fontFamily.sansBold, fontSize: 16, letterSpacing: -0.5 },
   repLabel:    { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase' },
   repDivider:  { width: 0.5, marginVertical: 4 },
-  stakeChip:     { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 0.5, marginTop: 2 },
-  stakeChipText: { fontFamily: fontFamily.sansMd, fontSize: 9, letterSpacing: 0.5 },
+  stakePill:   { marginTop: 2 },
 
   footer:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
   footerStat:  { fontFamily: fontFamily.sansMd, fontSize: 12 },
@@ -351,18 +247,4 @@ const S = StyleSheet.create({
   actionBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
                  paddingVertical: 15, borderRadius: 14 },
   actionText:  { fontFamily: fontFamily.sansMd, fontSize: 14, fontWeight: '600', letterSpacing: 0.2 },
-
-  stepper:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                borderRadius: 18, borderWidth: 0.5, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 14 },
-  stepBtn:    { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  stepCenter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepAmt:    { fontFamily: fontFamily.sansBold, fontSize: 36, letterSpacing: -1.5 },
-  stepUnit:   { fontFamily: fontFamily.sansMd, fontSize: 14, letterSpacing: 0.5, marginBottom: 2 },
-
-  impactBox:      { borderRadius: 14, borderWidth: 0.5, overflow: 'hidden', marginBottom: 20 },
-  impactRow:      { flexDirection: 'row', alignItems: 'center', gap: 8,
-                    paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 0.5 },
-  impactRowLabel: { flex: 1, fontFamily: fontFamily.sansMd, fontSize: 13 },
-  impactRowBefore:{ fontFamily: fontFamily.sansMd, fontSize: 13 },
-  impactRowAfter: { fontFamily: fontFamily.sansMd, fontSize: 13, fontWeight: '600' },
 });
