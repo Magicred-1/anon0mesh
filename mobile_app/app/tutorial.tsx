@@ -127,8 +127,8 @@ export default function TutorialScreen() {
         icon: "message-square",
         kicker: "Messages",
         title: "Encrypted chat, no internet.",
-        body: "Peer-to-peer messages over BLE, LoRa radio, or LAN. No servers, no phone number, no SIM. Open the Messages tab to start a conversation.",
-        statLabel: "Mesh ID",
+        body: "Send messages to nearby peers over Bluetooth radio. No servers, no phone number, no SIM. Open the Messages tab to start a conversation.",
+        statLabel: "Your mesh ID",
         statValue: shortAddress(myAddress),
       },
       {
@@ -143,7 +143,7 @@ export default function TutorialScreen() {
         icon: "credit-card",
         kicker: "Wallet",
         title: "Pay any peer, no banks required.",
-        body: "Your Solana wallet is built in. Send SOL or tokens to any mesh peer: scan their QR or pick from Messages. Keys never leave this device.",
+        body: "Your Solana wallet is built in. Send SOL or tokens to any mesh peer — scan their QR or pick from Messages. Keys never leave this device.",
         statLabel: "Wallet",
         statValue: shortAddress(publicKey?.toBase58()),
       },
@@ -158,7 +158,7 @@ export default function TutorialScreen() {
   const finish = useCallback(() => {
     markTutorialCompleted()
       .catch(() => undefined)
-      .finally(() => router.replace("/(tabs)"));
+      .finally(() => router.replace("/(tabs)/messages"));
   }, []);
 
   const navigateWith = useCallback(
@@ -273,6 +273,14 @@ export default function TutorialScreen() {
             style={S.footerButton}
           />
         )}
+        <DepthButton
+          label="Back"
+          onPress={back}
+          disabled={index === 0}
+          size="md"
+          variant="secondary"
+          style={S.footerButton}
+        />
         <DepthButton
           label={isLast ? "Go to Messages" : "Next"}
           onPress={next}
