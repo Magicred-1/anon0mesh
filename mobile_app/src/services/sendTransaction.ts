@@ -369,7 +369,7 @@ async function buildSplTransferTransaction({
   return tx;
 }
 
-async function signAndSubmitTransaction({
+export async function signAndSubmitTransaction({
   walletAdapter,
   rpcAdapter,
   tx,
